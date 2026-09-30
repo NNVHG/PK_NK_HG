@@ -1,0 +1,58 @@
+# ===== .NET / C# =====
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+TestResults/
+*.nupkg
+*.snupkg
+project.lock.json
+artifacts/
+
+# User secrets & Local settings
+**/secrets.json
+**/appsettings.Development.json
+
+# EF Core migrations snapshot tự động — commit bình thường (không ignore Migrations/)
+
+# ===== Node / Vue Frontend =====
+node_modules/
+dist/
+.vite/
+.env.local
+.env.*.local
+
+# ===== AI Assistant & Tooling Output (Không thuộc mã nguồn đồ án) =====
+graphify-out/
+skills/
+.cursor/
+.cline/
+.claude/
+docs/
+nội dung/
+AGENTS/
+HISTORY_LOG/
+REUSE_ANALYSIS/
+TIMELINE_DO_AN/
+
+
+# ===== Database Backups / Volumes =====
+postgres-data/
+*.dump
+*.sql.bak
+
+# ===== Hệ điều hành & Editors =====
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+.idea/
+*.swp
+*.swo
+*~
+
