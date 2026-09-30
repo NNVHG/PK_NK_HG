@@ -35,10 +35,10 @@ skills/
 .claude/
 docs/
 nội dung/
-AGENTS/
-HISTORY_LOG/
-REUSE_ANALYSIS/
-TIMELINE_DO_AN/
+AGENTS.md
+HISTORY_LOG.md
+REUSE_ANALYSIS.md
+TIMELINE_DO_AN.md
 
 
 # ===== Database Backups / Volumes =====
