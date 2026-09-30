@@ -1,10 +1,14 @@
 import axios from 'axios';
-import router from '@/router';
 
 let accessToken: string | null = null;
+let unauthorizedHandler: (() => void) | null = null;
 
 export function setAccessToken(token: string | null) {
   accessToken = token;
+}
+
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  unauthorizedHandler = handler;
 }
 
 export const apiClient = axios.create({
@@ -27,9 +31,7 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401) {
       setAccessToken(null);
       window.dispatchEvent(new Event('auth:expired'));
-      if (router.currentRoute.value.path !== '/login') {
-        router.push({ name: 'login', query: { redirect: router.currentRoute.value.fullPath } });
-      }
+      unauthorizedHandler?.();
     }
     return Promise.reject(error);
   }

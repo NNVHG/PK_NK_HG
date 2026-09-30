@@ -114,6 +114,20 @@ var app = builder.Build();
 // ===== Middleware pipeline =====
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
+if (!app.Environment.IsDevelopment())
+{
+    app.Use(async (context, next) =>
+    {
+        if (context.Request.Path.StartsWithSegments("/api/dev"))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        await next();
+    });
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

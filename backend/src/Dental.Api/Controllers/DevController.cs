@@ -8,7 +8,6 @@ namespace Dental.Api.Controllers;
 /// Controller kiểm tra phân quyền — CHỈ TỒN TẠI TRONG DEVELOPMENT.
 /// XÓA sau Sprint 1.
 /// </summary>
-#if DEBUG
 [ApiController]
 [Route("api/dev")]
 [Authorize]
@@ -26,4 +25,3 @@ public sealed class DevController : ControllerBase
     public IActionResult StaffOnly()
         => Ok(new { message = "Bạn là nhân viên. Endpoint này dành cho Staff." });
 }
-#endif
