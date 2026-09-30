@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(ls \"C:/Program Files/dotnet/sdk\" 2>&1 || echo \"NO SDK DIR\")",
-      "Bash(npm --version)"
-    ]
-  }
-}
