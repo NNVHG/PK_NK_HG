@@ -3,6 +3,7 @@ using Dental.Application.Features.Auth.DTOs;
 using Dental.Application.Features.Auth.Services;
 using Dental.Application.Features.Auth.Validators;
 using Dental.Application.Interfaces;
+using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -77,6 +78,45 @@ public sealed class AuthController : ControllerBase
 
         if (result.IsFailure)
             return NotFound(new { code = result.Error.Code, message = result.Error.Message });
+
+        return Ok(result.Value);
+    }
+
+    /// <summary>Cập nhật hồ sơ của người dùng hiện tại.</summary>
+    [HttpPut("profile")]
+    [ProducesResponseType(typeof(MeResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> UpdateProfile(
+        [FromBody] UpdateProfileRequest request,
+        [FromServices] IValidator<UpdateProfileRequest> profileValidator,
+        CancellationToken ct)
+    {
+        var userId = _currentUser.UserId;
+        if (userId is null)
+            return Unauthorized(new { code = "AUTH_003", message = "Bạn chưa đăng nhập." });
+
+        var validationResult = await profileValidator.ValidateAsync(request, ct);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new
+            {
+                code = "GEN_003",
+                message = "Dữ liệu đầu vào không hợp lệ.",
+                errors = validationResult.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage }),
+            });
+        }
+
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var result = await _authService.UpdateProfileAsync(userId.Value, request, ipAddress, ct);
+
+        if (result.IsFailure)
+        {
+            if (result.Error.Code == Error.NotFound.Code)
+                return NotFound(new { code = result.Error.Code, message = result.Error.Message });
+
+            return BadRequest(new { code = result.Error.Code, message = result.Error.Message });
+        }
 
         return Ok(result.Value);
     }

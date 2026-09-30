@@ -21,5 +21,12 @@ public record Error(string Code, string Message)
     public static readonly Error Unauthorized        = new("AUTH_003", "Bạn chưa đăng nhập hoặc không có quyền truy cập.");
     public static readonly Error WrongOldPassword    = new("AUTH_004", "Mật khẩu cũ không chính xác.");
     public static readonly Error SameNewPassword     = new("AUTH_005", "Mật khẩu mới không được trùng với mật khẩu cũ.");
+    public static readonly Error PhoneChangeNotAllowed = new("AUTH_006", "Chưa hỗ trợ thay đổi số điện thoại.");
+
+    // Lỗi quản lý tài khoản nhân viên (MOD_MST)
+    public static readonly Error StaffPhoneExists = new("MST_001", "Số điện thoại đã được sử dụng.");
+    public static readonly Error InvalidStaffRole = new("MST_002", "Vai trò nhân viên không hợp lệ.");
+    public static readonly Error LastActiveAdmin = new("MST_003", "Không thể hạ vai trò hoặc khóa Admin cuối cùng đang hoạt động.");
+    public static readonly Error CannotLockSelf = new("MST_004", "Bạn không thể tự khóa tài khoản.");
 
 }

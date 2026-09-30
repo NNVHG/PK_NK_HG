@@ -119,7 +119,8 @@ public sealed class AuthServiceTests
         var user = MakeUser();
         _userRepo.FindByPhoneAsync("0912345678").Returns(user);
         _passwordHasher.Verify(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
-        _tokenService.GenerateAccessToken(user).Returns("tok");
+        const string accessToken = "signed.jwt.value";
+        _tokenService.GenerateAccessToken(user).Returns(accessToken);
 
         var svc = CreateService();
         await svc.LoginAsync(new LoginRequest("0912345678", "myPassword"), ipAddress: null);
@@ -130,10 +131,80 @@ public sealed class AuthServiceTests
             entityType: Arg.Any<string>(),
             entityId: Arg.Any<int?>(),
             userId: Arg.Any<int?>(),
-            detail: Arg.Is<string?>(d => d == null || !d.Contains("myPassword")),
+            detail: Arg.Is<string?>(d => d == null || (!d.Contains("myPassword") && !d.Contains(accessToken))),
             ipAddress: Arg.Any<string?>(),
             ct: Arg.Any<CancellationToken>());
 
+    }
+
+    [Fact]
+    public async Task UpdateProfileAsync_ValidRequest_UpdatesProfileAndAuditsChangedFieldNamesOnly()
+    {
+        var user = MakeUser();
+        user.Email = "old@example.com";
+        _userRepo.FindByIdAsync(1).Returns(user);
+
+        var svc = CreateService();
+        var result = await svc.UpdateProfileAsync(
+            1,
+            new UpdateProfileRequest("Tên mới", user.Phone, "new@example.com", new DateOnly(1998, 4, 12), "Female"),
+            ipAddress: null);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("Tên mới", user.FullName);
+        Assert.Equal("new@example.com", user.Email);
+        Assert.Equal(new DateOnly(1998, 4, 12), user.DateOfBirth);
+        Assert.Equal("Female", user.Gender);
+        Assert.Equal(user.Phone, result.Value!.Phone);
+        Assert.Equal("Tên mới", result.Value.FullName);
+        Assert.Equal("new@example.com", result.Value.Email);
+        Assert.Equal(new DateOnly(1998, 4, 12), result.Value.DateOfBirth);
+        Assert.Equal("Female", result.Value.Gender);
+        await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _auditLogger.Received(1).LogAsync(
+            action: AuditActions.Update,
+            entityType: "User",
+            entityId: 1,
+            userId: 1,
+            detail: Arg.Is<string?>(detail =>
+                detail != null &&
+                detail.Contains("FullName") &&
+                detail.Contains("Email") &&
+                detail.Contains("DateOfBirth") &&
+                detail.Contains("Gender") &&
+                !detail.Contains("Tên mới") &&
+                !detail.Contains("new@example.com") &&
+                !detail.Contains("1998") &&
+                !detail.Contains("Female") &&
+                !detail.Contains(user.Phone)),
+            ipAddress: Arg.Any<string?>(),
+            ct: Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpdateProfileAsync_ChangedPhone_ReturnsFailureWithoutSaving()
+    {
+        var user = MakeUser();
+        _userRepo.FindByIdAsync(1).Returns(user);
+
+        var svc = CreateService();
+        var result = await svc.UpdateProfileAsync(
+            1,
+            new UpdateProfileRequest("Tên mới", "0987654321", null, null, null),
+            ipAddress: null);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("AUTH_006", result.Error.Code);
+        Assert.Equal("Test User", user.FullName);
+        await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _auditLogger.DidNotReceive().LogAsync(
+            action: Arg.Any<string>(),
+            entityType: Arg.Any<string>(),
+            entityId: Arg.Any<int?>(),
+            userId: Arg.Any<int?>(),
+            detail: Arg.Any<string?>(),
+            ipAddress: Arg.Any<string?>(),
+            ct: Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -151,6 +222,19 @@ public sealed class AuthServiceTests
         Assert.True(result.IsSuccess);
         Assert.Equal("newHashed", user.PasswordHash);
         await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _auditLogger.Received(1).LogAsync(
+            action: AuditActions.Update,
+            entityType: "User",
+            entityId: 1,
+            userId: 1,
+            detail: Arg.Is<string?>(detail =>
+                detail != null &&
+                !detail.Contains("oldPass") &&
+                !detail.Contains("newPass123") &&
+                !detail.Contains("newHashed") &&
+                !detail.Contains("signed.jwt.value")),
+            ipAddress: Arg.Any<string?>(),
+            ct: Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -166,6 +250,17 @@ public sealed class AuthServiceTests
         Assert.True(result.IsFailure);
         Assert.Equal("AUTH_004", result.Error.Code);
         await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _auditLogger.Received(1).LogAsync(
+            action: AuditActions.Update,
+            entityType: "User",
+            entityId: 1,
+            userId: 1,
+            detail: Arg.Is<string?>(detail =>
+                detail != null &&
+                !detail.Contains("wrongOldPass") &&
+                !detail.Contains("newPass123")),
+            ipAddress: Arg.Any<string?>(),
+            ct: Arg.Any<CancellationToken>());
     }
 
     [Fact]

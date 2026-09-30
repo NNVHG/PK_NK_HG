@@ -3,6 +3,7 @@ using Dental.Api.Middleware;
 using Dental.Api.Policies;
 using Dental.Application.Features.Auth.Services;
 using Dental.Application.Features.Auth.Validators;
+using Dental.Application.Features.Staff.Services;
 using Dental.Application.Interfaces;
 using Dental.Infrastructure.Data;
 using Dental.Infrastructure.Data.Seeders;
@@ -22,6 +23,7 @@ builder.Services.AddDbContext<DentalDbContext>(opts =>
 
 // ===== 2. Repositories & UnitOfWork =====
 builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // ===== 3. Infrastructure Services =====
@@ -33,7 +35,10 @@ builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
 // ===== 4. Application Services =====
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<AuditLogService>();
+builder.Services.AddScoped<StaffService>();
 builder.Services.AddScoped<LoginRequestValidator>();
+builder.Services.AddScoped<AuditLogQueryRequestValidator>();
 
 builder.Services.AddScoped<ChangePasswordRequestValidator>();
 

@@ -1,6 +1,9 @@
 using Dental.Domain.Constants;
+using Dental.Api.Controllers;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
+using System.Reflection;
 using System.Security.Claims;
 using Xunit;
 using ApiPolicies = Dental.Api.Policies.Policies;
@@ -30,6 +33,37 @@ public class RbacPolicyTests
         Assert.Contains(RoleCodes.Assistant, RoleCodes.StaffRoles);
         Assert.DoesNotContain(RoleCodes.Patient, RoleCodes.StaffRoles);
         Assert.Equal(4, RoleCodes.StaffRoles.Length);
+    }
+
+    [Fact]
+    public void StaffController_RequiresAdminOnlyPolicy_AndHasNoDeleteEndpoint()
+    {
+        var authorize = typeof(StaffController)
+            .GetCustomAttribute<AuthorizeAttribute>();
+
+        Assert.NotNull(authorize);
+        Assert.Equal(ApiPolicies.AdminOnly, authorize!.Policy);
+        Assert.DoesNotContain(typeof(StaffController).GetMethods(), method =>
+            method.GetCustomAttributes<HttpDeleteAttribute>().Any());
+    }
+
+    [Fact]
+    public void AuditLogsController_RequiresAdminOnlyPolicy_AndOnlyExposesGet()
+    {
+        var authorize = typeof(AuditLogsController)
+            .GetCustomAttribute<AuthorizeAttribute>();
+
+        Assert.NotNull(authorize);
+        Assert.Equal(ApiPolicies.AdminOnly, authorize!.Policy);
+
+        var actionMethods = typeof(AuditLogsController).GetMethods(BindingFlags.Instance | BindingFlags.Public)
+            .Where(method => method.DeclaringType == typeof(AuditLogsController));
+        Assert.Single(actionMethods, method => method.GetCustomAttributes<HttpGetAttribute>().Any());
+        Assert.DoesNotContain(actionMethods, method =>
+            method.GetCustomAttributes<HttpPostAttribute>().Any() ||
+            method.GetCustomAttributes<HttpPutAttribute>().Any() ||
+            method.GetCustomAttributes<HttpPatchAttribute>().Any() ||
+            method.GetCustomAttributes<HttpDeleteAttribute>().Any());
     }
 
     [Theory]

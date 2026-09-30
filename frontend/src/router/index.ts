@@ -17,6 +17,24 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
+      path: '/profile',
+      name: 'profile',
+      component: () => import('@/views/ProfileView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/admin/staff',
+      name: 'admin-staff',
+      component: () => import('@/views/StaffView.vue'),
+      meta: { requiresAuth: true, roles: ['ADMIN'] }
+    },
+    {
+      path: '/admin/audit-logs',
+      name: 'admin-audit-logs',
+      component: () => import('@/views/AuditLogView.vue'),
+      meta: { requiresAuth: true, roles: ['ADMIN'] }
+    },
+    {
       path: '/appointments',
       name: 'appointments',
       component: () => import('@/views/AppointmentsView.vue'),

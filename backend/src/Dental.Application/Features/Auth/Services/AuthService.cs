@@ -1,7 +1,9 @@
+using System.Text.Json;
 using Dental.Application.Common;
 using Dental.Application.Features.Auth.DTOs;
 using Dental.Application.Interfaces;
 using Dental.Domain.Constants;
+using Dental.Domain.Entities;
 
 namespace Dental.Application.Features.Auth.Services;
 
@@ -123,6 +125,88 @@ public sealed class AuthService
             Phone: user.Phone,
             FullName: user.FullName,
             Email: user.Email,
+            DateOfBirth: user.DateOfBirth,
+            Gender: user.Gender,
+            RoleCode: user.Role.RoleCode,
+            RoleName: user.Role.RoleName,
+            IsActive: user.IsActive
+        );
+
+        return Result<MeResponse>.Success(response);
+    }
+
+    /// <summary>Cập nhật hồ sơ của người dùng hiện tại.</summary>
+    public async Task<Result<MeResponse>> UpdateProfileAsync(
+        int userId,
+        UpdateProfileRequest request,
+        string? ipAddress,
+        CancellationToken ct = default)
+    {
+        var user = await _userRepo.FindByIdAsync(userId, ct);
+        if (user is null)
+            return Result<MeResponse>.Failure(Error.NotFound);
+
+        // [CẦN XÁC NHẬN] Tài liệu chưa nói rõ có cho đổi SĐT không; hiện không cho đổi vì SĐT là định danh đăng nhập.
+        if (request.Phone != user.Phone)
+            return Result<MeResponse>.Failure(Error.PhoneChangeNotAllowed);
+
+        var fullName = request.FullName.Trim();
+        var email = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email.Trim();
+        var changedFields = new List<string>();
+
+        if (user.FullName != fullName)
+        {
+            user.FullName = fullName;
+            changedFields.Add(nameof(User.FullName));
+        }
+
+        if (user.Email != email)
+        {
+            user.Email = email;
+            changedFields.Add(nameof(User.Email));
+        }
+
+        if (user.DateOfBirth != request.DateOfBirth)
+        {
+            user.DateOfBirth = request.DateOfBirth;
+            changedFields.Add(nameof(User.DateOfBirth));
+        }
+
+        var gender = string.IsNullOrWhiteSpace(request.Gender) ? null : request.Gender.Trim();
+        if (user.Gender != gender)
+        {
+            user.Gender = gender;
+            changedFields.Add(nameof(User.Gender));
+        }
+
+        if (changedFields.Count > 0)
+        {
+            user.UpdatedAt = DateTime.UtcNow;
+            await _unitOfWork.SaveChangesAsync(ct);
+
+            var detail = JsonSerializer.Serialize(new
+            {
+                action = "update_profile",
+                changedFields,
+            });
+
+            await _auditLogger.LogAsync(
+                action: AuditActions.Update,
+                entityType: "User",
+                entityId: user.UserId,
+                userId: user.UserId,
+                detail: detail,
+                ipAddress: ipAddress,
+                ct: ct);
+        }
+
+        var response = new MeResponse(
+            UserId: user.UserId,
+            Phone: user.Phone,
+            FullName: user.FullName,
+            Email: user.Email,
+            DateOfBirth: user.DateOfBirth,
+            Gender: user.Gender,
             RoleCode: user.Role.RoleCode,
             RoleName: user.Role.RoleName,
             IsActive: user.IsActive

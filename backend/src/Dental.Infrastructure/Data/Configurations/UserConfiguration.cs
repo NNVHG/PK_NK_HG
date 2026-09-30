@@ -25,6 +25,12 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.Email)
             .HasMaxLength(100);
 
+        builder.Property(u => u.DateOfBirth)
+            .HasColumnType("date");
+
+        builder.Property(u => u.Gender)
+            .HasMaxLength(10);
+
         builder.Property(u => u.CreatedAt)
             .HasColumnType("timestamptz")
             .IsRequired();

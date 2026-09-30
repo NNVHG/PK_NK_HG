@@ -11,29 +11,10 @@
         <p><strong>Vai trò:</strong> {{ authStore.user?.roleName }} (<code>{{ authStore.user?.roleCode }}</code>)</p>
       </div>
 
-      <div class="password-card">
-        <h3>Đổi Mật Khẩu (F_AUTH_03)</h3>
-        <form @submit.prevent="handleChangePassword">
-          <div class="form-group">
-            <label>Mật khẩu cũ</label>
-            <input v-model="oldPassword" type="password" placeholder="••••••••" required />
-          </div>
-          <div class="form-group">
-            <label>Mật khẩu mới</label>
-            <input v-model="newPassword" type="password" placeholder="Tối thiểu 6 ký tự: 1 hoa, 1 thường, 1 số" required />
-          </div>
-          <div class="form-group">
-            <label>Xác nhận mật khẩu mới</label>
-            <input v-model="confirmPassword" type="password" placeholder="Nhập lại mật khẩu mới" required />
-          </div>
-
-          <div v-if="pwdMessage" class="alert-success">{{ pwdMessage }}</div>
-          <div v-if="pwdError" class="alert-error">{{ pwdError }}</div>
-
-          <button type="submit" class="btn-pwd" :disabled="pwdLoading">
-            {{ pwdLoading ? 'Đang xử lý...' : 'Cập nhật mật khẩu' }}
-          </button>
-        </form>
+      <div class="profile-card">
+        <h3>Hồ sơ cá nhân</h3>
+        <p>Cập nhật thông tin liên hệ và đổi mật khẩu của bạn.</p>
+        <RouterLink class="btn-profile" to="/profile">Hồ sơ cá nhân</RouterLink>
       </div>
     </div>
 
@@ -55,10 +36,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'vue-router';
-import { apiClient } from '@/services/api';
 
 const authStore = useAuthStore();
 const router = useRouter();
@@ -68,46 +48,8 @@ const isStaff = computed(() => {
   return staffRoles.includes(authStore.role);
 });
 
-const oldPassword = ref('');
-const newPassword = ref('');
-const confirmPassword = ref('');
-const pwdMessage = ref('');
-const pwdError = ref('');
-const pwdLoading = ref(false);
-
 function goTo(path: string) {
   router.push(path);
-}
-
-async function handleChangePassword() {
-  pwdError.value = '';
-  pwdMessage.value = '';
-
-  if (newPassword.value !== confirmPassword.value) {
-    pwdError.value = 'Mật khẩu mới và xác nhận mật khẩu không trùng khớp.';
-    return;
-  }
-
-  pwdLoading.value = true;
-  try {
-    const res = await apiClient.post('/auth/change-password', {
-      oldPassword: oldPassword.value,
-      newPassword: newPassword.value
-    });
-    pwdMessage.value = res.data?.message || 'Đổi mật khẩu thành công!';
-    oldPassword.value = '';
-    newPassword.value = '';
-    confirmPassword.value = '';
-  } catch (err: any) {
-    const data = err.response?.data;
-    if (data?.errors && Array.isArray(data.errors)) {
-      pwdError.value = data.errors.map((e: any) => e.message).join(' ');
-    } else {
-      pwdError.value = data?.message || 'Đổi mật khẩu thất bại. Vui lòng thử lại.';
-    }
-  } finally {
-    pwdLoading.value = false;
-  }
 }
 </script>
 
@@ -129,14 +71,14 @@ async function handleChangePassword() {
   margin-bottom: 1.5rem;
 }
 
-.user-card, .password-card {
+.user-card, .profile-card {
   background: #fff;
   padding: 1.25rem 1.5rem;
   border-radius: 6px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
-.user-card h3, .password-card h3 {
+.user-card h3, .profile-card h3 {
   margin-bottom: 0.75rem;
   font-size: 1.1rem;
   color: #2c3e50;
@@ -148,50 +90,14 @@ async function handleChangePassword() {
   margin: 0.4rem 0;
 }
 
-.form-group {
-  margin-bottom: 0.9rem;
-}
-
-.form-group label {
-  display: block;
-  font-size: 0.85rem;
-  font-weight: 500;
-  margin-bottom: 0.3rem;
-  color: #444;
-}
-
-.form-group input {
-  width: 100%;
-  padding: 0.5rem 0.7rem;
-  border: 1px solid #ccd1d9;
-  border-radius: 4px;
+.profile-card p {
+  margin-bottom: 1rem;
+  color: #666;
   font-size: 0.9rem;
 }
 
-.form-group input:focus {
-  outline: none;
-  border-color: #3498db;
-}
-
-.alert-success {
-  background-color: #def7ec;
-  color: #03543f;
-  padding: 0.5rem 0.75rem;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  margin-bottom: 0.75rem;
-}
-
-.alert-error {
-  background-color: #fde8e8;
-  color: #9b1c1c;
-  padding: 0.5rem 0.75rem;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  margin-bottom: 0.75rem;
-}
-
-.btn-pwd {
+.btn-profile {
+  display: block;
   background-color: #27ae60;
   color: white;
   border: none;
@@ -201,16 +107,14 @@ async function handleChangePassword() {
   border-radius: 4px;
   cursor: pointer;
   width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+  text-decoration: none;
   transition: background-color 0.2s;
 }
 
-.btn-pwd:hover:not(:disabled) {
+.btn-profile:hover {
   background-color: #219150;
-}
-
-.btn-pwd:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 .modules-grid {

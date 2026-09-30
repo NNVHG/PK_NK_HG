@@ -10,6 +10,8 @@
           <router-link to="/appointments">Lịch hẹn</router-link>
           <router-link to="/patients">Bệnh nhân</router-link>
         </template>
+        <router-link v-if="isAdmin" to="/admin/staff">Tài khoản nhân viên</router-link>
+        <router-link v-if="isAdmin" to="/admin/audit-logs">Nhật ký thao tác</router-link>
       </nav>
       <div class="user-menu">
         <span>{{ authStore.user?.fullName }} (<strong>{{ authStore.user?.roleName }}</strong>)</span>
@@ -35,6 +37,7 @@ const isStaff = computed(() => {
   const staffRoles = ['ADMIN', 'RECEPTIONIST', 'DENTIST', 'ASSISTANT'];
   return staffRoles.includes(authStore.role);
 });
+const isAdmin = computed(() => authStore.role === 'ADMIN');
 
 async function handleLogout() {
   await authStore.logout();

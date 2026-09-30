@@ -9,6 +9,16 @@ export interface UserInfo {
   roleName: string;
   phone?: string;
   email?: string;
+  dateOfBirth?: string | null;
+  gender?: string | null;
+}
+
+export interface ProfileUpdatePayload {
+  fullName: string;
+  phone: string;
+  email: string | null;
+  dateOfBirth: string | null;
+  gender: string | null;
 }
 
 export const useAuthStore = defineStore('auth', () => {
@@ -48,6 +58,12 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function updateProfile(profile: ProfileUpdatePayload) {
+    const res = await apiClient.put('/auth/profile', profile);
+    user.value = res.data;
+    return res.data;
+  }
+
   async function logout() {
     try {
       if (token.value) {
@@ -69,6 +85,7 @@ export const useAuthStore = defineStore('auth', () => {
     role,
     login,
     fetchMe,
+    updateProfile,
     logout
   };
 });
