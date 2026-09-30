@@ -1,0 +1,151 @@
+using System.Text;
+using Dental.Api.Middleware;
+using Dental.Api.Policies;
+using Dental.Application.Features.Auth.Services;
+using Dental.Application.Features.Auth.Validators;
+using Dental.Application.Interfaces;
+using Dental.Infrastructure.Data;
+using Dental.Infrastructure.Data.Seeders;
+using Dental.Infrastructure.Repositories;
+using Dental.Infrastructure.Services;
+using FluentValidation;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// ===== 1. Database =====
+builder.Services.AddDbContext<DentalDbContext>(opts =>
+    opts.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
+
+// ===== 2. Repositories & UnitOfWork =====
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+// ===== 3. Infrastructure Services =====
+builder.Services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
+builder.Services.AddScoped<ITokenService, JwtTokenService>();
+builder.Services.AddScoped<IAuditLogger, AuditLogger>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+
+// ===== 4. Application Services =====
+builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<LoginRequestValidator>();
+
+builder.Services.AddScoped<ChangePasswordRequestValidator>();
+
+// ===== 5. FluentValidation =====
+builder.Services.AddValidatorsFromAssemblyContaining<LoginRequestValidator>();
+
+// ===== 6. JWT Authentication =====
+var jwtSecret = builder.Configuration["Jwt:Secret"]
+    ?? throw new InvalidOperationException(
+        "Jwt:Secret chưa được cấu hình. Dùng 'dotnet user-secrets set Jwt:Secret <giá_trị>'");
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(opts =>
+    {
+        opts.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer           = true,
+            ValidateAudience         = true,
+            ValidateLifetime         = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer              = builder.Configuration["Jwt:Issuer"] ?? "DentalClinic",
+            ValidAudience            = builder.Configuration["Jwt:Audience"] ?? "DentalClinicClient",
+            IssuerSigningKey         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+            ClockSkew                = TimeSpan.Zero, // không cho phép slack thời gian
+        };
+    });
+
+// ===== 7. Authorization Policies =====
+builder.Services.AddAuthorization(opts => opts.AddApplicationPolicies());
+
+// ===== 8. CORS (chỉ cho phép frontend dev) =====
+builder.Services.AddCors(opts =>
+{
+    opts.AddPolicy("FrontendDev", policy =>
+        policy.WithOrigins("http://localhost:5173", "http://127.0.0.1:5173")
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials());
+});
+
+// ===== 9. Controllers + Swagger =====
+builder.Services.AddControllers();
+
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddEndpointsApiExplorer();
+    builder.Services.AddSwaggerGen(c =>
+    {
+        c.SwaggerDoc("v1", new OpenApiInfo
+        {
+            Title   = "Dental Clinic API",
+            Version = "v1",
+            Description = "Hệ thống quản lý phòng khám nha khoa — đồ án tốt nghiệp",
+        });
+
+        // Hỗ trợ nhập JWT token trong Swagger UI
+        c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+        {
+            Description = "Nhập token dạng: Bearer {token}",
+            Name        = "Authorization",
+            In          = ParameterLocation.Header,
+            Type        = SecuritySchemeType.ApiKey,
+            Scheme      = "Bearer",
+        });
+        c.AddSecurityRequirement(new OpenApiSecurityRequirement
+        {
+            {
+                new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } },
+                Array.Empty<string>()
+            }
+        });
+    });
+}
+
+// ===== Build =====
+var app = builder.Build();
+
+// ===== Middleware pipeline =====
+app.UseMiddleware<GlobalExceptionMiddleware>();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Dental API v1"));
+}
+else
+{
+    app.UseHttpsRedirection();
+}
+
+app.UseCors("FrontendDev");
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapControllers();
+
+// ===== Auto-migrate + Seed khi khởi động =====
+using (var scope = app.Services.CreateScope())
+{
+    var db     = scope.ServiceProvider.GetRequiredService<DentalDbContext>();
+    var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+    await db.Database.MigrateAsync();
+
+    await DatabaseSeeder.SeedAsync(
+        db,
+        config,
+        logger,
+        isDevelopment: app.Environment.IsDevelopment());
+}
+
+app.Run();
+
+// Expose Program cho integration tests
+public partial class Program { }
