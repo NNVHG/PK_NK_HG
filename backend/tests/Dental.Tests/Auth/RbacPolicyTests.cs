@@ -66,6 +66,43 @@ public class RbacPolicyTests
             method.GetCustomAttributes<HttpDeleteAttribute>().Any());
     }
 
+    [Fact]
+    public void PatientsController_UsesSpecifiedPolicies_AndHasNoDeleteEndpoint()
+    {
+        var methods = typeof(PatientsController).GetMethods(BindingFlags.Instance | BindingFlags.Public)
+            .Where(method => method.DeclaringType == typeof(PatientsController))
+            .ToDictionary(method => method.Name);
+
+        Assert.Equal(ApiPolicies.PatientManage, Assert.Single(methods[nameof(PatientsController.CreatePatient)]
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+        Assert.Equal(ApiPolicies.PatientManage, Assert.Single(methods[nameof(PatientsController.CheckDuplicate)]
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+        Assert.Equal(ApiPolicies.PatientView, Assert.Single(methods[nameof(PatientsController.GetPatient)]
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+        Assert.Equal(ApiPolicies.PatientView, Assert.Single(methods[nameof(PatientsController.GetPatients)]
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+        Assert.Equal(ApiPolicies.PatientEdit, Assert.Single(methods[nameof(PatientsController.UpdatePatient)]
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+        Assert.DoesNotContain(methods.Values, method => method.GetCustomAttributes<HttpDeleteAttribute>().Any());
+    }
+
+    [Fact]
+    public void VisitsController_UsesPatientManageForCreateAndPatientViewForHistory()
+    {
+        var methods = typeof(VisitsController).GetMethods(BindingFlags.Instance | BindingFlags.Public)
+            .Where(method => method.DeclaringType == typeof(VisitsController))
+            .ToDictionary(method => method.Name);
+
+        Assert.Equal(ApiPolicies.PatientManage, Assert.Single(methods[nameof(VisitsController.CreateVisit)]
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+        Assert.Equal(ApiPolicies.PatientView, Assert.Single(methods[nameof(VisitsController.GetVisits)]
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+        Assert.DoesNotContain(methods.Values, method =>
+            method.GetCustomAttributes<HttpPutAttribute>().Any() ||
+            method.GetCustomAttributes<HttpPatchAttribute>().Any() ||
+            method.GetCustomAttributes<HttpDeleteAttribute>().Any());
+    }
+
     [Theory]
     [InlineData(RoleCodes.Admin, true)]
     [InlineData(RoleCodes.Receptionist, false)]
@@ -105,6 +142,60 @@ public class RbacPolicyTests
         var result = await _authService.AuthorizeAsync(user, null, ApiPolicies.StaffAny);
 
         // Assert
+        Assert.Equal(expectedAllowed, result.Succeeded);
+    }
+
+    [Theory]
+    [InlineData(RoleCodes.Admin, true)]
+    [InlineData(RoleCodes.Receptionist, true)]
+    [InlineData(RoleCodes.Assistant, true)]
+    [InlineData(RoleCodes.Dentist, false)]
+    [InlineData(RoleCodes.Patient, false)]
+    public async Task PatientManagePolicy_ShouldAllowOnlyConfiguredRoles(string roleCode, bool expectedAllowed)
+    {
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.Role, roleCode)
+        }, "TestAuth"));
+
+        var result = await _authService.AuthorizeAsync(user, null, ApiPolicies.PatientManage);
+
+        Assert.Equal(expectedAllowed, result.Succeeded);
+    }
+
+    [Theory]
+    [InlineData(RoleCodes.Admin, true)]
+    [InlineData(RoleCodes.Receptionist, true)]
+    [InlineData(RoleCodes.Dentist, true)]
+    [InlineData(RoleCodes.Assistant, true)]
+    [InlineData(RoleCodes.Patient, true)]
+    public async Task PatientViewPolicy_ShouldAllowConfiguredRoles(string roleCode, bool expectedAllowed)
+    {
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.Role, roleCode)
+        }, "TestAuth"));
+
+        var result = await _authService.AuthorizeAsync(user, null, ApiPolicies.PatientView);
+
+        Assert.Equal(expectedAllowed, result.Succeeded);
+    }
+
+    [Theory]
+    [InlineData(RoleCodes.Admin, true)]
+    [InlineData(RoleCodes.Receptionist, true)]
+    [InlineData(RoleCodes.Dentist, false)]
+    [InlineData(RoleCodes.Assistant, false)]
+    [InlineData(RoleCodes.Patient, false)]
+    public async Task PatientEditPolicy_ShouldAllowOnlyReceptionistAndAdmin(string roleCode, bool expectedAllowed)
+    {
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.Role, roleCode)
+        }, "TestAuth"));
+
+        var result = await _authService.AuthorizeAsync(user, null, ApiPolicies.PatientEdit);
+
         Assert.Equal(expectedAllowed, result.Succeeded);
     }
 }

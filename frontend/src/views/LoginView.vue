@@ -3,6 +3,7 @@
     <div class="login-card">
       <h2>Đăng Nhập Hệ Thống</h2>
       <p class="subtitle">Phòng Khám Nha Khoa</p>
+      <div v-if="registrationNotice" class="success-alert">{{ registrationNotice }}</div>
 
       <form @submit.prevent="handleSubmit">
         <div class="form-group">
@@ -37,14 +38,15 @@
           {{ loading ? 'Đang xác thực...' : 'Đăng nhập' }}
         </button>
       </form>
+      <p class="register-link">Chưa có tài khoản? <RouterLink to="/register">Đăng ký</RouterLink></p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useAuthStore } from '@/stores/auth';
-import { useRouter, useRoute } from 'vue-router';
+import { RouterLink, useRouter, useRoute } from 'vue-router';
 
 const authStore = useAuthStore();
 const router = useRouter();
@@ -54,6 +56,9 @@ const phone = ref('');
 const password = ref('');
 const errorMessage = ref('');
 const loading = ref(false);
+const registrationNotice = computed(() => route.query.registered === '1'
+  ? 'Đăng ký thành công. Vui lòng đăng nhập bằng tài khoản vừa tạo.'
+  : '');
 
 async function handleSubmit() {
   errorMessage.value = '';
@@ -132,6 +137,24 @@ async function handleSubmit() {
   font-size: 0.85rem;
   margin-bottom: 1.25rem;
 }
+
+.success-alert {
+  background-color: #e8f7ee;
+  color: #187044;
+  padding: 0.6rem 0.8rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  margin-bottom: 1.25rem;
+}
+
+.register-link {
+  margin: 1.25rem 0 0;
+  text-align: center;
+  color: #59636e;
+  font-size: 0.9rem;
+}
+
+.register-link a { color: #287bb5; font-weight: 600; }
 
 .btn-submit {
   width: 100%;

@@ -28,6 +28,42 @@ public sealed class AuthController : ControllerBase
         _currentUser = currentUser;
     }
 
+    /// <summary>Đăng ký tài khoản bệnh nhân. Sau khi đăng ký, người dùng đăng nhập tại trang đăng nhập.</summary>
+    [HttpPost("register")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(RegisterResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Register(
+        [FromBody] RegisterRequest request,
+        [FromServices] RegisterRequestValidator registerValidator,
+        CancellationToken ct)
+    {
+        var validationResult = await registerValidator.ValidateAsync(request, ct);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new
+            {
+                code = "GEN_003",
+                message = "Dữ liệu đầu vào không hợp lệ.",
+                errors = validationResult.Errors.Select(error => new { field = error.PropertyName, message = error.ErrorMessage }),
+            });
+        }
+
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var result = await _authService.RegisterAsync(request, ipAddress, ct);
+        if (result.IsFailure)
+        {
+            var statusCode = result.Error.Code == Error.RegistrationPhoneExists.Code
+                ? StatusCodes.Status409Conflict
+                : StatusCodes.Status400BadRequest;
+
+            return StatusCode(statusCode, new { code = result.Error.Code, message = result.Error.Message });
+        }
+
+        return Ok(result.Value);
+    }
+
     /// <summary>Đăng nhập bằng SĐT + mật khẩu. Trả về JWT access token.</summary>
     [HttpPost("login")]
     [AllowAnonymous]

@@ -9,4 +9,9 @@ public static class AuditActions
     public const string Create      = "CREATE";
     public const string Update      = "UPDATE";
     public const string Delete      = "DELETE";
+    public const string PatientCreated = "PATIENT_CREATED";
+    public const string PatientUpdated = "PATIENT_UPDATED";
+    public const string UserRegistered = "USER_REGISTERED";
+    public const string VisitCreated = "VISIT_CREATED";
+    public const string MedicalHistoryRecorded = "MEDICAL_HISTORY_RECORDED";
 }

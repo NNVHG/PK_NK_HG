@@ -3,7 +3,13 @@ using Dental.Api.Middleware;
 using Dental.Api.Policies;
 using Dental.Application.Features.Auth.Services;
 using Dental.Application.Features.Auth.Validators;
+using Dental.Application.Features.MedicalHistory.Services;
+using Dental.Application.Features.MedicalHistory.Validators;
+using Dental.Application.Features.Patients.Services;
+using Dental.Application.Features.Patients.Validators;
 using Dental.Application.Features.Staff.Services;
+using Dental.Application.Features.Visits.Services;
+using Dental.Application.Features.Visits.Validators;
 using Dental.Application.Interfaces;
 using Dental.Infrastructure.Data;
 using Dental.Infrastructure.Data.Seeders;
@@ -24,6 +30,9 @@ builder.Services.AddDbContext<DentalDbContext>(opts =>
 // ===== 2. Repositories & UnitOfWork =====
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+builder.Services.AddScoped<IPatientRepository, PatientRepository>();
+builder.Services.AddScoped<IVisitRepository, VisitRepository>();
+builder.Services.AddScoped<IMedicalHistoryRepository, MedicalHistoryRepository>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // ===== 3. Infrastructure Services =====
@@ -37,7 +46,19 @@ builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddScoped<StaffService>();
+builder.Services.AddScoped<PatientsService>();
+builder.Services.AddScoped<VisitService>();
+builder.Services.AddScoped<MedicalHistoryService>();
+builder.Services.AddScoped<CreatePatientRequestValidator>();
+builder.Services.AddScoped<PatientDuplicateCheckRequestValidator>();
+builder.Services.AddScoped<PatientQueryRequestValidator>();
+builder.Services.AddScoped<UpdatePatientRequestValidator>();
 builder.Services.AddScoped<LoginRequestValidator>();
+builder.Services.AddScoped<RegisterRequestValidator>();
+builder.Services.AddScoped<VisitQueryRequestValidator>();
+builder.Services.AddScoped<RecordMedicalHistoryRequestValidator>();
+builder.Services.AddScoped<MedicalHistoryItemRequestValidator>();
+builder.Services.AddScoped<MedicalHistoryQueryRequestValidator>();
 builder.Services.AddScoped<AuditLogQueryRequestValidator>();
 
 builder.Services.AddScoped<ChangePasswordRequestValidator>();

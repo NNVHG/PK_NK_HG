@@ -43,7 +43,8 @@ public sealed class AuthProfileControllerTests
             Substitute.For<IUnitOfWork>(),
             Substitute.For<IPasswordHasher>(),
             Substitute.For<ITokenService>(),
-            Substitute.For<IAuditLogger>());
+            Substitute.For<IAuditLogger>(),
+            Substitute.For<IPatientRepository>());
         var controller = new AuthController(authService, new LoginRequestValidator(), currentUser);
         controller.ControllerContext = new ControllerContext
         {

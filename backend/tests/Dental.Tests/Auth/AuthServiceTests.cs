@@ -16,9 +16,10 @@ public sealed class AuthServiceTests
     private readonly IPasswordHasher _passwordHasher = Substitute.For<IPasswordHasher>();
     private readonly ITokenService _tokenService = Substitute.For<ITokenService>();
     private readonly IAuditLogger _auditLogger = Substitute.For<IAuditLogger>();
+    private readonly IPatientRepository _patientRepository = Substitute.For<IPatientRepository>();
 
     private AuthService CreateService() =>
-        new(_userRepo, _unitOfWork, _passwordHasher, _tokenService, _auditLogger);
+        new(_userRepo, _unitOfWork, _passwordHasher, _tokenService, _auditLogger, _patientRepository);
 
 
     private static User MakeUser(bool isActive = true) => new()

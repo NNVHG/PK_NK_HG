@@ -22,6 +22,12 @@ public record Error(string Code, string Message)
     public static readonly Error WrongOldPassword    = new("AUTH_004", "Mật khẩu cũ không chính xác.");
     public static readonly Error SameNewPassword     = new("AUTH_005", "Mật khẩu mới không được trùng với mật khẩu cũ.");
     public static readonly Error PhoneChangeNotAllowed = new("AUTH_006", "Chưa hỗ trợ thay đổi số điện thoại.");
+    public static readonly Error RegistrationPhoneExists = new("AUTH_007", "Số điện thoại đã được đăng ký.");
+    public static readonly Error RegistrationRoleUnavailable = new("AUTH_008", "Không thể tạo tài khoản lúc này. Vui lòng thử lại sau.");
+
+    // Lỗi lần khám (MOD_PAT)
+    public static readonly Error VisitAlreadyOpen = new("PAT_090", "Bệnh nhân đang có lần khám chưa kết thúc.");
+    public static readonly Error MedicalHistoryVisitClosed = new("PAT_041", "Không thể ghi tiền sử cho lần khám đã kết thúc hoặc bị hủy.");
 
     // Lỗi quản lý tài khoản nhân viên (MOD_MST)
     public static readonly Error StaffPhoneExists = new("MST_001", "Số điện thoại đã được sử dụng.");

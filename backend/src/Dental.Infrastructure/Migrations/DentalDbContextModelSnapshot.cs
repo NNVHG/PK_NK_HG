@@ -22,6 +22,9 @@ namespace Dental.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.HasSequence<int>("patient_number_seq")
+                .HasMax(999999L);
+
             modelBuilder.Entity("Dental.Domain.Entities.AuditLog", b =>
                 {
                     b.Property<long>("LogId")
@@ -65,6 +68,79 @@ namespace Dental.Infrastructure.Migrations
                         .HasDatabaseName("IX_AuditLogs_User");
 
                     b.ToTable("AuditLogs");
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.Patient", b =>
+                {
+                    b.Property<int>("PatientId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("PatientId"));
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<DateOnly>("DateOfBirth")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Gender")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<int>("PatientNumber")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValueSql("nextval('patient_number_seq')");
+
+                    NpgsqlPropertyBuilderExtensions.UseSequence(b.Property<int>("PatientNumber"), "patient_number_seq");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("PatientId");
+
+                    b.HasIndex("FullName")
+                        .HasDatabaseName("IX_Patients_FullName");
+
+                    b.HasIndex("PatientNumber")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Patients_PatientNumber");
+
+                    b.HasIndex("Phone")
+                        .HasDatabaseName("IX_Patients_Phone");
+
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Patients_UserId");
+
+                    b.ToTable("Patients");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.Role", b =>
@@ -119,6 +195,9 @@ namespace Dental.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamptz");
 
+                    b.Property<DateOnly?>("DateOfBirth")
+                        .HasColumnType("date");
+
                     b.Property<string>("Email")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -127,6 +206,10 @@ namespace Dental.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Gender")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
@@ -147,13 +230,6 @@ namespace Dental.Infrastructure.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamptz");
 
-                    b.Property<DateOnly?>("DateOfBirth")
-                        .HasColumnType("date");
-
-                    b.Property<string>("Gender")
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
-
                     b.HasKey("UserId");
 
                     b.HasIndex("Phone")
@@ -165,12 +241,70 @@ namespace Dental.Infrastructure.Migrations
                     b.ToTable("Users");
                 });
 
+            modelBuilder.Entity("Dental.Domain.Entities.Visit", b =>
+                {
+                    b.Property<int>("VisitId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("VisitId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("DentistId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<int>("PatientId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.HasKey("VisitId");
+
+                    b.HasIndex("CreatedByUserId")
+                        .HasDatabaseName("IX_Visits_CreatedByUserId");
+
+                    b.HasIndex("DentistId")
+                        .HasDatabaseName("IX_Visits_DentistId");
+
+                    b.HasIndex("PatientId", "CreatedAt")
+                        .HasDatabaseName("IX_Visits_PatientId_CreatedAt");
+
+                    b.ToTable("Visits");
+                });
+
             modelBuilder.Entity("Dental.Domain.Entities.AuditLog", b =>
                 {
                     b.HasOne("Dental.Domain.Entities.User", "User")
                         .WithMany("AuditLogs")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.Patient", b =>
+                {
+                    b.HasOne("Dental.Domain.Entities.User", "User")
+                        .WithOne()
+                        .HasForeignKey("Dental.Domain.Entities.Patient", "UserId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("User");
                 });
@@ -184,6 +318,32 @@ namespace Dental.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Role");
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.Visit", b =>
+                {
+                    b.HasOne("Dental.Domain.Entities.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.User", "Dentist")
+                        .WithMany()
+                        .HasForeignKey("DentistId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Dental.Domain.Entities.Patient", "Patient")
+                        .WithMany()
+                        .HasForeignKey("PatientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Dentist");
+
+                    b.Navigation("Patient");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.Role", b =>
