@@ -58,14 +58,12 @@
               <td>{{ formatGender(patient.gender) }}</td>
               <td>{{ patient.phone }}</td>
               <td class="row-actions">
-                <button
+                <router-link
                   class="text-button"
-                  type="button"
-                  disabled
-                  title="Trang chi tiết hồ sơ sẽ được bổ sung ở P2.11"
+                  :to="{ name: 'patient-detail', params: { id: patient.patientId } }"
                 >
                   Chi tiết
-                </button>
+                </router-link>
                 <button
                   v-if="canEdit"
                   class="text-button"

@@ -3,6 +3,7 @@ using System;
 using Dental.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Dental.Infrastructure.Migrations
 {
     [DbContext(typeof(DentalDbContext))]
-    partial class DentalDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261002111921_AddMedicalHistory")]
+    partial class AddMedicalHistory
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -366,59 +369,6 @@ namespace Dental.Infrastructure.Migrations
                     b.ToTable("Visits");
                 });
 
-            modelBuilder.Entity("Dental.Domain.Entities.VitalSignRecord", b =>
-                {
-                    b.Property<int>("VitalSignRecordId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("VitalSignRecordId"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamptz");
-
-                    b.Property<int?>("DiastolicBp")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Note")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<int>("PatientId")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("PulseBpm")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("RecordedByUserId")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("SystolicBp")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal?>("TemperatureC")
-                        .HasColumnType("numeric");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamptz");
-
-                    b.Property<int>("VisitId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("VitalSignRecordId");
-
-                    b.HasIndex("RecordedByUserId")
-                        .HasDatabaseName("IX_VitalSignRecords_RecordedByUserId");
-
-                    b.HasIndex("VisitId")
-                        .HasDatabaseName("IX_VitalSignRecords_VisitId");
-
-                    b.HasIndex("PatientId", "CreatedAt")
-                        .HasDatabaseName("IX_VitalSignRecords_PatientId_CreatedAt");
-
-                    b.ToTable("VitalSignRecords");
-                });
-
             modelBuilder.Entity("Dental.Domain.Entities.AuditLog", b =>
                 {
                     b.HasOne("Dental.Domain.Entities.User", "User")
@@ -512,33 +462,6 @@ namespace Dental.Infrastructure.Migrations
                     b.Navigation("Dentist");
 
                     b.Navigation("Patient");
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.VitalSignRecord", b =>
-                {
-                    b.HasOne("Dental.Domain.Entities.Patient", "Patient")
-                        .WithMany()
-                        .HasForeignKey("PatientId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Dental.Domain.Entities.User", "RecordedByUser")
-                        .WithMany()
-                        .HasForeignKey("RecordedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Dental.Domain.Entities.Visit", "Visit")
-                        .WithMany()
-                        .HasForeignKey("VisitId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Patient");
-
-                    b.Navigation("RecordedByUser");
-
-                    b.Navigation("Visit");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.MedicalHistoryRecord", b =>

@@ -49,6 +49,7 @@ public sealed class PatientsService
 
         var page = PagedResult<PatientListItemResponse>.Create(
             patients.Items.Select(patient => new PatientListItemResponse(
+                patient.PatientId,
                 patient.PatientCode,
                 patient.FullName,
                 patient.DateOfBirth,

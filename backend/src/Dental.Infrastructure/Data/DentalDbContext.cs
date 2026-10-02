@@ -16,6 +16,7 @@ public sealed class DentalDbContext : DbContext
     public DbSet<Visit> Visits => Set<Visit>();
     public DbSet<MedicalHistoryRecord> MedicalHistoryRecords => Set<MedicalHistoryRecord>();
     public DbSet<MedicalHistoryItem> MedicalHistoryItems => Set<MedicalHistoryItem>();
+    public DbSet<VitalSignRecord> VitalSignRecords => Set<VitalSignRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -31,6 +32,7 @@ public sealed class DentalDbContext : DbContext
         modelBuilder.ApplyConfiguration(new VisitConfiguration());
         modelBuilder.ApplyConfiguration(new MedicalHistoryRecordConfiguration());
         modelBuilder.ApplyConfiguration(new MedicalHistoryItemConfiguration());
+        modelBuilder.ApplyConfiguration(new VitalSignRecordConfiguration());
     }
 
     /// <summary>

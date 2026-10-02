@@ -53,6 +53,12 @@ const router = createRouter({
       meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST', 'DENTIST', 'ASSISTANT'] }
     },
     {
+      path: '/patients/:id(\\d+)',
+      name: 'patient-detail',
+      component: () => import('@/views/PatientDetailView.vue'),
+      meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST', 'DENTIST', 'ASSISTANT'] }
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: () => import('@/views/NotFoundView.vue')

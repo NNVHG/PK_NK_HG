@@ -15,6 +15,8 @@ public static class Policies
     public const string PatientView = "PatientView";
     public const string PatientEdit = "PatientEdit";
     public const string MedicalHistoryWrite = "MedicalHistoryWrite";
+    public const string VitalSignsWrite = "VitalSignsWrite";
+    public const string PatientSafetyAlertsView = "PatientSafetyAlertsView";
 
     public static void AddApplicationPolicies(this AuthorizationOptions opts)
     {
@@ -37,5 +39,11 @@ public static class Policies
 
         opts.AddPolicy(MedicalHistoryWrite, policy =>
             policy.RequireRole(RoleCodes.Receptionist, RoleCodes.Assistant, RoleCodes.Admin));
+
+        opts.AddPolicy(VitalSignsWrite, policy =>
+            policy.RequireRole(RoleCodes.Receptionist, RoleCodes.Assistant, RoleCodes.Admin));
+
+        opts.AddPolicy(PatientSafetyAlertsView, policy =>
+            policy.RequireRole(RoleCodes.StaffRoles));
     }
 }

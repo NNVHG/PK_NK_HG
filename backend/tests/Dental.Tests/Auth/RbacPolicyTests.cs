@@ -103,6 +103,24 @@ public class RbacPolicyTests
             method.GetCustomAttributes<HttpDeleteAttribute>().Any());
     }
 
+    [Fact]
+    public void MedicalHistoryController_UsesWriteAndViewPolicies_AndHasNoMutationEndpoint()
+    {
+        var methods = typeof(MedicalHistoryController).GetMethods(BindingFlags.Instance | BindingFlags.Public)
+            .Where(method => method.DeclaringType == typeof(MedicalHistoryController))
+            .ToArray();
+
+        Assert.Equal(ApiPolicies.MedicalHistoryWrite, Assert.Single(methods
+            .Single(method => method.Name == nameof(MedicalHistoryController.Record))
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+        Assert.Equal(2, methods.Count(method => method.GetCustomAttributes<AuthorizeAttribute>()
+            .Any(attribute => attribute.Policy == ApiPolicies.PatientView)));
+        Assert.DoesNotContain(methods, method =>
+            method.GetCustomAttributes<HttpPutAttribute>().Any() ||
+            method.GetCustomAttributes<HttpPatchAttribute>().Any() ||
+            method.GetCustomAttributes<HttpDeleteAttribute>().Any());
+    }
+
     [Theory]
     [InlineData(RoleCodes.Admin, true)]
     [InlineData(RoleCodes.Receptionist, false)]
@@ -197,6 +215,106 @@ public class RbacPolicyTests
         var result = await _authService.AuthorizeAsync(user, null, ApiPolicies.PatientEdit);
 
         Assert.Equal(expectedAllowed, result.Succeeded);
+    }
+
+    [Theory]
+    [InlineData(RoleCodes.Admin, true)]
+    [InlineData(RoleCodes.Receptionist, true)]
+    [InlineData(RoleCodes.Assistant, true)]
+    [InlineData(RoleCodes.Dentist, false)]
+    [InlineData(RoleCodes.Patient, false)]
+    public async Task MedicalHistoryWritePolicy_ShouldAllowOnlyReceptionistAssistantAndAdmin(
+        string roleCode,
+        bool expectedAllowed)
+    {
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.Role, roleCode)
+        }, "TestAuth"));
+
+        var result = await _authService.AuthorizeAsync(user, null, ApiPolicies.MedicalHistoryWrite);
+
+        Assert.Equal(expectedAllowed, result.Succeeded);
+    }
+
+    [Fact]
+    public void VitalSignsController_UsesWriteAndViewPolicies_AndHasNoMutationEndpoint()
+    {
+        var methods = typeof(VitalSignsController).GetMethods(BindingFlags.Instance | BindingFlags.Public)
+            .Where(method => method.DeclaringType == typeof(VitalSignsController))
+            .ToArray();
+
+        Assert.Equal(ApiPolicies.VitalSignsWrite, Assert.Single(methods
+            .Single(method => method.Name == nameof(VitalSignsController.Record))
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+        Assert.Equal(ApiPolicies.PatientView, Assert.Single(methods
+            .Single(method => method.Name == nameof(VitalSignsController.GetPatientVitalSigns))
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+        Assert.DoesNotContain(methods, method =>
+            method.GetCustomAttributes<HttpPutAttribute>().Any() ||
+            method.GetCustomAttributes<HttpPatchAttribute>().Any() ||
+            method.GetCustomAttributes<HttpDeleteAttribute>().Any());
+    }
+
+    [Theory]
+    [InlineData(RoleCodes.Admin, true)]
+    [InlineData(RoleCodes.Receptionist, true)]
+    [InlineData(RoleCodes.Assistant, true)]
+    [InlineData(RoleCodes.Dentist, false)]
+    [InlineData(RoleCodes.Patient, false)]
+    public async Task VitalSignsWritePolicy_ShouldAllowOnlyConfiguredRoles(string roleCode, bool expectedAllowed)
+    {
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.Role, roleCode)
+        }, "TestAuth"));
+
+        var result = await _authService.AuthorizeAsync(user, null, ApiPolicies.VitalSignsWrite);
+
+        Assert.Equal(expectedAllowed, result.Succeeded);
+    }
+
+    [Fact]
+    public void PatientSafetyAlertsController_RequiresStaffOnlyPolicy()
+    {
+        var authorize = typeof(PatientSafetyAlertsController)
+            .GetCustomAttribute<AuthorizeAttribute>();
+
+        Assert.NotNull(authorize);
+        Assert.Equal(ApiPolicies.PatientSafetyAlertsView, authorize!.Policy);
+        Assert.Contains(typeof(PatientSafetyAlertsController).GetMethods(), method =>
+            method.Name == nameof(PatientSafetyAlertsController.Get) &&
+            method.GetCustomAttributes<HttpGetAttribute>().Any());
+    }
+
+    [Theory]
+    [InlineData(RoleCodes.Admin, true)]
+    [InlineData(RoleCodes.Receptionist, true)]
+    [InlineData(RoleCodes.Dentist, true)]
+    [InlineData(RoleCodes.Assistant, true)]
+    [InlineData(RoleCodes.Patient, false)]
+    public async Task PatientSafetyAlertsViewPolicy_ShouldAllowStaffAndRejectPatient(
+        string roleCode,
+        bool expectedAllowed)
+    {
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.Role, roleCode)
+        }, "TestAuth"));
+
+        var result = await _authService.AuthorizeAsync(user, null, ApiPolicies.PatientSafetyAlertsView);
+
+        Assert.Equal(expectedAllowed, result.Succeeded);
+    }
+
+    [Fact]
+    public void PatientTimelineController_UsesPatientViewPolicy()
+    {
+        var authorize = typeof(PatientTimelineController)
+            .GetCustomAttribute<AuthorizeAttribute>();
+
+        Assert.NotNull(authorize);
+        Assert.Equal(ApiPolicies.PatientView, authorize!.Policy);
     }
 }
 
