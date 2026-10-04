@@ -3,9 +3,11 @@ using Dental.Application.Features.Auth.DTOs;
 using Dental.Application.Features.Auth.Services;
 using Dental.Application.Features.Auth.Validators;
 using Dental.Application.Interfaces;
+using Dental.Api.RateLimiting;
 using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Dental.Api.Controllers;
 
@@ -31,9 +33,11 @@ public sealed class AuthController : ControllerBase
     /// <summary>Đăng ký tài khoản bệnh nhân. Sau khi đăng ký, người dùng đăng nhập tại trang đăng nhập.</summary>
     [HttpPost("register")]
     [AllowAnonymous]
+    [EnableRateLimiting(AuthRateLimitPolicies.Register)]
     [ProducesResponseType(typeof(RegisterResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> Register(
         [FromBody] RegisterRequest request,
         [FromServices] RegisterRequestValidator registerValidator,
@@ -67,9 +71,11 @@ public sealed class AuthController : ControllerBase
     /// <summary>Đăng nhập bằng SĐT + mật khẩu. Trả về JWT access token.</summary>
     [HttpPost("login")]
     [AllowAnonymous]
+    [EnableRateLimiting(AuthRateLimitPolicies.Login)]
     [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> Login([FromBody] LoginRequest request, CancellationToken ct)
     {
         // Validate đầu vào

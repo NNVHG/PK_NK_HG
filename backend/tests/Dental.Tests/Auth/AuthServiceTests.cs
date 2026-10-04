@@ -76,6 +76,14 @@ public sealed class AuthServiceTests
 
         Assert.True(result.IsFailure);
         Assert.Equal("AUTH_001", result.Error.Code); // cùng lỗi chung — chống dò tài khoản
+        await _auditLogger.Received(1).LogAsync(
+            action: AuditActions.LoginFailed,
+            entityType: "User",
+            entityId: Arg.Any<int?>(),
+            userId: Arg.Any<int?>(),
+            detail: Arg.Is<string?>(detail => detail == "{\"reason\":\"phone_not_found\"}" && !detail.Contains("0999999999")),
+            ipAddress: Arg.Any<string?>(),
+            ct: Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -91,6 +99,14 @@ public sealed class AuthServiceTests
 
         Assert.True(result.IsFailure);
         Assert.Equal("AUTH_002", result.Error.Code);
+        await _auditLogger.Received(1).LogAsync(
+            action: AuditActions.LoginFailed,
+            entityType: "User",
+            entityId: Arg.Any<int?>(),
+            userId: 1,
+            detail: Arg.Is<string?>(detail => detail == "{\"reason\":\"account_locked\"}" && !detail.Contains("0912345678")),
+            ipAddress: Arg.Any<string?>(),
+            ct: Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -109,13 +125,14 @@ public sealed class AuthServiceTests
             entityType: Arg.Any<string>(),
             entityId: Arg.Any<int?>(),
             userId: Arg.Any<int?>(),
-            detail: Arg.Any<string?>(),
+            detail: Arg.Is<string?>(detail =>
+                detail == "{\"reason\":\"wrong_password\"}" && !detail.Contains("0912345678")),
             ipAddress: Arg.Any<string?>(),
             ct: Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task LoginAsync_SuccessfulLogin_AuditLogNotContainPassword()
+    public async Task LoginAsync_SuccessfulLogin_AuditLogContainsUserIdWithoutPhoneOrCredentials()
     {
         var user = MakeUser();
         _userRepo.FindByPhoneAsync("0912345678").Returns(user);
@@ -126,13 +143,22 @@ public sealed class AuthServiceTests
         var svc = CreateService();
         await svc.LoginAsync(new LoginRequest("0912345678", "myPassword"), ipAddress: null);
 
-        // Detail trong AuditLog không được chứa password
+        // Audit thành công ghi UserId, không ghi SĐT, mật khẩu hoặc token vào detail.
         await _auditLogger.Received(1).LogAsync(
             action: AuditActions.Login,
             entityType: Arg.Any<string>(),
             entityId: Arg.Any<int?>(),
             userId: Arg.Any<int?>(),
-            detail: Arg.Is<string?>(d => d == null || (!d.Contains("myPassword") && !d.Contains(accessToken))),
+            detail: null,
+            ipAddress: Arg.Any<string?>(),
+            ct: Arg.Any<CancellationToken>());
+
+        await _auditLogger.Received(1).LogAsync(
+            action: AuditActions.Login,
+            entityType: "User",
+            entityId: 1,
+            userId: 1,
+            detail: null,
             ipAddress: Arg.Any<string?>(),
             ct: Arg.Any<CancellationToken>());
 

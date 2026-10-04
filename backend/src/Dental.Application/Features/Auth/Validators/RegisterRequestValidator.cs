@@ -1,3 +1,4 @@
+using Dental.Application.Common;
 using Dental.Application.Features.Auth.DTOs;
 using FluentValidation;
 
@@ -5,7 +6,7 @@ namespace Dental.Application.Features.Auth.Validators;
 
 public sealed class RegisterRequestValidator : AbstractValidator<RegisterRequest>
 {
-    public RegisterRequestValidator()
+    public RegisterRequestValidator(VietnamClock vietnamClock)
     {
         RuleFor(request => request.FullName)
             .Cascade(CascadeMode.Stop)
@@ -24,7 +25,12 @@ public sealed class RegisterRequestValidator : AbstractValidator<RegisterRequest
             .Matches(@"[0-9]").WithMessage("Mật khẩu mới phải chứa ít nhất 1 chữ số.");
 
         RuleFor(request => request.DateOfBirth)
-            .NotEmpty().WithMessage("Ngày sinh không được để trống.");
+            .NotEmpty().WithMessage("Ngày sinh không được để trống.")
+            .Must(dateOfBirth => dateOfBirth <= vietnamClock.Today)
+            .WithMessage("Ngày sinh không được ở tương lai.")
+            // [CẦN XÁC NHẬN] Giới hạn tuổi này dùng cùng quy tắc validator hồ sơ bệnh nhân hiện có.
+            .Must(dateOfBirth => dateOfBirth >= vietnamClock.Today.AddYears(-120))
+            .WithMessage("Ngày sinh không được quá 120 tuổi.");
 
         RuleFor(request => request.Gender)
             .Must(gender => gender is "Male" or "Female" or "Other")

@@ -15,4 +15,7 @@ public static class AuditActions
     public const string VisitCreated = "VISIT_CREATED";
     public const string MedicalHistoryRecorded = "MEDICAL_HISTORY_RECORDED";
     public const string VitalSignsRecorded = "VITAL_SIGNS_RECORDED";
+    public const string ServicePriceCreated = "SERVICE_PRICE_CREATED";
+    public const string ServiceDeactivated = "SERVICE_DEACTIVATED";
+    public const string ServiceActivated = "SERVICE_ACTIVATED";
 }

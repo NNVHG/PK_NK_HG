@@ -34,7 +34,7 @@ public sealed class VisitServiceTests
         };
         var visits = new List<Visit> { previousVisit };
         _patientRepository.GetByIdAsync(5, Arg.Any<CancellationToken>())
-            .Returns(new Patient { PatientId = 5, PatientNumber = 50 });
+            .Returns(new Patient { PatientId = 5, PatientNumber = 50, IsActive = true });
         _visitRepository.HasOpenVisitAsync(5, Arg.Any<CancellationToken>()).Returns(false);
         _visitRepository.AddAsync(Arg.Any<Visit>(), Arg.Any<CancellationToken>()).Returns(call =>
         {
@@ -76,6 +76,21 @@ public sealed class VisitServiceTests
 
         Assert.True(result.IsFailure);
         Assert.Equal(Error.NotFound, result.Error);
+        await _visitRepository.DidNotReceive().HasOpenVisitAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+        await _visitRepository.DidNotReceive().AddAsync(Arg.Any<Visit>(), Arg.Any<CancellationToken>());
+        await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateVisitAsync_InactivePatient_ReturnsConflict()
+    {
+        _patientRepository.GetByIdAsync(5, Arg.Any<CancellationToken>())
+            .Returns(new Patient { PatientId = 5, IsActive = false });
+
+        var result = await CreateService().CreateVisitAsync(5, 8, null);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(Error.PatientInactive, result.Error);
         await _visitRepository.DidNotReceive().HasOpenVisitAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
         await _visitRepository.DidNotReceive().AddAsync(Arg.Any<Visit>(), Arg.Any<CancellationToken>());
         await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());

@@ -103,9 +103,6 @@ public sealed class AuthService
         string? ipAddress,
         CancellationToken ct = default)
     {
-        // Che SĐT khi ghi log (VD: 09****678)
-        var maskedPhone = MaskPhone(request.Phone);
-
         var user = await _userRepo.FindByPhoneAsync(request.Phone, ct);
 
         // Không tìm thấy SĐT → trả lỗi chung (không tiết lộ SĐT không tồn tại)
@@ -114,7 +111,7 @@ public sealed class AuthService
             await _auditLogger.LogAsync(
                 action: AuditActions.LoginFailed,
                 entityType: "User",
-                detail: $"{{\"maskedPhone\":\"{maskedPhone}\",\"reason\":\"phone_not_found\"}}",
+                detail: "{\"reason\":\"phone_not_found\"}",
                 ipAddress: ipAddress,
                 ct: ct);
 
@@ -130,7 +127,7 @@ public sealed class AuthService
                 action: AuditActions.LoginFailed,
                 entityType: "User",
                 userId: user.UserId,
-                detail: $"{{\"maskedPhone\":\"{maskedPhone}\",\"reason\":\"wrong_password\"}}",
+                detail: "{\"reason\":\"wrong_password\"}",
                 ipAddress: ipAddress,
                 ct: ct);
 
@@ -144,7 +141,7 @@ public sealed class AuthService
                 action: AuditActions.LoginFailed,
                 entityType: "User",
                 userId: user.UserId,
-                detail: $"{{\"maskedPhone\":\"{maskedPhone}\",\"reason\":\"account_locked\"}}",
+                detail: "{\"reason\":\"account_locked\"}",
                 ipAddress: ipAddress,
                 ct: ct);
 
@@ -159,7 +156,7 @@ public sealed class AuthService
             entityType: "User",
             entityId: user.UserId,
             userId: user.UserId,
-            detail: $"{{\"maskedPhone\":\"{maskedPhone}\"}}",
+            detail: null,
             ipAddress: ipAddress,
             ct: ct);
 
@@ -347,13 +344,6 @@ public sealed class AuthService
             ct: ct);
 
         return Result<bool>.Success(true);
-    }
-
-    /// <summary>Che SĐT: 0912345678 → 09****678.</summary>
-    private static string MaskPhone(string phone)
-    {
-        if (phone.Length < 5) return "***";
-        return phone[..2] + new string('*', phone.Length - 5) + phone[^3..];
     }
 
     private static string? NormalizeOptional(string? value)

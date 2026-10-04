@@ -35,6 +35,8 @@ public sealed class VisitService
         var patient = await _patientRepository.GetByIdAsync(patientId, ct);
         if (patient is null)
             return Result<VisitResponse>.Failure(Error.NotFound);
+        if (!patient.IsActive)
+            return Result<VisitResponse>.Failure(Error.PatientInactive);
 
         // [CẦN XÁC NHẬN] Hiện từ chối tạo Visit mới nếu bệnh nhân còn lần khám Created/InProgress.
         if (await _visitRepository.HasOpenVisitAsync(patientId, ct))

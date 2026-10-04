@@ -77,7 +77,7 @@ public sealed class AuthRegistrationTests
     {
         var request = ValidRequest() with { Password = "weak" };
 
-        var result = await new RegisterRequestValidator().ValidateAsync(request);
+        var result = await new RegisterRequestValidator(new VietnamClock(TimeProvider.System)).ValidateAsync(request);
 
         Assert.False(result.IsValid);
         Assert.Contains(result.Errors, error => error.PropertyName == nameof(RegisterRequest.Password));

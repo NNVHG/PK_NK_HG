@@ -27,6 +27,7 @@ public record Error(string Code, string Message)
 
     // Lỗi lần khám (MOD_PAT)
     public static readonly Error VisitAlreadyOpen = new("PAT_090", "Bệnh nhân đang có lần khám chưa kết thúc.");
+    public static readonly Error PatientInactive = new("PAT_091", "Không thể tạo lần khám cho bệnh nhân đã ngừng hoạt động.");
     public static readonly Error MedicalHistoryVisitClosed = new("PAT_041", "Không thể ghi tiền sử cho lần khám đã kết thúc hoặc bị hủy.");
     public static readonly Error VitalSignsVisitClosed = new("PAT_052", "Không thể ghi sinh hiệu cho lần khám đã kết thúc hoặc bị hủy.");
 
@@ -35,5 +36,9 @@ public record Error(string Code, string Message)
     public static readonly Error InvalidStaffRole = new("MST_002", "Vai trò nhân viên không hợp lệ.");
     public static readonly Error LastActiveAdmin = new("MST_003", "Không thể hạ vai trò hoặc khóa Admin cuối cùng đang hoạt động.");
     public static readonly Error CannotLockSelf = new("MST_004", "Bạn không thể tự khóa tài khoản.");
+    public static readonly Error ServiceCodeExists = new("MST_010", "Mã dịch vụ đã tồn tại.");
+    public static readonly Error ServicePriceEffectiveDateInvalid = new("MST_011", "Ngày áp dụng giá mới không được trước ngày áp dụng giá gần nhất.");
+    public static readonly Error ServiceInactive = new("MST_012", "Dịch vụ đã ngừng bán.");
+    public static readonly Error ServicePriceUnavailable = new("MST_013", "Dịch vụ chưa có giá đang áp dụng.");
 
 }

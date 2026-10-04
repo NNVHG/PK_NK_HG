@@ -90,7 +90,7 @@ public sealed class VisitsController : ControllerBase
         var statusCode = error.Code switch
         {
             "GEN_001" => StatusCodes.Status404NotFound,
-            "PAT_090" => StatusCodes.Status409Conflict,
+            "PAT_090" or "PAT_091" => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status400BadRequest,
         };
 

@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Dental.Infrastructure.Data;
 
-/// <summary>DbContext chính — chỉ chứa 3 bảng của Sprint 0: Roles, Users, AuditLogs.</summary>
+/// <summary>DbContext chính của hệ thống phòng khám.</summary>
 public sealed class DentalDbContext : DbContext
 {
     public DentalDbContext(DbContextOptions<DentalDbContext> options) : base(options) { }
@@ -17,6 +17,8 @@ public sealed class DentalDbContext : DbContext
     public DbSet<MedicalHistoryRecord> MedicalHistoryRecords => Set<MedicalHistoryRecord>();
     public DbSet<MedicalHistoryItem> MedicalHistoryItems => Set<MedicalHistoryItem>();
     public DbSet<VitalSignRecord> VitalSignRecords => Set<VitalSignRecord>();
+    public DbSet<DentalService> DentalServices => Set<DentalService>();
+    public DbSet<ServicePrice> ServicePrices => Set<ServicePrice>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -33,6 +35,8 @@ public sealed class DentalDbContext : DbContext
         modelBuilder.ApplyConfiguration(new MedicalHistoryRecordConfiguration());
         modelBuilder.ApplyConfiguration(new MedicalHistoryItemConfiguration());
         modelBuilder.ApplyConfiguration(new VitalSignRecordConfiguration());
+        modelBuilder.ApplyConfiguration(new DentalServiceConfiguration());
+        modelBuilder.ApplyConfiguration(new ServicePriceConfiguration());
     }
 
     /// <summary>
@@ -63,6 +67,16 @@ public sealed class DentalDbContext : DbContext
         {
             throw new InvalidOperationException(
                 "AuditLog là bất biến — không được phép cập nhật hoặc xóa.");
+        }
+
+        var violatingPrices = ChangeTracker.Entries<ServicePrice>()
+            .Where(entry => entry.State is EntityState.Modified or EntityState.Deleted)
+            .ToList();
+
+        if (violatingPrices.Count > 0)
+        {
+            throw new InvalidOperationException(
+                "ServicePrice là dữ liệu chỉ thêm mới — không được phép cập nhật hoặc xóa.");
         }
     }
 }

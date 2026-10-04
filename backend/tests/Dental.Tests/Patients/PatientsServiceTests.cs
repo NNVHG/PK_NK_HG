@@ -283,10 +283,11 @@ public sealed class PatientsServiceTests
     [Fact]
     public async Task CreatePatientRequestValidator_InvalidFields_AreRejected()
     {
-        var validator = new CreatePatientRequestValidator();
+        var vietnamClock = new VietnamClock(TimeProvider.System);
+        var validator = new CreatePatientRequestValidator(vietnamClock);
         var request = new CreatePatientRequest(
             " ",
-            DateOnly.FromDateTime(DateTime.Today.AddDays(1)),
+            vietnamClock.Today.AddDays(1),
             "Unknown",
             "123",
             "email-khong-hop-le");

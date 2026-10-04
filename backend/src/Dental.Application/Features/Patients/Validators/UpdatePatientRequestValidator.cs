@@ -1,3 +1,4 @@
+using Dental.Application.Common;
 using Dental.Application.Features.Patients.DTOs;
 using FluentValidation;
 
@@ -5,7 +6,7 @@ namespace Dental.Application.Features.Patients.Validators;
 
 public sealed class UpdatePatientRequestValidator : AbstractValidator<UpdatePatientRequest>
 {
-    public UpdatePatientRequestValidator()
+    public UpdatePatientRequestValidator(VietnamClock vietnamClock)
     {
         RuleFor(request => request.FullName)
             .Cascade(CascadeMode.Stop)
@@ -14,9 +15,9 @@ public sealed class UpdatePatientRequestValidator : AbstractValidator<UpdatePati
             .MaximumLength(100).WithMessage("Họ tên không được vượt quá 100 ký tự.");
 
         RuleFor(request => request.DateOfBirth)
-            .Must(dateOfBirth => dateOfBirth <= DateOnly.FromDateTime(DateTime.Today))
+            .Must(dateOfBirth => dateOfBirth <= vietnamClock.Today)
             .WithMessage("Ngày sinh không được ở tương lai.")
-            .Must(dateOfBirth => dateOfBirth >= DateOnly.FromDateTime(DateTime.Today).AddYears(-120))
+            .Must(dateOfBirth => dateOfBirth >= vietnamClock.Today.AddYears(-120))
             .WithMessage("Ngày sinh không được quá 120 tuổi.");
 
         RuleFor(request => request.Gender)

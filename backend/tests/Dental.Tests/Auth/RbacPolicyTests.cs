@@ -1,7 +1,10 @@
 using Dental.Domain.Constants;
 using Dental.Api.Controllers;
+using Dental.Api.RateLimiting;
+using Dental.Application.Features.ServiceCatalog.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
 using System.Security.Claims;
@@ -21,6 +24,48 @@ public class RbacPolicyTests
         services.AddAuthorizationCore(opts => Dental.Api.Policies.Policies.AddApplicationPolicies(opts));
         var sp = services.BuildServiceProvider();
         _authService = sp.GetRequiredService<IAuthorizationService>();
+    }
+
+    [Fact]
+    public void AuthController_RequiresAuthenticationExceptRegisterAndLogin()
+    {
+        var controllerAuthorize = typeof(AuthController).GetCustomAttribute<AuthorizeAttribute>();
+        Assert.NotNull(controllerAuthorize);
+
+        var methods = typeof(AuthController).GetMethods(BindingFlags.Instance | BindingFlags.Public)
+            .Where(method => method.DeclaringType == typeof(AuthController))
+            .ToDictionary(method => method.Name);
+
+        foreach (var methodName in new[] { nameof(AuthController.Register), nameof(AuthController.Login) })
+        {
+            Assert.NotNull(methods[methodName].GetCustomAttribute<AllowAnonymousAttribute>());
+            Assert.NotNull(methods[methodName].GetCustomAttribute<EnableRateLimitingAttribute>());
+        }
+
+        foreach (var methodName in new[]
+                 {
+                     nameof(AuthController.GetMe), nameof(AuthController.UpdateProfile),
+                     nameof(AuthController.ChangePassword), nameof(AuthController.Logout),
+                 })
+        {
+            Assert.Null(methods[methodName].GetCustomAttribute<AllowAnonymousAttribute>());
+            Assert.Null(methods[methodName].GetCustomAttribute<EnableRateLimitingAttribute>());
+        }
+    }
+
+    [Fact]
+    public void DevController_RequiresAuthenticationAndExpectedPolicies()
+    {
+        Assert.NotNull(typeof(DevController).GetCustomAttribute<AuthorizeAttribute>());
+
+        var methods = typeof(DevController).GetMethods(BindingFlags.Instance | BindingFlags.Public)
+            .Where(method => method.DeclaringType == typeof(DevController))
+            .ToDictionary(method => method.Name);
+
+        Assert.Equal(ApiPolicies.AdminOnly,
+            methods[nameof(DevController.AdminOnly)].GetCustomAttribute<AuthorizeAttribute>()?.Policy);
+        Assert.Equal(ApiPolicies.StaffAny,
+            methods[nameof(DevController.StaffOnly)].GetCustomAttribute<AuthorizeAttribute>()?.Policy);
     }
 
     [Fact]
@@ -254,6 +299,47 @@ public class RbacPolicyTests
             method.GetCustomAttributes<HttpPutAttribute>().Any() ||
             method.GetCustomAttributes<HttpPatchAttribute>().Any() ||
             method.GetCustomAttributes<HttpDeleteAttribute>().Any());
+    }
+
+    [Fact]
+    public void ServiceCatalogController_UsesViewAndAdminPoliciesForEndpoints()
+    {
+        var methods = typeof(ServiceCatalogController).GetMethods(BindingFlags.Instance | BindingFlags.Public)
+            .Where(method => method.DeclaringType == typeof(ServiceCatalogController))
+            .ToDictionary(method => method.Name);
+
+        Assert.Equal(ApiPolicies.ServiceCatalogView, Assert.Single(methods[nameof(ServiceCatalogController.GetPage)]
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+        Assert.Equal(ApiPolicies.ServiceCatalogView, Assert.Single(methods[nameof(ServiceCatalogController.GetById)]
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+        foreach (var methodName in new[]
+                 {
+                     nameof(ServiceCatalogController.Create), nameof(ServiceCatalogController.Update),
+                     nameof(ServiceCatalogController.AddPrice), nameof(ServiceCatalogController.Deactivate),
+                     nameof(ServiceCatalogController.Activate),
+                 })
+        {
+            Assert.Equal(ApiPolicies.AdminOnly, Assert.Single(methods[methodName]
+                .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+        }
+    }
+
+    [Theory]
+    [InlineData(RoleCodes.Admin, true)]
+    [InlineData(RoleCodes.Dentist, true)]
+    [InlineData(RoleCodes.Assistant, true)]
+    [InlineData(RoleCodes.Receptionist, false)]
+    [InlineData(RoleCodes.Patient, false)]
+    public async Task ServiceCatalogViewPolicy_AllowsOnlyAdminDentistAndAssistant(string roleCode, bool expectedAllowed)
+    {
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.Role, roleCode)
+        }, "TestAuth"));
+
+        var result = await _authService.AuthorizeAsync(user, null, ApiPolicies.ServiceCatalogView);
+
+        Assert.Equal(expectedAllowed, result.Succeeded);
     }
 
     [Theory]

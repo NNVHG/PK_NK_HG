@@ -1,3 +1,4 @@
+using Dental.Application.Common;
 using Dental.Api.Controllers;
 using Dental.Application.Features.Patients.DTOs;
 using Dental.Application.Features.Patients.Services;
@@ -31,10 +32,10 @@ public sealed class PatientsControllerTests
         var controller = new PatientsController(
             service,
             currentUser,
-            new CreatePatientRequestValidator(),
-            new PatientDuplicateCheckRequestValidator(),
+            new CreatePatientRequestValidator(new VietnamClock(TimeProvider.System)),
+            new PatientDuplicateCheckRequestValidator(new VietnamClock(TimeProvider.System)),
             new PatientQueryRequestValidator(),
-            new UpdatePatientRequestValidator())
+            new UpdatePatientRequestValidator(new VietnamClock(TimeProvider.System)))
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
         };
@@ -58,10 +59,10 @@ public sealed class PatientsControllerTests
         var controller = new PatientsController(
             service,
             currentUser,
-            new CreatePatientRequestValidator(),
-            new PatientDuplicateCheckRequestValidator(),
+            new CreatePatientRequestValidator(new VietnamClock(TimeProvider.System)),
+            new PatientDuplicateCheckRequestValidator(new VietnamClock(TimeProvider.System)),
             new PatientQueryRequestValidator(),
-            new UpdatePatientRequestValidator());
+            new UpdatePatientRequestValidator(new VietnamClock(TimeProvider.System)));
 
         var result = await controller.GetPatients(new PatientQueryRequest(), CancellationToken.None);
 

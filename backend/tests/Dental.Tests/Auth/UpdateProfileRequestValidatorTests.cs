@@ -1,3 +1,4 @@
+using Dental.Application.Common;
 using Dental.Application.Features.Auth.DTOs;
 using Dental.Application.Features.Auth.Validators;
 using Xunit;
@@ -6,7 +7,7 @@ namespace Dental.Tests.Auth;
 
 public sealed class UpdateProfileRequestValidatorTests
 {
-    private readonly UpdateProfileRequestValidator _validator = new();
+    private readonly UpdateProfileRequestValidator _validator = new(new VietnamClock(TimeProvider.System));
 
     [Fact]
     public async Task ValidateAsync_InvalidProfileFields_ReturnsErrors()

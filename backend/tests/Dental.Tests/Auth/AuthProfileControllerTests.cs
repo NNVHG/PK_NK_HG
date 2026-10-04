@@ -1,3 +1,4 @@
+using Dental.Application.Common;
 using Dental.Application.Features.Auth.DTOs;
 using Dental.Application.Features.Auth.Services;
 using Dental.Application.Features.Auth.Validators;
@@ -53,7 +54,7 @@ public sealed class AuthProfileControllerTests
 
         var result = await controller.UpdateProfile(
             new UpdateProfileRequest("Tên đã cập nhật", currentUserRecord.Phone, null, null, null),
-            new UpdateProfileRequestValidator(),
+            new UpdateProfileRequestValidator(new VietnamClock(TimeProvider.System)),
             CancellationToken.None);
 
         Assert.IsType<OkObjectResult>(result);

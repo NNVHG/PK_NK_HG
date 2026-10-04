@@ -1,6 +1,8 @@
 using System.Text;
 using Dental.Api.Middleware;
 using Dental.Api.Policies;
+using Dental.Api.RateLimiting;
+using Dental.Application.Common;
 using Dental.Application.Features.Auth.Services;
 using Dental.Application.Features.Auth.Validators;
 using Dental.Application.Features.MedicalHistory.Services;
@@ -8,6 +10,8 @@ using Dental.Application.Features.MedicalHistory.Validators;
 using Dental.Application.Features.Patients.Services;
 using Dental.Application.Features.Patients.Validators;
 using Dental.Application.Features.Staff.Services;
+using Dental.Application.Features.ServiceCatalog.Services;
+using Dental.Application.Features.ServiceCatalog.Validators;
 using Dental.Application.Features.Visits.Services;
 using Dental.Application.Features.Visits.Validators;
 using Dental.Application.Features.VitalSigns.Services;
@@ -36,6 +40,7 @@ builder.Services.AddScoped<IPatientRepository, PatientRepository>();
 builder.Services.AddScoped<IVisitRepository, VisitRepository>();
 builder.Services.AddScoped<IMedicalHistoryRepository, MedicalHistoryRepository>();
 builder.Services.AddScoped<IVitalSignRepository, VitalSignRepository>();
+builder.Services.AddScoped<IServiceCatalogRepository, ServiceCatalogRepository>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // ===== 3. Infrastructure Services =====
@@ -44,6 +49,8 @@ builder.Services.AddScoped<ITokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuditLogger, AuditLogger>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<VietnamClock>();
 
 // ===== 4. Application Services =====
 builder.Services.AddScoped<AuthService>();
@@ -55,6 +62,7 @@ builder.Services.AddScoped<PatientSafetyAlertsService>();
 builder.Services.AddScoped<VisitService>();
 builder.Services.AddScoped<MedicalHistoryService>();
 builder.Services.AddScoped<VitalSignService>();
+builder.Services.AddScoped<ServiceCatalogService>();
 builder.Services.AddScoped<CreatePatientRequestValidator>();
 builder.Services.AddScoped<PatientDuplicateCheckRequestValidator>();
 builder.Services.AddScoped<PatientQueryRequestValidator>();
@@ -68,6 +76,11 @@ builder.Services.AddScoped<MedicalHistoryItemRequestValidator>();
 builder.Services.AddScoped<MedicalHistoryQueryRequestValidator>();
 builder.Services.AddScoped<RecordVitalSignsRequestValidator>();
 builder.Services.AddScoped<VitalSignQueryRequestValidator>();
+builder.Services.AddScoped<ServiceCatalogQueryRequestValidator>();
+builder.Services.AddScoped<CreateDentalServiceRequestValidator>();
+builder.Services.AddScoped<UpdateDentalServiceRequestValidator>();
+builder.Services.AddScoped<CreateServicePriceRequestValidator>();
+builder.Services.AddScoped<ServiceIdRequestValidator>();
 builder.Services.AddScoped<AuditLogQueryRequestValidator>();
 
 builder.Services.AddScoped<ChangePasswordRequestValidator>();
@@ -98,6 +111,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 // ===== 7. Authorization Policies =====
 builder.Services.AddAuthorization(opts => opts.AddApplicationPolicies());
+
+// [CẦN XÁC NHẬN] Ngưỡng mặc định là 10 lần/phút cho đăng nhập và 5 lần/phút cho đăng ký.
+builder.Services.AddRateLimiter(options => AuthRateLimitPolicies.Configure(options, builder.Configuration));
 
 // ===== 8. CORS (chỉ cho phép frontend dev) =====
 builder.Services.AddCors(opts =>
@@ -174,6 +190,8 @@ else
 }
 
 app.UseCors("FrontendDev");
+app.UseRouting();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
