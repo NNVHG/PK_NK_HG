@@ -55,6 +55,7 @@ public sealed class AppointmentsController : ControllerBase
 
         var result = await _appointmentService.CreateAppointmentAsync(
             actorUserId,
+            _currentUser.RoleCode,
             request,
             HttpContext.Connection.RemoteIpAddress?.ToString(),
             ct);

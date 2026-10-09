@@ -116,6 +116,22 @@ public sealed class PatientsController : ControllerBase
         return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
     }
 
+    [HttpGet("mine")]
+    [Authorize(Policy = AppPolicies.PatientView)]
+    [ProducesResponseType(typeof(IReadOnlyList<PatientListItemResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> GetMyProfiles(CancellationToken ct)
+    {
+        if (_currentUser.RoleCode != Dental.Domain.Constants.RoleCodes.Patient)
+            return Forbid();
+
+        if (_currentUser.UserId is not int currentUserId)
+            return Unauthorized(new { code = Error.Unauthorized.Code, message = Error.Unauthorized.Message });
+
+        var result = await _patientsService.GetMyActiveProfilesAsync(currentUserId, ct);
+        return Ok(result.Value);
+    }
+
     [HttpPut("{id:int}")]
     [Authorize(Policy = AppPolicies.PatientEdit)]
     [ProducesResponseType(typeof(PatientResponse), StatusCodes.Status200OK)]

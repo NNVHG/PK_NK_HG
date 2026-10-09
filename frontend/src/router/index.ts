@@ -44,7 +44,7 @@ const router = createRouter({
       path: '/appointments',
       name: 'appointments',
       component: () => import('@/views/AppointmentsView.vue'),
-      meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST', 'DENTIST', 'ASSISTANT'] }
+      meta: { requiresAuth: true, roles: ['PATIENT'] }
     },
     {
       path: '/patients',

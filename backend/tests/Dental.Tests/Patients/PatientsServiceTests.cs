@@ -23,6 +23,25 @@ public sealed class PatientsServiceTests
         => new("Nguyễn An", new DateOnly(1990, 2, 3), "Female", "0912345678", "an@example.com", "Địa chỉ thử nghiệm", confirmNotDuplicate);
 
     [Fact]
+    public async Task GetMyActiveProfilesAsync_ReturnsOnlyProfilesProvidedByCurrentUserRepository()
+    {
+        var profiles = new[]
+        {
+            new Patient { PatientId = 4, PatientNumber = 40, FullName = "An", DateOfBirth = new DateOnly(1990, 1, 1), Phone = "0900000000" },
+            new Patient { PatientId = 5, PatientNumber = 50, FullName = "Bình", DateOfBirth = new DateOnly(2010, 2, 2), Phone = "0900000000" },
+        };
+        _patientRepository.GetActiveByUserIdAsync(22, Arg.Any<CancellationToken>()).Returns(profiles);
+
+        var result = await CreateService().GetMyActiveProfilesAsync(22);
+
+        Assert.True(result.IsSuccess);
+        Assert.Collection(result.Value!,
+            item => Assert.Equal((4, "An"), (item.PatientId, item.FullName)),
+            item => Assert.Equal((5, "Bình"), (item.PatientId, item.FullName)));
+        await _patientRepository.Received(1).GetActiveByUserIdAsync(22, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task CreatePatientAsync_ValidRequest_CreatesPatientAndAuditsWithoutPersonalData()
     {
         _patientRepository.FindPossibleDuplicatesAsync(

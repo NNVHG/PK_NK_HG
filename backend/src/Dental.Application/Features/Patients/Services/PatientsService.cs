@@ -131,6 +131,22 @@ public sealed class PatientsService
         return Result<PatientResponse>.Success(ToResponse(patient));
     }
 
+    public async Task<Result<IReadOnlyList<PatientListItemResponse>>> GetMyActiveProfilesAsync(
+        int userId,
+        CancellationToken ct = default)
+    {
+        var patients = await _patientRepository.GetActiveByUserIdAsync(userId, ct);
+        var profiles = patients.Select(patient => new PatientListItemResponse(
+            patient.PatientId,
+            patient.PatientCode,
+            patient.FullName,
+            patient.DateOfBirth,
+            patient.Gender,
+            patient.Phone)).ToList();
+
+        return Result<IReadOnlyList<PatientListItemResponse>>.Success(profiles);
+    }
+
     public async Task<Result<PatientResponse>> UpdatePatientAsync(
         int actorUserId,
         int patientId,

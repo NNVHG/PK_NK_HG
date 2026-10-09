@@ -19,6 +19,14 @@ public sealed class PatientRepository : IPatientRepository
     public Task<Patient?> GetByUserIdAsync(int userId, CancellationToken ct = default)
         => _db.Patients.FirstOrDefaultAsync(patient => patient.UserId == userId, ct);
 
+    public async Task<IReadOnlyList<Patient>> GetActiveByUserIdAsync(int userId, CancellationToken ct = default)
+        => await _db.Patients
+            .AsNoTracking()
+            .Where(patient => patient.UserId == userId && patient.IsActive)
+            .OrderBy(patient => patient.FullName)
+            .ThenBy(patient => patient.PatientNumber)
+            .ToListAsync(ct);
+
     public async Task<PagedResult<Patient>> SearchAsync(
         string? keyword,
         int page,

@@ -31,6 +31,7 @@
     <div v-else class="patient-banner">
       <h3>Cổng Thông Tin Dành Cho Bệnh Nhân</h3>
       <p>Hồ sơ răng hàm mặt, đơn thuốc và lịch sử khám của bạn sẽ xuất hiện tại đây khi bác sĩ tiến hành điều trị.</p>
+      <RouterLink class="btn-appointment" to="/appointments">Đặt lịch khám</RouterLink>
     </div>
   </div>
 </template>
@@ -164,5 +165,16 @@ function goTo(path: string) {
 .patient-banner p {
   color: #555;
   font-size: 0.95rem;
+}
+
+.btn-appointment {
+  display: inline-block;
+  margin-top: .5rem;
+  padding: .65rem 1rem;
+  border-radius: 4px;
+  color: white;
+  background: #13795b;
+  font-weight: 600;
+  text-decoration: none;
 }
 </style>

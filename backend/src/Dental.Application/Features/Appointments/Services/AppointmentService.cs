@@ -34,12 +34,15 @@ public sealed class AppointmentService
 
     public async Task<Result<AppointmentResponse>> CreateAppointmentAsync(
         int actorUserId,
+        string? actorRoleCode,
         CreateAppointmentRequest request,
         string? ipAddress,
         CancellationToken ct = default)
     {
         var patient = await _patientRepository.GetByIdAsync(request.PatientId, ct);
         if (patient is null)
+            return Result<AppointmentResponse>.Failure(Error.NotFound);
+        if (actorRoleCode == RoleCodes.Patient && patient.UserId != actorUserId)
             return Result<AppointmentResponse>.Failure(Error.NotFound);
         if (!patient.IsActive)
             return Result<AppointmentResponse>.Failure(Error.PatientInactive);

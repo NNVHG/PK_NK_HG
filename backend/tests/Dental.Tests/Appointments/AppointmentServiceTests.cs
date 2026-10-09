@@ -59,6 +59,7 @@ public sealed class AppointmentServiceTests
 
         var result = await CreateService().CreateAppointmentAsync(
             actorUserId: 2,
+            actorRoleCode: RoleCodes.Receptionist,
             new CreateAppointmentRequest(1, tomorrow, slot, null, "Khám tổng quát"),
             ipAddress: "127.0.0.1");
 
@@ -79,6 +80,52 @@ public sealed class AppointmentServiceTests
     }
 
     [Fact]
+    public async Task CreateAppointmentAsync_PatientBookingOwnProfile_CreatesAppointment()
+    {
+        var tomorrow = _vietnamClock.Today.AddDays(1);
+        var slot = new TimeOnly(9, 0);
+        var patient = MakePatient();
+        patient.UserId = 2;
+        _patientRepository.GetByIdAsync(patient.PatientId, Arg.Any<CancellationToken>()).Returns(patient);
+        _appointmentRepository.HasActiveAppointmentOnDateAsync(patient.PatientId, tomorrow, Arg.Any<CancellationToken>()).Returns(false);
+        _appointmentRepository.GetSlotBookingCountAsync(tomorrow, slot, Arg.Any<CancellationToken>()).Returns(0);
+        _appointmentRepository.AddAsync(Arg.Any<Appointment>(), Arg.Any<CancellationToken>()).Returns(call =>
+        {
+            call.Arg<Appointment>().AppointmentId = 12;
+            return Task.CompletedTask;
+        });
+
+        var result = await CreateService().CreateAppointmentAsync(
+            actorUserId: 2,
+            actorRoleCode: RoleCodes.Patient,
+            new CreateAppointmentRequest(patient.PatientId, tomorrow, slot),
+            ipAddress: null);
+
+        Assert.True(result.IsSuccess);
+        await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateAppointmentAsync_PatientBookingOtherUsersProfile_ReturnsNotFoundWithoutSaving()
+    {
+        var tomorrow = _vietnamClock.Today.AddDays(1);
+        var patient = MakePatient();
+        patient.UserId = 99;
+        _patientRepository.GetByIdAsync(patient.PatientId, Arg.Any<CancellationToken>()).Returns(patient);
+
+        var result = await CreateService().CreateAppointmentAsync(
+            actorUserId: 2,
+            actorRoleCode: RoleCodes.Patient,
+            new CreateAppointmentRequest(patient.PatientId, tomorrow, new TimeOnly(9, 0)),
+            ipAddress: null);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(Error.NotFound.Code, result.Error.Code);
+        await _appointmentRepository.DidNotReceive().AddAsync(Arg.Any<Appointment>(), Arg.Any<CancellationToken>());
+        await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task CreateAppointmentAsync_PastDate_ReturnsAppointmentDateInPast()
     {
         var yesterday = _vietnamClock.Today.AddDays(-1);
@@ -87,6 +134,7 @@ public sealed class AppointmentServiceTests
 
         var result = await CreateService().CreateAppointmentAsync(
             actorUserId: 2,
+            actorRoleCode: RoleCodes.Receptionist,
             new CreateAppointmentRequest(1, yesterday, new TimeOnly(8, 30)),
             ipAddress: "127.0.0.1");
 
@@ -107,6 +155,7 @@ public sealed class AppointmentServiceTests
 
         var result = await CreateService().CreateAppointmentAsync(
             actorUserId: 2,
+            actorRoleCode: RoleCodes.Receptionist,
             new CreateAppointmentRequest(1, tomorrow, slot),
             ipAddress: "127.0.0.1");
 
@@ -124,6 +173,7 @@ public sealed class AppointmentServiceTests
 
         var result = await CreateService().CreateAppointmentAsync(
             actorUserId: 2,
+            actorRoleCode: RoleCodes.Receptionist,
             new CreateAppointmentRequest(1, tomorrow, new TimeOnly(10, 0)),
             ipAddress: "127.0.0.1");
 

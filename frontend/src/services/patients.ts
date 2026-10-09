@@ -134,6 +134,11 @@ export interface VisitDetails {
 }
 
 export const patientsService = {
+  async getMyProfiles(): Promise<PatientSummary[]> {
+    const response = await apiClient.get<PatientSummary[]>('/patients/mine');
+    return response.data;
+  },
+
   async search(query: PatientQuery): Promise<PagedResult<PatientSummary>> {
     const response = await apiClient.get<PagedResult<PatientSummary>>('/patients', { params: query });
     return response.data;

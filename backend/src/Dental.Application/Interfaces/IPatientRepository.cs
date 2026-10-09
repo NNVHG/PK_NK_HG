@@ -7,6 +7,7 @@ public interface IPatientRepository
 {
     Task<Patient?> GetByIdAsync(int patientId, CancellationToken ct = default);
     Task<Patient?> GetByUserIdAsync(int userId, CancellationToken ct = default);
+    Task<IReadOnlyList<Patient>> GetActiveByUserIdAsync(int userId, CancellationToken ct = default);
     Task<PagedResult<Patient>> SearchAsync(
         string? keyword,
         int page,
