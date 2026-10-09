@@ -402,5 +402,75 @@ public class RbacPolicyTests
         Assert.NotNull(authorize);
         Assert.Equal(ApiPolicies.PatientView, authorize!.Policy);
     }
+    [Fact]
+    public void AppointmentsController_UsesExpectedPolicies()
+    {
+        var methods = typeof(AppointmentsController).GetMethods(BindingFlags.Instance | BindingFlags.Public)
+            .Where(method => method.DeclaringType == typeof(AppointmentsController))
+            .ToDictionary(method => method.Name);
+
+        Assert.Equal(ApiPolicies.AppointmentCreate, Assert.Single(methods[nameof(AppointmentsController.CreateAppointment)]
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+        Assert.Equal(ApiPolicies.AppointmentView, Assert.Single(methods[nameof(AppointmentsController.GetAppointments)]
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+        Assert.Equal(ApiPolicies.AppointmentView, Assert.Single(methods[nameof(AppointmentsController.GetAppointmentById)]
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+        Assert.Equal(ApiPolicies.AppointmentView, Assert.Single(methods[nameof(AppointmentsController.CancelAppointment)]
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+        Assert.Equal(ApiPolicies.AppointmentManage, Assert.Single(methods[nameof(AppointmentsController.RescheduleAppointment)]
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+    }
+
+    [Fact]
+    public void QueueController_UsesExpectedPolicies()
+    {
+        var methods = typeof(QueueController).GetMethods(BindingFlags.Instance | BindingFlags.Public)
+            .Where(method => method.DeclaringType == typeof(QueueController))
+            .ToDictionary(method => method.Name);
+
+        Assert.Equal(ApiPolicies.QueueCheckIn, Assert.Single(methods[nameof(QueueController.CheckIn)]
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+        Assert.Equal(ApiPolicies.QueueView, Assert.Single(methods[nameof(QueueController.GetQueue)]
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+        Assert.Equal(ApiPolicies.QueueView, Assert.Single(methods[nameof(QueueController.GetQueueDetail)]
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+        Assert.Equal(ApiPolicies.QueueStatusUpdate, Assert.Single(methods[nameof(QueueController.UpdateStatus)]
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+    }
+
+    [Theory]
+    [InlineData(RoleCodes.Admin, true)]
+    [InlineData(RoleCodes.Receptionist, true)]
+    [InlineData(RoleCodes.Dentist, false)]
+    [InlineData(RoleCodes.Assistant, false)]
+    [InlineData(RoleCodes.Patient, false)]
+    public async Task QueueCheckInPolicy_AllowsOnlyAdminAndReceptionist(string roleCode, bool expectedAllowed)
+    {
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.Role, roleCode)
+        }, "TestAuth"));
+
+        var result = await _authService.AuthorizeAsync(user, null, ApiPolicies.QueueCheckIn);
+        Assert.Equal(expectedAllowed, result.Succeeded);
+    }
+
+    [Theory]
+    [InlineData(RoleCodes.Admin, true)]
+    [InlineData(RoleCodes.Receptionist, true)]
+    [InlineData(RoleCodes.Dentist, true)]
+    [InlineData(RoleCodes.Assistant, true)]
+    [InlineData(RoleCodes.Patient, false)]
+    public async Task QueueViewPolicy_AllowsStaffAndRejectsPatient(string roleCode, bool expectedAllowed)
+    {
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.Role, roleCode)
+        }, "TestAuth"));
+
+        var result = await _authService.AuthorizeAsync(user, null, ApiPolicies.QueueView);
+        Assert.Equal(expectedAllowed, result.Succeeded);
+    }
+
 }
 

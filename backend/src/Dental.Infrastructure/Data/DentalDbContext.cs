@@ -19,6 +19,9 @@ public sealed class DentalDbContext : DbContext
     public DbSet<VitalSignRecord> VitalSignRecords => Set<VitalSignRecord>();
     public DbSet<DentalService> DentalServices => Set<DentalService>();
     public DbSet<ServicePrice> ServicePrices => Set<ServicePrice>();
+    public DbSet<Appointment> Appointments => Set<Appointment>();
+    public DbSet<QueueEntry> QueueEntries => Set<QueueEntry>();
+    public DbSet<QueueStatusHistory> QueueStatusHistories => Set<QueueStatusHistory>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -37,6 +40,9 @@ public sealed class DentalDbContext : DbContext
         modelBuilder.ApplyConfiguration(new VitalSignRecordConfiguration());
         modelBuilder.ApplyConfiguration(new DentalServiceConfiguration());
         modelBuilder.ApplyConfiguration(new ServicePriceConfiguration());
+        modelBuilder.ApplyConfiguration(new AppointmentConfiguration());
+        modelBuilder.ApplyConfiguration(new QueueEntryConfiguration());
+        modelBuilder.ApplyConfiguration(new QueueStatusHistoryConfiguration());
     }
 
     /// <summary>
@@ -77,6 +83,16 @@ public sealed class DentalDbContext : DbContext
         {
             throw new InvalidOperationException(
                 "ServicePrice là dữ liệu chỉ thêm mới — không được phép cập nhật hoặc xóa.");
+        }
+
+        var violatingHistories = ChangeTracker.Entries<QueueStatusHistory>()
+            .Where(entry => entry.State is EntityState.Modified or EntityState.Deleted)
+            .ToList();
+
+        if (violatingHistories.Count > 0)
+        {
+            throw new InvalidOperationException(
+                "QueueStatusHistory là bất biến — không được phép cập nhật hoặc xóa.");
         }
     }
 }

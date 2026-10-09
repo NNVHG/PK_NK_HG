@@ -18,6 +18,13 @@ public static class Policies
     public const string VitalSignsWrite = "VitalSignsWrite";
     public const string PatientSafetyAlertsView = "PatientSafetyAlertsView";
     public const string ServiceCatalogView = "ServiceCatalogView";
+    public const string AppointmentCreate = "AppointmentCreate";
+    public const string AppointmentView = "AppointmentView";
+    public const string AppointmentManage = "AppointmentManage";
+    public const string QueueCheckIn = "QueueCheckIn";
+    public const string QueueView = "QueueView";
+    public const string QueueStatusUpdate = "QueueStatusUpdate";
+
 
     public static void AddApplicationPolicies(this AuthorizationOptions opts)
     {
@@ -49,5 +56,27 @@ public static class Policies
 
         opts.AddPolicy(ServiceCatalogView, policy =>
             policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant));
+
+        // DL-011, DL-043: Đặt lịch trực tuyến (Patient) hoặc tại quầy (Receptionist, Admin)
+        opts.AddPolicy(AppointmentCreate, policy =>
+            policy.RequireRole(RoleCodes.Admin, RoleCodes.Receptionist, RoleCodes.Patient));
+
+        opts.AddPolicy(AppointmentView, policy =>
+            policy.RequireRole(RoleCodes.Admin, RoleCodes.Receptionist, RoleCodes.Dentist, RoleCodes.Assistant, RoleCodes.Patient));
+
+        opts.AddPolicy(AppointmentManage, policy =>
+            policy.RequireRole(RoleCodes.Admin, RoleCodes.Receptionist));
+
+        // DL-044, DL-049: Tiếp đón và cấp số hàng đợi
+        opts.AddPolicy(QueueCheckIn, policy =>
+            policy.RequireRole(RoleCodes.Admin, RoleCodes.Receptionist));
+
+        // DL-047: Nhân viên xem danh sách hàng đợi
+        opts.AddPolicy(QueueView, policy =>
+            policy.RequireRole(RoleCodes.Admin, RoleCodes.Receptionist, RoleCodes.Dentist, RoleCodes.Assistant));
+
+        // DL-047, DL-053: Cập nhật trạng thái hàng đợi (chuyển trạng thái chi tiết kiểm tra theo vai trò trong service)
+        opts.AddPolicy(QueueStatusUpdate, policy =>
+            policy.RequireRole(RoleCodes.Admin, RoleCodes.Receptionist, RoleCodes.Dentist, RoleCodes.Assistant));
     }
 }

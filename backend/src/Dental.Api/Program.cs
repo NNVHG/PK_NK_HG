@@ -17,6 +17,11 @@ using Dental.Application.Features.Visits.Validators;
 using Dental.Application.Features.VitalSigns.Services;
 using Dental.Application.Features.VitalSigns.Validators;
 using Dental.Application.Interfaces;
+using Dental.Application.Features.Appointments.Services;
+using Dental.Application.Features.Appointments.Validators;
+using Dental.Application.Features.Queue.Services;
+using Dental.Application.Features.Queue.Validators;
+
 using Dental.Infrastructure.Data;
 using Dental.Infrastructure.Data.Seeders;
 using Dental.Infrastructure.Repositories;
@@ -41,6 +46,9 @@ builder.Services.AddScoped<IVisitRepository, VisitRepository>();
 builder.Services.AddScoped<IMedicalHistoryRepository, MedicalHistoryRepository>();
 builder.Services.AddScoped<IVitalSignRepository, VitalSignRepository>();
 builder.Services.AddScoped<IServiceCatalogRepository, ServiceCatalogRepository>();
+builder.Services.AddScoped<IAppointmentRepository, AppointmentRepository>();
+builder.Services.AddScoped<IQueueRepository, QueueRepository>();
+
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // ===== 3. Infrastructure Services =====
@@ -63,6 +71,9 @@ builder.Services.AddScoped<VisitService>();
 builder.Services.AddScoped<MedicalHistoryService>();
 builder.Services.AddScoped<VitalSignService>();
 builder.Services.AddScoped<ServiceCatalogService>();
+builder.Services.AddScoped<AppointmentService>();
+builder.Services.AddScoped<QueueService>();
+
 builder.Services.AddScoped<CreatePatientRequestValidator>();
 builder.Services.AddScoped<PatientDuplicateCheckRequestValidator>();
 builder.Services.AddScoped<PatientQueryRequestValidator>();
@@ -84,6 +95,14 @@ builder.Services.AddScoped<ServiceIdRequestValidator>();
 builder.Services.AddScoped<AuditLogQueryRequestValidator>();
 
 builder.Services.AddScoped<ChangePasswordRequestValidator>();
+builder.Services.AddScoped<CreateAppointmentRequestValidator>();
+builder.Services.AddScoped<AppointmentQueryRequestValidator>();
+builder.Services.AddScoped<RescheduleAppointmentRequestValidator>();
+builder.Services.AddScoped<CancelAppointmentRequestValidator>();
+builder.Services.AddScoped<CheckInRequestValidator>();
+builder.Services.AddScoped<QueueQueryRequestValidator>();
+builder.Services.AddScoped<UpdateQueueStatusRequestValidator>();
+
 
 // ===== 5. FluentValidation =====
 builder.Services.AddValidatorsFromAssemblyContaining<LoginRequestValidator>();

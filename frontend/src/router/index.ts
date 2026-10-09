@@ -58,6 +58,16 @@ const router = createRouter({
       component: () => import('@/views/PatientDetailView.vue'),
       meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST', 'DENTIST', 'ASSISTANT'] }
     },
+    ...(import.meta.env.DEV
+      ? [
+          {
+            path: '/dev/fdi-chart',
+            name: 'dev-fdi-chart',
+            component: () => import('@/views/FdiPreviewView.vue'),
+            meta: { requiresAuth: false }
+          }
+        ]
+      : []),
     {
       path: '/:pathMatch(.*)*',
       name: 'not-found',

@@ -41,4 +41,24 @@ public record Error(string Code, string Message)
     public static readonly Error ServiceInactive = new("MST_012", "Dịch vụ đã ngừng bán.");
     public static readonly Error ServicePriceUnavailable = new("MST_013", "Dịch vụ chưa có giá đang áp dụng.");
 
+    // Lỗi đặt lịch khám (MOD_APP)
+    public static readonly Error AppointmentNotFound           = new("APP_001", "Không tìm thấy lịch hẹn.");
+    public static readonly Error AppointmentSlotFull           = new("APP_002", "Khung giờ này đã đủ số lượng đặt hẹn tối đa (100 khách). Vui lòng chọn khung giờ khác.");
+    public static readonly Error AppointmentInvalidTime        = new("APP_003", "Giờ đặt hẹn không hợp lệ. Khung giờ khám: 08:00–11:30 và 13:30–16:30, slot 30 phút.");
+    public static readonly Error AppointmentDateInPast         = new("APP_004", "Không thể đặt lịch hẹn trong quá khứ.");
+    public static readonly Error AppointmentPatientHasActive   = new("APP_005", "Bệnh nhân đã có lịch hẹn chưa hoàn tất trong ngày này.");
+    public static readonly Error AppointmentCannotCancel       = new("APP_006", "Chỉ có thể hủy lịch hẹn đang ở trạng thái chờ khám.");
+    public static readonly Error AppointmentCannotReschedule   = new("APP_007", "Chỉ có thể đổi lịch hẹn đang ở trạng thái chờ khám.");
+    public static readonly Error AppointmentCannotCheckIn      = new("APP_008", "Lịch hẹn không ở trạng thái chờ khám hoặc đã được tiếp đón.");
+
+    // Lỗi tiếp đón & hàng đợi (MOD_CHK)
+    public static readonly Error QueueEntryNotFound            = new("CHK_001", "Không tìm thấy lượt tiếp đón trong hàng đợi.");
+    public static readonly Error QueueEntryAlreadyOpen         = new("CHK_002", "Bệnh nhân đang có số thứ tự trong hàng đợi chưa hoàn tất.");
+    public static readonly Error QueueInvalidStateTransition   = new("CHK_003", "Chuyển trạng thái hàng đợi không hợp lệ.");
+    public static readonly Error QueueTransitionForbidden      = new("CHK_004", "Bạn không có quyền thực hiện chuyển trạng thái này.");
+    public static readonly Error QueueDentistRequired          = new("CHK_005", "Bắt buộc chỉ định Nha sĩ khi bắt đầu khám.");
+    public static readonly Error QueueCannotRevertCompleted    = new("CHK_006", "Lượt khám đã hoàn tất, không thể thay đổi trạng thái.");
+    public static readonly Error QueueCannotRevertCancelled    = new("CHK_007", "Lượt khám đã bị hủy, không thể thay đổi trạng thái.");
+
+
 }

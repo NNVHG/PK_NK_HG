@@ -18,4 +18,10 @@ public static class AuditActions
     public const string ServicePriceCreated = "SERVICE_PRICE_CREATED";
     public const string ServiceDeactivated = "SERVICE_DEACTIVATED";
     public const string ServiceActivated = "SERVICE_ACTIVATED";
+    public const string AppointmentCreated = "APPOINTMENT_CREATED";
+    public const string AppointmentCancelled = "APPOINTMENT_CANCELLED";
+    public const string AppointmentRescheduled = "APPOINTMENT_RESCHEDULED";
+    public const string QueueCheckedIn = "QUEUE_CHECKED_IN";
+    public const string QueueStatusChanged = "QUEUE_STATUS_CHANGED";
+
 }
