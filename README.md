@@ -50,7 +50,7 @@ Hệ thống được xây dựng theo kiến trúc phân tầng Clean Architect
 |---|---|---|
 | `MOD_AUTH` | Xác thực & Phân quyền | Đăng nhập JWT, Hồ sơ người dùng, Đổi mật khẩu, RBAC, Nhật ký Audit Log |
 | `MOD_PAT` | Quản lý Bệnh nhân | Hồ sơ hành chính, Tiền sử bệnh lý, Dị ứng, Sinh hiệu |
-| `MOD_APP` | Quản lý Lịch hẹn | Đặt hẹn trực tuyến/tại quầy, xếp lịch theo ghế điều trị và bác sĩ |
+| `MOD_APP` | Quản lý Lịch hẹn | Đặt lịch trực tuyến/tại quầy theo giờ hoạt động chung, slot 30 phút (DL-043), tối đa 100 khách/slot (DL-050); không quản lý ca làm việc MOD_ROS |
 | `MOD_CHK` | Tiếp đón & Xếp hàng | Check-in, số thứ tự hàng đợi, điều phối vào buồng khám |
 | `MOD_FDI` | Khám bệnh & Sơ đồ răng | Sơ đồ răng 32/20 chuẩn FDI, chẩn đoán ICD-10, kế hoạch điều trị |
 | `MOD_IMG` | Quản lý Hình ảnh | Tải lên và lưu trữ phim X-quang, ảnh trước/sau điều trị |
@@ -148,10 +148,12 @@ PK_NK_HG/
 │   │   └── router/                      # Vue Router & Navigation Guards
 │   └── package.json
 ├── docs/                                # Tài liệu kỹ thuật, kiến trúc & cẩm nang
+│   ├── README.md                        # Mục lục tra cứu tài liệu hệ thống
 │   ├── RUN_GUIDE.md                     # Cẩm nang cài đặt, chạy và phản biện đồ án
 │   ├── ROLE_PERMISSION_MATRIX.md        # Ma trận phân quyền RBAC
 │   ├── ARCHITECTURE_OVERVIEW.md         # Tổng quan kiến trúc hệ thống
 │   ├── DATABASE_DESIGN.md               # Thiết kế cơ sở dữ liệu
+│   ├── testing/                         # Báo cáo, checklist & kế hoạch kiểm thử
 │   └── ...
 ├── docker-compose.yml                   # Cấu hình container PostgreSQL 16 có healthcheck
 ├── start-dev.ps1                        # Script PowerShell khởi chạy 1 chạm
