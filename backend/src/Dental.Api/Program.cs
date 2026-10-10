@@ -82,6 +82,7 @@ builder.Services.AddScoped<PatientTimelineQueryRequestValidator>();
 builder.Services.AddScoped<LoginRequestValidator>();
 builder.Services.AddScoped<RegisterRequestValidator>();
 builder.Services.AddScoped<VisitQueryRequestValidator>();
+builder.Services.AddScoped<UpdateVisitDiagnosisRequestValidator>();
 builder.Services.AddScoped<RecordMedicalHistoryRequestValidator>();
 builder.Services.AddScoped<MedicalHistoryItemRequestValidator>();
 builder.Services.AddScoped<MedicalHistoryQueryRequestValidator>();

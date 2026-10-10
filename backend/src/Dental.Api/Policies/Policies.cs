@@ -24,6 +24,7 @@ public static class Policies
     public const string QueueCheckIn = "QueueCheckIn";
     public const string QueueView = "QueueView";
     public const string QueueStatusUpdate = "QueueStatusUpdate";
+    public const string ClinicalDiagnosisUpdate = "ClinicalDiagnosisUpdate";
 
 
     public static void AddApplicationPolicies(this AuthorizationOptions opts)
@@ -34,14 +35,14 @@ public static class Policies
         opts.AddPolicy(StaffAny, policy =>
             policy.RequireRole(RoleCodes.StaffRoles));
 
-        // [CẦN XÁC NHẬN] Sheet 05 chỉ cho Phụ tá xem hồ sơ theo nghiệp vụ, còn F_PAT_01 liệt kê Phụ tá được tạo hồ sơ.
+        // DL-023: chỉ Admin và Lễ tân được tạo thông tin cá nhân bệnh nhân.
         opts.AddPolicy(PatientManage, policy =>
-            policy.RequireRole(RoleCodes.Receptionist, RoleCodes.Assistant, RoleCodes.Admin));
+            policy.RequireRole(RoleCodes.Receptionist, RoleCodes.Admin));
 
         opts.AddPolicy(PatientView, policy =>
             policy.RequireRole(RoleCodes.Receptionist, RoleCodes.Dentist, RoleCodes.Assistant, RoleCodes.Admin, RoleCodes.Patient));
 
-        // [CẦN XÁC NHẬN] F_PAT_01 cho Phụ tá tạo hồ sơ, còn ma trận chỉ cho Phụ tá xem; sửa hồ sơ theo ma trận chỉ dành Lễ tân và Admin.
+        // DL-023: sửa thông tin cá nhân chỉ dành Lễ tân và Admin.
         opts.AddPolicy(PatientEdit, policy =>
             policy.RequireRole(RoleCodes.Receptionist, RoleCodes.Admin));
 
@@ -78,5 +79,9 @@ public static class Policies
         // DL-047, DL-053: Cập nhật trạng thái hàng đợi (chuyển trạng thái chi tiết kiểm tra theo vai trò trong service)
         opts.AddPolicy(QueueStatusUpdate, policy =>
             policy.RequireRole(RoleCodes.Admin, RoleCodes.Receptionist, RoleCodes.Dentist, RoleCodes.Assistant));
+
+        // DL-085: Sửa chẩn đoán và ghi chú lâm sàng: Nha sĩ và Admin (kiểm tra Dentist phụ trách tại service)
+        opts.AddPolicy(ClinicalDiagnosisUpdate, policy =>
+            policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist));
     }
 }

@@ -14,6 +14,12 @@ public sealed class VisitConfiguration : IEntityTypeConfiguration<Visit>
             .HasMaxLength(20)
             .IsRequired();
 
+        builder.Property(visit => visit.Diagnosis)
+            .HasMaxLength(1000);
+
+        builder.Property(visit => visit.ClinicalNotes)
+            .HasMaxLength(2000);
+
         builder.Property(visit => visit.StartedAt).HasColumnType("timestamptz");
         builder.Property(visit => visit.EndedAt).HasColumnType("timestamptz");
         builder.Property(visit => visit.CreatedAt)

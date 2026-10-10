@@ -132,7 +132,7 @@ public class RbacPolicyTests
     }
 
     [Fact]
-    public void VisitsController_UsesPatientManageForCreateAndPatientViewForHistory()
+    public void VisitsController_UsesExpectedPolicies()
     {
         var methods = typeof(VisitsController).GetMethods(BindingFlags.Instance | BindingFlags.Public)
             .Where(method => method.DeclaringType == typeof(VisitsController))
@@ -142,8 +142,11 @@ public class RbacPolicyTests
             .GetCustomAttributes<AuthorizeAttribute>()).Policy);
         Assert.Equal(ApiPolicies.PatientView, Assert.Single(methods[nameof(VisitsController.GetVisits)]
             .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+        Assert.Equal(ApiPolicies.PatientView, Assert.Single(methods[nameof(VisitsController.GetVisitById)]
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+        Assert.Equal(ApiPolicies.ClinicalDiagnosisUpdate, Assert.Single(methods[nameof(VisitsController.UpdateDiagnosis)]
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
         Assert.DoesNotContain(methods.Values, method =>
-            method.GetCustomAttributes<HttpPutAttribute>().Any() ||
             method.GetCustomAttributes<HttpPatchAttribute>().Any() ||
             method.GetCustomAttributes<HttpDeleteAttribute>().Any());
     }
@@ -211,9 +214,10 @@ public class RbacPolicyTests
     [Theory]
     [InlineData(RoleCodes.Admin, true)]
     [InlineData(RoleCodes.Receptionist, true)]
-    [InlineData(RoleCodes.Assistant, true)]
+    [InlineData(RoleCodes.Assistant, false)]
     [InlineData(RoleCodes.Dentist, false)]
     [InlineData(RoleCodes.Patient, false)]
+    [InlineData("UNKNOWN", false)]
     public async Task PatientManagePolicy_ShouldAllowOnlyConfiguredRoles(string roleCode, bool expectedAllowed)
     {
         var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
@@ -472,5 +476,21 @@ public class RbacPolicyTests
         Assert.Equal(expectedAllowed, result.Succeeded);
     }
 
+    [Theory]
+    [InlineData(RoleCodes.Admin, true)]
+    [InlineData(RoleCodes.Dentist, true)]
+    [InlineData(RoleCodes.Receptionist, false)]
+    [InlineData(RoleCodes.Assistant, false)]
+    [InlineData(RoleCodes.Patient, false)]
+    public async Task ClinicalDiagnosisUpdatePolicy_AllowsOnlyAdminAndDentist(string roleCode, bool expectedAllowed)
+    {
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.Role, roleCode)
+        }, "TestAuth"));
+
+        var result = await _authService.AuthorizeAsync(user, null, ApiPolicies.ClinicalDiagnosisUpdate);
+        Assert.Equal(expectedAllowed, result.Succeeded);
+    }
 }
 

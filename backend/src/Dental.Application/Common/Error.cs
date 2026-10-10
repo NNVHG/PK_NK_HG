@@ -30,6 +30,8 @@ public record Error(string Code, string Message)
     public static readonly Error PatientInactive = new("PAT_091", "Không thể tạo lần khám cho bệnh nhân đã ngừng hoạt động.");
     public static readonly Error MedicalHistoryVisitClosed = new("PAT_041", "Không thể ghi tiền sử cho lần khám đã kết thúc hoặc bị hủy.");
     public static readonly Error VitalSignsVisitClosed = new("PAT_052", "Không thể ghi sinh hiệu cho lần khám đã kết thúc hoặc bị hủy.");
+    public static readonly Error DiagnosisVisitNotInProgress = new("PAT_111", "Chỉ có thể cập nhật chẩn đoán khi lần khám đang diễn ra.");
+    public static readonly Error DiagnosisDentistMismatch = new("PAT_112", "Chỉ nha sĩ phụ trách hoặc Admin mới có quyền cập nhật chẩn đoán.");
 
     // Lỗi quản lý tài khoản nhân viên (MOD_MST)
     public static readonly Error StaffPhoneExists = new("MST_001", "Số điện thoại đã được sử dụng.");

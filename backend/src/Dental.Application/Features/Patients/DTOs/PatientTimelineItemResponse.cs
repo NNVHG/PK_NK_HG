@@ -7,4 +7,5 @@ public sealed record PatientTimelineItemResponse(
     DateTime? EndedAt,
     string? DentistName,
     bool HasMedicalHistory,
-    bool HasVitalSigns);
+    bool HasVitalSigns,
+    string? Diagnosis = null);

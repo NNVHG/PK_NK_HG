@@ -89,6 +89,70 @@ public sealed class VisitService
         return Result<PagedResult<VisitResponse>>.Success(page);
     }
 
+    public async Task<Result<VisitResponse>> GetVisitByIdAsync(
+        int visitId,
+        int currentUserId,
+        string? currentRoleCode,
+        CancellationToken ct = default)
+    {
+        var visit = await _visitRepository.GetByIdAsync(visitId, ct);
+        if (visit is null)
+            return Result<VisitResponse>.Failure(Error.NotFound);
+
+        if (currentRoleCode == RoleCodes.Patient)
+        {
+            var patient = await _patientRepository.GetByIdAsync(visit.PatientId, ct);
+            if (patient is null || patient.UserId != currentUserId)
+                return Result<VisitResponse>.Failure(Error.NotFound);
+        }
+
+        return Result<VisitResponse>.Success(ToResponse(visit));
+    }
+
+    public async Task<Result<VisitResponse>> UpdateDiagnosisAsync(
+        int visitId,
+        UpdateVisitDiagnosisRequest request,
+        int currentUserId,
+        string? currentRoleCode,
+        string? ipAddress,
+        CancellationToken ct = default)
+    {
+        var visit = await _visitRepository.GetForUpdateAsync(visitId, ct);
+        if (visit is null)
+            return Result<VisitResponse>.Failure(Error.NotFound);
+
+        // DL-085: Sửa chẩn đoán chỉ cho Nha sĩ phụ trách hoặc Admin
+        if (currentRoleCode == RoleCodes.Dentist && visit.DentistId != currentUserId)
+            return Result<VisitResponse>.Failure(Error.DiagnosisDentistMismatch);
+
+        // DL-085: Chỉ khi InProgress
+        if (visit.Status != VisitStatuses.InProgress)
+            return Result<VisitResponse>.Failure(Error.DiagnosisVisitNotInProgress);
+
+        visit.Diagnosis = request.Diagnosis.Trim();
+        visit.ClinicalNotes = string.IsNullOrWhiteSpace(request.ClinicalNotes) ? null : request.ClinicalNotes.Trim();
+        visit.UpdatedAt = DateTime.UtcNow;
+
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        await _auditLogger.LogAsync(
+            action: AuditActions.VisitDiagnosisUpdated,
+            entityType: "Visit",
+            entityId: visit.VisitId,
+            userId: currentUserId,
+            detail: JsonSerializer.Serialize(new
+            {
+                visitId = visit.VisitId,
+                patientId = visit.PatientId,
+                diagnosis = visit.Diagnosis,
+                hasClinicalNotes = !string.IsNullOrEmpty(visit.ClinicalNotes)
+            }),
+            ipAddress: ipAddress,
+            ct: ct);
+
+        return Result<VisitResponse>.Success(ToResponse(visit));
+    }
+
     private static VisitResponse ToResponse(Visit visit)
         => new(
             visit.VisitId,
@@ -98,5 +162,7 @@ public sealed class VisitService
             visit.EndedAt,
             visit.DentistId,
             visit.CreatedByUserId,
-            visit.CreatedAt);
+            visit.CreatedAt,
+            visit.Diagnosis,
+            visit.ClinicalNotes);
 }

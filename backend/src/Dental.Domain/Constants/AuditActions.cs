@@ -13,6 +13,7 @@ public static class AuditActions
     public const string PatientUpdated = "PATIENT_UPDATED";
     public const string UserRegistered = "USER_REGISTERED";
     public const string VisitCreated = "VISIT_CREATED";
+    public const string VisitDiagnosisUpdated = "VISIT_DIAGNOSIS_UPDATED";
     public const string MedicalHistoryRecorded = "MEDICAL_HISTORY_RECORDED";
     public const string VitalSignsRecorded = "VITAL_SIGNS_RECORDED";
     public const string ServicePriceCreated = "SERVICE_PRICE_CREATED";

@@ -8,4 +8,6 @@ public sealed record VisitResponse(
     DateTime? EndedAt,
     int? DentistId,
     int CreatedByUserId,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    string? Diagnosis = null,
+    string? ClinicalNotes = null);

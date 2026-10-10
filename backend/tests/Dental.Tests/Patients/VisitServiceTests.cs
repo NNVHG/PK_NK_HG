@@ -136,4 +136,165 @@ public sealed class VisitServiceTests
         Assert.Contains(result.Errors, error => error.PropertyName == nameof(VisitQueryRequest.Page));
         Assert.Contains(result.Errors, error => error.PropertyName == nameof(VisitQueryRequest.PageSize));
     }
+
+    [Fact]
+    public async Task UpdateDiagnosisAsync_Success_WhenAssignedDentistUpdatesInProgressVisit()
+    {
+        var visit = new Visit
+        {
+            VisitId = 20,
+            PatientId = 7,
+            DentistId = 12,
+            Status = VisitStatuses.InProgress,
+        };
+        _visitRepository.GetForUpdateAsync(20, Arg.Any<CancellationToken>()).Returns(visit);
+
+        var request = new UpdateVisitDiagnosisRequest("Viêm tủy răng 26", "Đã đặt thuốc diệt tủy");
+        var result = await CreateService().UpdateDiagnosisAsync(
+            20, request, 12, RoleCodes.Dentist, "127.0.0.1");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("Viêm tủy răng 26", visit.Diagnosis);
+        Assert.Equal("Đã đặt thuốc diệt tủy", visit.ClinicalNotes);
+        Assert.NotNull(visit.UpdatedAt);
+        await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _auditLogger.Received(1).LogAsync(
+            action: AuditActions.VisitDiagnosisUpdated,
+            entityType: "Visit",
+            entityId: 20,
+            userId: 12,
+            detail: Arg.Is<string?>(d => d != null && d.Contains("\"visitId\":20") && d.Contains("true")),
+            ipAddress: "127.0.0.1",
+            ct: Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpdateDiagnosisAsync_Success_WhenAdminUpdatesInProgressVisit()
+    {
+        var visit = new Visit
+        {
+            VisitId = 20,
+            PatientId = 7,
+            DentistId = 12,
+            Status = VisitStatuses.InProgress,
+        };
+        _visitRepository.GetForUpdateAsync(20, Arg.Any<CancellationToken>()).Returns(visit);
+
+        var request = new UpdateVisitDiagnosisRequest("Viêm nướu", null);
+        var result = await CreateService().UpdateDiagnosisAsync(
+            20, request, 99, RoleCodes.Admin, null);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("Viêm nướu", visit.Diagnosis);
+        Assert.Null(visit.ClinicalNotes);
+        await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpdateDiagnosisAsync_MismatchedDentist_ReturnsDentistMismatchError()
+    {
+        var visit = new Visit
+        {
+            VisitId = 20,
+            PatientId = 7,
+            DentistId = 12,
+            Status = VisitStatuses.InProgress,
+        };
+        _visitRepository.GetForUpdateAsync(20, Arg.Any<CancellationToken>()).Returns(visit);
+
+        var request = new UpdateVisitDiagnosisRequest("Sâu răng", null);
+        var result = await CreateService().UpdateDiagnosisAsync(
+            20, request, 99, RoleCodes.Dentist, null);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(Error.DiagnosisDentistMismatch, result.Error);
+        await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(VisitStatuses.Created)]
+    [InlineData(VisitStatuses.Completed)]
+    [InlineData(VisitStatuses.Cancelled)]
+    public async Task UpdateDiagnosisAsync_NotInProgressVisit_ReturnsVisitNotInProgressError(string status)
+    {
+        var visit = new Visit
+        {
+            VisitId = 20,
+            PatientId = 7,
+            DentistId = 12,
+            Status = status,
+        };
+        _visitRepository.GetForUpdateAsync(20, Arg.Any<CancellationToken>()).Returns(visit);
+
+        var request = new UpdateVisitDiagnosisRequest("Sâu răng", null);
+        var result = await CreateService().UpdateDiagnosisAsync(
+            20, request, 12, RoleCodes.Dentist, null);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(Error.DiagnosisVisitNotInProgress, result.Error);
+        await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpdateDiagnosisAsync_VisitNotFound_ReturnsNotFoundError()
+    {
+        _visitRepository.GetForUpdateAsync(404, Arg.Any<CancellationToken>()).Returns((Visit?)null);
+
+        var request = new UpdateVisitDiagnosisRequest("Sâu răng", null);
+        var result = await CreateService().UpdateDiagnosisAsync(
+            404, request, 12, RoleCodes.Dentist, null);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(Error.NotFound, result.Error);
+        await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpdateVisitDiagnosisRequestValidator_ValidatesExpectedRules()
+    {
+        var validator = new UpdateVisitDiagnosisRequestValidator();
+
+        var emptyDiagnosis = await validator.ValidateAsync(new UpdateVisitDiagnosisRequest(""));
+        Assert.False(emptyDiagnosis.IsValid);
+        Assert.Contains(emptyDiagnosis.Errors, e => e.PropertyName == nameof(UpdateVisitDiagnosisRequest.Diagnosis));
+
+        var tooLongDiagnosis = await validator.ValidateAsync(new UpdateVisitDiagnosisRequest(new string('a', 1001)));
+        Assert.False(tooLongDiagnosis.IsValid);
+
+        var tooLongNotes = await validator.ValidateAsync(new UpdateVisitDiagnosisRequest("Sâu răng", new string('b', 2001)));
+        Assert.False(tooLongNotes.IsValid);
+
+        var valid = await validator.ValidateAsync(new UpdateVisitDiagnosisRequest("Sâu răng", "Theo dõi"));
+        Assert.True(valid.IsValid);
+    }
+
+    [Fact]
+    public async Task GetVisitByIdAsync_ProtectsPatientIdorAndReturnsSuccess()
+    {
+        var visit = new Visit
+        {
+            VisitId = 10,
+            PatientId = 5,
+            Status = VisitStatuses.Completed,
+            Diagnosis = "Viêm nướu",
+        };
+        _visitRepository.GetByIdAsync(10, Arg.Any<CancellationToken>()).Returns(visit);
+        _patientRepository.GetByIdAsync(5, Arg.Any<CancellationToken>()).Returns(new Patient { PatientId = 5, UserId = 100 });
+
+        var service = CreateService();
+
+        // Matching patient
+        var successResult = await service.GetVisitByIdAsync(10, 100, RoleCodes.Patient);
+        Assert.True(successResult.IsSuccess);
+        Assert.Equal("Viêm nướu", successResult.Value!.Diagnosis);
+
+        // Mismatched patient -> NotFound
+        var idorResult = await service.GetVisitByIdAsync(10, 999, RoleCodes.Patient);
+        Assert.True(idorResult.IsFailure);
+        Assert.Equal(Error.NotFound, idorResult.Error);
+
+        // Staff (e.g. Dentist) -> success without matching patient UserId
+        var staffResult = await service.GetVisitByIdAsync(10, 12, RoleCodes.Dentist);
+        Assert.True(staffResult.IsSuccess);
+    }
 }

@@ -17,15 +17,18 @@ public sealed class VisitsController : ControllerBase
     private readonly VisitService _visitService;
     private readonly ICurrentUser _currentUser;
     private readonly VisitQueryRequestValidator _queryValidator;
+    private readonly UpdateVisitDiagnosisRequestValidator _diagnosisValidator;
 
     public VisitsController(
         VisitService visitService,
         ICurrentUser currentUser,
-        VisitQueryRequestValidator queryValidator)
+        VisitQueryRequestValidator queryValidator,
+        UpdateVisitDiagnosisRequestValidator diagnosisValidator)
     {
         _visitService = visitService;
         _currentUser = currentUser;
         _queryValidator = queryValidator;
+        _diagnosisValidator = diagnosisValidator;
     }
 
     [HttpPost]
@@ -77,6 +80,54 @@ public sealed class VisitsController : ControllerBase
         return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
     }
 
+    [HttpGet("/api/visits/{id:int}")]
+    [Authorize(Policy = AppPolicies.PatientView)]
+    [ProducesResponseType(typeof(VisitResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetVisitById(int id, CancellationToken ct)
+    {
+        if (_currentUser.UserId is not int currentUserId)
+            return Unauthorized(new { code = Error.Unauthorized.Code, message = Error.Unauthorized.Message });
+
+        var result = await _visitService.GetVisitByIdAsync(
+            id,
+            currentUserId,
+            _currentUser.RoleCode,
+            ct);
+
+        return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
+    }
+
+    [HttpPut("/api/visits/{id:int}/diagnosis")]
+    [Authorize(Policy = AppPolicies.ClinicalDiagnosisUpdate)]
+    [ProducesResponseType(typeof(VisitResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> UpdateDiagnosis(
+        int id,
+        [FromBody] UpdateVisitDiagnosisRequest request,
+        CancellationToken ct)
+    {
+        if (_currentUser.UserId is not int currentUserId)
+            return Unauthorized(new { code = Error.Unauthorized.Code, message = Error.Unauthorized.Message });
+
+        var validation = await _diagnosisValidator.ValidateAsync(request, ct);
+        if (!validation.IsValid)
+            return ToValidationProblem(validation);
+
+        var result = await _visitService.UpdateDiagnosisAsync(
+            id,
+            request,
+            currentUserId,
+            _currentUser.RoleCode,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            ct);
+
+        return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
+    }
+
     private IActionResult ToValidationProblem(ValidationResult validation)
         => BadRequest(new
         {
@@ -90,7 +141,8 @@ public sealed class VisitsController : ControllerBase
         var statusCode = error.Code switch
         {
             "GEN_001" => StatusCodes.Status404NotFound,
-            "PAT_090" or "PAT_091" => StatusCodes.Status409Conflict,
+            "GEN_002" or "PAT_112" => StatusCodes.Status403Forbidden,
+            "PAT_090" or "PAT_091" or "PAT_111" => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status400BadRequest,
         };
 

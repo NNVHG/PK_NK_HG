@@ -17,6 +17,9 @@ public sealed class VisitRepository : IVisitRepository
     public Task<Visit?> GetByIdAsync(int visitId, CancellationToken ct = default)
         => _db.Visits.AsNoTracking().FirstOrDefaultAsync(visit => visit.VisitId == visitId, ct);
 
+    public Task<Visit?> GetForUpdateAsync(int visitId, CancellationToken ct = default)
+        => _db.Visits.FirstOrDefaultAsync(visit => visit.VisitId == visitId, ct);
+
     public Task<bool> HasOpenVisitAsync(int patientId, CancellationToken ct = default)
         => _db.Visits.AnyAsync(visit =>
             visit.PatientId == patientId &&
@@ -65,7 +68,8 @@ public sealed class VisitRepository : IVisitRepository
                 visit.EndedAt,
                 visit.Dentist == null ? null : visit.Dentist.FullName,
                 _db.MedicalHistoryRecords.Any(record => record.VisitId == visit.VisitId),
-                _db.VitalSignRecords.Any(record => record.VisitId == visit.VisitId)))
+                _db.VitalSignRecords.Any(record => record.VisitId == visit.VisitId),
+                visit.Diagnosis))
             .ToListAsync(ct);
 
         return PagedResult<PatientTimelineItemResponse>.Create(items, totalCount, page, pageSize);
