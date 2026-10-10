@@ -131,6 +131,8 @@ export interface VisitDetails {
   dentistId: number | null;
   createdByUserId: number;
   createdAt: string;
+  diagnosis: string | null;
+  clinicalNotes: string | null;
 }
 
 export const patientsService = {

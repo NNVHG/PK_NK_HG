@@ -117,6 +117,9 @@ public sealed class VisitService
         string? ipAddress,
         CancellationToken ct = default)
     {
+        if (currentRoleCode is not (RoleCodes.Admin or RoleCodes.Dentist))
+            return Result<VisitResponse>.Failure(Error.Forbidden);
+
         var visit = await _visitRepository.GetForUpdateAsync(visitId, ct);
         if (visit is null)
             return Result<VisitResponse>.Failure(Error.NotFound);
@@ -143,8 +146,7 @@ public sealed class VisitService
             detail: JsonSerializer.Serialize(new
             {
                 visitId = visit.VisitId,
-                patientId = visit.PatientId,
-                diagnosis = visit.Diagnosis,
+                changedFields = new[] { nameof(Visit.Diagnosis), nameof(Visit.ClinicalNotes) },
                 hasClinicalNotes = !string.IsNullOrEmpty(visit.ClinicalNotes)
             }),
             ipAddress: ipAddress,

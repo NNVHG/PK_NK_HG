@@ -31,6 +31,10 @@
         <h3>Tiếp đón & Check-in (MOD_CHK)</h3>
         <p>Xác nhận khách đã đến, liên kết lịch hẹn trong ngày và cấp số thứ tự.</p>
       </div>
+      <RouterLink v-if="canDiagnose" class="card" to="/clinical/diagnosis">
+        <h3>Khám & chẩn đoán</h3>
+        <p>Chọn lượt khám hôm nay, bắt đầu khám và lưu kết quả lâm sàng.</p>
+      </RouterLink>
     </div>
     <div v-else class="patient-banner">
       <h3>Cổng Thông Tin Dành Cho Bệnh Nhân</h3>
@@ -53,6 +57,7 @@ const isStaff = computed(() => {
   return staffRoles.includes(authStore.role);
 });
 const canCheckIn = computed(() => ['ADMIN', 'RECEPTIONIST'].includes(authStore.role));
+const canDiagnose = computed(() => ['ADMIN', 'DENTIST'].includes(authStore.role));
 
 function goTo(path: string) {
   router.push(path);

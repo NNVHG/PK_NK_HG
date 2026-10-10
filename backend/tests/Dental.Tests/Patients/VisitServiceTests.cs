@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Dental.Application.Common;
 using Dental.Application.Features.Visits.DTOs;
 using Dental.Application.Features.Visits.Services;
@@ -163,9 +164,27 @@ public sealed class VisitServiceTests
             entityType: "Visit",
             entityId: 20,
             userId: 12,
-            detail: Arg.Is<string?>(d => d != null && d.Contains("\"visitId\":20") && d.Contains("true")),
+            detail: Arg.Is<string?>(d => d != null && d.Contains("\"visitId\":20") && d.Contains("changedFields")
+                && !d.Contains(JsonSerializer.Serialize(request.Diagnosis))
+                && !d.Contains(JsonSerializer.Serialize(request.ClinicalNotes))),
             ipAddress: "127.0.0.1",
             ct: Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(RoleCodes.Receptionist)]
+    [InlineData(RoleCodes.Assistant)]
+    [InlineData(RoleCodes.Patient)]
+    [InlineData("UNKNOWN")]
+    [InlineData(null)]
+    public async Task UpdateDiagnosisAsync_UnsupportedRole_CannotLoadOrChangeVisit(string? role)
+    {
+        var result = await CreateService().UpdateDiagnosisAsync(
+            20, new UpdateVisitDiagnosisRequest("Sâu răng"), 12, role, null);
+
+        Assert.Equal(Error.Forbidden, result.Error);
+        await _visitRepository.DidNotReceive().GetForUpdateAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+        await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
