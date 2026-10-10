@@ -27,6 +27,10 @@
         <h3>Bệnh Nhân (MOD_PAT)</h3>
         <p>Hồ sơ hành chính bệnh nhân, tiền sử bệnh lý toàn thân và liên hệ.</p>
       </div>
+      <div v-if="canCheckIn" class="card" @click="goTo('/queue/check-in')">
+        <h3>Tiếp đón & Check-in (MOD_CHK)</h3>
+        <p>Xác nhận khách đã đến, liên kết lịch hẹn trong ngày và cấp số thứ tự.</p>
+      </div>
     </div>
     <div v-else class="patient-banner">
       <h3>Cổng Thông Tin Dành Cho Bệnh Nhân</h3>
@@ -48,6 +52,7 @@ const isStaff = computed(() => {
   const staffRoles = ['ADMIN', 'RECEPTIONIST', 'DENTIST', 'ASSISTANT'];
   return staffRoles.includes(authStore.role);
 });
+const canCheckIn = computed(() => ['ADMIN', 'RECEPTIONIST'].includes(authStore.role));
 
 function goTo(path: string) {
   router.push(path);

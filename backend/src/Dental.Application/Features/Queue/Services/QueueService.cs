@@ -95,6 +95,9 @@ public sealed class QueueService
             if (appointment is null || appointment.PatientId != request.PatientId)
                 return Result<QueueEntryResponse>.Failure(Error.AppointmentNotFound);
 
+            if (appointment.AppointmentDate != today)
+                return Result<QueueEntryResponse>.Failure(Error.AppointmentCannotCheckIn);
+
             if (appointment.Status != AppointmentStatuses.Scheduled)
                 return Result<QueueEntryResponse>.Failure(Error.AppointmentCannotCheckIn);
 

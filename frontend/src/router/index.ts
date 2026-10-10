@@ -47,6 +47,12 @@ const router = createRouter({
       meta: { requiresAuth: true, roles: ['PATIENT'] }
     },
     {
+      path: '/queue/check-in',
+      name: 'queue-check-in',
+      component: () => import('@/views/QueueCheckInView.vue'),
+      meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST'] }
+    },
+    {
       path: '/patients',
       name: 'patients',
       component: () => import('@/views/PatientsView.vue'),

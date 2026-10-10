@@ -113,6 +113,36 @@ public sealed class QueueServiceTests
         Assert.True(capturedEntry!.IsPriority);
         Assert.Equal(AppointmentStatuses.CheckedIn, appointment.Status);
     }
+
+    [Fact]
+    public async Task CheckInAsync_AppointmentFromAnotherDate_ReturnsConflictWithoutCreatingQueueEntry()
+    {
+        var patient = MakePatient();
+        var appointment = new Appointment
+        {
+            AppointmentId = 18,
+            PatientId = 1,
+            AppointmentDate = _vietnamClock.Today.AddDays(1),
+            SlotTime = new TimeOnly(9, 15),
+            Status = AppointmentStatuses.Scheduled
+        };
+        _patientRepository.GetByIdAsync(1, Arg.Any<CancellationToken>()).Returns(patient);
+        _appointmentRepository.GetByIdAsync(18, Arg.Any<CancellationToken>()).Returns(appointment);
+        _queueRepository.GetOpenQueueEntriesForPatientAsync(1, Arg.Any<CancellationToken>()).Returns(new List<QueueEntry>());
+        _visitRepository.HasOpenVisitAsync(1, Arg.Any<CancellationToken>()).Returns(false);
+
+        var result = await CreateService().CheckInAsync(
+            actorUserId: 3,
+            new CheckInRequest(PatientId: 1, AppointmentId: 18),
+            ipAddress: null);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(Error.AppointmentCannotCheckIn.Code, result.Error.Code);
+        Assert.Equal(AppointmentStatuses.Scheduled, appointment.Status);
+        await _unitOfWork.DidNotReceive().ExecuteInTransactionAsync(
+            Arg.Any<Func<CancellationToken, Task<Result<QueueEntryResponse>>>>(),
+            Arg.Any<CancellationToken>());
+    }
     [Fact]
     public async Task CheckInAsync_EarlyAppointment_MoreThan30MinutesEarly_GetsIsPriorityFalse()
     {
