@@ -59,6 +59,7 @@
               <div class="timeline-top"><strong>Lần khám #{{ visit.visitId }}</strong><span :class="['status-pill', `status-${visit.status.toLowerCase()}`]">{{ formatVisitStatus(visit.status) }}</span></div>
               <p>{{ visit.startedAt ? formatDateTime(visit.startedAt) : 'Chưa bắt đầu' }}<template v-if="visit.endedAt"> — {{ formatDateTime(visit.endedAt) }}</template></p>
               <p>Nha sĩ: {{ visit.dentistName || 'Chưa phân công' }}</p>
+              <RouterLink :to="`/clinical/visits/${visit.visitId}/fdi`">Xem tình trạng răng của lần khám</RouterLink>
               <div class="visit-flags"><span>{{ visit.hasMedicalHistory ? 'Có tiền sử' : 'Chưa ghi tiền sử' }}</span><span>{{ visit.hasVitalSigns ? 'Có sinh hiệu' : 'Chưa ghi sinh hiệu' }}</span></div>
             </div>
           </li>

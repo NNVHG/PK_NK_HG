@@ -33,6 +33,9 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddScoped<Dental.Application.Features.MOD_FDI.Services.ToothConditionService>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_FDI.Validators.ToothConditionRequestValidator>();
+builder.Services.AddScoped<IToothConditionRepository, ToothConditionRepository>();
 
 // ===== 1. Database =====
 builder.Services.AddDbContext<DentalDbContext>(opts =>

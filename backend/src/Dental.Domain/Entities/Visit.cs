@@ -14,6 +14,7 @@ public sealed class Visit : BaseEntity
     public int CreatedByUserId { get; set; }
     public string? Diagnosis { get; set; }
     public string? ClinicalNotes { get; set; }
+    public bool IsLocked { get; set; }
 
     public Patient Patient { get; set; } = null!;
     public User? Dentist { get; set; }

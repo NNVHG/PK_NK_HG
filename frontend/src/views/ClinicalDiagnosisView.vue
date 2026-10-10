@@ -43,6 +43,7 @@
             {{ dirty ? 'Bỏ thay đổi và tải lại' : 'Tải lại hồ sơ' }}
           </button>
           <template v-if="visit">
+            <RouterLink v-if="!dirty && !busy" :to="`/clinical/visits/${visit.visitId}/fdi`">Mở sơ đồ và ghi tình trạng răng</RouterLink>
             <p>Trạng thái: {{ visitStatusLabel }}</p>
             <button v-if="canStart" type="button" :disabled="busy" @click="startConsultation">
               {{ starting ? 'Đang bắt đầu…' : 'Bắt đầu khám' }}

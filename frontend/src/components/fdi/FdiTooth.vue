@@ -303,11 +303,3 @@ function onToothNumberClick() {
   fill: #ffffff;
 }
 </style>
-
-}
-
-function onToothNumberClick() {
-  if (props.readonly) return;
-  emit('toothClick', props.toothNumber);
-}
-</script>

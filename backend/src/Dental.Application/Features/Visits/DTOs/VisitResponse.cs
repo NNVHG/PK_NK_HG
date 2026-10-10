@@ -10,4 +10,5 @@ public sealed record VisitResponse(
     int CreatedByUserId,
     DateTime CreatedAt,
     string? Diagnosis = null,
-    string? ClinicalNotes = null);
+    string? ClinicalNotes = null,
+    bool IsLocked = false);

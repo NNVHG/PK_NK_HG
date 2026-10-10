@@ -166,5 +166,6 @@ public sealed class VisitService
             visit.CreatedByUserId,
             visit.CreatedAt,
             visit.Diagnosis,
-            visit.ClinicalNotes);
+            visit.ClinicalNotes,
+            visit.IsLocked);
 }

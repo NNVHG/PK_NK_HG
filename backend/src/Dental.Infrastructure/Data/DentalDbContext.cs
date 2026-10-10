@@ -14,6 +14,7 @@ public sealed class DentalDbContext : DbContext
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<Patient> Patients => Set<Patient>();
     public DbSet<Visit> Visits => Set<Visit>();
+    public DbSet<ToothCondition> ToothConditions => Set<ToothCondition>();
     public DbSet<MedicalHistoryRecord> MedicalHistoryRecords => Set<MedicalHistoryRecord>();
     public DbSet<MedicalHistoryItem> MedicalHistoryItems => Set<MedicalHistoryItem>();
     public DbSet<VitalSignRecord> VitalSignRecords => Set<VitalSignRecord>();
@@ -35,6 +36,7 @@ public sealed class DentalDbContext : DbContext
             .HasMax(999999);
         modelBuilder.ApplyConfiguration(new PatientConfiguration());
         modelBuilder.ApplyConfiguration(new VisitConfiguration());
+        modelBuilder.ApplyConfiguration(new ToothConditionConfiguration());
         modelBuilder.ApplyConfiguration(new MedicalHistoryRecordConfiguration());
         modelBuilder.ApplyConfiguration(new MedicalHistoryItemConfiguration());
         modelBuilder.ApplyConfiguration(new VitalSignRecordConfiguration());

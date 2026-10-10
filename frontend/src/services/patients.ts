@@ -133,6 +133,7 @@ export interface VisitDetails {
   createdAt: string;
   diagnosis: string | null;
   clinicalNotes: string | null;
+  isLocked: boolean;
 }
 
 export const patientsService = {
