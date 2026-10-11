@@ -2,6 +2,7 @@
   <main class="assignment-page">
     <RouterLink :to="`/clinical/visits/${visitId}/fdi`">← Sơ đồ và tình trạng răng</RouterLink>
     <h1>Chỉ định dịch vụ · Lần khám #{{ visitId }}</h1>
+    <RouterLink v-if="!busy && ['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(auth.role)" :to="`/clinical/visits/${visitId}/invoice-draft`">Hoàn tất khám / Xem hóa đơn nháp</RouterLink>
     <button type="button" :disabled="busy" @click="load">Tải lại hồ sơ</button>
     <p v-if="busy" role="status">Đang xử lý…</p>
     <p v-if="error" role="alert" class="error">{{ error }}</p>

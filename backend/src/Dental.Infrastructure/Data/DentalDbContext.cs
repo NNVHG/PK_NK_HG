@@ -16,6 +16,9 @@ public sealed class DentalDbContext : DbContext
     public DbSet<Visit> Visits => Set<Visit>();
     public DbSet<ToothCondition> ToothConditions => Set<ToothCondition>();
     public DbSet<VisitService> VisitServices => Set<VisitService>();
+    public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<InvoiceItem> InvoiceItems => Set<InvoiceItem>();
+    public DbSet<InvoiceNumberCounter> InvoiceNumberCounters => Set<InvoiceNumberCounter>();
     public DbSet<MedicalHistoryRecord> MedicalHistoryRecords => Set<MedicalHistoryRecord>();
     public DbSet<MedicalHistoryItem> MedicalHistoryItems => Set<MedicalHistoryItem>();
     public DbSet<VitalSignRecord> VitalSignRecords => Set<VitalSignRecord>();
@@ -39,6 +42,9 @@ public sealed class DentalDbContext : DbContext
         modelBuilder.ApplyConfiguration(new VisitConfiguration());
         modelBuilder.ApplyConfiguration(new ToothConditionConfiguration());
         modelBuilder.ApplyConfiguration(new VisitServiceConfiguration());
+        modelBuilder.ApplyConfiguration(new InvoiceConfiguration());
+        modelBuilder.ApplyConfiguration(new InvoiceItemConfiguration());
+        modelBuilder.ApplyConfiguration(new InvoiceNumberCounterConfiguration());
         modelBuilder.ApplyConfiguration(new MedicalHistoryRecordConfiguration());
         modelBuilder.ApplyConfiguration(new MedicalHistoryItemConfiguration());
         modelBuilder.ApplyConfiguration(new VitalSignRecordConfiguration());

@@ -20,6 +20,7 @@ public sealed class QueueServiceTests
     private readonly IUserRepository _userRepository = Substitute.For<IUserRepository>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly IAuditLogger _auditLogger = Substitute.For<IAuditLogger>();
+    private readonly IInvoiceDraftGenerator _invoiceDraft = Substitute.For<IInvoiceDraftGenerator>();
     private readonly FixedTimeProvider _timeProvider;
     private readonly VietnamClock _vietnamClock;
 
@@ -38,7 +39,7 @@ public sealed class QueueServiceTests
     }
 
     private QueueService CreateService()
-        => new(_queueRepository, _appointmentRepository, _patientRepository, _visitRepository, _userRepository, _unitOfWork, _auditLogger, _vietnamClock);
+        => new(_queueRepository, _appointmentRepository, _patientRepository, _visitRepository, _userRepository, _unitOfWork, _auditLogger, _vietnamClock, _invoiceDraft);
 
     private static Patient MakePatient(int patientId = 1, bool isActive = true)
         => new()

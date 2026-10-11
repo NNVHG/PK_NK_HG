@@ -18,6 +18,7 @@ public sealed class QueueService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IAuditLogger _auditLogger;
     private readonly VietnamClock _vietnamClock;
+    private readonly IInvoiceDraftGenerator _invoiceDraft;
 
     public QueueService(
         IQueueRepository queueRepository,
@@ -27,7 +28,8 @@ public sealed class QueueService
         IUserRepository userRepository,
         IUnitOfWork unitOfWork,
         IAuditLogger auditLogger,
-        VietnamClock vietnamClock)
+        VietnamClock vietnamClock,
+        IInvoiceDraftGenerator invoiceDraft)
     {
         _queueRepository = queueRepository;
         _appointmentRepository = appointmentRepository;
@@ -37,6 +39,7 @@ public sealed class QueueService
         _unitOfWork = unitOfWork;
         _auditLogger = auditLogger;
         _vietnamClock = vietnamClock;
+        _invoiceDraft = invoiceDraft;
     }
 
     public async Task<Result<QueueEntryResponse>> CheckInAsync(
@@ -260,8 +263,13 @@ public sealed class QueueService
         }
         else if (targetStatus == QueueStatus.Completed)
         {
+            if (entry.Visit is null || entry.Visit.Status != VisitStatuses.InProgress || entry.Visit.IsLocked)
+                return Result<QueueEntryResponse>.Failure(Error.Validation);
+            if (actorRole == RoleCodes.Dentist && entry.Visit.DentistId != actorUserId)
+                return Result<QueueEntryResponse>.Failure(Error.Forbidden);
             if (entry.Visit is not null)
             {
+                entry.Visit.IsLocked = true;
                 entry.Visit.Status = VisitStatuses.Completed;
                 entry.Visit.EndedAt = DateTime.UtcNow;
                 entry.Visit.UpdatedAt = DateTime.UtcNow;
@@ -291,7 +299,12 @@ public sealed class QueueService
         entry.UpdatedAt = DateTime.UtcNow;
 
         await _queueRepository.AddStatusHistoryAsync(history, ct);
-        await _unitOfWork.SaveChangesAsync(ct);
+        if (targetStatus == QueueStatus.Completed)
+        {
+            var draft = await _invoiceDraft.GenerateAsync(entry.Visit!, actorUserId, actorRole, ipAddress, ct);
+            if (draft.IsFailure) return Result<QueueEntryResponse>.Failure(draft.Error);
+        }
+        else await _unitOfWork.SaveChangesAsync(ct);
 
         await _auditLogger.LogAsync(
             action: AuditActions.QueueStatusChanged,
