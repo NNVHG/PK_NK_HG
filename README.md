@@ -194,3 +194,29 @@ F_FDI_04 mới có thêm/đọc; xóa chỉ định còn phụ thuộc kiểm tr
 - Script lặp lại: `pwsh -NoProfile -File backend/tests/Smoke/VerifyExistingFunctions.ps1 -IsolatedTestDatabase`. Chỉ chạy API localhost đã nối CSDL kiểm thử riêng, dùng cấu hình seed local; có tạo dữ liệu tổng hợp và không in token/mật khẩu/nội dung lâm sàng.
 
 Giới hạn: chưa kiểm thử tải/concurrency, chưa nghiệm thu toàn bộ thao tác ghi trên UI. Thuốc thực, thu tiền/hoàn tiền, hình ảnh, báo cáo và phần chưa có source không thuộc lượt tích hợp này; F_BIL_01/F_PAT_08 vẫn PARTIAL theo phạm vi. Bộ test xanh không chứng minh các chức năng chưa triển khai hoạt động. Tài liệu nghiệp vụ và báo cáo kiểm chứng trong `docs/` vẫn local theo `.gitignore` hiện có.
+## F_BIL_03 — Thu tiền mặt (DL-175)
+
+Phần thu tiền mặt có backend và UI tại `/clinical/visits/{visitId}/invoice-draft`.
+Admin hoặc Lễ tân/Thu ngân mở hóa đơn của ca đã kết thúc và khóa, nhập số tiền thu
+không vượt số nợ cùng tiền khách đưa, rồi tích xác nhận đã nhận tiền và bấm thu.
+Màn hình hiển thị mã khoản thu, tiền thối, trạng thái hóa đơn và lịch sử các lần thu.
+
+Để nghiệm thu: thu một phần, kiểm tra số nợ giảm đúng; thu hết phần còn lại và kiểm
+tra trạng thái Đã thanh toán. Tiền khách đưa lớn hơn khoản thu chỉ tạo tiền thối,
+không làm tăng tiền đã thanh toán. Bệnh nhân/Nha sĩ/Phụ tá không có quyền thu.
+Nếu kết quả lần thu chưa rõ do mất kết nối, tải lại lịch sử hoặc thử lại lần thu
+đang chờ; hệ thống giữ cùng mã yêu cầu để tránh ghi nhận hai lần.
+
+Kiểm chứng cục bộ phần tiền mặt: 473 unit test pass, frontend build 159 modules;
+29 kiểm tra PostgreSQL/HTTP pass trên CSDL riêng với dữ liệu tổng hợp. Chạy từ
+`backend/`:
+
+```powershell
+dotnet test --no-restore -p:UseAppHost=false
+dotnet run --project tests/CashPayment.Postgres -p:UseAppHost=false -- --isolated-config src/Dental.Api/appsettings.Development.json
+```
+
+Smoke test tạo rồi xóa CSDL test có tên ngẫu nhiên; tài khoản CSDL cần quyền tạo
+database. Test HTTP dùng host localhost và khóa JWT sinh riêng trong bộ nhớ;
+không kiểm chứng đăng nhập của ứng dụng. Gia chưa nghiệm thu UI phần tiền mặt.
+F_BIL_03 tổng thể còn chuyển khoản/VietQR; biên lai K80 thuộc F_BIL_06.

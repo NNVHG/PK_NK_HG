@@ -3,6 +3,7 @@
     <h2>Thu tiền mặt</h2>
     <p v-if="error" role="alert">{{ error }}</p>
     <p v-if="busy" role="status">Đang xử lý…</p>
+    <button v-if="!historyReady && !busy" @click="loadHistory">Tải lại lịch sử thu</button>
     <template v-if="canPay || pending">
       <label>Số tiền thu cho hóa đơn (VND)
         <input v-model="amount" type="number" min="1" step="1" :disabled="busy || !!pending" />
@@ -36,7 +37,7 @@ import { useCashPaymentsStore } from '@/stores/cashPayments';
 import { useAuthStore } from '@/stores/auth';
 
 const props = defineProps<{ invoiceId: number; remainingAmount: number; status: number }>();
-const emit = defineEmits<{ paid: [] }>();
+const emit = defineEmits<{ paid: [payment: CashPaymentResponse] }>();
 const auth = useAuthStore();
 const store = useCashPaymentsStore();
 const key = computed(() => `${auth.user?.userId}:${props.invoiceId}`);
@@ -54,7 +55,7 @@ const valid = computed(() => canPay.value && Number.isSafeInteger(Number(amount.
 const change = computed(() => Math.max(0, Number(tendered.value) - Number(amount.value)));
 const money = (value: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
 let version = 0;
-watch(() => props.invoiceId, async () => {
+async function loadHistory() {
   const ticket = ++version; busy.value = true; historyReady.value = false; confirmed.value = false; error.value = ''; history.value = [];
   amount.value = pending.value?.amount ?? ''; tendered.value = pending.value?.amountTendered ?? '';
   try {
@@ -65,16 +66,17 @@ watch(() => props.invoiceId, async () => {
     if (pending.value && rows.some(x => x.requestId === pending.value?.requestId)) store.clear(key.value);
   } catch { if (ticket === version) error.value = 'Không thể tải các lần thu. Tải lại hóa đơn để đối chiếu trước khi thu tiếp.'; }
   finally { if (ticket === version) busy.value = false; }
-}, { immediate: true });
+}
+watch(() => props.invoiceId, loadHistory, { immediate: true });
 async function receive() {
   if (busy.value || !historyReady.value || !confirmed.value || (!pending.value && !valid.value)) return;
   const ticket = version; const requestKey = key.value;
   const request = pending.value ?? { amount: Number(amount.value), amountTendered: Number(tendered.value), requestId: crypto.randomUUID(), paymentMethod: 'Cash' as const };
   store.put(requestKey, request); busy.value = true; error.value = '';
   try {
-    await cashPaymentsApi.receive(props.invoiceId, request);
+    const payment = await cashPaymentsApi.receive(props.invoiceId, request);
     store.clear(requestKey);
-    if (ticket === version) { confirmed.value = false; emit('paid'); }
+    if (ticket === version) { confirmed.value = false; emit('paid', payment); }
   } catch (cause) {
     if (axios.isAxiosError(cause) && [400, 403, 404].includes(cause.response?.status ?? 0)) store.clear(requestKey);
     if (ticket === version) error.value = axios.isAxiosError(cause) ? cause.response?.data?.message || 'Chưa xác định kết quả lần thu. Kiểm tra hoặc thử lại cùng yêu cầu.' : 'Chưa xác định kết quả lần thu.';

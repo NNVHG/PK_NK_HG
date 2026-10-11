@@ -41,7 +41,7 @@
       <p>Đã thu: {{ money(invoice.paidAmount) }} · Còn lại: {{ money(invoice.remainingAmount) }}</p>
       <p>Dòng dịch vụ giữ nguyên giá đã ghi nhận khi chỉ định.</p>
       <InvoiceCashPayment v-if="auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST'"
-        :invoice-id="invoice.id" :remaining-amount="invoice.remainingAmount" :status="invoice.status" @paid="load" />
+        :invoice-id="invoice.id" :remaining-amount="invoice.remainingAmount" :status="invoice.status" @paid="onPaymentReceived" />
     </section>
     <section v-if="auth.role === 'ADMIN' && unlockHistory.length" aria-label="Lịch sử mở khóa">
       <h2>Lịch sử mở khóa</h2>
@@ -63,6 +63,7 @@ import { visitsService } from '@/services/visits';
 import { invoiceDraftApi } from '@/services/invoiceDraft';
 import type { VisitUnlockHistory } from '@/services/invoiceDraft';
 import InvoiceCashPayment from '@/components/InvoiceCashPayment.vue';
+import type { CashPaymentResponse } from '@/services/cashPayments';
 import { useInvoiceDraftStore } from '@/stores/invoiceDraft';
 import { useAuthStore } from '@/stores/auth';
 import type { VisitDetails } from '@/services/patients';
@@ -109,6 +110,12 @@ async function load() {
     }
   } catch (cause) { if (ticket === version) { error.value = message(cause); visit.value = null; } }
   finally { if (ticket === version) busy.value = false; }
+}
+async function onPaymentReceived(payment: CashPaymentResponse) {
+  const expectedVersion = version + 1;
+  await load();
+  if (version === expectedVersion)
+    success.value = `Đã ghi nhận khoản thu #${payment.id}: ${money(payment.amount)}. Tiền thối: ${money(payment.changeAmount)}.`;
 }
 async function unlock() {
   const reason = unlockReason.value.trim();

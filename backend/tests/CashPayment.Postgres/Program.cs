@@ -52,6 +52,7 @@ try
     Check(await setup.AuditLogs.CountAsync(x => x.Action == "MOD_BIL_CASH_RECEIVED") == 2, "Exactly one audit per committed charge");
     await using var reopenDb = NewDb();
     Check((await new VisitReopenRepository(reopenDb).ReopenAsync(visit.VisitId, cashier.UserId, "Synthetic correction reason", null)).IsFailure, "Paid visit cannot reopen");
+    await CashPaymentHttpSmoke.RunAsync(options, cashier.UserId, patient.PatientId, Check);
     Console.WriteLine($"PostgreSQL payment checks: {checks}/{checks} PASS");
 }
 finally

@@ -13,6 +13,9 @@ namespace Dental.Infrastructure.Repositories;
 
 public sealed class CashPaymentRepository(DentalDbContext db) : ICashPaymentRepository
 {
+    public Task<bool> InvoiceExistsAsync(int invoiceId, CancellationToken ct = default)
+        => db.Invoices.AsNoTracking().AnyAsync(x => x.Id == invoiceId, ct);
+
     public async Task<IReadOnlyList<PaymentTransaction>> GetAsync(int invoiceId, CancellationToken ct = default)
         => await db.PaymentTransactions.AsNoTracking().Where(x => x.InvoiceId == invoiceId).OrderBy(x => x.Id).ToListAsync(ct);
 

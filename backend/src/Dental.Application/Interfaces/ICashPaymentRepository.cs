@@ -8,4 +8,5 @@ public interface ICashPaymentRepository
 {
     Task<Result<PaymentTransaction>> ReceiveAsync(int invoiceId, int cashierId, CashPaymentRequest request, string? ip, CancellationToken ct = default);
     Task<IReadOnlyList<PaymentTransaction>> GetAsync(int invoiceId, CancellationToken ct = default);
+    Task<bool> InvoiceExistsAsync(int invoiceId, CancellationToken ct = default);
 }

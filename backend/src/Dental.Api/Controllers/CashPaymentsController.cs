@@ -28,6 +28,7 @@ public sealed class CashPaymentsController(CashPaymentService service, ICashPaym
     {
         if (user.UserId is not int) return Unauthorized();
         if (invoiceId <= 0) return BadRequest();
+        if (!await repository.InvoiceExistsAsync(invoiceId, ct)) return NotFound();
         return Ok((await repository.GetAsync(invoiceId, ct)).Select(CashPaymentService.Map));
     }
 }
