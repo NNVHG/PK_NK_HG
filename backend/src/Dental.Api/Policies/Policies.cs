@@ -26,11 +26,13 @@ public static class Policies
     public const string QueueStatusUpdate = "QueueStatusUpdate";
     public const string ClinicalDiagnosisUpdate = "ClinicalDiagnosisUpdate";
     public const string FdiConditionWrite = "FdiConditionWrite";
+    public const string FdiServiceAssign = "FdiServiceAssign";
 
 
     public static void AddApplicationPolicies(this AuthorizationOptions opts)
     {
         opts.AddPolicy(FdiConditionWrite, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist));
+        opts.AddPolicy(FdiServiceAssign, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist));
         opts.AddPolicy(AdminOnly, policy =>
             policy.RequireRole(RoleCodes.Admin));
 

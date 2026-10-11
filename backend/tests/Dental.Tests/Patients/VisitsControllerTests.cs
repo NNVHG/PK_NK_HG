@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using Xunit;
+using VisitService = Dental.Application.Features.Visits.Services.VisitService;
 
 namespace Dental.Tests.Patients;
 

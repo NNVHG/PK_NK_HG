@@ -2,6 +2,7 @@
   <main class="fdi-page">
     <RouterLink to="/clinical/diagnosis">← Khám và chẩn đoán</RouterLink>
     <h1>Tình trạng răng · Lần khám #{{ visitId }}</h1>
+    <RouterLink v-if="!busy" :to="`/clinical/visits/${visitId}/services`">Chỉ định dịch vụ theo răng</RouterLink>
     <button :disabled="busy" @click="load">Tải lại hồ sơ</button>
     <p v-if="busy" role="status">Đang xử lý…</p>
     <p v-if="error" role="alert" class="error">{{ error }}</p>

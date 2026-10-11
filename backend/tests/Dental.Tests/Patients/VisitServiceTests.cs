@@ -8,6 +8,7 @@ using Dental.Domain.Constants;
 using Dental.Domain.Entities;
 using NSubstitute;
 using Xunit;
+using VisitService = Dental.Application.Features.Visits.Services.VisitService;
 
 namespace Dental.Tests.Patients;
 
