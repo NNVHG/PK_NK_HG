@@ -26,9 +26,9 @@ export interface QueueEntryResponse {
 }
 
 export const queueService = {
-  async getToday(page = 1): Promise<PagedResult<QueueEntryResponse>> {
+  async getToday(page = 1, status?: number): Promise<PagedResult<QueueEntryResponse>> {
     const response = await apiClient.get<PagedResult<QueueEntryResponse>>('/queue', {
-      params: { page, pageSize: 20 }
+      params: { page, pageSize: 20, ...(status === undefined ? {} : { status }) }
     });
     return response.data;
   },

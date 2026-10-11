@@ -67,10 +67,13 @@ public sealed class QueueRepository : IQueueRepository
 
         var totalCount = await query.CountAsync(ct);
 
-        // Thứ tự ưu tiên theo DL-046 & DL-054: IsPriority DESC (ưu tiên trước), sau đó QueueNumber ASC
+        // DL-046/054: đúng hẹn theo giờ hẹn; thường/trễ hẹn theo giờ check-in.
         var items = await query
             .OrderByDescending(q => q.IsPriority)
+            .ThenBy(q => q.IsPriority && q.Appointment != null ? q.Appointment.SlotTime : TimeOnly.MaxValue)
+            .ThenBy(q => q.CheckInTime)
             .ThenBy(q => q.QueueNumber)
+            .ThenBy(q => q.QueueEntryId)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(ct);

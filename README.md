@@ -385,3 +385,8 @@ Các chức năng PARTIAL vẫn chờ nghiệm thu tương ứng: ngân hàng li
 ## Đặt lịch tại quầy (F_APP_02)
 Lễ tân/Admin mở Đặt lịch tại quầy ở /appointments/counter, tìm hồ sơ theo tên/SĐT/mã, đối chiếu họ tên/ngày sinh/mã, chọn ngày/slot, notes tùy chọn rồi xác nhận với khách. Tối đa20 kết quả; thu hẹp từ khóa nếu chưa thấy hồ sơ. Hồ sơ không tài khoản vẫn đặt được.
 Đặt lịch không tự check-in. API POST /api/appointments kiểm giờ chuẩn/lịch trùng theo bệnh nhân; chưa phân nha sĩ/cấp cứu/đổi-hủy UI/nhắc hẹn. Gia cần nghiệm thu UI có đăng nhập.
+
+## Hàng đợi nội bộ hôm nay (F_CHK_02)
+Nhân viên mở Hàng đợi hôm nay tại /queue/today. Mặc định Đang chờ; chọn trạng thái hoặc Tất cả, dùng Trang trước/Trang sau và Tải lại. Danh sách chỉ ngày đang xét theo giờ Việt Nam của server,20dòng/trang; API nội bộ cũng hỗ trợ Date cho tra cứu hiện hành, UI này không chọn ngày lịch sử.
+Khách hẹn đúng giờ xếp trước theo giờ hẹn; khách thường/trễ hẹn theo thời điểm check-in. UI dùng thứ tự backend. STT A-001 cho thường/có hẹn, ưu tiên lịch hẹn không phải cấp cứuU. Patient không có quyền truy cập.
+Đây là danh sách nội bộ: chưa TVâmthanh/gọi số/cấp cứu/phân ghế, chưa sửa dọn lượt qua ngày DL-051. Chờ Gia nghiệm thu UI có đăng nhập.
