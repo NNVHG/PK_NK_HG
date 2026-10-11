@@ -117,7 +117,7 @@ Toàn bộ logic bảo mật, mã hóa BCrypt, phát hành JWT và phân quyền
   ```powershell
   dotnet test backend/DentalClinic.sln
   ```
-  *Kết quả:* **30/30 tests PASSED** (100% thành công, 0 lỗi).
+  *Kết quả:* **424/424 tests PASSED** (100% thành công, 0 lỗi).
 - **Frontend Type-check & Build:**
   ```powershell
   cd frontend
@@ -139,7 +139,7 @@ PK_NK_HG/
 │   │   ├── Dental.Domain/               # Entities, Enums, Domain Rules
 │   │   └── Dental.Infrastructure/       # EF Core, DbContext, Migrations, Seeders
 │   └── tests/
-│       └── Dental.Tests/                # 30 Unit Tests cho Auth & RBAC
+│       └── Dental.Tests/                # 424 tests cho các chức năng đã triển khai
 ├── frontend/                            # Single Page Application Vue 3 + Vite
 │   ├── src/
 │   │   ├── views/                       # Màn hình theo module (Login, Dashboard, v.v.)
@@ -181,3 +181,16 @@ PK_NK_HG/
 - Giới hạn: chưa nghiệm thu UI có đăng nhập, ghi FDI/dịch vụ qua API trên CSDL thật, tải/concurrency hoặc toàn bộ luồng nghiệp vụ. Test hiện có không chứng minh các chức năng chưa triển khai hoạt động.
 
 F_FDI_04 mới có thêm/đọc; xóa chỉ định còn phụ thuộc kiểm tra thanh toán. UI lịch tại quầy, điều phối hàng đợi, hóa đơn/thanh toán, kê đơn, hình ảnh và báo cáo vẫn còn phần chưa triển khai. Kho và nghiệp vụ phụ tá thuộc Phase 2.
+
+## Kiểm chứng và tích hợp hóa đơn dịch vụ (2026-10-11 11:00 — Asia/Ho_Chi_Minh)
+
+Đã fast-forward `codex/phase1-invoice-draft` vào `main` sau kiểm chứng. Phần hiện có gồm Draft dịch vụ, đồng bộ theo snapshot giá, kết thúc khám chuyển chờ thanh toán, Admin mở lại khám hủy hóa đơn chưa thu và sinh mã mới; lý do mở khóa nằm trong lịch sử bảo vệ, AuditLog chỉ tham chiếu ID theo quyết định đã xác nhận.
+
+- Backend: restore/build đạt, 0 warning / 0 error; test 424/424, 0 fail / 0 skip, chạy lại trên main đạt.
+- Frontend: vue-tsc và Vite build đạt, 154 modules; UI 26/26 kiểm tra tải/điều hướng bằng năm vai trò, 0 lỗi console mới sau sửa.
+- PostgreSQL: toàn bộ 13 migration áp dụng được từ CSDL trống riêng; không pending model changes. Không thay đổi CSDL làm việc của người dùng.
+- API thực tế: 113/113 kiểm tra trên CSDL riêng, gồm RBAC/401/403, Auth/Staff/Patients/Visits/History/Vitals/Catalog/Audit, lịch hẹn, FDI và luồng hóa đơn mở lại/tái khóa.
+- Đã sửa lỗi thẻ script thừa trong preview FDI và menu lịch hẹn sai vai trò (kể cả liên kết dashboard). Không thay đổi quyền route/API.
+- Script lặp lại: `pwsh -NoProfile -File backend/tests/Smoke/VerifyExistingFunctions.ps1 -IsolatedTestDatabase`. Chỉ chạy API localhost đã nối CSDL kiểm thử riêng, dùng cấu hình seed local; có tạo dữ liệu tổng hợp và không in token/mật khẩu/nội dung lâm sàng.
+
+Giới hạn: chưa kiểm thử tải/concurrency, chưa nghiệm thu toàn bộ thao tác ghi trên UI. Thuốc thực, thu tiền/hoàn tiền, hình ảnh, báo cáo và phần chưa có source không thuộc lượt tích hợp này; F_BIL_01/F_PAT_08 vẫn PARTIAL theo phạm vi. Bộ test xanh không chứng minh các chức năng chưa triển khai hoạt động. Tài liệu nghiệp vụ và báo cáo kiểm chứng trong `docs/` vẫn local theo `.gitignore` hiện có.
