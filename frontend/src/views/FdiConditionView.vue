@@ -10,7 +10,9 @@
     <template v-if="visit">
       <p>Trạng thái lần khám: {{ visit.status }}</p>
       <p v-if="!canEdit">Chỉ Admin hoặc nha sĩ phụ trách được ghi tình trạng khi lần khám đang diễn ra và chưa khóa.</p>
-      <FdiDentalChart v-model="selection" v-model:dentition-type="dentition" :multiple="false" :readonly="busy || !canEdit" />
+      <p>Chọn răng trên sơ đồ để tra cứu lịch sử qua các lần khám.</p>
+      <FdiDentalChart v-model="selection" v-model:dentition-type="dentition" :multiple="false" :readonly="busy" @select="openHistory" />
+      <ToothHistoryDrawer ref="history" :patient-id="visit.patientId" />
       <form v-if="canEdit" @submit.prevent="save">
         <p v-if="selection[0]">Răng {{ selection[0].toothNumber }} · {{ selection[0].surface ? SURFACE_METADATA[selection[0].surface].nameVi : 'Toàn răng' }}</p>
         <p v-else>Chọn một răng hoặc mặt răng trên sơ đồ.</p>
@@ -29,6 +31,7 @@
           — {{ FDI_CONDITIONS[row.conditionCode] || row.conditionCode }}
           <small>{{ new Date(row.createdAt).toLocaleString('vi-VN') }}</small>
           <button type="button" :disabled="busy" @click="locate(row)">Xem trên sơ đồ</button>
+          <button type="button" :disabled="busy" @click="openHistory({ toothNumber: row.toothNumber })">Lịch sử răng</button>
         </li>
       </ul>
     </template>
@@ -41,6 +44,7 @@ import { storeToRefs } from 'pinia';
 import { useRoute } from 'vue-router';
 import axios from 'axios';
 import FdiDentalChart from '@/components/fdi/FdiDentalChart.vue';
+import ToothHistoryDrawer from '@/components/fdi/ToothHistoryDrawer.vue';
 import { FDI_CONDITIONS, fdiService, type ConditionCode, type ToothCondition } from '@/services/fdi';
 import { useFdiStore } from '@/stores/fdi';
 import { visitsService } from '@/services/visits';
@@ -60,6 +64,8 @@ const code = ref<ConditionCode>('CARIES');
 const busy = ref(false);
 const error = ref('');
 const success = ref('');
+const history = ref<InstanceType<typeof ToothHistoryDrawer> | null>(null);
+function openHistory(selected: { toothNumber: number }) { if (!busy.value) void history.value?.open(selected.toothNumber); }
 const canEdit = computed(() => visit.value?.status === 'InProgress' && !visit.value?.isLocked &&
   (auth.role === 'ADMIN' || (auth.role === 'DENTIST' && visit.value.dentistId === auth.user?.userId)));
 
