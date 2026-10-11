@@ -117,7 +117,7 @@ Toàn bộ logic bảo mật, mã hóa BCrypt, phát hành JWT và phân quyền
   ```powershell
   dotnet test backend/DentalClinic.sln
   ```
-  *Kết quả:* **424/424 tests PASSED** (100% thành công, 0 lỗi).
+  *Kết quả:* **501/501 tests PASSED** (100% thành công, 0 lỗi).
 - **Frontend Type-check & Build:**
   ```powershell
   cd frontend
@@ -139,7 +139,7 @@ PK_NK_HG/
 │   │   ├── Dental.Domain/               # Entities, Enums, Domain Rules
 │   │   └── Dental.Infrastructure/       # EF Core, DbContext, Migrations, Seeders
 │   └── tests/
-│       └── Dental.Tests/                # 424 tests cho các chức năng đã triển khai
+│       └── Dental.Tests/                # 501 tests cho các chức năng đã triển khai
 ├── frontend/                            # Single Page Application Vue 3 + Vite
 │   ├── src/
 │   │   ├── views/                       # Màn hình theo module (Login, Dashboard, v.v.)
@@ -274,3 +274,16 @@ trực tuyến** sau khi bỏ chặn để tải lại ảnh thật. Production 
 Kiểm thử logic hiển thị bằng `node --test tests/bankQrDisplay.test.mjs` từ
 `frontend/` (9 trường hợp). Không cần thêm package. Phần timeout/TTL thuộc Q-181,
 chưa có quyết định chính thức và chưa được triển khai trong phần fallback này.
+
+## Kiểm chứng tích hợp thanh toán vào main — 2026-10-11 13:45 (Asia/Ho_Chi_Minh)
+
+Nguồn codex/phase1-vietqr-offline tại c329aa9, được người dùng chọn merge trực tiếp nếu đạt. Phần code gồm tiền mặt, SePay webhook/Development simulation và VietQR offline theo DL-175/DL-190/DL-195/DL-196/DL-200.
+
+- Backend restore/build đạt 0 warning/error; unit 501/501 pass, 0 fail/skip.
+- Frontend vue-tsc/Vite build đạt 166 modules; node --test tests/bankQrDisplay.test.mjs 9/9 pass.
+- PostgreSQL: toàn bộ 16 migration áp dụng từ CSDL trống riêng; model không pending changes. Payment.Postgres kiểm tra 60/60 đạt gồm cash/bank, RBAC, idempotency và callback đồng thời; tự xóa đúng database test sở hữu.
+- API ứng dụng thật: VerifyExistingFunctions.ps1 trên CSDL riêng 113/113 đạt với 5 seed roles và các luồng đã có.
+- Browser: 29/29 kiểm tra tải/điều hướng/route guards và luồng ghi test tiền mặt+mô phỏng đạt, 0 console error. Fallback thiếu bank config hiển thị SVG cục bộ/cảnh báo không chuyển tiền; mô phỏng100.000 + cash300.000/tendered400.000 → Paid, nợ0, thối100.000.
+- Diff không có secret cấu hình local hoặc file build/thừa; không thêm package, không đổi schema/nghiệp vụ trong lượt kiểm chứng.
+
+Giới hạn: chưa có giao dịch ngân hàng live hoặc cấu hình ngân hàng production; mô phỏng không chứng minh tiền đã vào ngân hàng. Nhánh ảnh trực tuyến bị mất mạng được kiểm tra ở helper 9 case, chưa chặn mạng ảnh qua browser. Không nghiệm thu mọi thao tác ghi UI hoặc toàn bộ tính năng còn thiếu (thuốc, giảm giá, in/hoàn tiền, TTL, Phase2). F_BIL_03 vẫn PARTIAL. CSDL làm việc của người dùng không được thay đổi bởi lượt kiểm chứng; API/start-dev có cơ chế migration khi khởi động theo code hiện có. Báo cáo và ảnh/JSON local trong docs/testing/, giữ ignore.
