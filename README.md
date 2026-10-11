@@ -351,3 +351,9 @@ Giới hạn: chưa có giao dịch ngân hàng live hoặc cấu hình ngân h�
 - `GET /api/patients/{patientId}/teeth/{toothNumber}/history` và `GET /api/patients/{patientId}/treatment-timeline?toothNumber=11` trả `PagedResult`, mặc định `page=1&pageSize=20`, tối đa50 dòng/trang. Bỏ `toothNumber` ở timeline để xem toàn hàm. Các vai trò nhân viên được đọc; Patient chỉ đọc hồ sơ có `UserId` thuộc mình, hồ sơ khác trả404. Response `no-store`; ID FDI/phân trang không hợp lệ400.
 - Mỗi bản ghi tình trạng và chỉ định là sự kiện riêng, sắp thời điểm ghi mới nhất trước; giữ ghi chú, mặt răng, lần khám, nha sĩ và giá snapshot dịch vụ. Chỉ định không chứng minh thủ thuật đã thực hiện. Chỉ định đã xóa cứng không xuất hiện trong timeline; audit xóa vẫn theo F_FDI_04. Không đổi schema/mã mặt răng trong lượt này; source nhiều mặt `Surfaces` theo DL-201 còn chưa triển khai.
 - Kiểm thử tự động kiểm API thật trên PostgreSQL cô lập và script drawer; vẫn cần Gia nghiệm thu drawer bằng trình duyệt có đăng nhập.
+
+## Ghi chú lâm sàng theo răng (F_FDI_07)
+
+- Tại màn hình tình trạng răng, Admin hoặc nha sĩ phụ trách chọn răng/mặt răng, tình trạng và nhập **Ghi chú lâm sàng theo răng** tùy chọn, tối đa500 ký tự. Lưu tạo bản ghi tình trạng mới; ghi chú cũ được giữ và đọc trong danh sách hoặc drawer lịch sử.
+- `POST /api/visits/{visitId}/tooth-conditions` nhận thêm `note` nullable. Payload cũ không có `note` vẫn hợp lệ; khoảng trắng đầu/cuối được bỏ, chuỗi trắng lưu null. Ghi chú dài quá500 trả400; ca khám khóa/kết thúc trả409; chỉ Admin hoặc nha sĩ phụ trách được ghi. Nội dung y khoa không được ghi vào audit log.
+- Ghi chú gắn tình trạng mới theo DL-093/110/184, chưa có thao tác sửa trực tiếp bản ghi cũ hoặc ghi chú hậu thanh toán DL-227. Chờ Gia nghiệm thu UI có đăng nhập.

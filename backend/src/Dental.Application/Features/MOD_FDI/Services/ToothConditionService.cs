@@ -47,6 +47,7 @@ public sealed class ToothConditionService(IVisitRepository visits, IPatientRepos
         {
             VisitId = visitId, ToothNumber = request.ToothNumber,
             Surface = FdiCodes.NormalizeSurface(request.Surface), ConditionCode = request.ConditionCode,
+            Note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim(),
             CreatedAt = DateTime.UtcNow
         };
         await conditions.AddAsync(row, ct);

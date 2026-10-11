@@ -13,7 +13,7 @@ export const fdiService = {
   async get(visitId: number): Promise<ToothCondition[]> {
     return (await apiClient.get<ToothCondition[]>(`/visits/${visitId}/tooth-conditions`)).data;
   },
-  async add(visitId: number, toothNumber: number, surface: string | null, conditionCode: ConditionCode): Promise<ToothCondition> {
-    return (await apiClient.post<ToothCondition>(`/visits/${visitId}/tooth-conditions`, { toothNumber, surface, conditionCode })).data;
+  async add(visitId: number, toothNumber: number, surface: string | null, conditionCode: ConditionCode, note: string | null = null): Promise<ToothCondition> {
+    return (await apiClient.post<ToothCondition>(`/visits/${visitId}/tooth-conditions`, { toothNumber, surface, conditionCode, note })).data;
   }
 };
