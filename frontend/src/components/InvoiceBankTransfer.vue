@@ -10,8 +10,14 @@
     <template v-if="info">
       <p>Nội dung: <strong>{{ info.content }}</strong> · Còn nợ: {{ money(info.remainingAmount) }}</p>
       <p v-if="info.configurationMessage">{{ info.configurationMessage }}</p>
-      <img v-if="info.qrUrl && !qrFailed" :src="info.qrUrl" :alt="`VietQR ${info.invoiceCode}`" referrerpolicy="no-referrer" @error="qrFailed = true" />
-      <p v-if="qrFailed">Không tải được ảnh VietQR. Kiểm tra kết nối trước khi chuyển tiền.</p>
+      <img v-if="qrDisplay === 'online'" :src="info.qrUrl!" :alt="`VietQR ${info.invoiceCode}`" referrerpolicy="no-referrer" @error="handleQrImageError" />
+      <div v-else-if="qrDisplay === 'offline-demo'" class="offline-demo" role="status">
+        <p><strong>Chế độ mô phỏng ngoại tuyến (Offline Demo)</strong></p>
+        <img :src="demoQrImage" alt="Minh họa VietQR ngoại tuyến — không dùng để chuyển tiền" />
+        <p>Ảnh minh họa không chứa tài khoản ngân hàng. Dùng nút mô phỏng bên dưới để nghiệm thu luồng; cần kết nối với backend cục bộ.</p>
+      </div>
+      <p v-else-if="qrFailed" role="alert">Không tải được ảnh VietQR. Kiểm tra kết nối trước khi chuyển tiền.</p>
+      <button v-if="qrFailed && info.qrUrl" :disabled="busy" @click="qrFailed = false">Thử tải lại VietQR trực tuyến</button>
       <p v-if="info.accountName">Tài khoản phòng khám: {{ info.accountName }}</p>
       <button :disabled="busy || watching" @click="startWatching">Theo dõi chuyển khoản</button>
       <button :disabled="busy" @click="checkNow">Kiểm tra thanh toán</button>
@@ -36,6 +42,8 @@ import { bankTransfersApi } from '@/services/bankTransfers';
 import type { BankTransferInfo, BankTransferResponse } from '@/services/bankTransfers';
 import { useBankTransfersStore } from '@/stores/bankTransfers';
 import { useAuthStore } from '@/stores/auth';
+import { MOD_BIL_bankQrDisplay } from '@/services/bankQrDisplay';
+import demoQrImage from '@/assets/images/vietqr-demo-fallback.svg';
 const props = defineProps<{ invoiceId: number }>();
 const emit = defineEmits<{ paid: [payment: BankTransferResponse | null] }>();
 const auth = useAuthStore(); const store = useBankTransfersStore();
@@ -44,6 +52,8 @@ const pending = computed(() => store.pending[key.value]);
 const info = ref<BankTransferInfo | null>(null); const amount = ref<number | string>('');
 const dialog = ref<HTMLDialogElement | null>(null);
 const busy = ref(false); const confirmed = ref(false); const error = ref(''); const qrFailed = ref(false); const watching = ref(false);
+const qrDisplay = computed(() => MOD_BIL_bankQrDisplay(info.value?.qrUrl ?? null, qrFailed.value, info.value?.simulationEnabled ?? false));
+function handleQrImageError() { qrFailed.value = true; }
 const valid = computed(() => Number.isSafeInteger(Number(amount.value)) && Number(amount.value) > 0);
 const money = (value: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
 let version = 0; let timer: ReturnType<typeof setInterval> | undefined; let polling = false;
@@ -114,4 +124,5 @@ onUnmounted(() => { version++; stopWatching(); });
 img { max-width: 300px; width: 100%; } label { display: block; margin: .6rem 0; } button { margin: .4rem; }
 dialog { width: min(90vw, 600px); max-height: 85vh; overflow: auto; border: 1px solid #ccc; }
 dialog::backdrop { background: rgb(0 0 0 / .4); }
+.offline-demo { background: #fff8db; color: #5c4600; border: 1px solid #b58b00; border-radius: .5rem; padding: .75rem; }
 </style>

@@ -257,3 +257,20 @@ Kiểm chứng lượt webhook:501 unit tests pass, frontend build164 modules;
 Dùng lệnh smoke ở mục trước. Chưa nghiệm thu browserUI của Gia, ảnh QR qua
 internet hay nhận webhook từ tài khoản ngân hàng thật; không coi các kiểm tra
 HTTP trên test host là kiểm chứng production login/Casso.
+
+### F_BIL_03 — VietQR dự phòng ngoại tuyến (DL-200)
+
+Trong Development, modal thanh toán tự hiển thị SVG cục bộ và thông báo vàng
+**Chế độ mô phỏng ngoại tuyến (Offline Demo)** khi ảnh VietQR tải lỗi hoặc chưa
+cấu hình ngân hàng. Ảnh minh họa không chứa tài khoản, không dùng để chuyển tiền.
+Thu ngân xác nhận mô phỏng và sử dụng nút mô phỏng hiện có để kiểm chứng khoản
+thu, trạng thái hóa đơn và lịch sử thanh toán. Backend cục bộ vẫn cần hoạt động.
+
+Để kiểm chứng lỗi tải ảnh, chặn riêng yêu cầu tới `img.vietqr.io` trong trình
+duyệt rồi mở modal; giữ kết nối tới backend cục bộ. Bấm **Thử tải lại VietQR
+trực tuyến** sau khi bỏ chặn để tải lại ảnh thật. Production không hiển thị
+ảnh mô phỏng và endpoint simulate vẫn trả 404.
+
+Kiểm thử logic hiển thị bằng `node --test tests/bankQrDisplay.test.mjs` từ
+`frontend/` (9 trường hợp). Không cần thêm package. Phần timeout/TTL thuộc Q-181,
+chưa có quyết định chính thức và chưa được triển khai trong phần fallback này.

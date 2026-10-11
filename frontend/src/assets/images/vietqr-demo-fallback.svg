@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300" role="img" aria-labelledby="title description">
+  <title id="title">VietQR — mô phỏng ngoại tuyến</title>
+  <desc id="description">Minh họa QR dành cho demo, không chứa tài khoản ngân hàng và không dùng để chuyển tiền.</desc>
+  <rect width="300" height="300" rx="12" fill="#fff8db"/>
+  <g fill="none" stroke="#5c4600" stroke-width="8">
+    <path d="M34 34h60v60H34z M206 34h60v60h-60z M34 206h60v60H34z"/>
+  </g>
+  <g fill="#5c4600">
+    <path d="M50 50h28v28H50z M222 50h28v28h-28z M50 222h28v28H50z"/>
+    <path d="M118 34h18v18h-18z M154 52h18v36h-18z M118 88h18v18h-18z M34 118h36v18H34z M88 154h18v18H88z M206 118h18v18h-18z M242 154h24v18h-24z M118 206h18v36h-18z M154 242h18v24h-18z M206 206h18v18h-18z M242 242h24v24h-24z"/>
+  </g>
+  <rect x="12" y="136" width="276" height="58" rx="6" fill="#ffdf76"/>
+  <text x="150" y="161" text-anchor="middle" font-family="sans-serif" font-size="21" font-weight="bold" fill="#392b00">OFFLINE DEMO</text>
+  <text x="150" y="183" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#392b00">Không dùng để chuyển tiền</text>
+</svg>
