@@ -69,4 +69,14 @@ public sealed class BankTransferWebhookController(BankTransferWebhookService ser
         return Ok(new BankTransferInfo(invoice.Id, invoice.InvoiceCode, remaining, content, url, ready ? name : null,
             environment.IsDevelopment(), ready ? null : "Chưa cấu hình tài khoản ngân hàng phòng khám. Không thể hiển thị VietQR thực."));
     }
+    [HttpGet("api/invoices/{invoiceId:int}")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = AppPolicies.CashPaymentWrite)]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
+    public async Task<IActionResult> State(int invoiceId, CancellationToken ct)
+    {
+        if (invoiceId <= 0) return BadRequest();
+        var invoice = await repository.GetInvoiceAsync(invoiceId, ct);
+        return invoice is null ? NotFound() : Ok(new InvoicePaymentState(invoice.Id, invoice.InvoiceCode,
+            invoice.Status, invoice.PaidAmount, invoice.TotalAmount - invoice.PaidAmount));
+    }
 }

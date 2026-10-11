@@ -77,7 +77,8 @@ internal static class BankTransferHttpSmoke
         var originalEventId = (BitConverter.ToInt64(SHA256.HashData(Encoding.UTF8.GetBytes(body.TransactionReference))) & long.MaxValue) + 1;
         using (var response = await client.PostAsJsonAsync(endpoint, new SePayWebhookRequest(originalEventId, "in", body.Amount, "DIFFREF1", body.AddInfo, "12345678")))
             check(response.StatusCode == HttpStatusCode.Conflict, "Bank: same provider event cannot credit a changed reference");
-        using (var response = await Post(body with { Amount = 30001 })) check(response.StatusCode == HttpStatusCode.Conflict, "Bank: reference reuse mismatch 409");
+        using (var response = await Post(body with { Amount = 30001 })) check(response.StatusCode == HttpStatusCode.OK &&
+            (await ProviderReceipt(response)).Amount == 30000, "Bank: DL-195 repeated reference returns stored receipt without altering amount");
         authenticate(RoleCodes.Admin);
         using (var response = await Post(body with { Amount = 70000, TransactionReference = "SIM00001" }, true))
         {
@@ -88,6 +89,9 @@ internal static class BankTransferHttpSmoke
         }
         var paid = await db.Invoices.AsNoTracking().SingleAsync(x => x.Id == invoice.Id);
         check(paid.PaidAmount == 100000 && paid.Status == InvoiceStatus.Paid, "Bank: mixed cash/bank never exceeds debt");
+        using (var response = await client.GetAsync($"/api/invoices/{invoice.Id}"))
+            check(response.StatusCode == HttpStatusCode.OK && (await response.Content.ReadFromJsonAsync<InvoicePaymentState>())!.Status == InvoiceStatus.Paid &&
+                response.Headers.CacheControl?.NoStore == true, "Bank: canonical invoice polling state and no-store");
         var storedBank = await db.PaymentTransactions.AsNoTracking().SingleAsync(x => x.InvoiceId == invoice.Id && x.Source == "Simulation");
         check(storedBank.AmountTendered == 70000 && storedBank.BankReceivedAmount == 70000 && storedBank.ChangeAmount == 20000,
             "Bank: DL-191 stored tendered and change are exact");

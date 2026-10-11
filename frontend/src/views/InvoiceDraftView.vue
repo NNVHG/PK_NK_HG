@@ -42,7 +42,7 @@
       <p>Dòng dịch vụ giữ nguyên giá đã ghi nhận khi chỉ định.</p>
       <InvoiceCashPayment v-if="auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST'"
         :invoice-id="invoice.id" :remaining-amount="invoice.remainingAmount" :status="invoice.status" @paid="onPaymentReceived" />
-      <InvoiceBankTransfer v-if="(auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST') && [1, 2].includes(invoice.status)"
+      <InvoiceBankTransfer v-if="(auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST') && [1, 2].includes(invoice.status) && invoice.remainingAmount > 0"
         :invoice-id="invoice.id" @paid="onBankReceived" />
     </section>
     <section v-if="auth.role === 'ADMIN' && unlockHistory.length" aria-label="Lịch sử mở khóa">

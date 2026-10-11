@@ -30,11 +30,12 @@ public sealed class BankTransferRepository(DentalDbContext db) : IBankTransferRe
         try
         {
             var existing = await db.PaymentTransactions.AsNoTracking().Include(x => x.Invoice)
-                .FirstOrDefaultAsync(x => x.RequestId == requestId || x.Source == source && x.TransactionReference == request.TransactionReference, ct);
+                .FirstOrDefaultAsync(x => x.RequestId == requestId || x.TransactionReference == request.TransactionReference, ct);
             if (existing is not null)
             {
-                if (existing.RequestId != requestId || existing.Source != source || existing.TransactionReference != request.TransactionReference ||
-                    existing.Invoice.InvoiceCode != invoiceCode || existing.BankReceivedAmount != request.Amount || existing.CashierId != actorId)
+                // DL-195: an already stored bank reference is acknowledged without changing its original data.
+                if (existing.Source != source || existing.TransactionReference != request.TransactionReference ||
+                    simulated && (existing.Invoice.InvoiceCode != invoiceCode || existing.BankReceivedAmount != request.Amount || existing.CashierId != actorId))
                     return Result<PaymentTransaction>.Failure(Error.Conflict);
                 await tx.CommitAsync(ct); committed = true;
                 return Result<PaymentTransaction>.Success(existing);

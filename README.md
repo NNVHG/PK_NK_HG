@@ -228,7 +228,7 @@ Id, transferType=in, transferAmount, referenceCode, content và accountNumber.
 Nội dung cần chứa đúng một mã PKNK INV-yyyyMMdd-XXXX. Callback thành công trả
 HTTP200 với success=true; event ID và mã giao dịch chống ghi nhận trùng.
 Payload/ack được đối chiếu với tài liệu chính thức:
-https://developer.sepay.vn/vi/sepay-webhooks/tich-hop-webhook
+[Tài liệu webhook SePay](https://developer.sepay.vn/vi/sepay-webhooks/tich-hop-webhook)
 Casso chưa có adapter; chưa kết nối/tạo tài khoản ngân hàng hay webhook public thực.
 
 Cấu hình thật không được seed giả: SystemConfigs cần ba khóa Payment:BankBin,
@@ -253,7 +253,7 @@ ChangeAmount/Note lưu khoản dư cần đối soát. Hệ thống không tự 
 Một khoản tiền vào mới cho hóa đơn đã Paid bị trả409 để đối soát riêng.
 
 Kiểm chứng lượt webhook:501 unit tests pass, frontend build164 modules;
-58 kiểm tra PostgreSQL/HTTP pass trên CSDL riêng (bao gồm29 kiểm tra cash cũ).
+60 kiểm tra PostgreSQL/HTTP pass trên CSDL riêng (bao gồm29 kiểm tra cash cũ).
 Dùng lệnh smoke ở mục trước. Chưa nghiệm thu browserUI của Gia, ảnh QR qua
 internet hay nhận webhook từ tài khoản ngân hàng thật; không coi các kiểm tra
 HTTP trên test host là kiểm chứng production login/Casso.
