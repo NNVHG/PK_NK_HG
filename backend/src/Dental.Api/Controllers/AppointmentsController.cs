@@ -151,6 +151,7 @@ public sealed class AppointmentsController : ControllerBase
     {
         var statusCode = error.Code switch
         {
+            "GEN_002" => StatusCodes.Status403Forbidden,
             "GEN_001" or "APP_001" => StatusCodes.Status404NotFound,
             "APP_002" or "APP_005" => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status400BadRequest,

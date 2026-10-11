@@ -29,6 +29,12 @@ const router = createRouter({
       meta: { guestOnly: true }
     },
     {
+      path: '/appointments/counter',
+      name: 'counter-booking',
+      component: () => import('@/views/CounterBookingView.vue'),
+      meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST'] }
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),

@@ -12,6 +12,17 @@ namespace Dental.Tests.Appointments;
 
 public sealed class AppointmentServiceTests
 {
+    [Theory]
+    [InlineData(RoleCodes.Dentist)]
+    [InlineData(RoleCodes.Assistant)]
+    [InlineData(null)]
+    public async Task CreateAppointment_UnsupportedActorIsForbiddenBeforeReadingPatient(string? role)
+    {
+        var result = await CreateService().CreateAppointmentAsync(1, role, new CreateAppointmentRequest(1, _vietnamClock.Today.AddDays(1), new TimeOnly(8, 0)), null);
+        Assert.Equal(Error.Forbidden, result.Error);
+        Assert.Empty(_patientRepository.ReceivedCalls());
+        Assert.Empty(_unitOfWork.ReceivedCalls());
+    }
     private readonly IAppointmentRepository _appointmentRepository = Substitute.For<IAppointmentRepository>();
     private readonly IPatientRepository _patientRepository = Substitute.For<IPatientRepository>();
     private readonly IUserRepository _userRepository = Substitute.For<IUserRepository>();
