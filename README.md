@@ -364,3 +364,9 @@ Giới hạn: chưa có giao dịch ngân hàng live hoặc cấu hình ngân h�
 Thu tiền mặt nhận diện PostgreSQL 40001/40P01/23505 trong chuỗi ngoại lệ, rollback và trả409/BIL_006. Lỗi khác không đổi thành lỗi đồng thời. Thu ngân đối chiếu hóa đơn, xác nhận lại, dùng nút kiểm tra/thử lại cùng yêu cầu; không nhận thêm tiền khách. UI giữ mã yêu cầu và số tiền, không tự retry.
 
 Kiểm chứng bằng backend unit, CashPayment.Postgres với --isolated-config, frontend Node tests và build theo lệnh hiện có. Fault injection trong transaction PostgreSQL riêng chứng minh rollback tiền thu/công nợ/audit và retry một receipt. Chưa UAT browser; chưa gộp bản sửa vào integrate.
+
+## Đặt lịch cho tài khoản gia đình (F_APP_01, DL-079)
+
+Tại màn hình đặt lịch, Patient chọn hồ sơ bằng họ tên/ngày sinh/mã rồi ngày và slot. Một User có nhiều Patient đã liên kết; chỉ hồ sơ hoạt động thuộc tài khoản được đặt lịch. Lịch trùng kiểm theo từng thành viên. Chưa có UI tạo/liên kết thành viên trong phạm vi lượt sửa này; không tạo dữ liệu mẫu trong production.
+
+Migration `20261011133134_AllowFamilyPatientProfiles` chuyển index `Patients.UserId` sang không unique, giữ `Users.Phone` unique. Đã áp dụng local; không chạy Down khi còn nhiều hồ sơ cùng User. API mine trả no-store. Kiểm thử cùng các lệnh hiện có: backend unit, CashPayment.Postgres cô lập và frontend Node/build. Gia cần nghiệm thu UI gia đình có đăng nhập.

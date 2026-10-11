@@ -58,6 +58,20 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddScoped<IAuditLogger, AuditLogger>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_FDI.Services.ToothConditionService>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_FDI.Validators.ToothConditionRequestValidator>();
+        builder.Services.AddScoped<IAppointmentRepository, AppointmentRepository>();
+        builder.Services.AddScoped<IUserRepository, UserRepository>();
+        builder.Services.AddScoped<Dental.Application.Features.Appointments.Services.AppointmentService>();
+        builder.Services.AddScoped<Dental.Application.Features.Appointments.Validators.CreateAppointmentRequestValidator>();
+        builder.Services.AddScoped<Dental.Application.Features.Appointments.Validators.AppointmentQueryRequestValidator>();
+        builder.Services.AddScoped<Dental.Application.Features.Appointments.Validators.RescheduleAppointmentRequestValidator>();
+        builder.Services.AddScoped<Dental.Application.Features.Appointments.Validators.CancelAppointmentRequestValidator>();
+        builder.Services.AddScoped<Dental.Application.Features.Patients.Services.PatientsService>();
+        builder.Services.AddScoped<Dental.Application.Features.Patients.Validators.CreatePatientRequestValidator>();
+        builder.Services.AddScoped<Dental.Application.Features.Patients.Validators.PatientDuplicateCheckRequestValidator>();
+        builder.Services.AddScoped<Dental.Application.Features.Patients.Validators.PatientQueryRequestValidator>();
+        builder.Services.AddScoped<Dental.Application.Features.Patients.Validators.UpdatePatientRequestValidator>();
+        builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddSingleton<Dental.Application.Common.VietnamClock>();
         builder.Services.AddScoped<IBankTransferRepository, BankTransferRepository>();
         builder.Services.AddScoped<BankTransferWebhookService>();
         builder.Services.AddScoped<BankTransferRequestValidator>();
@@ -131,6 +145,7 @@ internal static class CashPaymentHttpSmoke
             await FdiServiceDeletionHttpSmoke.RunAsync(client, options, cashierId, patientId, Authenticate, check);
             await ToothHistoryHttpSmoke.RunAsync(client, options, cashierId, patientId, Authenticate, check);
             await ToothClinicalNoteHttpSmoke.RunAsync(client, options, cashierId, patientId, Authenticate, check);
+            await FamilyBookingHttpSmoke.RunAsync(client, options, cashierId, patientId, Authenticate, check);
             await BankTransferHttpSmoke.RunAsync(client, options, cashierId, patientId, webhookKey, Authenticate, check);
         }
         finally { await app.StopAsync(); }
