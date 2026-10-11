@@ -44,7 +44,7 @@ public sealed class VisitReopenRepository(DentalDbContext db) : IVisitReopenRepo
                 CancelledInvoiceId = invoice?.Id, CreatedAt = now };
             db.VisitUnlockRecords.Add(record);
             await db.SaveChangesAsync(ct);
-            // [CẦN XÁC NHẬN] DL-158 yêu cầu lý do nguyên văn trong audit; AGENTS §6 cấm thông tin bệnh nhân.
+            // DL-159 hòa giải DL-158 theo AGENTS §6: lý do chỉ lưu trong lịch sử bảo vệ; audit tham chiếu ID.
             // Lưu lý do ở bản ghi được bảo vệ, audit chỉ tham chiếu để tránh rò nội dung bệnh án.
             var detail = JsonSerializer.Serialize(new { unlockRecordId = record.Id, cancelledInvoiceId = record.CancelledInvoiceId });
             db.AuditLogs.Add(new AuditLog { UserId = actor, Action = "MOD_PAT_VISIT_UNLOCKED", EntityType = "Visit",
