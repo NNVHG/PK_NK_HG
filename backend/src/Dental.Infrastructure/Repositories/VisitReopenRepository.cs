@@ -27,7 +27,8 @@ public sealed class VisitReopenRepository(DentalDbContext db) : IVisitReopenRepo
             var invoice = await db.Invoices.FirstOrDefaultAsync(x => x.VisitId == visitId && x.Status != InvoiceStatus.Cancelled, ct);
             var otherOpen = await db.Visits.AnyAsync(x => x.PatientId == visit.PatientId && x.VisitId != visitId &&
                 (x.Status == VisitStatuses.Created || x.Status == VisitStatuses.InProgress), ct);
-            var hasPreviousPayment = await db.Invoices.AnyAsync(x => x.VisitId == visitId && x.PaidAmount != 0, ct);
+            var hasPreviousPayment = await db.Invoices.AnyAsync(x => x.VisitId == visitId && x.PaidAmount != 0, ct)
+                || await db.PaymentTransactions.AnyAsync(x => x.Invoice.VisitId == visitId && x.Amount > 0, ct);
             var validation = VisitReopenRules.Validate(visit, invoice, otherOpen, hasPreviousPayment);
             if (validation.IsFailure) return Fail(validation.Error);
             var queue = await db.QueueEntries.FirstOrDefaultAsync(x => x.VisitId == visitId, ct);

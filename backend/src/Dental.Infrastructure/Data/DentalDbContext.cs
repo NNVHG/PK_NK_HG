@@ -18,6 +18,7 @@ public sealed class DentalDbContext : DbContext
     public DbSet<ToothCondition> ToothConditions => Set<ToothCondition>();
     public DbSet<VisitService> VisitServices => Set<VisitService>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
     public DbSet<InvoiceItem> InvoiceItems => Set<InvoiceItem>();
     public DbSet<InvoiceNumberCounter> InvoiceNumberCounters => Set<InvoiceNumberCounter>();
     public DbSet<MedicalHistoryRecord> MedicalHistoryRecords => Set<MedicalHistoryRecord>();
@@ -31,6 +32,7 @@ public sealed class DentalDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.ApplyConfiguration(new PaymentTransactionConfiguration());
         modelBuilder.ApplyConfiguration(new VisitUnlockRecordConfiguration());
         // Áp dụng từng configuration riêng theo entity
         modelBuilder.ApplyConfiguration(new RoleConfiguration());
@@ -77,6 +79,8 @@ public sealed class DentalDbContext : DbContext
 
     private void GuardAuditLogImmutability()
     {
+        if (ChangeTracker.Entries<PaymentTransaction>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("PaymentTransaction là bất biến — không được cập nhật hoặc xóa.");
         if (ChangeTracker.Entries<VisitUnlockRecord>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("VisitUnlockRecord là bất biến — không được phép cập nhật hoặc xóa.");
         var violatingEntries = ChangeTracker.Entries<AuditLog>()

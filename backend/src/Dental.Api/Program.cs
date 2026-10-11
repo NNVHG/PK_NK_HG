@@ -37,6 +37,9 @@ builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.InvoiceD
 builder.Services.AddScoped<IInvoiceDraftGenerator>(services => services.GetRequiredService<Dental.Application.Features.MOD_BIL.Services.InvoiceDraftService>());
 builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.InvoiceVisitRequestValidator>();
 builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
+builder.Services.AddScoped<ICashPaymentRepository, CashPaymentRepository>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.CashPaymentService>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.CashPaymentRequestValidator>();
 builder.Services.AddScoped<IVisitReopenRepository, VisitReopenRepository>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.VisitReopenService>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.UnlockVisitRequestValidator>();
