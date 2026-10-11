@@ -42,6 +42,9 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddScoped<ICashPaymentRepository, CashPaymentRepository>();
         builder.Services.AddScoped<CashPaymentService>();
         builder.Services.AddScoped<CashPaymentRequestValidator>();
+        builder.Services.AddScoped<IReceiptRepository, ReceiptRepository>();
+        builder.Services.AddScoped<ReceiptPrintService>();
+        builder.Services.AddScoped<ReceiptRequestValidator>();
         builder.Services.AddScoped<IBankTransferRepository, BankTransferRepository>();
         builder.Services.AddScoped<BankTransferWebhookService>();
         builder.Services.AddScoped<BankTransferRequestValidator>();
@@ -61,7 +64,8 @@ internal static class CashPaymentHttpSmoke
             await using var db = new DentalDbContext(options);
             var invoice = new Invoice { Visit = new Visit { PatientId = patientId, CreatedByUserId = cashierId,
                 Status = VisitStatuses.Completed, IsLocked = true }, CreatedByUserId = cashierId,
-                InvoiceCode = "TEST-CASH-HTTP", TotalAmount = 100000, Status = InvoiceStatus.PendingPayment, CreatedAt = DateTime.UtcNow };
+                InvoiceCode = "TEST-CASH-HTTP", TotalAmount = 100000, Status = InvoiceStatus.PendingPayment, CreatedAt = DateTime.UtcNow,
+                Items = [new InvoiceItem { Code = "TEST-SERVICE", Name = "Synthetic receipt service", Quantity = 2, UnitPrice = 50000, TotalAmount = 100000 }] };
             db.Invoices.Add(invoice); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
             var path = $"/api/invoices/{invoice.Id}/payments";
             async Task<HttpResponseMessage> Post(CashPaymentRequest body) => await client.PostAsJsonAsync(path, body);
@@ -94,6 +98,12 @@ internal static class CashPaymentHttpSmoke
                 check(receipt.Amount == 40000 && receipt.ChangeAmount == 10000 && receipt.CashierId == cashierId, "HTTP receipt amount/change/JWT cashier");
             }
             using (var response = await Post(first)) check((await response.Content.ReadFromJsonAsync<CashPaymentResponse>())!.Id == receipt.Id, "HTTP replay same receipt");
+            using (var response = await client.GetAsync(path + $"/{receipt.Id}/receipt"))
+            {
+                var preview = await response.Content.ReadFromJsonAsync<ReceiptPrintDto>();
+                check(response.StatusCode == HttpStatusCode.OK && preview?.RemainingAmount == 60000 && preview.PaidAmount == 40000 && preview.PrintCount == 0,
+                    "Receipt partial payment preview preserves outstanding debt");
+            }
             Authenticate(RoleCodes.Admin);
             using (var response = await Post(new(60000, 100000, Guid.NewGuid()))) check(response.StatusCode == HttpStatusCode.OK, "HTTP Admin full cash 200");
             using (var response = await client.GetAsync(path))
@@ -104,6 +114,7 @@ internal static class CashPaymentHttpSmoke
             var paid = await db.Invoices.AsNoTracking().SingleAsync(x => x.Id == invoice.Id);
             check(paid.PaidAmount == 100000 && paid.Status == InvoiceStatus.Paid, "HTTP persisted Paid balance");
             check(await db.AuditLogs.CountAsync(x => x.EntityId == invoice.Id && x.Action == "MOD_BIL_CASH_RECEIVED") == 2, "HTTP committed audit count");
+            await ReceiptHttpSmoke.RunAsync(client, options, invoice.Id, receipt.Id, Authenticate, check);
             await BankTransferHttpSmoke.RunAsync(client, options, cashierId, patientId, webhookKey, Authenticate, check);
         }
         finally { await app.StopAsync(); }
