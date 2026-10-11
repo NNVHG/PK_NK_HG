@@ -220,3 +220,40 @@ Smoke test tạo rồi xóa CSDL test có tên ngẫu nhiên; tài khoản CSDL 
 database. Test HTTP dùng host localhost và khóa JWT sinh riêng trong bộ nhớ;
 không kiểm chứng đăng nhập của ứng dụng. Gia chưa nghiệm thu UI phần tiền mặt.
 F_BIL_03 tổng thể còn chuyển khoản/VietQR; biên lai K80 thuộc F_BIL_06.
+
+## F_BIL_03 — Chuyển khoản webhook và mô phỏng
+
+Backend hỗ trợ payload SePay tại POST /api/webhooks/payment/bank-transfer:
+Id, transferType=in, transferAmount, referenceCode, content và accountNumber.
+Nội dung cần chứa đúng một mã PKNK INV-yyyyMMdd-XXXX. Callback thành công trả
+HTTP200 với success=true; event ID và mã giao dịch chống ghi nhận trùng.
+Payload/ack được đối chiếu với tài liệu chính thức:
+https://developer.sepay.vn/vi/sepay-webhooks/tich-hop-webhook
+Casso chưa có adapter; chưa kết nối/tạo tài khoản ngân hàng hay webhook public thực.
+
+Cấu hình thật không được seed giả: SystemConfigs cần ba khóa Payment:BankBin,
+Payment:AccountNumber, Payment:AccountName. API key lấy từ cấu hình bảo mật
+Payment:WebhookSecretKey (ít nhất32 ký tự; không commit secret). Cấu hình
+Payment:WebhookActorUserId là một user đang hoạt động có vai trò Admin/Thu ngân,
+được gán làm actor kiểm toán cho webhook đã xác thực. Không có actor/secret hợp lệ
+thì callback trả401; tài khoản nhận khác cấu hình không được ghi tiền.
+Phần CRUD cấu hình toàn hệ thống thuộc MOD_MST, chưa triển khai lượt này.
+
+Mở hóa đơn của ca đã kết thúc ở /clinical/visits/{visitId}/invoice-draft bằng
+Admin hoặc Lễ tân/Thu ngân. UI hiển thị VietQR nếu đã cấu hình, tự kiểm tra nợ mỗi
+3giây, có nút kiểm tra ngay và dừng theo dõi. Khi Development, xác nhận mục
+Mô phỏng rồi bấm Mô phỏng thanh toán chuyển khoản thành công. Có thể demo offline
+khi chưa có cấu hình ngân hàng: QR thật không hiện, vẫn ghi khoản thu Simulation
+có nhãn MÔ PHỎNG để kiểm chứng gạch nợ. Endpoint simulate yêu cầu JWT Admin/Thu ngân
+và Development; Production trả404. Mỗi lần thử lại dùng cùng TransactionReference.
+
+Chuyển thiếu tạo PartiallyPaid; chuyển đủ/dư tạo Paid. Amount là phần ghi vào
+hóa đơn không vượt nợ; AmountTendered và BankReceivedAmount lưu số thực nhận,
+ChangeAmount/Note lưu khoản dư cần đối soát. Hệ thống không tự hoàn tiền.
+Một khoản tiền vào mới cho hóa đơn đã Paid bị trả409 để đối soát riêng.
+
+Kiểm chứng lượt webhook:501 unit tests pass, frontend build164 modules;
+58 kiểm tra PostgreSQL/HTTP pass trên CSDL riêng (bao gồm29 kiểm tra cash cũ).
+Dùng lệnh smoke ở mục trước. Chưa nghiệm thu browserUI của Gia, ảnh QR qua
+internet hay nhận webhook từ tài khoản ngân hàng thật; không coi các kiểm tra
+HTTP trên test host là kiểm chứng production login/Casso.

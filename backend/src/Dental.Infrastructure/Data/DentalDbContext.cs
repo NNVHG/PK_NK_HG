@@ -19,6 +19,7 @@ public sealed class DentalDbContext : DbContext
     public DbSet<VisitService> VisitServices => Set<VisitService>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
+    public DbSet<SystemConfig> SystemConfigs => Set<SystemConfig>();
     public DbSet<InvoiceItem> InvoiceItems => Set<InvoiceItem>();
     public DbSet<InvoiceNumberCounter> InvoiceNumberCounters => Set<InvoiceNumberCounter>();
     public DbSet<MedicalHistoryRecord> MedicalHistoryRecords => Set<MedicalHistoryRecord>();
@@ -33,6 +34,7 @@ public sealed class DentalDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new PaymentTransactionConfiguration());
+        modelBuilder.ApplyConfiguration(new SystemConfigConfiguration());
         modelBuilder.ApplyConfiguration(new VisitUnlockRecordConfiguration());
         // Áp dụng từng configuration riêng theo entity
         modelBuilder.ApplyConfiguration(new RoleConfiguration());

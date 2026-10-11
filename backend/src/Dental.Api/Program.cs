@@ -38,6 +38,10 @@ builder.Services.AddScoped<IInvoiceDraftGenerator>(services => services.GetRequi
 builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.InvoiceVisitRequestValidator>();
 builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
 builder.Services.AddScoped<ICashPaymentRepository, CashPaymentRepository>();
+builder.Services.AddScoped<IBankTransferRepository, BankTransferRepository>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.BankTransferWebhookService>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.BankTransferRequestValidator>();
+builder.Services.AddAuthentication().AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, BankWebhookAuthenticationHandler>(BankWebhookAuthenticationHandler.SchemeName, _ => { });
 builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.CashPaymentService>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.CashPaymentRequestValidator>();
 builder.Services.AddScoped<IVisitReopenRepository, VisitReopenRepository>();

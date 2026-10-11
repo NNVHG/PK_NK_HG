@@ -19,5 +19,6 @@ public sealed class CashPaymentService(ICashPaymentRepository repository, CashPa
     }
 
     public static CashPaymentResponse Map(PaymentTransaction p)
-        => new(p.Id, p.InvoiceId, p.Amount, p.AmountTendered, p.ChangeAmount, p.PaymentMethod, p.CashierId, p.PaidAt, p.RequestId);
+        => new(p.Id, p.InvoiceId, p.Amount, p.AmountTendered, p.ChangeAmount, p.PaymentMethod, p.CashierId, p.PaidAt, p.RequestId,
+            p.BankReceivedAmount, p.TransactionReference, p.Source, p.Note);
 }

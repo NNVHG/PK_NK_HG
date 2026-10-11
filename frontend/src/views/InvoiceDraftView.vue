@@ -42,6 +42,8 @@
       <p>Dòng dịch vụ giữ nguyên giá đã ghi nhận khi chỉ định.</p>
       <InvoiceCashPayment v-if="auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST'"
         :invoice-id="invoice.id" :remaining-amount="invoice.remainingAmount" :status="invoice.status" @paid="onPaymentReceived" />
+      <InvoiceBankTransfer v-if="(auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST') && [1, 2].includes(invoice.status)"
+        :invoice-id="invoice.id" @paid="onBankReceived" />
     </section>
     <section v-if="auth.role === 'ADMIN' && unlockHistory.length" aria-label="Lịch sử mở khóa">
       <h2>Lịch sử mở khóa</h2>
@@ -63,6 +65,8 @@ import { visitsService } from '@/services/visits';
 import { invoiceDraftApi } from '@/services/invoiceDraft';
 import type { VisitUnlockHistory } from '@/services/invoiceDraft';
 import InvoiceCashPayment from '@/components/InvoiceCashPayment.vue';
+import InvoiceBankTransfer from '@/components/InvoiceBankTransfer.vue';
+import type { BankTransferResponse } from '@/services/bankTransfers';
 import type { CashPaymentResponse } from '@/services/cashPayments';
 import { useInvoiceDraftStore } from '@/stores/invoiceDraft';
 import { useAuthStore } from '@/stores/auth';
@@ -115,7 +119,13 @@ async function onPaymentReceived(payment: CashPaymentResponse) {
   const expectedVersion = version + 1;
   await load();
   if (version === expectedVersion)
-    success.value = `Đã ghi nhận khoản thu #${payment.id}: ${money(payment.amount)}. Tiền thối: ${money(payment.changeAmount)}.`;
+    success.value = `Đã ghi nhận khoản thu #${payment.id}: ${money(payment.amount)}. Tiền thối: ${money(payment.changeAmount ?? 0)}.`;
+}
+async function onBankReceived(payment: BankTransferResponse | null) {
+  const expectedVersion = version + 1; await load();
+  if (version === expectedVersion) success.value = payment
+    ? `Đã ghi nhận MÔ PHỎNG #${payment.id}: ${money(payment.amount)} vào hóa đơn. ${payment.note ?? ''}`
+    : 'Đã có khoản thu mới. Đối chiếu hóa đơn và lịch sử khoản thu bên dưới.';
 }
 async function unlock() {
   const reason = unlockReason.value.trim();

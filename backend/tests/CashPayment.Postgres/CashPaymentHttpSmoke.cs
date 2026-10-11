@@ -9,6 +9,7 @@ using Dental.Api.Policies;
 using Dental.Application.Features.MOD_BIL.DTOs;
 using Dental.Application.Features.MOD_BIL.Services;
 using Dental.Application.Features.MOD_BIL.Validators;
+using Microsoft.AspNetCore.Authentication;
 using Dental.Application.Interfaces;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
@@ -30,7 +31,10 @@ internal static class CashPaymentHttpSmoke
     {
         // Dedicated test host validates ephemeral JWTs only. Never read clinic JWT keys/demo credentials.
         var signingKey = new SymmetricSecurityKey(RandomNumberGenerator.GetBytes(64));
-        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [], EnvironmentName = "Development" });
+        var webhookKey = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        builder.Configuration["Payment:WebhookSecretKey"] = webhookKey;
+        builder.Configuration["Payment:WebhookActorUserId"] = cashierId.ToString();
         builder.Logging.ClearProviders();
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Services.AddControllers().AddApplicationPart(typeof(CashPaymentsController).Assembly);
@@ -38,6 +42,10 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddScoped<ICashPaymentRepository, CashPaymentRepository>();
         builder.Services.AddScoped<CashPaymentService>();
         builder.Services.AddScoped<CashPaymentRequestValidator>();
+        builder.Services.AddScoped<IBankTransferRepository, BankTransferRepository>();
+        builder.Services.AddScoped<BankTransferWebhookService>();
+        builder.Services.AddScoped<BankTransferRequestValidator>();
+        builder.Services.AddAuthentication().AddScheme<AuthenticationSchemeOptions, BankWebhookAuthenticationHandler>(BankWebhookAuthenticationHandler.SchemeName, _ => { });
         builder.Services.AddHttpContextAccessor(); builder.Services.AddScoped<ICurrentUser, CurrentUser>();
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(jwt =>
             jwt.TokenValidationParameters = new TokenValidationParameters { ValidateIssuerSigningKey = true,
@@ -96,6 +104,7 @@ internal static class CashPaymentHttpSmoke
             var paid = await db.Invoices.AsNoTracking().SingleAsync(x => x.Id == invoice.Id);
             check(paid.PaidAmount == 100000 && paid.Status == InvoiceStatus.Paid, "HTTP persisted Paid balance");
             check(await db.AuditLogs.CountAsync(x => x.EntityId == invoice.Id && x.Action == "MOD_BIL_CASH_RECEIVED") == 2, "HTTP committed audit count");
+            await BankTransferHttpSmoke.RunAsync(client, options, cashierId, patientId, webhookKey, Authenticate, check);
         }
         finally { await app.StopAsync(); }
     }

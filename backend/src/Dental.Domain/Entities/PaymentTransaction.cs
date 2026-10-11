@@ -12,6 +12,10 @@ public sealed class PaymentTransaction
     public int CashierId { get; set; }
     public DateTime PaidAt { get; set; }
     public Guid RequestId { get; set; }
+    public string? TransactionReference { get; set; }
+    public string? Source { get; set; }
+    public decimal? BankReceivedAmount { get; set; }
+    public string? Note { get; set; }
     public Invoice Invoice { get; set; } = null!;
     public User Cashier { get; set; } = null!;
 }

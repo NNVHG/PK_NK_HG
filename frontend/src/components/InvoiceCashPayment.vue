@@ -23,7 +23,10 @@
     <h3 v-if="history.length">Các lần thu đã ghi nhận</h3>
     <ul><li v-for="payment in history" :key="payment.id">
       #{{ payment.id }} · {{ new Date(payment.paidAt).toLocaleString('vi-VN') }} · Thu ngân #{{ payment.cashierId }}
-      <p>Đã thu {{ money(payment.amount) }} · Khách đưa {{ money(payment.amountTendered) }} · Thối {{ money(payment.changeAmount) }}</p>
+      <p v-if="payment.paymentMethod === 'Cash'">Tiền mặt · Đã thu {{ money(payment.amount) }} · Khách đưa {{ money(payment.amountTendered ?? 0) }} · Thối {{ money(payment.changeAmount ?? 0) }}</p>
+      <p v-else>Chuyển khoản · Ghi vào hóa đơn {{ money(payment.amount) }} · Ngân hàng nhận {{ money(payment.bankReceivedAmount ?? 0) }} · Mã {{ payment.transactionReference }}
+        <strong v-if="payment.source === 'Simulation'"> · MÔ PHỎNG</strong></p>
+      <p v-if="payment.note" role="alert">{{ payment.note }}</p>
     </li></ul>
   </section>
 </template>
