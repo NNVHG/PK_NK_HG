@@ -278,11 +278,3 @@ function clearSelections() {
   overflow: auto;
 }
 </style>
-
-
-function clearSelections() {
-  selections.value = [];
-  lastTooth.value = null;
-  lastSurface.value = null;
-}
-</script>
