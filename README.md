@@ -370,3 +370,14 @@ Kiểm chứng bằng backend unit, CashPayment.Postgres với --isolated-config
 Tại màn hình đặt lịch, Patient chọn hồ sơ bằng họ tên/ngày sinh/mã rồi ngày và slot. Một User có nhiều Patient đã liên kết; chỉ hồ sơ hoạt động thuộc tài khoản được đặt lịch. Lịch trùng kiểm theo từng thành viên. Chưa có UI tạo/liên kết thành viên trong phạm vi lượt sửa này; không tạo dữ liệu mẫu trong production.
 
 Migration `20261011133134_AllowFamilyPatientProfiles` chuyển index `Patients.UserId` sang không unique, giữ `Users.Phone` unique. Đã áp dụng local; không chạy Down khi còn nhiều hồ sơ cùng User. API mine trả no-store. Kiểm thử cùng các lệnh hiện có: backend unit, CashPayment.Postgres cô lập và frontend Node/build. Gia cần nghiệm thu UI gia đình có đăng nhập.
+
+## Kiểm chứng tích hợp đầy đủ — 2026-10-11
+
+Đã kiểm chứng chuỗi VietQR TTL, biên lai K80, xóa chỉ định, lịch sử răng, ghi chú răng và đặt lịch gia đình; bổ sung bản sửa `8600381` nhận diện ngoại lệ thu tiền đồng thời lồng nhau, giữ rollback/BIL_006 và request idempotency.
+
+- Backend build: 0 cảnh báo, 0 lỗi; 584/584 unit test đạt, không fail/skip; EF không pending model changes.
+- PostgreSQL 16 Docker Compose riêng: 18 migration từ CSDL trống và seeder Development đạt; 175/175 kiểm tra PostgreSQL/HTTP và 113/113 API trên 5 vai trò đạt.
+- Frontend vue-tsc/Vite build: 176 modules; 74/74 Node test đạt; 16 route imports đều có file tương ứng.
+- Backup: `backup/main-20261011-2054`. Lịch sử merge được giữ; không xóa/sửa migration cũ hoặc thêm package. Chưa push trong lượt tích hợp này.
+
+Các chức năng PARTIAL vẫn chờ nghiệm thu tương ứng: ngân hàng live, máy in K80, UI gia đình và nhiều mặt răng. Bộ chạy ban đầu tạo dữ liệu tổng hợp trong CSDL Development Windows trước khi được sửa để dùng đúng Docker; dữ liệu đó được giữ nguyên, sự cố được ghi trong báo cáo local `docs/testing/MAIN_INTEGRATION_20261011_REPORT.md` và HISTORY_LOG, không che kết quả lỗi trước đó.
