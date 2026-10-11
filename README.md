@@ -1,10 +1,10 @@
-﻿# Hệ thống Quản Lý Phòng Khám Nha Khoa Hoàng Gia (PK_NK_HG)
+# Hệ thống Quản Lý Phòng Khám Nha Khoa Hoàng Gia (PK_NK_HG)
 
 > **Đồ án tốt nghiệp ngành Công nghệ Thông tin**  
 > **Trường Đại học Thủ Dầu Một — Viện Công nghệ số**  
 > **Sinh viên thực hiện:** Nguyễn Ngô Vũ Hoàng Gia — **MSSV:** 2224802010628 — **Lớp:** D22CNTT02  
 > **Giảng viên hướng dẫn:** TS. Ngô Thị Ngọc Dịu  
-> **Trạng thái:** Hoàn tất **Sprint 0** (Nền tảng kiến trúc, CSDL PostgreSQL, Xác thực JWT, Phân quyền RBAC 5 vai trò, Audit Log, UI Vue 3 & 30/30 Unit Tests Pass).
+> **Trạng thái:** Phase 1 — `main` đã tích hợp đặt lịch trực tuyến, check-in, khám/chẩn đoán, tình trạng răng FDI và thêm/đọc chỉ định dịch vụ; 342/342 backend tests pass. Hóa đơn WIP còn ở nhánh riêng, chưa đưa vào `main`.
 
 ---
 
@@ -169,3 +169,15 @@ PK_NK_HG/
 - Mọi thành viên và AI Assistant phải đọc kỹ và tuân thủ các quy tắc trong [**`AGENTS.md`**](./AGENTS.md).
 - Sau mỗi lần cập nhật mã nguồn hoặc tài liệu, bắt buộc bổ sung một mục ghi vết vào cuối file [**`HISTORY_LOG.md`**](./HISTORY_LOG.md).
 - Không tự ý thêm thư viện ngoài danh mục đã phê duyệt; tuân thủ quy tắc đánh số răng chuẩn FDI quốc tế.
+
+## Kiểm chứng tích hợp main (2026-10-11 08:56 — Asia/Ho_Chi_Minh)
+
+Đã tích hợp chuỗi commit từ `bbe5e8d` đến `e75a6dd` bằng fast-forward. Nhánh `codex/phase1-invoice-draft` (`26de2da`) giữ riêng theo yêu cầu; `main` không chứa migration `AddInvoiceDrafts` hoặc endpoint hóa đơn WIP.
+
+- Backend: `dotnet build` đạt, 0 warning / 0 error; `dotnet test --no-build` đạt 342/342, 0 fail / 0 skip.
+- Frontend: `npm run build` đạt kiểm tra TypeScript và Vite, 149 modules. Chưa có frontend test runner.
+- EF Core: `dotnet ef migrations has-pending-model-changes --project src/Dental.Infrastructure --startup-project src/Dental.Api --no-build` không phát hiện thay đổi model chưa có migration. CSDL local đã áp dụng đủ 11 migration trên main.
+- Runtime PostgreSQL: 61/61 kiểm tra HTTP đạt, gồm đăng nhập 5 vai trò, đọc API, 401 khi chưa đăng nhập, quyền Admin, quyền hàng đợi và kiểm tra quyền ghi FDI trên ID không tồn tại. Không ghi dữ liệu lâm sàng trong kiểm tra runtime này.
+- Giới hạn: chưa nghiệm thu UI có đăng nhập, ghi FDI/dịch vụ qua API trên CSDL thật, tải/concurrency hoặc toàn bộ luồng nghiệp vụ. Test hiện có không chứng minh các chức năng chưa triển khai hoạt động.
+
+F_FDI_04 mới có thêm/đọc; xóa chỉ định còn phụ thuộc kiểm tra thanh toán. UI lịch tại quầy, điều phối hàng đợi, hóa đơn/thanh toán, kê đơn, hình ảnh và báo cáo vẫn còn phần chưa triển khai. Kho và nghiệp vụ phụ tá thuộc Phase 2.
