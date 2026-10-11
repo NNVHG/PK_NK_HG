@@ -6,6 +6,7 @@
     <p v-if="busy" role="status">Đang xử lý…</p>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
     <p v-if="success" role="status">{{ success }}</p>
+    <p v-if="invoice?.status === 0">Hóa đơn nháp tự cập nhật dịch vụ khi mở hoặc tải lại hồ sơ. Có thể tiếp tục chỉ định trước khi kết thúc khám.</p>
     <template v-if="visit">
       <p>Trạng thái khám: {{ visit.status }}</p>
       <template v-if="canComplete">

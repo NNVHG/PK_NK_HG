@@ -61,8 +61,8 @@ public sealed class InvoiceDraftServiceTests
         invoices.SaveCompletedVisitDraftAsync(visit, userId, new DateOnly(2026, 10, 11), Arg.Any<CancellationToken>())
             .Returns(Result<Invoice>.Success(new Invoice { Id = 4 }));
         Assert.True((await Service().GenerateAsync(visit, userId, role, null)).IsSuccess);
-        await audit.Received(1).LogAsync("MOD_BIL_DRAFT_CREATED", "Invoice", 4, userId,
-            "{\"action\":\"draft_created\"}", null, Arg.Any<CancellationToken>());
+        await audit.Received(1).LogAsync("MOD_BIL_INVOICE_PENDING_PAYMENT", "Invoice", 4, userId,
+            "{\"action\":\"visit_completed\"}", null, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -107,6 +107,47 @@ public sealed class InvoiceDraftServiceTests
     {
         Assert.Equal(Error.Forbidden, (await Service().GetAsync(8, 5, RoleCodes.Assistant)).Error);
         Assert.Empty(visits.ReceivedCalls());
+    }
+
+    [Theory]
+    [InlineData(RoleCodes.Admin, true)]
+    [InlineData(RoleCodes.Dentist, true)]
+    [InlineData(RoleCodes.Receptionist, false)]
+    [InlineData(RoleCodes.Patient, true)]
+    public async Task Get_InProgress_AutomaticallySynchronizesAfterAuthorization(string role, bool changed)
+    {
+        var visit = Completed(); visit.Status = VisitStatuses.InProgress; visit.IsLocked = false;
+        visits.GetByIdAsync(8, Arg.Any<CancellationToken>()).Returns(visit);
+        patients.GetByIdAsync(6, Arg.Any<CancellationToken>()).Returns(new Patient { UserId = 5 });
+        invoices.SynchronizeDraftAsync(8, 5, new DateOnly(2026, 10, 11), Arg.Any<CancellationToken>())
+            .Returns(Result<InvoiceDraftSynchronization>.Success(new(new Invoice { Id = 4, Status = InvoiceStatus.Draft, TotalAmount = 100000 }, changed)));
+        var result = await Service().GetAsync(8, 5, role);
+        Assert.True(result.IsSuccess);
+        Assert.Equal(0, result.Value!.Status);
+        Assert.Equal(100000m, result.Value.TotalAmount);
+        await invoices.DidNotReceive().GetForVisitAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+        Assert.Equal(changed ? 1 : 0, audit.ReceivedCalls().Count());
+    }
+
+    [Fact]
+    public async Task Get_InProgress_ConflictIsPropagatedWithoutAudit()
+    {
+        var visit = Completed(); visit.Status = VisitStatuses.InProgress; visit.IsLocked = false;
+        visits.GetByIdAsync(8, Arg.Any<CancellationToken>()).Returns(visit);
+        invoices.SynchronizeDraftAsync(8, 5, Arg.Any<DateOnly>(), Arg.Any<CancellationToken>())
+            .Returns(Result<InvoiceDraftSynchronization>.Failure(Error.Conflict));
+        Assert.Equal(Error.Conflict, (await Service().GetAsync(8, 5, RoleCodes.Admin)).Error);
+        Assert.Empty(audit.ReceivedCalls());
+    }
+
+    [Fact]
+    public async Task Get_OtherPatientCannotTriggerSynchronization()
+    {
+        var visit = Completed(); visit.Status = VisitStatuses.InProgress; visit.IsLocked = false;
+        visits.GetByIdAsync(8, Arg.Any<CancellationToken>()).Returns(visit);
+        patients.GetByIdAsync(6, Arg.Any<CancellationToken>()).Returns(new Patient { UserId = 99 });
+        Assert.Equal(Error.NotFound, (await Service().GetAsync(8, 5, RoleCodes.Patient)).Error);
+        Assert.Empty(invoices.ReceivedCalls());
     }
 
     [Fact]

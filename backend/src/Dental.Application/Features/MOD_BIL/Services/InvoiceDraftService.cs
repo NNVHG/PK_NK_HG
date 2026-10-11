@@ -18,8 +18,8 @@ public sealed class InvoiceDraftService(IInvoiceRepository invoices, IVisitRepos
             return Result.Failure(new Error("BIL_001", "Lần khám phải được hoàn tất và khóa cùng hóa đơn nháp."));
         var result = await invoices.SaveCompletedVisitDraftAsync(completedVisit, userId, clock.Today, ct);
         if (result.IsFailure) return Result.Failure(result.Error);
-        await audit.LogAsync("MOD_BIL_DRAFT_CREATED", "Invoice", result.Value!.Id, userId,
-            "{\"action\":\"draft_created\"}", ip, ct);
+        await audit.LogAsync("MOD_BIL_INVOICE_PENDING_PAYMENT", "Invoice", result.Value!.Id, userId,
+            "{\"action\":\"visit_completed\"}", ip, ct);
         return Result.Success();
     }
 
@@ -31,7 +31,17 @@ public sealed class InvoiceDraftService(IInvoiceRepository invoices, IVisitRepos
         if (visit is null) return Result<InvoiceResponse>.Failure(Error.NotFound);
         if (role == RoleCodes.Patient && (await patients.GetByIdAsync(visit.PatientId, ct))?.UserId != userId)
             return Result<InvoiceResponse>.Failure(Error.NotFound);
-        var invoice = await invoices.GetForVisitAsync(visitId, ct);
+        Invoice? invoice;
+        if (visit.Status == VisitStatuses.InProgress && !visit.IsLocked)
+        {
+            var synced = await invoices.SynchronizeDraftAsync(visitId, userId, clock.Today, ct);
+            if (synced.IsFailure) return Result<InvoiceResponse>.Failure(synced.Error);
+            invoice = synced.Value!.Invoice;
+            if (synced.Value.Changed)
+                await audit.LogAsync("MOD_BIL_DRAFT_SYNCHRONIZED", "Invoice", invoice.Id, userId,
+                    "{\"action\":\"services_synchronized\"}", null, ct);
+        }
+        else invoice = await invoices.GetForVisitAsync(visitId, ct);
         if (invoice is null) return Result<InvoiceResponse>.Failure(Error.NotFound);
         return Result<InvoiceResponse>.Success(new(invoice.Id, invoice.VisitId, invoice.InvoiceCode,
             (int)invoice.Status, invoice.TotalAmount, invoice.PaidAmount, invoice.TotalAmount - invoice.PaidAmount,

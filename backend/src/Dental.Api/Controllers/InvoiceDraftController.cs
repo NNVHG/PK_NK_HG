@@ -16,6 +16,8 @@ public sealed class InvoiceDraftController(InvoiceDraftService service, IInvoice
     QueueService queue, ICurrentUser user, InvoiceVisitRequestValidator validator) : ControllerBase
 {
     [HttpGet("api/visits/{visitId:int}/invoice-draft")]
+    [HttpGet("api/invoices/by-visit/{visitId:int}")]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
     [Authorize(Policy = AppPolicies.InvoiceDraftView)]
     public async Task<IActionResult> Get(int visitId, CancellationToken ct)
     {

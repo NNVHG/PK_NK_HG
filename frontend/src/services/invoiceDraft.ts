@@ -10,7 +10,7 @@ export interface InvoiceDraft {
 }
 export const invoiceDraftApi = {
   async get(visitId: number): Promise<InvoiceDraft> {
-    return (await apiClient.get<InvoiceDraft>(`/visits/${visitId}/invoice-draft`)).data;
+    return (await apiClient.get<InvoiceDraft>(`/invoices/by-visit/${visitId}`)).data;
   },
   async complete(visitId: number): Promise<void> {
     await apiClient.put(`/visits/${visitId}/complete`);
