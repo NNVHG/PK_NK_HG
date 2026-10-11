@@ -53,6 +53,9 @@ builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.Unlock
 builder.Services.AddScoped<Dental.Application.Features.MOD_FDI.Services.FdiServiceAssignmentService>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_FDI.Validators.AssignServicesRequestValidator>();
 builder.Services.AddScoped<IVisitServiceRepository, VisitServiceRepository>();
+builder.Services.AddScoped<IFdiServiceDeletionRepository, FdiServiceDeletionRepository>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_FDI.Services.FdiServiceDeletionService>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_FDI.Validators.DeleteVisitServiceRequestValidator>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_FDI.Services.ToothConditionService>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_FDI.Validators.ToothConditionRequestValidator>();
 builder.Services.AddScoped<IToothConditionRepository, ToothConditionRepository>();
