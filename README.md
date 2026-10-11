@@ -294,6 +294,37 @@ từ `frontend/`: 22 trường hợp, gồm 9 QR fallback, 8 timer và 5 tích h
 component với clock/API test riêng. Đây chưa phải kiểm chứng hiển thị trình duyệt
 hoặc ngân hàng thật; không dùng test clock trong source production.
 
+### F_BIL_06 — Biên lai K80 và in lại (DL-152/180/210)
+
+Admin/Lễ tân mở lịch sử thu tại hóa đơn và bấm **Xem / in biên lai** của khoản thu.
+Xem trước không tăng lượt in. **In biên lai K80** ghi lượt in + audit rồi mở
+`window.print()`; chọn giấy rộng 80mm và tắt header/footer của trình duyệt.
+Phiếu gồm thông tin phòng khám, bệnh nhân/thu ngân, các dòng chi phí snapshot,
+giao dịch kỳ này (khách đưa/thối), tổng đã thu hiện tại/còn nợ, mã tra cứu và lời cảm ơn.
+Khoản thu mô phỏng giữ nhãn MÔ PHỎNG trên bản in.
+
+`GET /api/invoices/{id}/payments/{txId}/receipt` trả dữ liệu xem trước;
+`POST /api/invoices/{id}/payments/{txId}/reprint` ghi yêu cầu in và trả dữ liệu
+đã xác nhận lượt in. Cả hai yêu cầu JWT Admin/RECEPTIONIST và trả `no-store`.
+In đầu số 1 có tiêu đề BIÊN LAI THU TIỀN; từ số 2 có BẢN IN LẠI - LẦN N
+và thời gian in lại theo giờ Việt Nam. Yêu cầu đồng thời được serialize/concurrency
+guard; 409 cần tải lại để đối chiếu, không tự retry POST in khi kết quả chưa rõ.
+
+PrintCount là số yêu cầu in đã ghi vào hệ thống, không chứng minh giấy đã ra khỏi
+máy in: hủy hộp thoại/máy in lỗi vẫn giữ lượt và audit. Khoản thu tài chính bất biến;
+chỉ PrintCount được tăng đúng 1 cùng audit trong transaction. Preview không tăng đếm.
+Địa chỉ/hotline đọc từ SystemConfigs `Clinic:Address` / `Clinic:Phone`; thiếu cấu hình
+thì UI thông báo, không tạo thông tin phòng khám giả. CRUD cấu hình chưa triển khai.
+
+Mã tra cứu được render SVG Code 39 cục bộ, không gửi thông tin bệnh nhân tới dịch vụ
+ngoài. Bảng mã đối chiếu [nguồn ZXing Code39Reader](https://github.com/zxing/zxing/blob/master/core/src/main/java/com/google/zxing/oned/Code39Reader.java);
+không thêm thư viện. Không thêm giảm giá/thuốc chưa có source hoặc hoàn tiền trong lượt in.
+Chưa nghiệm thu bản in trình duyệt/máy K80 hoặc scanner thật.
+
+Kiểm chứng lượt biên lai: 516 backend unit, 79 PostgreSQL/HTTP, 36 frontend logic/script
+tests pass; build backend/frontend OK. Chạy `node --test tests/*.test.mjs` từ frontend,
+smoke PostgreSQL bằng lệnh đã nêu ở mục thanh toán. Tests dùng dữ liệu tổng hợp/CSDL riêng.
+
 ## Kiểm chứng tích hợp thanh toán vào main — 2026-10-11 13:45 (Asia/Ho_Chi_Minh)
 
 Nguồn codex/phase1-vietqr-offline tại c329aa9, được người dùng chọn merge trực tiếp nếu đạt. Phần code gồm tiền mặt, SePay webhook/Development simulation và VietQR offline theo DL-175/DL-190/DL-195/DL-196/DL-200.

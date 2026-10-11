@@ -96,7 +96,7 @@ internal static class BankTransferHttpSmoke
         check(storedBank.AmountTendered == 70000 && storedBank.BankReceivedAmount == 70000 && storedBank.ChangeAmount == 20000,
             "Bank: DL-191 stored tendered and change are exact");
         check(await db.PaymentTransactions.CountAsync(x => x.InvoiceId == invoice.Id) == 3, "Bank: immutable split payment count");
-        check(await db.AuditLogs.CountAsync(x => x.EntityId == invoice.Id) == 4, "Bank: atomic payment audits plus excess warning; replay ignored");
+        check(await db.AuditLogs.CountAsync(x => x.EntityType == "Invoice" && x.EntityId == invoice.Id) == 4, "Bank: atomic payment audits plus excess warning; replay ignored");
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Apikey", webhookKey);
         using (var response = await Post(body)) check(response.StatusCode == HttpStatusCode.OK, "Bank: callback replay after Paid");
         using (var response = await Post(body with { TransactionReference = "BANK0002" })) check(response.StatusCode == HttpStatusCode.Conflict, "Bank: new credit against Paid rejected");

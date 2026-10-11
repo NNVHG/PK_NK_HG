@@ -1,6 +1,6 @@
 namespace Dental.Domain.Entities;
 
-/// <summary>MOD_BIL: giao dịch thu thực tế, chỉ thêm mới; hoàn tiền về sau là dòng riêng.</summary>
+/// <summary>MOD_BIL: dữ liệu khoản thu chỉ thêm mới; DL-210 cho phép tăng metadata PrintCount. Hoàn tiền là dòng riêng.</summary>
 public sealed class PaymentTransaction
 {
     public int Id { get; set; }
@@ -16,6 +16,8 @@ public sealed class PaymentTransaction
     public string? Source { get; set; }
     public decimal? BankReceivedAmount { get; set; }
     public string? Note { get; set; }
+    /// <summary>DL-210: print request metadata; financial fields remain immutable.</summary>
+    public int PrintCount { get; set; }
     public Invoice Invoice { get; set; } = null!;
     public User Cashier { get; set; } = null!;
 }

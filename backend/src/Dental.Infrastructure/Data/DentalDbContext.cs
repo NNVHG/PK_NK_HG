@@ -81,8 +81,11 @@ public sealed class DentalDbContext : DbContext
 
     private void GuardAuditLogImmutability()
     {
-        if (ChangeTracker.Entries<PaymentTransaction>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
-            throw new InvalidOperationException("PaymentTransaction là bất biến — không được cập nhật hoặc xóa.");
+        // DL-210 allows only a single increment of print metadata, never financial edits.
+        if (ChangeTracker.Entries<PaymentTransaction>().Any(x => x.State == EntityState.Deleted ||
+            (x.State == EntityState.Modified && (x.Properties.Any(p => p.IsModified && p.Metadata.Name != nameof(PaymentTransaction.PrintCount)) ||
+             (long)x.Entity.PrintCount != (long)x.Property(p => p.PrintCount).OriginalValue + 1))))
+            throw new InvalidOperationException("Dữ liệu khoản thu PaymentTransaction là bất biến; chỉ được tăng PrintCount một lượt theo DL-210.");
         if (ChangeTracker.Entries<VisitUnlockRecord>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("VisitUnlockRecord là bất biến — không được phép cập nhật hoặc xóa.");
         var violatingEntries = ChangeTracker.Entries<AuditLog>()

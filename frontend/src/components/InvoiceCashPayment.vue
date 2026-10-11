@@ -27,6 +27,7 @@
       <p v-else>Chuyển khoản · Ghi vào hóa đơn {{ money(payment.amount) }} · Ngân hàng nhận {{ money(payment.bankReceivedAmount ?? 0) }} · Mã {{ payment.transactionReference }}
         <strong v-if="payment.source === 'Simulation'"> · MÔ PHỎNG</strong></p>
       <p v-if="payment.note" role="alert">{{ payment.note }}</p>
+      <PaymentReceiptModal :invoice-id="invoiceId" :payment-id="payment.id" />
     </li></ul>
   </section>
 </template>
@@ -38,6 +39,7 @@ import { cashPaymentsApi } from '@/services/cashPayments';
 import type { CashPaymentResponse } from '@/services/cashPayments';
 import { useCashPaymentsStore } from '@/stores/cashPayments';
 import { useAuthStore } from '@/stores/auth';
+import PaymentReceiptModal from '@/components/PaymentReceiptModal.vue';
 
 const props = defineProps<{ invoiceId: number; remainingAmount: number; status: number }>();
 const emit = defineEmits<{ paid: [payment: CashPaymentResponse] }>();

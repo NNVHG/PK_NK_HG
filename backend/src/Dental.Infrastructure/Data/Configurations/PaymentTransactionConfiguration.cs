@@ -18,6 +18,7 @@ public sealed class PaymentTransactionConfiguration : IEntityTypeConfiguration<P
         b.Property(x => x.Source).HasMaxLength(20);
         b.Property(x => x.BankReceivedAmount).HasPrecision(18, 0);
         b.Property(x => x.Note).HasMaxLength(200);
+        b.Property(x => x.PrintCount).HasDefaultValue(0).IsConcurrencyToken();
         b.HasIndex(x => new { x.Source, x.TransactionReference }).IsUnique()
             .HasFilter("\"TransactionReference\" IS NOT NULL");
         b.HasIndex(x => x.TransactionReference).IsUnique().HasFilter("\"TransactionReference\" IS NOT NULL");
