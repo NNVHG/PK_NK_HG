@@ -50,6 +50,8 @@ public sealed class QueueServiceTests
         var result = await CreateService().UpdateQueueStatusAsync(8, actor, role, new UpdateQueueStatusRequest(3), null);
         Assert.True(result.IsSuccess);
         Assert.True(visit.IsLocked);
+        Assert.NotNull(visit.LockedAt);
+        Assert.Equal(actor, visit.LockedBy);
         Assert.Equal(VisitStatuses.Completed, visit.Status);
         Assert.NotNull(visit.EndedAt);
         await _invoiceDraft.Received(1).GenerateAsync(visit, actor, role, null, Arg.Any<CancellationToken>());

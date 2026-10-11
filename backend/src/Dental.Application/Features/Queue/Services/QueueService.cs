@@ -270,6 +270,8 @@ public sealed class QueueService
             if (entry.Visit is not null)
             {
                 entry.Visit.IsLocked = true;
+                entry.Visit.LockedAt = DateTime.UtcNow;
+                entry.Visit.LockedBy = actorUserId;
                 entry.Visit.Status = VisitStatuses.Completed;
                 entry.Visit.EndedAt = DateTime.UtcNow;
                 entry.Visit.UpdatedAt = DateTime.UtcNow;

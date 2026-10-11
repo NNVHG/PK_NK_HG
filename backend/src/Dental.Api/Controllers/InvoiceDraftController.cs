@@ -13,7 +13,8 @@ namespace Dental.Api.Controllers;
 [ApiController]
 [Authorize]
 public sealed class InvoiceDraftController(InvoiceDraftService service, IInvoiceRepository invoices,
-    QueueService queue, ICurrentUser user, InvoiceVisitRequestValidator validator) : ControllerBase
+    QueueService queue, ICurrentUser user, InvoiceVisitRequestValidator validator, VisitReopenService reopen,
+    IVisitReopenRepository reopenRepository) : ControllerBase
 {
     [HttpGet("api/visits/{visitId:int}/invoice-draft")]
     [HttpGet("api/invoices/by-visit/{visitId:int}")]
@@ -28,6 +29,7 @@ public sealed class InvoiceDraftController(InvoiceDraftService service, IInvoice
     }
 
     [HttpPut("api/visits/{visitId:int}/complete")]
+    [HttpPost("api/visits/{visitId:int}/lock")]
     [Authorize(Policy = AppPolicies.FdiServiceAssign)]
     public async Task<IActionResult> Complete(int visitId, CancellationToken ct)
     {
@@ -38,6 +40,27 @@ public sealed class InvoiceDraftController(InvoiceDraftService service, IInvoice
         var result = await queue.UpdateQueueStatusAsync(queueId.Value, userId, user.RoleCode!,
             new UpdateQueueStatusRequest(3), HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
         return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
+    }
+
+    [HttpPost("api/visits/{visitId:int}/unlock")]
+    [Authorize(Policy = AppPolicies.AdminOnly)]
+    public async Task<IActionResult> Unlock(int visitId, UnlockVisitRequest request, CancellationToken ct)
+    {
+        if (user.UserId is not int userId) return Unauthorized();
+        var result = await reopen.ReopenAsync(visitId, userId, user.RoleCode, request,
+            HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
+        return result.IsFailure ? Failure(result.Error) : NoContent();
+    }
+
+    [HttpGet("api/visits/{visitId:int}/unlock-history")]
+    [Authorize(Policy = AppPolicies.AdminOnly)]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
+    public async Task<IActionResult> UnlockHistory(int visitId, CancellationToken ct)
+    {
+        if (user.UserId is not int) return Unauthorized();
+        if (!(await validator.ValidateAsync(new InvoiceVisitRequest(visitId), ct)).IsValid) return BadRequest();
+        var rows = await reopenRepository.GetHistoryAsync(visitId, ct);
+        return Ok(rows.Select(x => new { x.Id, x.ActorUserId, x.CancelledInvoiceId, x.Reason, x.CreatedAt }));
     }
 
     private IActionResult Failure(Error error) => StatusCode(error.Code switch
