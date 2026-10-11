@@ -13,6 +13,9 @@ export interface AssignServicesPayload {
   serviceId: number; toothNumbers: number[] | null; surface: string | null; quantity: number;
 }
 export const visitServicesApi = {
+  async remove(visitId: number, assignmentId: number, reason: string): Promise<void> {
+    await apiClient.delete(`/visits/${visitId}/services/${assignmentId}`, { data: { reason } });
+  },
   async get(visitId: number): Promise<AssignedService[]> {
     return (await apiClient.get<AssignedService[]>(`/visits/${visitId}/services`)).data;
   },

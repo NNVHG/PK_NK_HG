@@ -51,6 +51,15 @@
           <p>{{ row.toothNumber === null ? 'Toàn hàm / tổng quát' : `Răng ${row.toothNumber} · ${row.surface || 'Toàn răng'}` }}</p>
           <p>{{ row.quantity }} × {{ money(row.unitPrice) }} = {{ money(row.totalAmount) }} (giá đã chốt)</p>
           <small>{{ new Date(row.createdAt).toLocaleString('vi-VN') }}</small>
+          <button v-if="canEdit" type="button" :disabled="busy" @click="beginDelete(row.id)">Xóa chỉ định</button>
+          <form v-if="deleteId === row.id && canEdit" @submit.prevent="remove">
+            <p>Xác nhận xóa dòng chỉ định này. Hóa đơn chưa thu sẽ giảm tương ứng; thao tác được lưu nhật ký.</p>
+            <label>Lý do xóa (không nhập thông tin cá nhân bệnh nhân)
+              <textarea v-model="deleteReason" required maxlength="500" :disabled="busy" />
+            </label>
+            <button type="submit" :disabled="busy || !deleteReason.trim()">Xác nhận xóa</button>
+            <button type="button" :disabled="busy" @click="deleteId = null">Hủy</button>
+          </form>
         </li>
       </ul>
     </template>
@@ -79,6 +88,29 @@ const visit = ref<VisitDetails | null>(null);
 const busy = ref(false);
 const error = ref('');
 const success = ref('');
+const deleteId = ref<number | null>(null);
+const deleteReason = ref('');
+function beginDelete(id: number) {
+  if (!canEdit.value || busy.value) return;
+  deleteId.value = id; deleteReason.value = ''; error.value = ''; success.value = '';
+}
+async function remove() {
+  if (!canEdit.value || busy.value || deleteId.value === null) return;
+  const id = deleteId.value, reason = deleteReason.value.trim();
+  if (!Number.isInteger(id) || id <= 0 || !reason || reason.length > 500) {
+    error.value = 'Nhập lý do xóa từ 1 đến 500 ký tự.'; return;
+  }
+  const ticket = version, currentVisitId = visitId.value;
+  busy.value = true; error.value = ''; success.value = '';
+  try {
+    await visitServicesApi.remove(currentVisitId, id, reason);
+    if (ticket !== version) return;
+    store.replace(rows.value.filter(row => row.id !== id)); deleteId.value = null; deleteReason.value = '';
+    success.value = 'Đã xóa chỉ định và cập nhật hóa đơn chưa thu. Tải lại để đối chiếu hồ sơ.';
+  } catch (cause) {
+    if (ticket === version) { error.value = message(cause); deleteId.value = null; deleteReason.value = ''; }
+  } finally { if (ticket === version) busy.value = false; }
+}
 const selection = ref<SelectedToothSurface[]>([]);
 const general = ref(false);
 const surface = ref<string | null>(null);
@@ -113,6 +145,7 @@ async function load() {
   const ticket = ++version;
   busy.value = true; error.value = ''; success.value = ''; visit.value = null; store.reset();
   selection.value = []; serviceId.value = null; general.value = false; surface.value = null; quantity.value = 1;
+  deleteId.value = null; deleteReason.value = '';
   catalog.value = []; catalogError.value = '';
   if (!Number.isInteger(visitId.value) || visitId.value <= 0) { error.value = 'Mã lần khám không hợp lệ.'; busy.value = false; return; }
   try {

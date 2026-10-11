@@ -337,3 +337,9 @@ Nguồn codex/phase1-vietqr-offline tại c329aa9, được người dùng chọ
 - Diff không có secret cấu hình local hoặc file build/thừa; không thêm package, không đổi schema/nghiệp vụ trong lượt kiểm chứng.
 
 Giới hạn: chưa có giao dịch ngân hàng live hoặc cấu hình ngân hàng production; mô phỏng không chứng minh tiền đã vào ngân hàng. Nhánh ảnh trực tuyến bị mất mạng được kiểm tra ở helper 9 case, chưa chặn mạng ảnh qua browser. Không nghiệm thu mọi thao tác ghi UI hoặc toàn bộ tính năng còn thiếu (thuốc, giảm giá, in/hoàn tiền, TTL, Phase2). F_BIL_03 vẫn PARTIAL. CSDL làm việc của người dùng không được thay đổi bởi lượt kiểm chứng; API/start-dev có cơ chế migration khi khởi động theo code hiện có. Báo cáo và ảnh/JSON local trong docs/testing/, giữ ignore.
+# Xóa chỉ định dịch vụ trước thanh toán (F_FDI_04)
+
+- Mở màn hình **Chỉ định dịch vụ** của lượt khám `InProgress`, chưa khóa. Admin hoặc nha sĩ phụ trách chọn **Xóa chỉ định**, nhập lý do rồi **Xác nhận xóa**; **Hủy** đóng bước xác nhận.
+- API `DELETE /api/visits/{visitId}/services/{assignmentId}` nhận JSON `{ "reason": "Điều chỉnh chỉ định" }`; `assignmentId` là ID dòng chỉ định, không phải ID danh mục dịch vụ. Thành công `204`; ID/lý do không hợp lệ `400`, thiếu dòng `404`, không đủ quyền `403`, lượt khám khóa/kết thúc hoặc đã thu tiền/xung đột đồng thời `409`.
+- Xóa cứng, giảm dòng hóa đơn chưa thu và lưu audit `VisitServiceDeleted` cùng transaction. Lý do tối đa 500 ký tự; không nhập dữ liệu cá nhân bệnh nhân. Hóa đơn đã hủy được giữ để truy vết. Khi kết quả mạng chưa rõ, tải lại hồ sơ để đối chiếu trước khi thao tác tiếp.
+- Kiểm thử: `dotnet test -p:UseAppHost=false` trong `backend`; `dotnet run --project tests/CashPayment.Postgres -p:UseAppHost=false -- --isolated-config src/Dental.Api/appsettings.Development.json` dùng PostgreSQL cô lập; `node --test tests/*.test.mjs` và `npm run build` trong `frontend`. Chờ Gia nghiệm thu UI có đăng nhập; đây chưa phải xác nhận demo Phase 1.
