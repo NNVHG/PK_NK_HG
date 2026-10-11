@@ -13,6 +13,6 @@ export const invoiceDraftApi = {
     return (await apiClient.get<InvoiceDraft>(`/visits/${visitId}/invoice-draft`)).data;
   },
   async complete(visitId: number): Promise<void> {
-    await apiClient.post(`/visits/${visitId}/complete`);
+    await apiClient.put(`/visits/${visitId}/complete`);
   }
 };

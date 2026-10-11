@@ -38,6 +38,46 @@ public sealed class QueueServiceTests
             });
     }
 
+    [Theory]
+    [InlineData(RoleCodes.Dentist, 5)]
+    [InlineData(RoleCodes.Admin, 99)]
+    public async Task Complete_LocksVisitAndGeneratesInvoiceWithoutSeparateSave(string role, int actor)
+    {
+        var visit = new Visit { VisitId = 8, DentistId = 5, Status = VisitStatuses.InProgress };
+        var entry = new QueueEntry { QueueEntryId = 8, DentistId = 5, Visit = visit, Status = QueueStatus.InConsultation };
+        _queueRepository.GetByIdAsync(8, Arg.Any<CancellationToken>()).Returns(entry);
+        _invoiceDraft.GenerateAsync(visit, actor, role, null, Arg.Any<CancellationToken>()).Returns(Result.Success());
+        var result = await CreateService().UpdateQueueStatusAsync(8, actor, role, new UpdateQueueStatusRequest(3), null);
+        Assert.True(result.IsSuccess);
+        Assert.True(visit.IsLocked);
+        Assert.Equal(VisitStatuses.Completed, visit.Status);
+        Assert.NotNull(visit.EndedAt);
+        await _invoiceDraft.Received(1).GenerateAsync(visit, actor, role, null, Arg.Any<CancellationToken>());
+        Assert.Empty(_unitOfWork.ReceivedCalls());
+    }
+
+    [Fact]
+    public async Task Complete_OtherDentistCannotLockOrGenerate()
+    {
+        var visit = new Visit { DentistId = 5, Status = VisitStatuses.InProgress };
+        _queueRepository.GetByIdAsync(8, Arg.Any<CancellationToken>()).Returns(new QueueEntry { Visit = visit, Status = QueueStatus.InConsultation });
+        Assert.Equal(Error.Forbidden, (await CreateService().UpdateQueueStatusAsync(8, 9, RoleCodes.Dentist, new UpdateQueueStatusRequest(3), null)).Error);
+        Assert.False(visit.IsLocked);
+        Assert.Equal(VisitStatuses.InProgress, visit.Status);
+        Assert.Empty(_invoiceDraft.ReceivedCalls());
+    }
+
+    [Fact]
+    public async Task Complete_InvoiceFailureDoesNotSaveOrAuditSuccess()
+    {
+        var visit = new Visit { DentistId = 5, Status = VisitStatuses.InProgress };
+        _queueRepository.GetByIdAsync(8, Arg.Any<CancellationToken>()).Returns(new QueueEntry { Visit = visit, Status = QueueStatus.InConsultation });
+        _invoiceDraft.GenerateAsync(visit, 5, RoleCodes.Dentist, null, Arg.Any<CancellationToken>()).Returns(Result.Failure(Error.Conflict));
+        Assert.True((await CreateService().UpdateQueueStatusAsync(8, 5, RoleCodes.Dentist, new UpdateQueueStatusRequest(3), null)).IsFailure);
+        Assert.Empty(_unitOfWork.ReceivedCalls());
+        Assert.Empty(_auditLogger.ReceivedCalls());
+    }
+
     private QueueService CreateService()
         => new(_queueRepository, _appointmentRepository, _patientRepository, _visitRepository, _userRepository, _unitOfWork, _auditLogger, _vietnamClock, _invoiceDraft);
 

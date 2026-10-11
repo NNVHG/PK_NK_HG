@@ -1,3 +1,5 @@
+using Dental.Domain.Enums;
+
 namespace Dental.Domain.Entities;
 
 public sealed class Invoice
@@ -5,7 +7,7 @@ public sealed class Invoice
     public int Id { get; set; }
     public int VisitId { get; set; }
     public string InvoiceCode { get; set; } = string.Empty;
-    public int Status { get; set; }
+    public InvoiceStatus Status { get; set; }
     public decimal TotalAmount { get; set; }
     public decimal PaidAmount { get; set; }
     public int CreatedByUserId { get; set; }

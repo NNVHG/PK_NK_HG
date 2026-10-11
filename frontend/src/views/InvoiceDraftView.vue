@@ -56,7 +56,7 @@ const busy = ref(false);
 const error = ref('');
 const success = ref('');
 const confirmed = ref(false);
-const statuses: Record<number, string> = { 0: 'Nháp', 1: 'Đã phát hành', 2: 'Thanh toán một phần', 3: 'Đã thanh toán', 4: 'Đã hủy' };
+const statuses: Record<number, string> = { 0: 'Nháp', 1: 'Chờ thanh toán', 2: 'Thanh toán một phần', 3: 'Đã thanh toán', 4: 'Đã hủy' };
 const canComplete = computed(() => visit.value?.status === 'InProgress' && !visit.value.isLocked &&
   (auth.role === 'ADMIN' || auth.role === 'DENTIST' && visit.value.dentistId === auth.user?.userId));
 const money = (value: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
@@ -66,7 +66,7 @@ function message(cause: unknown) {
 }
 async function load() {
   const ticket = ++version;
-  busy.value = true; error.value = ''; visit.value = null; store.replace(null); confirmed.value = false;
+  busy.value = true; error.value = ''; success.value = ''; visit.value = null; store.replace(null); confirmed.value = false;
   if (!Number.isInteger(visitId.value) || visitId.value <= 0) { error.value = 'Mã lần khám không hợp lệ.'; busy.value = false; return; }
   try {
     const details = await visitsService.getById(visitId.value);
@@ -87,12 +87,14 @@ async function complete() {
   try {
     await invoiceDraftApi.complete(visitId.value);
     if (ticket !== version) return;
+    const refreshVersion = version + 1;
     await load();
-    success.value = 'Đã kết thúc khám và tạo hóa đơn nháp. Hồ sơ đã được khóa.';
+    if (refreshVersion === version && invoice.value) success.value = 'Đã kết thúc khám và tạo hóa đơn chờ thanh toán. Hồ sơ đã được khóa.';
   } catch (cause) {
     if (ticket !== version) return;
     const failureMessage = message(cause);
-    await load(); error.value = failureMessage;
+    const refreshVersion = version + 1;
+    await load(); if (refreshVersion === version) error.value = failureMessage;
   } finally { if (ticket === version) busy.value = false; }
 }
 watch(visitId, load, { immediate: true });

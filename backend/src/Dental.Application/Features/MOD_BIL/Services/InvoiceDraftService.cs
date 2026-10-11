@@ -34,7 +34,7 @@ public sealed class InvoiceDraftService(IInvoiceRepository invoices, IVisitRepos
         var invoice = await invoices.GetForVisitAsync(visitId, ct);
         if (invoice is null) return Result<InvoiceResponse>.Failure(Error.NotFound);
         return Result<InvoiceResponse>.Success(new(invoice.Id, invoice.VisitId, invoice.InvoiceCode,
-            invoice.Status, invoice.TotalAmount, invoice.PaidAmount, invoice.TotalAmount - invoice.PaidAmount,
+            (int)invoice.Status, invoice.TotalAmount, invoice.PaidAmount, invoice.TotalAmount - invoice.PaidAmount,
             invoice.CreatedAt, invoice.Items.OrderBy(x => x.Id).Select(x => new InvoiceItemResponse(x.ItemType,
                 x.Code, x.Name, x.ToothNumber, x.Surface, x.Quantity, x.UnitPrice, x.TotalAmount)).ToArray()));
     }

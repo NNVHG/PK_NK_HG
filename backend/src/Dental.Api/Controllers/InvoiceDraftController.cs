@@ -25,7 +25,7 @@ public sealed class InvoiceDraftController(InvoiceDraftService service, IInvoice
         return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
     }
 
-    [HttpPost("api/visits/{visitId:int}/complete")]
+    [HttpPut("api/visits/{visitId:int}/complete")]
     [Authorize(Policy = AppPolicies.FdiServiceAssign)]
     public async Task<IActionResult> Complete(int visitId, CancellationToken ct)
     {
@@ -40,6 +40,6 @@ public sealed class InvoiceDraftController(InvoiceDraftService service, IInvoice
 
     private IActionResult Failure(Error error) => StatusCode(error.Code switch
     {
-        "GEN_001" => 404, "GEN_002" => 403, _ => 409
+        "GEN_001" => 404, "GEN_002" => 403, "GEN_003" => 400, _ => 409
     }, new { code = error.Code, message = error.Message });
 }
