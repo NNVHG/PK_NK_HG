@@ -49,12 +49,18 @@ public sealed class CashPaymentRepository(DentalDbContext db) : ICashPaymentRepo
             await transaction.CommitAsync(ct); committed = true;
             return Result<PaymentTransaction>.Success(payment);
         }
-        catch (Exception error) when (error is PostgresException { SqlState: "40001" or "40P01" or "23505" } ||
-            error is DbUpdateException { InnerException: PostgresException { SqlState: "40001" or "40P01" or "23505" } })
+        catch (Exception error) when (IsConcurrentFailure(error))
         {
             await transaction.RollbackAsync(CancellationToken.None);
             return Result<PaymentTransaction>.Failure(new Error("BIL_006", "Có thao tác đồng thời; tải lại hoặc thử lại cùng yêu cầu."));
         }
         finally { if (!committed) db.ChangeTracker.Clear(); }
+    }
+
+    private static bool IsConcurrentFailure(Exception error)
+    {
+        for (Exception? current = error; current is not null; current = current.InnerException)
+            if (current is PostgresException { SqlState: "40001" or "40P01" or "23505" }) return true;
+        return false;
     }
 }

@@ -53,6 +53,7 @@ try
     await using var reopenDb = NewDb();
     Check((await new VisitReopenRepository(reopenDb).ReopenAsync(visit.VisitId, cashier.UserId, "Synthetic correction reason", null)).IsFailure, "Paid visit cannot reopen");
     await CashPaymentHttpSmoke.RunAsync(options, cashier.UserId, patient.PatientId, Check);
+    await CashConflictRollbackSmoke.RunAsync(options, patient.PatientId, cashier.UserId, Check);
     Console.WriteLine($"PostgreSQL payment checks: {checks}/{checks} PASS");
 }
 finally

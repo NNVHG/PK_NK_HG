@@ -357,3 +357,10 @@ Giới hạn: chưa có giao dịch ngân hàng live hoặc cấu hình ngân h�
 - Tại màn hình tình trạng răng, Admin hoặc nha sĩ phụ trách chọn răng/mặt răng, tình trạng và nhập **Ghi chú lâm sàng theo răng** tùy chọn, tối đa500 ký tự. Lưu tạo bản ghi tình trạng mới; ghi chú cũ được giữ và đọc trong danh sách hoặc drawer lịch sử.
 - `POST /api/visits/{visitId}/tooth-conditions` nhận thêm `note` nullable. Payload cũ không có `note` vẫn hợp lệ; khoảng trắng đầu/cuối được bỏ, chuỗi trắng lưu null. Ghi chú dài quá500 trả400; ca khám khóa/kết thúc trả409; chỉ Admin hoặc nha sĩ phụ trách được ghi. Nội dung y khoa không được ghi vào audit log.
 - Ghi chú gắn tình trạng mới theo DL-093/110/184, chưa có thao tác sửa trực tiếp bản ghi cũ hoặc ghi chú hậu thanh toán DL-227. Chờ Gia nghiệm thu UI có đăng nhập.
+
+
+## Xung đột thu tiền mặt (F_BIL_03)
+
+Thu tiền mặt nhận diện PostgreSQL 40001/40P01/23505 trong chuỗi ngoại lệ, rollback và trả409/BIL_006. Lỗi khác không đổi thành lỗi đồng thời. Thu ngân đối chiếu hóa đơn, xác nhận lại, dùng nút kiểm tra/thử lại cùng yêu cầu; không nhận thêm tiền khách. UI giữ mã yêu cầu và số tiền, không tự retry.
+
+Kiểm chứng bằng backend unit, CashPayment.Postgres với --isolated-config, frontend Node tests và build theo lệnh hiện có. Fault injection trong transaction PostgreSQL riêng chứng minh rollback tiền thu/công nợ/audit và retry một receipt. Chưa UAT browser; chưa gộp bản sửa vào integrate.
