@@ -81,6 +81,41 @@ public sealed class QueueRepository : IQueueRepository
         return (items, totalCount);
     }
 
+    public async Task<QueueEntry?> GetNextWaitingEntryAsync(DateOnly date, int? dentistId, CancellationToken ct = default)
+    {
+        var query = _db.QueueEntries
+            .Include(q => q.Patient)
+            .Include(q => q.Dentist)
+            .Include(q => q.Appointment)
+            .Include(q => q.Visit)
+            .Where(q => q.QueueDate == date && q.Status == QueueStatus.Waiting);
+
+        if (dentistId.HasValue)
+        {
+            query = query.Where(q => q.DentistId == null || q.DentistId == dentistId.Value);
+        }
+
+        return await query
+            .OrderByDescending(q => q.IsPriority)
+            .ThenBy(q => q.IsPriority && q.Appointment != null ? q.Appointment.SlotTime : TimeOnly.MaxValue)
+            .ThenBy(q => q.CheckInTime)
+            .ThenBy(q => q.QueueNumber)
+            .ThenBy(q => q.QueueEntryId)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<QueueEntry>> GetPublicDisplayQueueAsync(DateOnly date, CancellationToken ct = default)
+    {
+        return await _db.QueueEntries
+            .AsNoTracking()
+            .Include(q => q.Patient)
+            .Include(q => q.Dentist)
+            .Include(q => q.Appointment)
+            .Where(q => q.QueueDate == date &&
+                        (q.Status == QueueStatus.InConsultation || q.Status == QueueStatus.Waiting))
+            .ToListAsync(ct);
+    }
+
     public async Task AddStatusHistoryAsync(QueueStatusHistory history, CancellationToken ct = default)
         => await _db.QueueStatusHistories.AddAsync(history, ct);
 

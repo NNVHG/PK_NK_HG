@@ -41,6 +41,18 @@ const router = createRouter({
       meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST', 'DENTIST', 'ASSISTANT'] }
     },
     {
+      path: '/queue/display',
+      name: 'queue-display',
+      component: () => import('@/views/QueueDisplayView.vue'),
+      meta: { requiresAuth: false }
+    },
+    {
+      path: '/queue/public-monitor',
+      name: 'queue-public-monitor',
+      component: () => import('@/views/QueueDisplayView.vue'),
+      meta: { requiresAuth: false }
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),

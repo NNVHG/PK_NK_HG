@@ -369,6 +369,89 @@ public sealed class QueueService
         return Result<QueueEntryDetailResponse>.Success(detail);
     }
 
+    public async Task<Result<QueueEntryResponse>> CallNextAsync(
+        int actorUserId,
+        string actorRole,
+        CallNextRequest request,
+        string? ipAddress,
+        CancellationToken ct = default)
+    {
+        // DL-120: Chỉ Nha sĩ hoặc Admin mới được gọi khám
+        if (actorRole is not RoleCodes.Dentist and not RoleCodes.Admin)
+            return Result<QueueEntryResponse>.Failure(Error.QueueTransitionForbidden);
+
+        int targetDentistId;
+        if (actorRole == RoleCodes.Dentist)
+        {
+            targetDentistId = actorUserId;
+        }
+        else
+        {
+            if (!request.DentistId.HasValue)
+                return Result<QueueEntryResponse>.Failure(Error.QueueDentistRequired);
+
+            var dentist = await _userRepository.FindByIdAsync(request.DentistId.Value, ct);
+            if (dentist is null || !dentist.IsActive || dentist.Role?.RoleCode != RoleCodes.Dentist)
+                return Result<QueueEntryResponse>.Failure(Error.Validation.Code, "Nha sĩ được chỉ định không hợp lệ hoặc không hoạt động.");
+
+            targetDentistId = request.DentistId.Value;
+        }
+
+        // DL-045: Một Nha sĩ không thể đồng thời có 2 ca khám ở trạng thái InProgress
+        if (await _visitRepository.HasActiveVisitForDentistAsync(targetDentistId, ct))
+            return Result<QueueEntryResponse>.Failure(Error.DentistHasActiveVisit);
+
+        var today = _vietnamClock.Today;
+        var nextEntry = await _queueRepository.GetNextWaitingEntryAsync(today, targetDentistId, ct);
+        if (nextEntry is null)
+            return Result<QueueEntryResponse>.Failure(Error.QueueNoWaitingPatients);
+
+        nextEntry.Status = QueueStatus.InConsultation;
+        nextEntry.DentistId = targetDentistId;
+        nextEntry.UpdatedAt = DateTime.UtcNow;
+
+        if (nextEntry.Visit is not null)
+        {
+            nextEntry.Visit.Status = VisitStatuses.InProgress;
+            nextEntry.Visit.DentistId = targetDentistId;
+            nextEntry.Visit.StartedAt ??= DateTime.UtcNow;
+            nextEntry.Visit.UpdatedAt = DateTime.UtcNow;
+        }
+
+        var history = new QueueStatusHistory
+        {
+            QueueEntryId = nextEntry.QueueEntryId,
+            FromStatus = QueueStatus.Waiting,
+            ToStatus = QueueStatus.InConsultation,
+            ChangedByUserId = actorUserId,
+            ChangedAt = DateTime.UtcNow,
+            Reason = "Gọi vào khám (Call Next - DL-120)"
+        };
+
+        await _queueRepository.AddStatusHistoryAsync(history, ct);
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        await _auditLogger.LogAsync(
+            action: AuditActions.QueueStatusChanged,
+            entityType: "QueueEntry",
+            entityId: nextEntry.QueueEntryId,
+            userId: actorUserId,
+            detail: JsonSerializer.Serialize(new
+            {
+                action = "CallNext",
+                queueEntryId = nextEntry.QueueEntryId,
+                dentistId = targetDentistId,
+                queueNumber = nextEntry.QueueNumber,
+                fromStatus = (int)QueueStatus.Waiting,
+                toStatus = (int)QueueStatus.InConsultation
+            }),
+            ipAddress: ipAddress,
+            ct: ct);
+
+        var refreshed = await _queueRepository.GetByIdAsync(nextEntry.QueueEntryId, ct);
+        return Result<QueueEntryResponse>.Success(ToResponse(refreshed ?? nextEntry));
+    }
+
     private static QueueEntryResponse ToResponse(QueueEntry q)
         => new(
             q.QueueEntryId,
@@ -404,5 +487,72 @@ public sealed class QueueService
             h.Reason
         );
 
+    public async Task<Result<PublicQueueMonitorResponse>> GetPublicQueueDisplayAsync(CancellationToken ct = default)
+    {
+        var today = _vietnamClock.Today;
+        var entries = await _queueRepository.GetPublicDisplayQueueAsync(today, ct);
+
+        var inConsultation = entries
+            .Where(q => q.Status == QueueStatus.InConsultation)
+            .OrderByDescending(q => q.UpdatedAt ?? q.CreatedAt)
+            .Take(5)
+            .Select(ToPublicResponse)
+            .ToList();
+
+        var waiting = entries
+            .Where(q => q.Status == QueueStatus.Waiting)
+            .OrderByDescending(q => q.IsPriority)
+            .ThenBy(q => q.IsPriority && q.Appointment != null ? q.Appointment.SlotTime : TimeOnly.MaxValue)
+            .ThenBy(q => q.CheckInTime)
+            .ThenBy(q => q.QueueNumber)
+            .Take(15)
+            .Select(ToPublicResponse)
+            .ToList();
+
+        return Result<PublicQueueMonitorResponse>.Success(new PublicQueueMonitorResponse(inConsultation, waiting));
+    }
+
+    public static string MaskPatientName(string? fullName)
+    {
+        if (string.IsNullOrWhiteSpace(fullName))
+            return "Bệnh nhân";
+
+        var parts = fullName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1)
+        {
+            var w = parts[0];
+            return w.Length <= 2 ? w : $"{w[0]}***{w[^1]}";
+        }
+
+        if (parts.Length == 2)
+        {
+            return $"{parts[0]} *** {parts[1]}";
+        }
+
+        var first = parts[0];
+        var last = parts[^1];
+        var middle = string.Join(" ", parts.Skip(1).Take(parts.Length - 2).Select(m => $"{m[0]}***"));
+        return $"{first} {middle} {last}";
+    }
+
+    public static string FormatQueueNumber(int queueNumber, bool isPriority)
+    {
+        var prefix = isPriority ? "A" : "A";
+        return $"{prefix}-{queueNumber:D3}";
+    }
+
+    private static PublicQueueItemResponse ToPublicResponse(QueueEntry q)
+        => new(
+            q.QueueEntryId,
+            q.QueueNumber,
+            FormatQueueNumber(q.QueueNumber, q.IsPriority),
+            MaskPatientName(q.Patient?.FullName),
+            q.Dentist?.FullName,
+            (int)q.Status,
+            QueueStatusDescriptions.GetDescription(q.Status),
+            q.IsPriority
+        );
+
 }
+
 

@@ -1,0 +1,149 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { parse, compileScript } from '@vue/compiler-sfc';
+import ts from 'typescript';
+
+const { descriptor } = parse(await readFile(new URL('../src/views/QueueDisplayView.vue', import.meta.url), 'utf8'));
+const compiled = ts.transpileModule(compileScript(descriptor, { id: 'queue-display-test' }).content, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText;
+
+const mockData = {
+  inConsultation: [
+    {
+      queueEntryId: 10,
+      queueNumber: 1,
+      queueNumberDisplay: 'A-001',
+      maskedPatientName: 'Nguyễn V*** An',
+      dentistName: 'BS. Lê Văn B',
+      status: 2,
+      statusText: 'Đang khám',
+      isPriority: false,
+    },
+  ],
+  waiting: [
+    {
+      queueEntryId: 11,
+      queueNumber: 2,
+      queueNumberDisplay: 'A-002',
+      maskedPatientName: 'Trần T*** Bé',
+      dentistName: null,
+      status: 1,
+      statusText: 'Đang chờ',
+      isPriority: true,
+    },
+  ],
+};
+
+function fixture(responses = [mockData]) {
+  let mount, cleanup;
+  const calls = [];
+  const intervals = [];
+  const clearedIntervals = [];
+
+  const imports = {
+    vue: {
+      defineComponent: c => c,
+      ref: value => ({ value }),
+      onMounted: cb => { mount = cb; },
+      onUnmounted: cb => { cleanup = cb; },
+    },
+    '@/services/queue': {
+      queueService: {
+        getPublicDisplay: async () => {
+          calls.push(true);
+          const response = responses.shift() ?? mockData;
+          if (response instanceof Error) throw response;
+          return response;
+        },
+      },
+    },
+  };
+
+  const originalSetInterval = globalThis.setInterval;
+  const originalClearInterval = globalThis.clearInterval;
+
+  globalThis.setInterval = (fn, ms) => {
+    const id = { fn, ms };
+    intervals.push(id);
+    return id;
+  };
+  globalThis.clearInterval = id => {
+    clearedIntervals.push(id);
+  };
+
+  try {
+    const module = { exports: {} };
+    new Function('require', 'module', 'exports', compiled)(name => imports[name], module, module.exports);
+    const c = module.exports.default.setup({}, { expose() {} });
+    return {
+      c,
+      calls,
+      intervals,
+      clearedIntervals,
+      mount: async () => {
+        if (mount) await mount();
+      },
+      cleanup: () => {
+        if (cleanup) cleanup();
+        globalThis.setInterval = originalSetInterval;
+        globalThis.clearInterval = originalClearInterval;
+      },
+    };
+  } catch (err) {
+    globalThis.setInterval = originalSetInterval;
+    globalThis.clearInterval = originalClearInterval;
+    throw err;
+  }
+}
+
+test('mount loads public monitor data and populates inConsultation and waiting', async () => {
+  const f = fixture();
+  try {
+    await f.mount();
+    assert.equal(f.calls.length, 1);
+    assert.equal(f.c.inConsultation.value.length, 1);
+    assert.equal(f.c.inConsultation.value[0].queueNumberDisplay, 'A-001');
+    assert.equal(f.c.waiting.value.length, 1);
+    assert.equal(f.c.waiting.value[0].maskedPatientName, 'Trần T*** Bé');
+    assert.equal(f.c.error.value, '');
+  } finally {
+    f.cleanup();
+  }
+});
+
+test('sound toggle starts disabled and toggles soundEnabled state', () => {
+  const f = fixture();
+  try {
+    assert.equal(f.c.soundEnabled.value, false);
+    f.c.toggleSound();
+    assert.equal(f.c.soundEnabled.value, true);
+    f.c.toggleSound();
+    assert.equal(f.c.soundEnabled.value, false);
+  } finally {
+    f.cleanup();
+  }
+});
+
+test('network error sets user friendly message', async () => {
+  const f = fixture([new Error('Network error')]);
+  try {
+    await f.mount();
+    assert.ok(f.c.error.value.includes('Mất kết nối'));
+  } finally {
+    f.cleanup();
+  }
+});
+
+test('unmount clears polling and clock timers', async () => {
+  const f = fixture();
+  try {
+    await f.mount();
+    assert.equal(f.intervals.length, 2);
+    f.cleanup();
+    assert.equal(f.clearedIntervals.length, 2);
+  } finally {
+    f.cleanup();
+  }
+});

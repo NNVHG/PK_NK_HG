@@ -20,19 +20,22 @@ public sealed class QueueController : ControllerBase
     private readonly CheckInRequestValidator _checkInValidator;
     private readonly QueueQueryRequestValidator _queryValidator;
     private readonly UpdateQueueStatusRequestValidator _statusValidator;
+    private readonly CallNextRequestValidator _callNextValidator;
 
     public QueueController(
         QueueService queueService,
         ICurrentUser currentUser,
         CheckInRequestValidator checkInValidator,
         QueueQueryRequestValidator queryValidator,
-        UpdateQueueStatusRequestValidator statusValidator)
+        UpdateQueueStatusRequestValidator statusValidator,
+        CallNextRequestValidator callNextValidator)
     {
         _queueService = queueService;
         _currentUser = currentUser;
         _checkInValidator = checkInValidator;
         _queryValidator = queryValidator;
         _statusValidator = statusValidator;
+        _callNextValidator = callNextValidator;
     }
 
     [HttpPost("check-in")]
@@ -116,6 +119,46 @@ public sealed class QueueController : ControllerBase
         return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
     }
 
+    [HttpPost("call-next")]
+    [Authorize(Policy = AppPolicies.QueueStatusUpdate)]
+    [ProducesResponseType(typeof(QueueEntryResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> CallNext([FromBody] CallNextRequest? request, CancellationToken ct)
+    {
+        request ??= new CallNextRequest(null);
+        var validation = await _callNextValidator.ValidateAsync(request, ct);
+        if (!validation.IsValid)
+            return ToValidationProblem(validation);
+
+        if (_currentUser.UserId is not int actorUserId)
+            return Unauthorized(new { code = Error.Unauthorized.Code, message = Error.Unauthorized.Message });
+
+        var actorRole = _currentUser.RoleCode ?? string.Empty;
+
+        var result = await _queueService.CallNextAsync(
+            actorUserId,
+            actorRole,
+            request,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            ct);
+
+        return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
+    }
+
+    [HttpGet("display")]
+    [HttpGet("public-monitor")]
+    [AllowAnonymous]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
+    [ProducesResponseType(typeof(PublicQueueMonitorResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPublicDisplay(CancellationToken ct)
+    {
+        var result = await _queueService.GetPublicQueueDisplayAsync(ct);
+        return Ok(result.Value);
+    }
+
     private IActionResult ToValidationProblem(ValidationResult validation)
         => BadRequest(new
         {
@@ -128,9 +171,9 @@ public sealed class QueueController : ControllerBase
     {
         var statusCode = error.Code switch
         {
-            "GEN_001" or "CHK_001" or "APP_001" => StatusCodes.Status404NotFound,
+            "GEN_001" or "CHK_001" or "CHK_008" or "APP_001" => StatusCodes.Status404NotFound,
             "CHK_004" => StatusCodes.Status403Forbidden,
-            "CHK_002" or "PAT_090" or "PAT_091" or "APP_008" => StatusCodes.Status409Conflict,
+            "CHK_002" or "CHK_009" or "PAT_090" or "PAT_091" or "APP_008" => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status400BadRequest,
         };
 
