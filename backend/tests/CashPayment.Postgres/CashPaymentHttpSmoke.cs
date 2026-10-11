@@ -52,6 +52,12 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddScoped<IToothHistoryRepository, ToothHistoryRepository>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_FDI.Services.ToothHistoryService>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_FDI.Validators.ToothHistoryRequestValidator>();
+        builder.Services.AddScoped<IVisitRepository, VisitRepository>();
+        builder.Services.AddScoped<IToothConditionRepository, ToothConditionRepository>();
+        builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+        builder.Services.AddScoped<IAuditLogger, AuditLogger>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_FDI.Services.ToothConditionService>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_FDI.Validators.ToothConditionRequestValidator>();
         builder.Services.AddScoped<IBankTransferRepository, BankTransferRepository>();
         builder.Services.AddScoped<BankTransferWebhookService>();
         builder.Services.AddScoped<BankTransferRequestValidator>();
@@ -124,6 +130,7 @@ internal static class CashPaymentHttpSmoke
             await ReceiptHttpSmoke.RunAsync(client, options, invoice.Id, receipt.Id, Authenticate, check);
             await FdiServiceDeletionHttpSmoke.RunAsync(client, options, cashierId, patientId, Authenticate, check);
             await ToothHistoryHttpSmoke.RunAsync(client, options, cashierId, patientId, Authenticate, check);
+            await ToothClinicalNoteHttpSmoke.RunAsync(client, options, cashierId, patientId, Authenticate, check);
             await BankTransferHttpSmoke.RunAsync(client, options, cashierId, patientId, webhookKey, Authenticate, check);
         }
         finally { await app.StopAsync(); }

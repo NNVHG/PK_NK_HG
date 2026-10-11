@@ -21,6 +21,10 @@
             <option v-for="(label, value) in FDI_CONDITIONS" :key="value" :value="value">{{ label }}</option>
           </select>
         </label>
+        <label>Ghi chú lâm sàng theo răng (không bắt buộc)
+          <textarea v-model="note" :disabled="busy" maxlength="500" rows="3" placeholder="Ghi nhận chuyên môn cho răng/mặt răng đã chọn" />
+          <small>{{ note.length }}/500 ký tự · Lưu cùng bản ghi tình trạng mới, giữ lịch sử cũ.</small>
+        </label>
         <button type="submit" :disabled="busy || !selection.length">Ghi nhận tình trạng</button>
       </form>
       <h2>Tình trạng đã ghi trong lần khám</h2>
@@ -29,6 +33,7 @@
         <li v-for="row in rows" :key="row.id">
           <strong>Răng {{ row.toothNumber }} · {{ row.surface || 'Toàn răng' }}</strong>
           — {{ FDI_CONDITIONS[row.conditionCode] || row.conditionCode }}
+          <p v-if="row.note" class="clinical-note">Ghi chú: {{ row.note }}</p>
           <small>{{ new Date(row.createdAt).toLocaleString('vi-VN') }}</small>
           <button type="button" :disabled="busy" @click="locate(row)">Xem trên sơ đồ</button>
           <button type="button" :disabled="busy" @click="openHistory({ toothNumber: row.toothNumber })">Lịch sử răng</button>
@@ -61,6 +66,7 @@ const { rows } = storeToRefs(fdiStore);
 const selection = ref<SelectedToothSurface[]>([]);
 const dentition = ref<DentitionType>('adult');
 const code = ref<ConditionCode>('CARIES');
+const note = ref('');
 const busy = ref(false);
 const error = ref('');
 const success = ref('');
@@ -83,6 +89,7 @@ let loadVersion = 0;
 async function load() {
   const version = ++loadVersion;
   busy.value = true; error.value = ''; success.value = ''; visit.value = null; fdiStore.reset(); selection.value = [];
+  note.value = '';
   if (!Number.isInteger(visitId.value) || visitId.value <= 0) {
     error.value = 'Mã lần khám không hợp lệ.'; busy.value = false; return;
   }
@@ -104,14 +111,16 @@ async function save() {
     error.value = 'Số răng hoặc mặt răng không hợp lệ.'; return;
   }
   if (!(code.value in FDI_CONDITIONS)) { error.value = 'Tình trạng không hợp lệ.'; return; }
+  if (note.value.length > 500) { error.value = 'Ghi chú theo răng tối đa 500 ký tự.'; return; }
   const id = visitId.value;
   const version = loadVersion;
   busy.value = true; error.value = ''; success.value = '';
   try {
     const surface = selected.surface ? SURFACE_METADATA[selected.surface].code : null;
-    const saved = await fdiService.add(id, selected.toothNumber, surface, code.value);
+    const saved = await fdiService.add(id, selected.toothNumber, surface, code.value, note.value.trim() || null);
     if (id !== visitId.value || version !== loadVersion) return;
     fdiStore.prepend(saved); selection.value = [];
+    note.value = '';
     success.value = 'Đã ghi nhận tình trạng răng. Có thể tải lại để xem dữ liệu đã lưu.';
   } catch (cause) { if (id === visitId.value && version === loadVersion) error.value = message(cause); }
   finally { if (id === visitId.value && version === loadVersion) busy.value = false; }
@@ -127,4 +136,6 @@ select, button { padding: .6rem; }
 li { margin: .8rem 0; }
 small { display: block; color: #64748b; }
 .error { color: #b91c1c; }
+.clinical-note { white-space: pre-wrap; overflow-wrap: anywhere; }
+textarea { display: block; width: min(450px, 75vw); padding: .6rem; font: inherit; }
 </style>

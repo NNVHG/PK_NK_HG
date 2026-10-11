@@ -19,6 +19,32 @@ public sealed class ToothConditionTests
     private readonly IAuditLogger audit = Substitute.For<IAuditLogger>();
     private ToothConditionService Service => new(visits, patients, conditions, unitOfWork, audit, new());
 
+    [Theory] [InlineData(null, null)] [InlineData("", null)] [InlineData("   ", null)]
+    [InlineData("  Ghi chú chuyên môn\nDòng thứ hai  ", "Ghi chú chuyên môn\nDòng thứ hai")]
+    public async Task Add_PreservesNoteWithoutLoggingClinicalText(string? input, string? expected)
+    {
+        visits.GetForUpdateAsync(1, Arg.Any<CancellationToken>()).Returns(new Visit { VisitId = 1, Status = VisitStatuses.InProgress, DentistId = 2 });
+        var result = await Service.AddAsync(1, new(11, "O", "CARIES", input), 2, RoleCodes.Dentist, null);
+        Assert.True(result.IsSuccess); Assert.Equal(expected, result.Value!.Note);
+        await conditions.Received(1).AddAsync(Arg.Is<ToothCondition>(x => x.Note == expected && x.VisitId == 1 && x.ToothNumber == 11 && x.Surface == "O"), Arg.Any<CancellationToken>());
+        await audit.Received(1).LogAsync("MOD_FDI_CONDITION_CREATED", "ToothCondition", Arg.Any<int?>(), 2,
+            "{\"action\":\"condition_created\"}", null, Arg.Any<CancellationToken>());
+    }
+    [Theory] [InlineData(500, true)] [InlineData(501, false)]
+    public void Validator_EnforcesNoteLimit(int length, bool valid)
+        => Assert.Equal(valid, new ToothConditionRequestValidator().Validate(new ToothConditionRequest(11, null, "CARIES", new string('x', length))).IsValid);
+    [Fact] public async Task Add_OverlongNoteDoesNotReadOrSave()
+    {
+        Assert.Equal(Error.Validation, (await Service.AddAsync(1, new(11, null, "CARIES", new string('x', 501)), 2, RoleCodes.Admin, null)).Error);
+        Assert.Empty(visits.ReceivedCalls()); Assert.Empty(conditions.ReceivedCalls()); Assert.Empty(audit.ReceivedCalls());
+    }
+    [Fact] public async Task Get_ReturnsPersistedClinicalNote()
+    {
+        visits.GetByIdAsync(1, Arg.Any<CancellationToken>()).Returns(new Visit { PatientId = 5 });
+        conditions.GetForVisitAsync(1, Arg.Any<CancellationToken>()).Returns(new[] { new ToothCondition { Id = 3, VisitId = 1, ToothNumber = 11, ConditionCode = "CARIES", Note = "Synthetic note" } });
+        Assert.Equal("Synthetic note", Assert.Single((await Service.GetAsync(1, 2, RoleCodes.Admin)).Value!).Note);
+    }
+
     [Fact]
     public void Validator_AcceptsExactly52FdiTeeth()
     {
