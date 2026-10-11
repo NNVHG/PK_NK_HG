@@ -272,8 +272,27 @@ trực tuyến** sau khi bỏ chặn để tải lại ảnh thật. Production 
 ảnh mô phỏng và endpoint simulate vẫn trả 404.
 
 Kiểm thử logic hiển thị bằng `node --test tests/bankQrDisplay.test.mjs` từ
-`frontend/` (9 trường hợp). Không cần thêm package. Phần timeout/TTL thuộc Q-181,
-chưa có quyết định chính thức và chưa được triển khai trong phần fallback này.
+`frontend/` (9 trường hợp). Không cần thêm package. Phần timeout/TTL thuộc Q-181
+đã chốt tại DL-205 và được triển khai như mô tả dưới đây.
+
+### F_BIL_03 — Phiên VietQR 15 phút (DL-205)
+
+Mở modal VietQR để bắt đầu phiên 15 phút với đồng hồ `15:00`. Khi hết hạn,
+modal làm mờ mã, thông báo **Mã thanh toán đã hết hạn**, dừng polling và khóa
+thao tác mô phỏng/kiểm tra trong phiên cũ. **Tạo lại mã QR** tải lại số dư từ
+backend và mở phiên 15 phút mới. **Chọn phương thức khác (Tiền mặt)** đóng
+modal và focus ô thu tiền mặt hiện có. Đóng modal/Escape hoặc rời màn hình
+sẽ dọn timer; dừng theo dõi thủ công không kéo dài thời gian phiên.
+
+TTL áp dụng cho phiên hiển thị/thăm dò trên UI. Hệ thống vẫn nhận và đối soát
+webhook hợp lệ đến muộn theo số dư hóa đơn; hết hạn UI không hủy hóa đơn hoặc
+hủy một khoản tiền ngân hàng đã chuyển. Tạo lại mã tải thông tin hiện hành,
+không đổi mã hóa đơn hay reference của lần mô phỏng đang cần thử lại.
+
+Chạy `node --test tests/bankQrDisplay.test.mjs tests/bankQrSession.test.mjs tests/bankQrModal.test.mjs`
+từ `frontend/`: 22 trường hợp, gồm 9 QR fallback, 8 timer và 5 tích hợp script
+component với clock/API test riêng. Đây chưa phải kiểm chứng hiển thị trình duyệt
+hoặc ngân hàng thật; không dùng test clock trong source production.
 
 ## Kiểm chứng tích hợp thanh toán vào main — 2026-10-11 13:45 (Asia/Ho_Chi_Minh)
 
