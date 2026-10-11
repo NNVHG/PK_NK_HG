@@ -122,6 +122,7 @@ public sealed class PatientsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetMyProfiles(CancellationToken ct)
     {
+        Response.Headers.CacheControl = "no-store";
         if (_currentUser.RoleCode != Dental.Domain.Constants.RoleCodes.Patient)
             return Forbid();
 

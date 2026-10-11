@@ -59,12 +59,11 @@ public sealed class PatientConfiguration : IEntityTypeConfiguration<Patient>
             .HasDatabaseName("IX_Patients_FullName");
 
         builder.HasOne(patient => patient.User)
-            .WithOne()
-            .HasForeignKey<Patient>(patient => patient.UserId)
+            .WithMany()
+            .HasForeignKey(patient => patient.UserId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(patient => patient.UserId)
-            .IsUnique()
             .HasDatabaseName("IX_Patients_UserId");
     }
 }

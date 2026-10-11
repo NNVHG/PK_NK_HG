@@ -357,3 +357,9 @@ Giới hạn: chưa có giao dịch ngân hàng live hoặc cấu hình ngân h�
 - Tại màn hình tình trạng răng, Admin hoặc nha sĩ phụ trách chọn răng/mặt răng, tình trạng và nhập **Ghi chú lâm sàng theo răng** tùy chọn, tối đa500 ký tự. Lưu tạo bản ghi tình trạng mới; ghi chú cũ được giữ và đọc trong danh sách hoặc drawer lịch sử.
 - `POST /api/visits/{visitId}/tooth-conditions` nhận thêm `note` nullable. Payload cũ không có `note` vẫn hợp lệ; khoảng trắng đầu/cuối được bỏ, chuỗi trắng lưu null. Ghi chú dài quá500 trả400; ca khám khóa/kết thúc trả409; chỉ Admin hoặc nha sĩ phụ trách được ghi. Nội dung y khoa không được ghi vào audit log.
 - Ghi chú gắn tình trạng mới theo DL-093/110/184, chưa có thao tác sửa trực tiếp bản ghi cũ hoặc ghi chú hậu thanh toán DL-227. Chờ Gia nghiệm thu UI có đăng nhập.
+
+## Đặt lịch cho tài khoản gia đình (F_APP_01, DL-079)
+
+Tại màn hình đặt lịch, Patient chọn hồ sơ bằng họ tên/ngày sinh/mã rồi ngày và slot. Một User có nhiều Patient đã liên kết; chỉ hồ sơ hoạt động thuộc tài khoản được đặt lịch. Lịch trùng kiểm theo từng thành viên. Chưa có UI tạo/liên kết thành viên trong phạm vi lượt sửa này; không tạo dữ liệu mẫu trong production.
+
+Migration `20261011133134_AllowFamilyPatientProfiles` chuyển index `Patients.UserId` sang không unique, giữ `Users.Phone` unique. Đã áp dụng local; không chạy Down khi còn nhiều hồ sơ cùng User. API mine trả no-store. Kiểm thử cùng các lệnh hiện có: backend unit, CashPayment.Postgres cô lập và frontend Node/build. Gia cần nghiệm thu UI gia đình có đăng nhập.

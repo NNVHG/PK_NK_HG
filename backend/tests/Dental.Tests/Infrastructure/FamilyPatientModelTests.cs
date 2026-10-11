@@ -1,0 +1,27 @@
+using Dental.Domain.Entities;
+using Dental.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+using Xunit;
+namespace Dental.Tests.Infrastructure;
+public sealed class FamilyPatientModelTests
+{
+    private static DentalDbContext CreateDb() => new(new DbContextOptionsBuilder<DentalDbContext>().UseNpgsql("Host=localhost;Database=model_only").Options);
+    [Fact] public void UserPatientRelationshipIsManyToOneWithRestrictDelete()
+    {
+        using var db = CreateDb();
+        var entity = db.Model.FindEntityType(typeof(Patient))!;
+        var fk = entity.GetForeignKeys().Single(f => f.Properties.Single().Name == nameof(Patient.UserId));
+        Assert.False(fk.IsUnique); Assert.Equal(DeleteBehavior.Restrict, fk.DeleteBehavior);
+    }
+    [Fact] public void PatientOwnerIndexIsNotUniqueButPatientNumberStillIs()
+    {
+        using var db = CreateDb(); var indexes = db.Model.FindEntityType(typeof(Patient))!.GetIndexes();
+        Assert.False(indexes.Single(i => i.Properties.Single().Name == nameof(Patient.UserId)).IsUnique);
+        Assert.True(indexes.Single(i => i.Properties.Single().Name == nameof(Patient.PatientNumber)).IsUnique);
+    }
+    [Fact] public void UserPhoneRemainsUnique()
+    {
+        using var db = CreateDb();
+        Assert.True(db.Model.FindEntityType(typeof(User))!.GetIndexes().Single(i => i.Properties.Single().Name == nameof(User.Phone)).IsUnique);
+    }
+}

@@ -45,7 +45,7 @@ public sealed class PatientsControllerTests
             new CreatePatientRequestValidator(new VietnamClock(TimeProvider.System)),
             new PatientDuplicateCheckRequestValidator(new VietnamClock(TimeProvider.System)),
             new PatientQueryRequestValidator(),
-            new UpdatePatientRequestValidator(new VietnamClock(TimeProvider.System)));
+            new UpdatePatientRequestValidator(new VietnamClock(TimeProvider.System))) { ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() } };
 
         var result = await controller.GetMyProfiles(CancellationToken.None);
 
@@ -67,7 +67,7 @@ public sealed class PatientsControllerTests
             new CreatePatientRequestValidator(new VietnamClock(TimeProvider.System)),
             new PatientDuplicateCheckRequestValidator(new VietnamClock(TimeProvider.System)),
             new PatientQueryRequestValidator(),
-            new UpdatePatientRequestValidator(new VietnamClock(TimeProvider.System)));
+            new UpdatePatientRequestValidator(new VietnamClock(TimeProvider.System))) { ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() } };
 
         var result = await controller.GetMyProfiles(CancellationToken.None);
 
@@ -120,7 +120,7 @@ public sealed class PatientsControllerTests
             new CreatePatientRequestValidator(new VietnamClock(TimeProvider.System)),
             new PatientDuplicateCheckRequestValidator(new VietnamClock(TimeProvider.System)),
             new PatientQueryRequestValidator(),
-            new UpdatePatientRequestValidator(new VietnamClock(TimeProvider.System)));
+            new UpdatePatientRequestValidator(new VietnamClock(TimeProvider.System))) { ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() } };
 
         var result = await controller.GetPatients(new PatientQueryRequest(), CancellationToken.None);
 

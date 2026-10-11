@@ -6,26 +6,26 @@
     </header>
 
     <form class="booking-card" @submit.prevent="submit">
-      <label for="patient">Hồ sơ bệnh nhân</label>
-      <select id="patient" v-model.number="patientId" required :disabled="loadingProfiles || profiles.length === 0">
+      <label for="patient">Hồ sơ bệnh nhân trong tài khoản gia đình</label>
+      <select id="patient" v-model.number="patientId" required :disabled="submitting || loadingProfiles || profiles.length === 0">
         <option :value="0" disabled>Chọn hồ sơ</option>
         <option v-for="profile in profiles" :key="profile.patientId" :value="profile.patientId">
-          {{ profile.fullName }} · {{ profile.patientCode }}
+          {{ profile.fullName }} · {{ formatDate(profile.dateOfBirth) }} · {{ profile.patientCode }}
         </option>
       </select>
       <p v-if="!loadingProfiles && profiles.length === 0" class="hint">Tài khoản chưa có hồ sơ bệnh nhân hoạt động để đặt lịch.</p>
 
       <label for="date">Ngày khám</label>
-      <input id="date" v-model="appointmentDate" type="date" :min="today" required />
+      <input id="date" v-model="appointmentDate" type="date" :min="today" :disabled="submitting" required />
 
       <label for="slot">Khung giờ</label>
-      <select id="slot" v-model="slotTime" required>
+      <select id="slot" v-model="slotTime" :disabled="submitting" required>
         <option value="" disabled>Chọn khung giờ</option>
         <option v-for="slot in slots" :key="slot" :value="slot">{{ slot }}</option>
       </select>
 
       <label for="notes">Lý do khám (không bắt buộc)</label>
-      <textarea id="notes" v-model.trim="notes" rows="3" maxlength="500" placeholder="Ví dụ: khám tổng quát" />
+      <textarea id="notes" v-model.trim="notes" :disabled="submitting" rows="3" maxlength="500" placeholder="Ví dụ: khám tổng quát" />
 
       <p v-if="errorMessage" class="message error" role="alert">{{ errorMessage }}</p>
       <p v-if="success" class="message success" role="status">
@@ -40,7 +40,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import axios from 'axios';
 import { appointmentsService, type AppointmentResponse } from '@/services/appointments';
 import { patientsService, type PatientSummary } from '@/services/patients';
@@ -54,6 +54,7 @@ const loadingProfiles = ref(true);
 const submitting = ref(false);
 const errorMessage = ref('');
 const success = ref<AppointmentResponse | null>(null);
+let version = 0;
 
 const today = computed(() => {
   const date = new Date();
@@ -67,42 +68,51 @@ const slots = [
 ];
 
 onMounted(async () => {
+  const ticket = version;
   try {
-    profiles.value = await patientsService.getMyProfiles();
+    const result = await patientsService.getMyProfiles();
+    if (ticket === version) profiles.value = result;
   } catch {
-    errorMessage.value = 'Không thể tải hồ sơ của bạn. Hãy đăng nhập lại hoặc thử sau.';
+    if (ticket === version) errorMessage.value = 'Không thể tải hồ sơ của bạn. Hãy đăng nhập lại hoặc thử sau.';
   } finally {
-    loadingProfiles.value = false;
+    if (ticket === version) loadingProfiles.value = false;
   }
 });
 
 async function submit() {
+  if (submitting.value || loadingProfiles.value) return;
   errorMessage.value = '';
   success.value = null;
 
-  if (!patientId.value || !appointmentDate.value || !slotTime.value) {
+  if (!Number.isInteger(patientId.value) || !profiles.value.some(profile => profile.patientId === patientId.value) ||
+      !appointmentDate.value || !slots.includes(slotTime.value) || notes.value.length > 500) {
     errorMessage.value = 'Vui lòng chọn hồ sơ, ngày và khung giờ khám.';
     return;
   }
 
   submitting.value = true;
+  const ticket = version;
   try {
-    success.value = await appointmentsService.create({
+    const result = await appointmentsService.create({
       patientId: patientId.value,
       appointmentDate: appointmentDate.value,
       slotTime: `${slotTime.value}:00`,
       notes: notes.value || null
     });
+    if (ticket !== version) return;
+    success.value = result;
     notes.value = '';
   } catch (error) {
+    if (ticket !== version) return;
     const response = axios.isAxiosError(error) ? error.response?.data : null;
     errorMessage.value = response?.message
       ?? response?.errors?.[0]?.message
       ?? 'Không thể đặt lịch. Khung giờ có thể đã đầy hoặc thông tin không hợp lệ.';
   } finally {
-    submitting.value = false;
+    if (ticket === version) submitting.value = false;
   }
 }
+onUnmounted(() => { version++; profiles.value = []; patientId.value = 0; notes.value = ''; success.value = null; });
 
 function makeSlots(startHour: number, startMinute: number, endHour: number, endMinute: number): string[] {
   const result: string[] = [];
