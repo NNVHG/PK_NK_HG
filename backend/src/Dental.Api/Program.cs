@@ -59,6 +59,9 @@ builder.Services.AddScoped<Dental.Application.Features.MOD_FDI.Validators.Delete
 builder.Services.AddScoped<Dental.Application.Features.MOD_FDI.Services.ToothConditionService>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_FDI.Validators.ToothConditionRequestValidator>();
 builder.Services.AddScoped<IToothConditionRepository, ToothConditionRepository>();
+builder.Services.AddScoped<IToothHistoryRepository, ToothHistoryRepository>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_FDI.Services.ToothHistoryService>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_FDI.Validators.ToothHistoryRequestValidator>();
 
 // ===== 1. Database =====
 builder.Services.AddDbContext<DentalDbContext>(opts =>
