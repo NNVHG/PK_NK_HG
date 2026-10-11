@@ -82,7 +82,13 @@ async function receive() {
     if (ticket === version) { confirmed.value = false; emit('paid', payment); }
   } catch (cause) {
     if (axios.isAxiosError(cause) && [400, 403, 404].includes(cause.response?.status ?? 0)) store.clear(requestKey);
-    if (ticket === version) error.value = axios.isAxiosError(cause) ? cause.response?.data?.message || 'Chưa xác định kết quả lần thu. Kiểm tra hoặc thử lại cùng yêu cầu.' : 'Chưa xác định kết quả lần thu.';
+    if (ticket === version) {
+      const conflict = axios.isAxiosError(cause) && cause.response?.data?.code === 'BIL_006';
+      if (conflict) confirmed.value = false;
+      error.value = conflict
+        ? 'Có thao tác thu tiền đồng thời. Đối chiếu hóa đơn và xác nhận lại để kiểm tra / thử lại cùng yêu cầu; không nhận thêm tiền khách.'
+        : axios.isAxiosError(cause) ? cause.response?.data?.message || 'Chưa xác định kết quả lần thu. Kiểm tra hoặc thử lại cùng yêu cầu.' : 'Chưa xác định kết quả lần thu.';
+    }
   } finally { if (ticket === version) busy.value = false; }
 }
 onUnmounted(() => { version++; });

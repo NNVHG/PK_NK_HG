@@ -287,3 +287,9 @@ Nguồn codex/phase1-vietqr-offline tại c329aa9, được người dùng chọ
 - Diff không có secret cấu hình local hoặc file build/thừa; không thêm package, không đổi schema/nghiệp vụ trong lượt kiểm chứng.
 
 Giới hạn: chưa có giao dịch ngân hàng live hoặc cấu hình ngân hàng production; mô phỏng không chứng minh tiền đã vào ngân hàng. Nhánh ảnh trực tuyến bị mất mạng được kiểm tra ở helper 9 case, chưa chặn mạng ảnh qua browser. Không nghiệm thu mọi thao tác ghi UI hoặc toàn bộ tính năng còn thiếu (thuốc, giảm giá, in/hoàn tiền, TTL, Phase2). F_BIL_03 vẫn PARTIAL. CSDL làm việc của người dùng không được thay đổi bởi lượt kiểm chứng; API/start-dev có cơ chế migration khi khởi động theo code hiện có. Báo cáo và ảnh/JSON local trong docs/testing/, giữ ignore.
+
+## Xung đột thu tiền mặt (F_BIL_03)
+
+Thu tiền mặt nhận diện PostgreSQL 40001/40P01/23505 trong chuỗi ngoại lệ, rollback và trả409/BIL_006. Lỗi khác không đổi thành lỗi đồng thời. Thu ngân đối chiếu hóa đơn, xác nhận lại, dùng nút kiểm tra/thử lại cùng yêu cầu; không nhận thêm tiền khách. UI giữ mã yêu cầu và số tiền, không tự retry.
+
+Kiểm chứng bằng backend unit, CashPayment.Postgres với --isolated-config, frontend Node tests và build theo lệnh hiện có. Fault injection trong transaction PostgreSQL riêng chứng minh rollback tiền thu/công nợ/audit và retry một receipt. Chưa UAT browser; chưa gộp bản sửa vào integrate.
