@@ -6,8 +6,8 @@
       </div>
       <nav class="nav-links">
         <router-link to="/">Bảng điều khiển</router-link>
+        <router-link v-if="authStore.role === 'PATIENT'" to="/appointments">Đặt lịch khám</router-link>
         <template v-if="isStaff">
-          <router-link to="/appointments">Lịch hẹn</router-link>
           <router-link to="/patients">Bệnh nhân</router-link>
         </template>
         <router-link v-if="isAdmin" to="/admin/staff">Tài khoản nhân viên</router-link>

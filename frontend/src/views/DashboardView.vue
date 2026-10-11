@@ -19,10 +19,6 @@
     </div>
 
     <div v-if="isStaff" class="modules-grid">
-      <div class="card" @click="goTo('/appointments')">
-        <h3>Lịch Hẹn (MOD_APP)</h3>
-        <p>Xem và sắp xếp lịch hẹn khám răng, đặt hẹn theo ghế và bác sĩ.</p>
-      </div>
       <div class="card" @click="goTo('/patients')">
         <h3>Bệnh Nhân (MOD_PAT)</h3>
         <p>Hồ sơ hành chính bệnh nhân, tiền sử bệnh lý toàn thân và liên hệ.</p>
