@@ -67,6 +67,7 @@ public sealed class AppointmentsController : ControllerBase
     }
 
     [HttpGet]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
     [Authorize(Policy = AppPolicies.AppointmentView)]
     [ProducesResponseType(typeof(PagedResult<AppointmentResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -76,17 +77,20 @@ public sealed class AppointmentsController : ControllerBase
         if (!validation.IsValid)
             return ToValidationProblem(validation);
 
-        var result = await _appointmentService.GetAppointmentsAsync(request, ct);
-        return Ok(result.Value);
+        if (_currentUser.UserId is not int userId) return Unauthorized();
+        var result = await _appointmentService.GetAccessibleAppointmentsAsync(request, userId, _currentUser.RoleCode, ct);
+        return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
     }
 
     [HttpGet("{id:int}")]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
     [Authorize(Policy = AppPolicies.AppointmentView)]
     [ProducesResponseType(typeof(AppointmentResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetAppointmentById(int id, CancellationToken ct)
     {
-        var result = await _appointmentService.GetAppointmentByIdAsync(id, ct);
+        if (_currentUser.UserId is not int userId) return Unauthorized();
+        var result = await _appointmentService.GetAccessibleAppointmentByIdAsync(id, userId, _currentUser.RoleCode, ct);
         return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
     }
 

@@ -29,6 +29,9 @@ export interface AppointmentPage {
 }
 
 export const appointmentsService = {
+  async getMine(page = 1, patientId?: number, status?: string): Promise<AppointmentPage> {
+    return (await apiClient.get<AppointmentPage>('/appointments', { params: { page, pageSize: 20, patientId, status } })).data;
+  },
   async getForDesk(date: string, page = 1, status?: string): Promise<AppointmentPage> {
     return (await apiClient.get<AppointmentPage>('/appointments/desk', { params: { date, page, pageSize: 20, status } })).data;
   },

@@ -40,7 +40,8 @@ public sealed class AppointmentRepository : IAppointmentRepository
         string? status,
         int page,
         int pageSize,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        int? ownerUserId = null)
     {
         var query = _db.Appointments
             .AsNoTracking()
@@ -48,6 +49,9 @@ public sealed class AppointmentRepository : IAppointmentRepository
             .Include(a => a.Dentist)
             .Include(a => a.CreatedByUser)
             .AsQueryable();
+
+        if (ownerUserId.HasValue)
+            query = query.Where(a => a.Patient.UserId == ownerUserId.Value);
 
         if (date.HasValue)
             query = query.Where(a => a.AppointmentDate == date.Value);

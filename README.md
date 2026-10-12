@@ -389,3 +389,11 @@ Lễ tân/Admin mở Lịch hẹn tại quầy tại /appointments/desk, chọn 
 Lý do được nối vào ghi chú hiện có, tổng tối đa500ký tự; form hiển thị số ký tự còn lại, không cắt ghi chú cũ. Thành công hủy và tải lại danh sách; nếu kết quả mạng chưa rõ, tải lại lịch để đối chiếu trước khi thử tiếp.
 
 GET /api/appointments/desk chỉ Admin/Receptionist và no-store. Backend hủy Patient kiểm ownership và mốc120phút DL-082; sát giờ liên hệ lễ tân, lễ tân/Admin vẫn hỗ trợ được. Lượt này chưa có UI đổi lịch hoặc tra cứu/hủy Patient; chờ Gia UAT trước khi đánh dấu toàn luồng hoàn thành.
+
+## Lịch hẹn của gia đình (F_APP_03)
+
+Patient mở Lịch hẹn gia đình tại /appointments/mine. Mặc định hiển thị mọi lịch của các hồ sơ liên kết với tài khoản,20dòng/trang và thời gian tăng dần; có thể chọn hồ sơ hoạt động bằng họ tên/ngày sinh/mã và lọc trạng thái. Tải lại, Trang trước/Trang sau chỉ thực hiện thao tác đọc.
+
+API GET /api/appointments và GET /api/appointments/{id} kiểm ownership bằng JWT UserId; lọc trước đếm/phân trang và no-store, hồ sơ/lịch của tài khoản khác trả404. Không lấy owner từ tham số do client gửi. Lỗi bộ chọn hồ sơ không làm mất quyền lọc trên backend.
+
+Lượt này chỉ tra cứu, chưa có UI tự hủy hoặc tự đổi lịch; liên hệ lễ tân nếu cần hỗ trợ. Chờ Gia nghiệm thu UI có đăng nhập.

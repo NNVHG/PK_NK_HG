@@ -14,5 +14,6 @@ public interface IAppointmentRepository
         string? status,
         int page,
         int pageSize,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        int? ownerUserId = null);
 }
