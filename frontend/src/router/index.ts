@@ -29,6 +29,12 @@ const router = createRouter({
       meta: { guestOnly: true }
     },
     {
+      path: '/appointments/desk',
+      name: 'appointment-desk',
+      component: () => import('@/views/AppointmentDeskView.vue'),
+      meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST'] }
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),

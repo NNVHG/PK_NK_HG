@@ -145,24 +145,40 @@ public sealed class AppointmentService
     public async Task<Result<AppointmentResponse>> CancelAppointmentAsync(
         int appointmentId,
         int actorUserId,
+        string? actorRoleCode,
         CancelAppointmentRequest request,
         string? ipAddress,
         CancellationToken ct = default)
     {
+        if (actorRoleCode is not (RoleCodes.Admin or RoleCodes.Receptionist or RoleCodes.Patient))
+            return Result<AppointmentResponse>.Failure(Error.Forbidden);
         var appointment = await _appointmentRepository.GetByIdAsync(appointmentId, ct);
         if (appointment is null)
             return Result<AppointmentResponse>.Failure(Error.AppointmentNotFound);
 
+        if (actorRoleCode == RoleCodes.Patient)
+        {
+            var patient = await _patientRepository.GetByIdAsync(appointment.PatientId, ct);
+            if (patient?.UserId != actorUserId)
+                return Result<AppointmentResponse>.Failure(Error.AppointmentNotFound);
+            if ((appointment.AppointmentDate.ToDateTime(appointment.SlotTime) - _vietnamClock.Now).TotalMinutes < 120)
+                return Result<AppointmentResponse>.Failure(Error.AppointmentCannotCancel.Code, "Lịch hẹn còn dưới 2 giờ. Vui lòng liên hệ Lễ tân phòng khám để được hỗ trợ.");
+        }
+
         if (appointment.Status != AppointmentStatuses.Scheduled)
             return Result<AppointmentResponse>.Failure(Error.AppointmentCannotCancel);
 
-        appointment.Status = AppointmentStatuses.Cancelled;
+        var notes = appointment.Notes;
         if (!string.IsNullOrWhiteSpace(request.Reason))
         {
-            appointment.Notes = string.IsNullOrEmpty(appointment.Notes)
+            notes = string.IsNullOrEmpty(appointment.Notes)
                 ? $"[Lý do hủy: {request.Reason.Trim()}]"
                 : $"{appointment.Notes} [Lý do hủy: {request.Reason.Trim()}]";
         }
+        if (notes?.Length > 500)
+            return Result<AppointmentResponse>.Failure(Error.Validation.Code, "Ghi chú và lý do hủy vượt 500 ký tự. Vui lòng rút ngắn lý do hủy.");
+        appointment.Status = AppointmentStatuses.Cancelled;
+        appointment.Notes = notes;
         appointment.UpdatedAt = DateTime.UtcNow;
 
         await _unitOfWork.SaveChangesAsync(ct);

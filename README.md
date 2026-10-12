@@ -381,3 +381,11 @@ Migration `20261011133134_AllowFamilyPatientProfiles` chuyển index `Patients.U
 - Backup: `backup/main-20261011-2054`. Lịch sử merge được giữ; không xóa/sửa migration cũ hoặc thêm package. Chưa push trong lượt tích hợp này.
 
 Các chức năng PARTIAL vẫn chờ nghiệm thu tương ứng: ngân hàng live, máy in K80, UI gia đình và nhiều mặt răng. Bộ chạy ban đầu tạo dữ liệu tổng hợp trong CSDL Development Windows trước khi được sửa để dùng đúng Docker; dữ liệu đó được giữ nguyên, sự cố được ghi trong báo cáo local `docs/testing/MAIN_INTEGRATION_20261011_REPORT.md` và HISTORY_LOG, không che kết quả lỗi trước đó.
+
+## Tra cứu và hủy lịch tại quầy (F_APP_03)
+
+Lễ tân/Admin mở Lịch hẹn tại quầy tại /appointments/desk, chọn ngày/trạng thái, tìm lịch và bấm Hủy lịch này. Đối chiếu tên/mã hồ sơ/ngày/giờ với khách, nhập lý do tùy chọn rồi xác nhận; Quay lại giữ nguyên lịch. Danh sách20dòng/trang; chỉ Scheduled được hủy.
+
+Lý do được nối vào ghi chú hiện có, tổng tối đa500ký tự; form hiển thị số ký tự còn lại, không cắt ghi chú cũ. Thành công hủy và tải lại danh sách; nếu kết quả mạng chưa rõ, tải lại lịch để đối chiếu trước khi thử tiếp.
+
+GET /api/appointments/desk chỉ Admin/Receptionist và no-store. Backend hủy Patient kiểm ownership và mốc120phút DL-082; sát giờ liên hệ lễ tân, lễ tân/Admin vẫn hỗ trợ được. Lượt này chưa có UI đổi lịch hoặc tra cứu/hủy Patient; chờ Gia UAT trước khi đánh dấu toàn luồng hoàn thành.

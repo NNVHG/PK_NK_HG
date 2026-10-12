@@ -90,6 +90,17 @@ public sealed class AppointmentsController : ControllerBase
         return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
     }
 
+    [HttpGet("desk")]
+    [Authorize(Policy = AppPolicies.AppointmentManage)]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
+    public async Task<IActionResult> GetDeskAppointments([FromQuery] AppointmentQueryRequest request, CancellationToken ct)
+    {
+        var validation = await _queryValidator.ValidateAsync(request, ct);
+        if (!validation.IsValid) return ToValidationProblem(validation);
+        var result = await _appointmentService.GetAppointmentsAsync(request, ct);
+        return Ok(result.Value);
+    }
+
     [HttpPut("{id:int}/cancel")]
     [Authorize(Policy = AppPolicies.AppointmentView)]
     [ProducesResponseType(typeof(AppointmentResponse), StatusCodes.Status200OK)]
@@ -107,6 +118,7 @@ public sealed class AppointmentsController : ControllerBase
         var result = await _appointmentService.CancelAppointmentAsync(
             id,
             actorUserId,
+            _currentUser.RoleCode,
             request,
             HttpContext.Connection.RemoteIpAddress?.ToString(),
             ct);
@@ -151,6 +163,7 @@ public sealed class AppointmentsController : ControllerBase
     {
         var statusCode = error.Code switch
         {
+            "GEN_002" => StatusCodes.Status403Forbidden,
             "GEN_001" or "APP_001" => StatusCodes.Status404NotFound,
             "APP_002" or "APP_005" => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status400BadRequest,
