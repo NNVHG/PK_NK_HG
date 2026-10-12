@@ -13,6 +13,7 @@ function deferred() { let resolve; const promise = new Promise(done => { resolve
 function fixture({ pages = [result], profileResult = profiles } = {}) {
   let mount, cleanup; const calls = [];
   const imports = {
+    '@/components/PatientAppointmentCancellation.vue': {},
     vue: { defineComponent: c => c, ref: value => ({ value }), onMounted: cb => { mount = cb; }, onUnmounted: cb => { cleanup = cb; } },
     '@/services/appointments': { appointmentsService: { getMine: async (...args) => { calls.push(args); const response = pages.shift() ?? result; if (response instanceof Error) throw response; return response; } } },
     '@/services/patients': { patientsService: { getMyProfiles: async () => { if (profileResult instanceof Error) throw profileResult; return profileResult; } } },

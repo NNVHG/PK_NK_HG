@@ -65,6 +65,7 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddScoped<Dental.Application.Features.Appointments.Validators.AppointmentQueryRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Appointments.Validators.RescheduleAppointmentRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Appointments.Validators.CancelAppointmentRequestValidator>();
+        builder.Services.AddScoped<Dental.Application.Features.Appointments.Validators.SelfCancellationEligibilityRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Patients.Services.PatientsService>();
         builder.Services.AddScoped<Dental.Application.Features.Patients.Validators.CreatePatientRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Patients.Validators.PatientDuplicateCheckRequestValidator>();
@@ -148,6 +149,7 @@ internal static class CashPaymentHttpSmoke
             await FamilyBookingHttpSmoke.RunAsync(client, options, cashierId, patientId, Authenticate, check);
             await AppointmentCancelHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await PatientAppointmentReadHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
+            await PatientSelfCancellationHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await BankTransferHttpSmoke.RunAsync(client, options, cashierId, patientId, webhookKey, Authenticate, check);
         }
         finally { await app.StopAsync(); }

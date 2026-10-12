@@ -16,6 +16,8 @@
     <ul><li v-for="row in rows" :key="row.appointmentId">
       <strong>#{{ row.appointmentId }} · {{ row.patientName }} · {{ row.patientCode }}</strong>
       <p>{{ row.appointmentDate }} · {{ row.slotTime.slice(0, 5) }} · {{ statusLabel(row.status) }}</p>
+      <PatientAppointmentCancellation v-if="row.status === 'Scheduled'" :appointment-id="row.appointmentId" :patient-name="row.patientName"
+        :date="row.appointmentDate" :time="row.slotTime" @cancelled="load(page)" />
     </li></ul>
     <nav aria-label="Phân trang lịch hẹn"><span>{{ total }} lịch · Trang {{ page }}</span>
       <button :disabled="loading || page <= 1" @click="load(page - 1)">Trang trước</button>
@@ -26,6 +28,7 @@
 </template>
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue';
+import PatientAppointmentCancellation from '@/components/PatientAppointmentCancellation.vue';
 import { appointmentsService, type AppointmentResponse } from '@/services/appointments';
 import { patientsService, type PatientSummary } from '@/services/patients';
 const profiles = ref<PatientSummary[]>([]), patientId = ref(0), status = ref(''), profileError = ref('');
