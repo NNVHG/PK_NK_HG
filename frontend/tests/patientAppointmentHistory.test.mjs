@@ -14,6 +14,7 @@ function fixture({ pages = [result], profileResult = profiles } = {}) {
   let mount, cleanup; const calls = [];
   const imports = {
     '@/components/PatientAppointmentCancellation.vue': {},
+    '@/components/AppointmentRescheduling.vue': {},
     vue: { defineComponent: c => c, ref: value => ({ value }), onMounted: cb => { mount = cb; }, onUnmounted: cb => { cleanup = cb; } },
     '@/services/appointments': { appointmentsService: { getMine: async (...args) => { calls.push(args); const response = pages.shift() ?? result; if (response instanceof Error) throw response; return response; } } },
     '@/services/patients': { patientsService: { getMyProfiles: async () => { if (profileResult instanceof Error) throw profileResult; return profileResult; } } },
@@ -24,6 +25,11 @@ function fixture({ pages = [result], profileResult = profiles } = {}) {
 }
 test('mount loads family profiles and all owned appointments', async () => {
   const f = fixture(); await f.mount(); assert.deepEqual(f.c.profiles.value, profiles); assert.deepEqual(f.calls, [[1, undefined, undefined]]); assert.deepEqual(f.c.rows.value, result.items);
+});
+
+test('successful self-reschedule refreshes current family page and shows confirmation', async () => {
+  const f = fixture(); await f.mount(); f.c.patientId.value = 2; f.c.page.value = 2; await f.c.rescheduled();
+  assert.deepEqual(f.calls[1], [2, 2, undefined]); assert.ok(f.c.notice.value); f.cleanup(); assert.equal(f.c.notice.value, '');
 });
 test('selecting member and status sends only requested filters', async () => {
   const f = fixture(); await f.mount(); f.c.patientId.value = 2; f.c.status.value = 'Cancelled'; await f.c.load(1); assert.deepEqual(f.calls[1], [1, 2, 'Cancelled']);

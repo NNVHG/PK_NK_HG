@@ -6,6 +6,7 @@
       <option v-for="profile in profiles" :key="profile.patientId" :value="profile.patientId">{{ profile.fullName }} · {{ profile.dateOfBirth }} · {{ profile.patientCode }}</option>
     </select>
     <p v-if="profileError" role="alert">{{ profileError }}</p>
+    <p v-if="notice" role="status">{{ notice }}</p>
     <label for="status">Trạng thái</label><select id="status" v-model="status" @change="load(1)">
       <option value="">Tất cả</option><option value="Scheduled">Đã đặt lịch</option><option value="CheckedIn">Đã tiếp đón</option>
       <option value="Cancelled">Đã hủy</option><option value="Completed">Hoàn tất</option>
@@ -16,6 +17,8 @@
     <ul><li v-for="row in rows" :key="row.appointmentId">
       <strong>#{{ row.appointmentId }} · {{ row.patientName }} · {{ row.patientCode }}</strong>
       <p>{{ row.appointmentDate }} · {{ row.slotTime.slice(0, 5) }} · {{ statusLabel(row.status) }}</p>
+      <AppointmentRescheduling v-if="row.status === 'Scheduled'" :appointment-id="row.appointmentId" :patient-name="row.patientName" self-service
+        @rescheduled="rescheduled" />
       <PatientAppointmentCancellation v-if="row.status === 'Scheduled'" :appointment-id="row.appointmentId" :patient-name="row.patientName"
         :date="row.appointmentDate" :time="row.slotTime" @cancelled="load(page)" />
     </li></ul>
@@ -29,9 +32,11 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue';
 import PatientAppointmentCancellation from '@/components/PatientAppointmentCancellation.vue';
+import AppointmentRescheduling from '@/components/AppointmentRescheduling.vue';
 import { appointmentsService, type AppointmentResponse } from '@/services/appointments';
 import { patientsService, type PatientSummary } from '@/services/patients';
 const profiles = ref<PatientSummary[]>([]), patientId = ref(0), status = ref(''), profileError = ref('');
+const notice = ref('');
 const rows = ref<AppointmentResponse[]>([]), page = ref(1), total = ref(0), hasNext = ref(false), loading = ref(false), error = ref('');
 let version = 0, profileVersion = 0;
 async function loadProfiles() {
@@ -52,8 +57,9 @@ async function load(targetPage = 1) {
 }
 function statusLabel(value: string) { return ({ Scheduled: 'Đã đặt lịch', CheckedIn: 'Đã tiếp đón', Cancelled: 'Đã hủy', Completed: 'Hoàn tất' } as Record<string, string>)[value] ?? value; }
 async function refresh() { await Promise.all([loadProfiles(), load(1)]); }
+async function rescheduled() { notice.value = 'Đã đổi lịch. Kiểm tra ngày, giờ mới trong danh sách.'; await load(page.value); }
 onMounted(refresh);
-onUnmounted(() => { version++; profileVersion++; rows.value = []; profiles.value = []; patientId.value = 0; total.value = 0; });
+onUnmounted(() => { version++; profileVersion++; rows.value = []; profiles.value = []; patientId.value = 0; total.value = 0; notice.value = ''; });
 </script>
 <style scoped>
 .page { max-width: 850px; margin: auto; padding: 1.5rem; } button, select { font: inherit; padding: .5rem; margin: .5rem; }

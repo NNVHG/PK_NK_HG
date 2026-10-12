@@ -249,22 +249,32 @@ public sealed class AppointmentService
         string? ipAddress,
         CancellationToken ct = default)
     {
-        if (actorRoleCode is not (RoleCodes.Admin or RoleCodes.Receptionist))
+        if (actorRoleCode is not (RoleCodes.Admin or RoleCodes.Receptionist or RoleCodes.Patient))
             return Result<AppointmentResponse>.Failure(Error.Forbidden);
         try
         {
             return await _unitOfWork.ExecuteSerializableTransactionAsync(
-                transactionCt => RescheduleCoreAsync(appointmentId, actorUserId, request, ipAddress, transactionCt), ct);
+                transactionCt => RescheduleCoreAsync(appointmentId, actorUserId, actorRoleCode, request, ipAddress, transactionCt), ct);
         }
         catch (ConcurrentOperationException) { return Result<AppointmentResponse>.Failure(Error.AppointmentConcurrent); }
     }
 
     private async Task<Result<AppointmentResponse>> RescheduleCoreAsync(
-        int appointmentId, int actorUserId, RescheduleAppointmentRequest request, string? ipAddress, CancellationToken ct)
+        int appointmentId, int actorUserId, string actorRoleCode, RescheduleAppointmentRequest request, string? ipAddress, CancellationToken ct)
     {
         var appointment = await _appointmentRepository.GetByIdAsync(appointmentId, ct);
         if (appointment is null)
             return Result<AppointmentResponse>.Failure(Error.AppointmentNotFound);
+
+        if (actorRoleCode == RoleCodes.Patient)
+        {
+            var patient = await _patientRepository.GetByIdAsync(appointment.PatientId, ct);
+            if (patient?.UserId != actorUserId)
+                return Result<AppointmentResponse>.Failure(Error.AppointmentNotFound);
+            // Portal only moves the time; it cannot reassign a dentist or edit staff notes.
+            if ((request.DentistId.HasValue && request.DentistId != appointment.DentistId) || request.Notes is not null)
+                return Result<AppointmentResponse>.Failure(Error.Forbidden);
+        }
 
         if (appointment.Status != AppointmentStatuses.Scheduled)
             return Result<AppointmentResponse>.Failure(Error.AppointmentCannotReschedule);
@@ -276,6 +286,9 @@ public sealed class AppointmentService
         var dentistId = request.DentistId ?? appointment.DentistId;
         if (appointment.AppointmentDate == request.AppointmentDate && appointment.SlotTime == request.SlotTime && appointment.DentistId == dentistId)
             return Result<AppointmentResponse>.Success(ToResponse(appointment));
+
+        if (actorRoleCode == RoleCodes.Patient && SelfReschedulingMessage(appointment) is string message)
+            return Result<AppointmentResponse>.Failure(Error.AppointmentCannotReschedule.Code, message);
 
         var today = _vietnamClock.Today;
         if (request.AppointmentDate < today)
@@ -345,6 +358,26 @@ public sealed class AppointmentService
 
         return Result<AppointmentResponse>.Success(ToResponse(appointment));
     }
+
+    public async Task<Result<SelfReschedulingEligibilityResponse>> GetSelfReschedulingEligibilityAsync(
+        int id, int actorUserId, CancellationToken ct = default)
+    {
+        var appointment = await _appointmentRepository.GetByIdAsync(id, ct);
+        if (appointment is null)
+            return Result<SelfReschedulingEligibilityResponse>.Failure(Error.AppointmentNotFound);
+        var patient = await _patientRepository.GetByIdAsync(appointment.PatientId, ct);
+        if (patient?.UserId != actorUserId)
+            return Result<SelfReschedulingEligibilityResponse>.Failure(Error.AppointmentNotFound);
+        var message = SelfReschedulingMessage(appointment);
+        return Result<SelfReschedulingEligibilityResponse>.Success(new(
+            ToResponse(appointment), message is null, message, Math.Max(0, 2 - appointment.RescheduleCount)));
+    }
+
+    private string? SelfReschedulingMessage(Appointment appointment)
+        => appointment.Status != AppointmentStatuses.Scheduled ? "Lịch hẹn không còn ở trạng thái chờ khám. Vui lòng liên hệ Lễ tân phòng khám."
+            : appointment.RescheduleCount >= 2 ? "Lịch hẹn đã đổi 2 lần. Vui lòng liên hệ Lễ tân phòng khám để được hỗ trợ."
+            : (appointment.AppointmentDate.ToDateTime(appointment.SlotTime) - _vietnamClock.Now).TotalMinutes < 120
+                ? "Lịch hẹn còn dưới 2 giờ. Vui lòng liên hệ Lễ tân phòng khám để được hỗ trợ." : null;
 
     private static AppointmentResponse ToResponse(Appointment a)
         => new(
