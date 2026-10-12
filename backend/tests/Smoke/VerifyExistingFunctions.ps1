@@ -149,7 +149,7 @@ try {
     $tomorrow=[TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([DateTime]::UtcNow,'SE Asia Standard Time').AddDays(1).ToString('yyyy-MM-dd')
     $appointment=Api 'Bệnh nhân đặt lịch thuộc hồ sơ' POST '/api/appointments' OWNER @{patientId=$ownerId;appointmentDate=$tomorrow;slotTime='09:00:00';dentistId=$users.DENTIST} 201
     $appointmentId=$appointment.appointmentId
-    $null=Api 'Đổi lịch tại quầy' PUT "/api/appointments/$appointmentId/reschedule" RECEPTIONIST @{appointmentDate=$tomorrow;slotTime='09:30:00';dentistId=$users.DENTIST}
+    $null=Api 'Đổi lịch tại quầy' PUT "/api/appointments/$appointmentId/reschedule" RECEPTIONIST @{appointmentDate=$tomorrow;slotTime='09:30:00';dentistId=$users.DENTIST;reason='Kiểm chứng đổi lịch'}
     $null=Api 'Hủy lịch tại quầy' PUT "/api/appointments/$appointmentId/cancel" RECEPTIONIST @{reason='Kiểm chứng hủy lịch'}
     $null=Api 'Chặn đặt lịch hồ sơ người khác' POST '/api/appointments' OWNER @{patientId=$patientId;appointmentDate=$tomorrow;slotTime='10:00:00'} 404
     $null=Api 'Ngừng dịch vụ' POST "/api/services/$serviceId/deactivate" ADMIN $null

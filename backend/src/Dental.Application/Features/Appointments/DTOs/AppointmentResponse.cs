@@ -13,5 +13,7 @@ public sealed record AppointmentResponse(
     string Status,
     string? Notes,
     int CreatedByUserId,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    int RescheduleCount = 0,
+    string? RescheduleReason = null
 );

@@ -15,6 +15,8 @@ public sealed class Appointment : BaseEntity
     public int? DentistId { get; set; }
     public string Status { get; set; } = AppointmentStatuses.Scheduled;
     public string? Notes { get; set; }
+    public int RescheduleCount { get; set; }
+    public string? RescheduleReason { get; set; }
     public int CreatedByUserId { get; set; }
 
     public Patient Patient { get; set; } = null!;

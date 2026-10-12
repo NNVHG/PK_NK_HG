@@ -12,6 +12,7 @@
       <strong>#{{ row.appointmentId }} · {{ row.patientName }} · {{ row.patientCode }}</strong>
       <p>{{ row.appointmentDate }} · {{ row.slotTime.slice(0, 5) }} · {{ row.status }}</p>
       <button v-if="row.status === 'Scheduled'" :disabled="busy || loading" @click="select(row)">Hủy lịch này</button>
+      <AppointmentRescheduling v-if="row.status === 'Scheduled' && !selected" :appointment-id="row.appointmentId" :patient-name="row.patientName" @rescheduled="onRescheduled" />
     </li></ul>
     <form v-if="selected" @submit.prevent="cancel">
       <h2>Xác nhận hủy #{{ selected.appointmentId }} · {{ selected.patientName }}</h2>
@@ -30,6 +31,7 @@
 </template>
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
+import AppointmentRescheduling from '@/components/AppointmentRescheduling.vue';
 import axios from 'axios';
 import { appointmentsService, type AppointmentResponse } from '@/services/appointments';
 const date = ref(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()));
@@ -67,6 +69,11 @@ async function cancel() {
   } catch (cause) {
     if (ticket === version) { confirmed.value = false; error.value = axios.isAxiosError(cause) ? cause.response?.data?.message ?? 'Chưa xác định kết quả. Tải lại lịch để đối chiếu trước khi thử tiếp.' : 'Chưa xác định kết quả. Tải lại lịch để đối chiếu trước khi thử tiếp.'; }
   } finally { if (ticket === version) busy.value = false; }
+}
+async function onRescheduled() {
+  const expected = version + 1;
+  await load(page.value);
+  if (version === expected) success.value = 'Đã đổi lịch. Tra cứu ngày mới để xem lịch cập nhật.';
 }
 onMounted(() => load()); onUnmounted(() => { version++; close(); rows.value = []; });
 </script>

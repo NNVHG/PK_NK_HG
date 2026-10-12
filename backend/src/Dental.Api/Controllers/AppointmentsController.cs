@@ -163,6 +163,7 @@ public sealed class AppointmentsController : ControllerBase
         var result = await _appointmentService.RescheduleAppointmentAsync(
             id,
             actorUserId,
+            _currentUser.RoleCode,
             request,
             HttpContext.Connection.RemoteIpAddress?.ToString(),
             ct);
@@ -184,7 +185,7 @@ public sealed class AppointmentsController : ControllerBase
         {
             "GEN_002" => StatusCodes.Status403Forbidden,
             "GEN_001" or "APP_001" => StatusCodes.Status404NotFound,
-            "APP_002" or "APP_005" => StatusCodes.Status409Conflict,
+            "APP_002" or "APP_005" or "APP_009" => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status400BadRequest,
         };
 
