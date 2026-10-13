@@ -34,6 +34,14 @@ public class RbacPolicyTests
         Assert.True(method.GetCustomAttribute<ResponseCacheAttribute>()!.NoStore);
     }
 
+    [Fact]
+    public void BookingDentistsUsesStaffManagePolicyAndNoStore()
+    {
+        var method = typeof(AppointmentsController).GetMethod(nameof(AppointmentsController.GetBookingDentists))!;
+        Assert.Equal(ApiPolicies.AppointmentManage, method.GetCustomAttribute<AuthorizeAttribute>()!.Policy);
+        Assert.True(method.GetCustomAttribute<ResponseCacheAttribute>()!.NoStore);
+    }
+
     public RbacPolicyTests()
     {
         var services = new ServiceCollection();

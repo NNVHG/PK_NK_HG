@@ -5,6 +5,12 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
+      path: '/appointments/counter',
+      name: 'counter-booking',
+      component: () => import('@/views/CounterBookingView.vue'),
+      meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST'] }
+    },
+    {
       path: '/clinical/visits/:visitId/invoice-draft',
       name: 'invoice-draft',
       component: () => import('@/views/InvoiceDraftView.vue'),
@@ -27,12 +33,6 @@ const router = createRouter({
       name: 'register',
       component: () => import('@/views/RegisterView.vue'),
       meta: { guestOnly: true }
-    },
-    {
-      path: '/appointments/counter',
-      name: 'counter-booking',
-      component: () => import('@/views/CounterBookingView.vue'),
-      meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST'] }
     },
     {
       path: '/queue/today',

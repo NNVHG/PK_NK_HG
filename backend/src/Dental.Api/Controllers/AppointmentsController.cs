@@ -108,6 +108,15 @@ public sealed class AppointmentsController : ControllerBase
         return Ok(result.Value);
     }
 
+    [HttpGet("booking-dentists")]
+    [Authorize(Policy = AppPolicies.AppointmentManage)]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
+    public async Task<IActionResult> GetBookingDentists(CancellationToken ct)
+    {
+        var result = await _appointmentService.GetBookingDentistsAsync(_currentUser.RoleCode, ct);
+        return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
+    }
+
     [HttpGet("{id:int}/cancellation-eligibility")]
     [Authorize(Roles = Dental.Domain.Constants.RoleCodes.Patient)]
     [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]

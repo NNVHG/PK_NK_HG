@@ -12,6 +12,12 @@ public sealed class UserRepository : IUserRepository
 
     public UserRepository(DentalDbContext db) => _db = db;
 
+    public async Task<IReadOnlyList<User>> GetActiveDentistsAsync(CancellationToken ct = default)
+        => await _db.Users.AsNoTracking()
+            .Where(u => u.IsActive && u.Role.RoleCode == RoleCodes.Dentist)
+            .OrderBy(u => u.FullName).ThenBy(u => u.UserId)
+            .ToListAsync(ct);
+
     public async Task<User?> FindByPhoneAsync(string phone, CancellationToken ct = default)
         => await _db.Users
             .Include(u => u.Role)
