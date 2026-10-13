@@ -21,6 +21,7 @@ public static class Policies
     public const string AppointmentCreate = "AppointmentCreate";
     public const string AppointmentView = "AppointmentView";
     public const string AppointmentManage = "AppointmentManage";
+    public const string AppointmentReschedule = "AppointmentReschedule";
     public const string QueueCheckIn = "QueueCheckIn";
     public const string QueueView = "QueueView";
     public const string QueueStatusUpdate = "QueueStatusUpdate";
@@ -33,6 +34,7 @@ public static class Policies
 
     public static void AddApplicationPolicies(this AuthorizationOptions opts)
     {
+        opts.AddPolicy(AppointmentReschedule, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Receptionist, RoleCodes.Patient));
         opts.AddPolicy(CashPaymentWrite, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Receptionist));
         opts.AddPolicy(FdiConditionWrite, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist));
         opts.AddPolicy(FdiServiceAssign, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist));

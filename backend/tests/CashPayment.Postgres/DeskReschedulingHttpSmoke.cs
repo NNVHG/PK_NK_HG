@@ -45,8 +45,10 @@ internal static class DeskReschedulingHttpSmoke
         var request = new RescheduleAppointmentRequest(newDay, new(9, 0), Reason: "Synthetic shift");
         client.DefaultRequestHeaders.Authorization = null;
         using (var response = await client.PutAsJsonAsync($"/api/appointments/{moved.AppointmentId}/reschedule", request)) check(response.StatusCode == HttpStatusCode.Unauthorized, "Desk reschedule anonymous 401");
-        foreach (var roleCode in new[] { RoleCodes.Patient, RoleCodes.Dentist, RoleCodes.Assistant })
+        foreach (var roleCode in new[] { RoleCodes.Dentist, RoleCodes.Assistant })
         { authenticate(roleCode); using var response = await client.PutAsJsonAsync($"/api/appointments/{moved.AppointmentId}/reschedule", request); check(response.StatusCode == HttpStatusCode.Forbidden, $"Desk reschedule {roleCode} 403"); }
+        authenticate(RoleCodes.Patient);
+        using (var response = await client.PutAsJsonAsync($"/api/appointments/{moved.AppointmentId}/reschedule", request)) check(response.StatusCode == HttpStatusCode.NotFound, "Patient reschedule foreign desk appointment 404");
         authenticate(RoleCodes.Receptionist);
         using (var response = await client.PutAsJsonAsync($"/api/appointments/{moved.AppointmentId}/reschedule", request))
         {

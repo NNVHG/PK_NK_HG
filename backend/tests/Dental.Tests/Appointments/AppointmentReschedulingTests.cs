@@ -39,7 +39,7 @@ public sealed class AppointmentReschedulingTests
         var detail = (string)audit.ReceivedCalls().Single().GetArguments()[4]!;
         Assert.Contains("oldDate", detail); Assert.Contains("newTime", detail); Assert.DoesNotContain("Synthetic shift", detail);
     }
-    [Theory] [InlineData(RoleCodes.Patient)] [InlineData(RoleCodes.Dentist)] [InlineData(RoleCodes.Assistant)]
+    [Theory] [InlineData(RoleCodes.Dentist)] [InlineData(RoleCodes.Assistant)]
     public async Task UnsupportedRoleNeverStartsTransaction(string role)
     { Assert.Equal(Error.Forbidden, (await Move(role: role)).Error); Assert.Empty(uow.ReceivedCalls()); }
     [Fact] public async Task MissingAppointmentReturns404() => Assert.Equal(Error.AppointmentNotFound, (await Move()).Error);

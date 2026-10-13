@@ -39,7 +39,17 @@ export interface SelfCancellationEligibility {
   reasonMaxLength: number;
 }
 
+export interface SelfReschedulingEligibility {
+  appointment: AppointmentResponse;
+  canReschedule: boolean;
+  message: string | null;
+  remainingChanges: number;
+}
+
 export const appointmentsService = {
+  async selfReschedulingEligibility(id: number): Promise<SelfReschedulingEligibility> {
+    return (await apiClient.get<SelfReschedulingEligibility>(`/appointments/${id}/rescheduling-eligibility`)).data;
+  },
   async getById(id: number): Promise<AppointmentResponse> {
     return (await apiClient.get<AppointmentResponse>(`/appointments/${id}`)).data;
   },

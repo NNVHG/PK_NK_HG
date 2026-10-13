@@ -17,6 +17,23 @@ public class RbacPolicyTests
 {
     private readonly IAuthorizationService _authService;
 
+    [Theory]
+    [InlineData(RoleCodes.Admin, true)] [InlineData(RoleCodes.Receptionist, true)] [InlineData(RoleCodes.Patient, true)]
+    [InlineData(RoleCodes.Dentist, false)] [InlineData(RoleCodes.Assistant, false)]
+    public async Task AppointmentReschedulePolicyAllowsOnlyExpectedRoles(string role, bool allowed)
+    {
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(ClaimTypes.Role, role) }, "Test"));
+        Assert.Equal(allowed, (await _authService.AuthorizeAsync(user, null, ApiPolicies.AppointmentReschedule)).Succeeded);
+    }
+
+    [Fact]
+    public void ReschedulingEligibilityIsPatientOnlyAndNoStore()
+    {
+        var method = typeof(AppointmentsController).GetMethod(nameof(AppointmentsController.GetSelfReschedulingEligibility))!;
+        Assert.Equal(RoleCodes.Patient, method.GetCustomAttribute<AuthorizeAttribute>()!.Roles);
+        Assert.True(method.GetCustomAttribute<ResponseCacheAttribute>()!.NoStore);
+    }
+
     public RbacPolicyTests()
     {
         var services = new ServiceCollection();
@@ -421,7 +438,7 @@ public class RbacPolicyTests
             .GetCustomAttributes<AuthorizeAttribute>()).Policy);
         Assert.Equal(ApiPolicies.AppointmentView, Assert.Single(methods[nameof(AppointmentsController.CancelAppointment)]
             .GetCustomAttributes<AuthorizeAttribute>()).Policy);
-        Assert.Equal(ApiPolicies.AppointmentManage, Assert.Single(methods[nameof(AppointmentsController.RescheduleAppointment)]
+        Assert.Equal(ApiPolicies.AppointmentReschedule, Assert.Single(methods[nameof(AppointmentsController.RescheduleAppointment)]
             .GetCustomAttributes<AuthorizeAttribute>()).Policy);
     }
 

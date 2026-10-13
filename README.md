@@ -412,7 +412,7 @@ Tại /appointments/mine, Patient chọn Tự hủy lịch ở dòng Scheduled. 
 
 Sau thành công danh sách tải lại. Nếu kết quả mạng chưa rõ, đối chiếu lại lịch trước khi thử tiếp; UI không tự gửi lại thao tác hủy. Lý do giới hạn theo phần ghi chú còn lại, không cắt nội dung cũ.
 
-GET cancellation-eligibility chỉ Patient/ownership/no-store; PUT cancel vẫn kiểm lại điều kiện lúc ghi, nên lần đọc hợp lệ trước đó không vượt được ngưỡng thời gian. Chưa có tự đổi lịch. Chờ Gia nghiệm thu dialog bằng browser có đăng nhập.
+GET cancellation-eligibility chỉ Patient/ownership/no-store; PUT cancel vẫn kiểm lại điều kiện lúc ghi, nên lần đọc hợp lệ trước đó không vượt được ngưỡng thời gian. Tự đổi lịch được mô tả bên dưới. Chờ Gia nghiệm thu dialog bằng browser có đăng nhập.
 
 ## Đổi lịch tại quầy (F_APP_03)
 
@@ -422,4 +422,14 @@ Lễ tân/Admin mở /appointments/desk, chọn Đổi lịch trên dòng Schedu
 
 Migration20261012175813_AddAppointmentRescheduleMetadata thêm Count default0/Reason nullable và đã áp dụng local. Không chạy Down nếu cần giữ hai trường lịch sử này. Đổi lịch dùng Serializable, kiểm trùng nha sĩ/bệnh nhân/slot và trả409 khi có thao tác đồng thời; UI không tự retry.
 
-Giới hạn: chưa Patient tự đổi, chưa cột AppointmentCode riêng, chưa sửa kiểm trùng nha sĩ ở luồng tạo lịch mới; test race chỉ giữa reschedule. Chờ Gia nghiệm thu UI có đăng nhập.
+Giới hạn: chưa cột AppointmentCode riêng, chưa sửa kiểm trùng nha sĩ ở luồng tạo lịch mới; test race chỉ giữa reschedule. Chờ Gia nghiệm thu UI có đăng nhập.
+
+## Bệnh nhân tự đổi lịch (F_APP_03)
+
+Patient đăng nhập, mở /appointments/mine và chọn Đổi lịch trên lịch Scheduled của hồ sơ gia đình. Dialog tải trạng thái mới nhất, số lần còn lại và điều kiện từ server; chỉ cho đổi khi còn ít nhất 120 phút trước giờ hẹn hiện tại và RescheduleCount < 2 theo câu trả lời Q-238. Bộ đếm tính tổng lần đổi trên cùng lịch, kể cả lần đổi tại quầy. Khi hết lượt hoặc sát giờ, liên hệ Lễ tân để được hỗ trợ.
+
+Chọn ngày/slot mới, nhập lý do bắt buộc tối đa 500 ký tự, tích xác nhận rồi gửi. Giữ ID, hồ sơ, nha sĩ đang gán và Notes của nhân viên. Thành công tải lại danh sách; Quay lại/ESC trước gửi giữ lịch cũ. Khi lỗi, giữ bản nháp, đọc lại điều kiện và yêu cầu xác nhận lại; không tự gửi lại mutation.
+
+GET /api/appointments/{id}/rescheduling-eligibility chỉ Patient, ownership theo JWT và no-store; trả appointment, canReschedule, message, remainingChanges. PUT reschedule mở thêm Patient theo policy AppointmentReschedule và kiểm lại ownership/120 phút/count trong transaction Serializable; lịch ngoài tài khoản trả 404, sửa nha sĩ hoặc Notes bị 403. Admin/Receptionist vẫn hỗ trợ khi Patient hết lượt. Same-target replay chỉ đọc trạng thái, không tăng count, có thể trả 200 sau mốc/giới hạn; UI không mở thao tác mới khi eligibility=false.
+
+Lượt này không thay schema, dùng migration metadata có sẵn. Kiểm chứng: 681 backend unit, 118 frontend Node, 291 PostgreSQL/HTTP đạt; build backend/frontend OK. Chưa browser UAT. F_APP_03 tổng thể vẫn PARTIAL/chờ Gia nghiệm thu; Phase 2 chưa được mở.

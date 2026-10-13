@@ -146,13 +146,15 @@ public sealed class AppointmentsController : ControllerBase
     }
 
     [HttpPut("{id:int}/reschedule")]
-    [Authorize(Policy = AppPolicies.AppointmentManage)]
+    [Authorize(Policy = AppPolicies.AppointmentReschedule)]
     [ProducesResponseType(typeof(AppointmentResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> RescheduleAppointment(int id, [FromBody] RescheduleAppointmentRequest request, CancellationToken ct)
     {
+        var idValidation = await _eligibilityValidator.ValidateAsync(id, ct);
+        if (!idValidation.IsValid) return ToValidationProblem(idValidation);
         var validation = await _rescheduleValidator.ValidateAsync(request, ct);
         if (!validation.IsValid)
             return ToValidationProblem(validation);
@@ -168,6 +170,18 @@ public sealed class AppointmentsController : ControllerBase
             HttpContext.Connection.RemoteIpAddress?.ToString(),
             ct);
 
+        return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
+    }
+
+    [HttpGet("{id:int}/rescheduling-eligibility")]
+    [Authorize(Roles = Dental.Domain.Constants.RoleCodes.Patient)]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
+    public async Task<IActionResult> GetSelfReschedulingEligibility(int id, CancellationToken ct)
+    {
+        var validation = await _eligibilityValidator.ValidateAsync(id, ct);
+        if (!validation.IsValid) return ToValidationProblem(validation);
+        if (_currentUser.UserId is not int userId) return Unauthorized();
+        var result = await _appointmentService.GetSelfReschedulingEligibilityAsync(id, userId, ct);
         return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
     }
 
