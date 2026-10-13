@@ -10,6 +10,46 @@ using Xunit;
 namespace Dental.Tests.Appointments;
 public sealed class AppointmentCancellationTests
 {
+    [Theory] [InlineData(119, false)] [InlineData(120, true)] [InlineData(121, true)]
+    public async Task EligibilityUsesSameDeadlineAndDoesNotSave(int minutes, bool allowed)
+    {
+        Row(minutes); var result = await Service().GetSelfCancellationEligibilityAsync(9, 7);
+        Assert.True(result.IsSuccess); Assert.Equal(allowed, result.Value!.CanCancel); Assert.Empty(uow.ReceivedCalls()); Assert.Empty(audit.ReceivedCalls());
+    }
+    [Fact] public async Task EligibilityCannotExposeOtherAccount()
+    {
+        Row(); var result = await Service().GetSelfCancellationEligibilityAsync(9, 8);
+        Assert.Equal(Error.AppointmentNotFound, result.Error);
+    }
+    [Theory] [InlineData(AppointmentStatuses.CheckedIn)] [InlineData(AppointmentStatuses.Cancelled)] [InlineData(AppointmentStatuses.Completed)]
+    public async Task EligibilityRejectsNonScheduled(string status)
+    {
+        Row(status: status); Assert.False((await Service().GetSelfCancellationEligibilityAsync(9, 7)).Value!.CanCancel);
+    }
+    [Theory] [InlineData(0)] [InlineData(400)] [InlineData(500)]
+    public async Task EligibilityReportsRemainingNoteBudget(int length)
+    {
+        Row(notes: length == 0 ? null : new string('x', length));
+        var result = await Service().GetSelfCancellationEligibilityAsync(9, 7);
+        Assert.Equal(Math.Max(0, 500 - length - (length > 0 ? 1 : 0) - "[Lý do hủy: ]".Length), result.Value!.ReasonMaxLength);
+    }
+    [Fact] public async Task DeadlineIsRecheckedOnWriteAfterEligibleRead()
+    {
+        var row = Row(); Assert.True((await Service().GetSelfCancellationEligibilityAsync(9, 7)).Value!.CanCancel);
+        var later = new AppointmentService(appointments, patients, Substitute.For<IUserRepository>(), uow, audit,
+            new VietnamClock(new FixedTimeProvider(new DateTimeOffset(2026, 10, 12, 5, 1, 0, TimeSpan.Zero))));
+        Assert.True((await later.CancelAppointmentAsync(9, 7, RoleCodes.Patient, new(), null)).IsFailure);
+        Assert.Equal(AppointmentStatuses.Scheduled, row.Status); Assert.Empty(uow.ReceivedCalls());
+    }
+    [Theory] [InlineData(0, false)] [InlineData(-1, false)] [InlineData(9, true)]
+    public void EligibilityIdValidator(int id, bool valid)
+        => Assert.Equal(valid, new Dental.Application.Features.Appointments.Validators.SelfCancellationEligibilityRequestValidator().Validate(id).IsValid);
+    [Fact] public void EligibilityEndpointOnlyAllowsPatientAndDisablesCache()
+    {
+        var method = typeof(Dental.Api.Controllers.AppointmentsController).GetMethod("GetSelfCancellationEligibility")!;
+        Assert.Equal(RoleCodes.Patient, Assert.Single(method.GetCustomAttributes(typeof(Microsoft.AspNetCore.Authorization.AuthorizeAttribute), true).Cast<Microsoft.AspNetCore.Authorization.AuthorizeAttribute>()).Roles);
+        Assert.True(Assert.Single(method.GetCustomAttributes(typeof(Microsoft.AspNetCore.Mvc.ResponseCacheAttribute), true).Cast<Microsoft.AspNetCore.Mvc.ResponseCacheAttribute>()).NoStore);
+    }
     [Theory]
     [InlineData(0, 20, null, null)] [InlineData(1000001, 20, null, null)]
     [InlineData(1, 101, null, null)] [InlineData(1, 20, "Unknown", null)] [InlineData(1, 20, null, 0)]

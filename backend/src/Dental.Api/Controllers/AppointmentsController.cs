@@ -21,6 +21,7 @@ public sealed class AppointmentsController : ControllerBase
     private readonly AppointmentQueryRequestValidator _queryValidator;
     private readonly RescheduleAppointmentRequestValidator _rescheduleValidator;
     private readonly CancelAppointmentRequestValidator _cancelValidator;
+    private readonly SelfCancellationEligibilityRequestValidator _eligibilityValidator;
 
     public AppointmentsController(
         AppointmentService appointmentService,
@@ -28,7 +29,8 @@ public sealed class AppointmentsController : ControllerBase
         CreateAppointmentRequestValidator createValidator,
         AppointmentQueryRequestValidator queryValidator,
         RescheduleAppointmentRequestValidator rescheduleValidator,
-        CancelAppointmentRequestValidator cancelValidator)
+        CancelAppointmentRequestValidator cancelValidator,
+        SelfCancellationEligibilityRequestValidator eligibilityValidator)
     {
         _appointmentService = appointmentService;
         _currentUser = currentUser;
@@ -36,6 +38,7 @@ public sealed class AppointmentsController : ControllerBase
         _queryValidator = queryValidator;
         _rescheduleValidator = rescheduleValidator;
         _cancelValidator = cancelValidator;
+        _eligibilityValidator = eligibilityValidator;
     }
 
     [HttpPost]
@@ -103,6 +106,18 @@ public sealed class AppointmentsController : ControllerBase
         if (!validation.IsValid) return ToValidationProblem(validation);
         var result = await _appointmentService.GetAppointmentsAsync(request, ct);
         return Ok(result.Value);
+    }
+
+    [HttpGet("{id:int}/cancellation-eligibility")]
+    [Authorize(Roles = Dental.Domain.Constants.RoleCodes.Patient)]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
+    public async Task<IActionResult> GetSelfCancellationEligibility(int id, CancellationToken ct)
+    {
+        var validation = await _eligibilityValidator.ValidateAsync(id, ct);
+        if (!validation.IsValid) return ToValidationProblem(validation);
+        if (_currentUser.UserId is not int userId) return Unauthorized();
+        var result = await _appointmentService.GetSelfCancellationEligibilityAsync(id, userId, ct);
+        return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
     }
 
     [HttpPut("{id:int}/cancel")]

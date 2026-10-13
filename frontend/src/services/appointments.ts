@@ -28,7 +28,17 @@ export interface AppointmentPage {
   hasPreviousPage: boolean;
 }
 
+export interface SelfCancellationEligibility {
+  appointmentId: number;
+  canCancel: boolean;
+  message: string | null;
+  reasonMaxLength: number;
+}
+
 export const appointmentsService = {
+  async selfCancellationEligibility(id: number): Promise<SelfCancellationEligibility> {
+    return (await apiClient.get<SelfCancellationEligibility>(`/appointments/${id}/cancellation-eligibility`)).data;
+  },
   async getMine(page = 1, patientId?: number, status?: string): Promise<AppointmentPage> {
     return (await apiClient.get<AppointmentPage>('/appointments', { params: { page, pageSize: 20, patientId, status } })).data;
   },

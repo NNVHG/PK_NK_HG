@@ -405,3 +405,11 @@ Patient mở Lịch hẹn gia đình tại /appointments/mine. Mặc định hi�
 API GET /api/appointments và GET /api/appointments/{id} kiểm ownership bằng JWT UserId; lọc trước đếm/phân trang và no-store, hồ sơ/lịch của tài khoản khác trả404. Không lấy owner từ tham số do client gửi. Lỗi bộ chọn hồ sơ không làm mất quyền lọc trên backend.
 
 Lượt này chỉ tra cứu, chưa có UI tự hủy hoặc tự đổi lịch; liên hệ lễ tân nếu cần hỗ trợ. Chờ Gia nghiệm thu UI có đăng nhập.
+
+## Patient tự hủy lịch (F_APP_03, DL-082)
+
+Tại /appointments/mine, Patient chọn Tự hủy lịch ở dòng Scheduled. Hệ thống kiểm điều kiện từ server; nếu còn ít nhất120phút, đối chiếu hồ sơ/ngày/giờ, nhập lý do tùy chọn và tích xác nhận rồi hủy. Quay lại hoặc ESC trước khi gửi giữ nguyên lịch. Sát giờ hoặc đã tiếp đón không tự hủy được, liên hệ lễ tân để hỗ trợ.
+
+Sau thành công danh sách tải lại. Nếu kết quả mạng chưa rõ, đối chiếu lại lịch trước khi thử tiếp; UI không tự gửi lại thao tác hủy. Lý do giới hạn theo phần ghi chú còn lại, không cắt nội dung cũ.
+
+GET cancellation-eligibility chỉ Patient/ownership/no-store; PUT cancel vẫn kiểm lại điều kiện lúc ghi, nên lần đọc hợp lệ trước đó không vượt được ngưỡng thời gian. Chưa có tự đổi lịch. Chờ Gia nghiệm thu dialog bằng browser có đăng nhập.

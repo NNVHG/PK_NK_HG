@@ -129,6 +129,7 @@ builder.Services.AddScoped<CreateAppointmentRequestValidator>();
 builder.Services.AddScoped<AppointmentQueryRequestValidator>();
 builder.Services.AddScoped<RescheduleAppointmentRequestValidator>();
 builder.Services.AddScoped<CancelAppointmentRequestValidator>();
+builder.Services.AddScoped<SelfCancellationEligibilityRequestValidator>();
 builder.Services.AddScoped<CheckInRequestValidator>();
 builder.Services.AddScoped<QueueQueryRequestValidator>();
 builder.Services.AddScoped<UpdateQueueStatusRequestValidator>();

@@ -175,6 +175,20 @@ public sealed class AppointmentService
         return Result<AppointmentResponse>.Success(ToResponse(appointment));
     }
 
+    public async Task<Result<SelfCancellationEligibilityResponse>> GetSelfCancellationEligibilityAsync(
+        int id, int actorUserId, CancellationToken ct = default)
+    {
+        var result = await GetAccessibleAppointmentByIdAsync(id, actorUserId, RoleCodes.Patient, ct);
+        if (result.IsFailure) return Result<SelfCancellationEligibilityResponse>.Failure(result.Error);
+        var appointment = result.Value!;
+        var scheduled = appointment.Status == AppointmentStatuses.Scheduled;
+        var enoughTime = (appointment.AppointmentDate.ToDateTime(appointment.SlotTime) - _vietnamClock.Now).TotalMinutes >= 120;
+        var message = !scheduled ? "Lịch hẹn không còn ở trạng thái chờ khám."
+            : !enoughTime ? "Lịch hẹn còn dưới 2 giờ. Vui lòng liên hệ Lễ tân phòng khám để được hỗ trợ." : null;
+        var reasonLimit = Math.Max(0, 500 - (appointment.Notes?.Length ?? 0) - (string.IsNullOrEmpty(appointment.Notes) ? 0 : 1) - "[Lý do hủy: ]".Length);
+        return Result<SelfCancellationEligibilityResponse>.Success(new(id, scheduled && enoughTime, message, reasonLimit));
+    }
+
     public async Task<Result<AppointmentResponse>> CancelAppointmentAsync(
         int appointmentId,
         int actorUserId,
