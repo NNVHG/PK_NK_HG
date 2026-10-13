@@ -22,6 +22,7 @@ public class RbacPolicyTests
     {
         Assert.Equal(ApiPolicies.AppointmentManage, typeof(AppointmentRemindersController).GetCustomAttribute<AuthorizeAttribute>()!.Policy);
         Assert.True(typeof(AppointmentRemindersController).GetMethod(nameof(AppointmentRemindersController.GetLogs))!.GetCustomAttribute<ResponseCacheAttribute>()!.NoStore);
+        Assert.True(typeof(AppointmentRemindersController).GetMethod(nameof(AppointmentRemindersController.GetWorkerStatus))!.GetCustomAttribute<ResponseCacheAttribute>()!.NoStore);
     }
 
     [Theory]

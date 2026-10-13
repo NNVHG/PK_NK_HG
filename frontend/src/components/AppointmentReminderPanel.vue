@@ -2,7 +2,13 @@
   <button :disabled="busy" @click="openPanel">Nhật ký nhắc lịch</button>
   <section v-if="opened" aria-labelledby="reminder-title">
     <h2 id="reminder-title">Nhật ký nhắc lịch</h2>
-    <p>Nhắc hẹn được mô phỏng và lưu nội bộ; không gửi SMS thực tế. Quét lịch trong khoảng 23,5–24,5 giờ tới theo giờ Việt Nam.</p>
+    <p>Nhắc hẹn được mô phỏng và lưu nội bộ; không gửi SMS thực tế. Hệ thống tự quét mỗi 30 phút khi API đang chạy, trong khoảng 23,5–24,5 giờ tới theo giờ Việt Nam.</p>
+    <p v-if="worker">Nhắc tự động: {{ workerState(worker.state) }}.
+      <template v-if="worker.lastCompletedAtUtc">Lần quét gần nhất: {{ sentTime(worker.lastCompletedAtUtc) }}.</template>
+      <template v-if="worker.createdCount !== null"> Tạo {{ worker.createdCount }} tin; {{ worker.alreadyRemindedCount }} lịch đã được nhắc.</template>
+    </p>
+    <p v-if="workerError" role="alert">{{ workerError }}</p>
+    <button :disabled="busy || statusLoading" @click="loadWorkerStatus">{{ statusLoading ? 'Đang tải trạng thái…' : 'Tải trạng thái nhắc tự động' }}</button>
     <form @submit.prevent="simulate">
       <label><input v-model="confirmed" type="checkbox" :disabled="busy || loading" /> Tôi xác nhận mô phỏng gửi nhắc lịch</label>
       <button :disabled="busy || loading || !confirmed">{{ busy ? 'Đang mô phỏng…' : 'Mô phỏng gửi nhắc lịch' }}</button>
@@ -30,12 +36,20 @@
 <script setup lang="ts">
 import { onUnmounted, ref } from 'vue';
 import axios from 'axios';
-import { appointmentRemindersService, type ReminderLog, type ReminderScan } from '@/services/appointmentReminders';
+import { appointmentRemindersService, type ReminderLog, type ReminderScan, type ReminderWorkerStatus } from '@/services/appointmentReminders';
 const opened = ref(false), busy = ref(false), loading = ref(false), confirmed = ref(false);
 const rows = ref<ReminderLog[]>([]), scan = ref<ReminderScan | null>(null), appointmentId = ref<string | number>('');
 const readError = ref(''), writeError = ref(''), page = ref(1), total = ref(0), hasNext = ref(false);
-let life = 0, readVersion = 0;
-async function openPanel() { if (opened.value || busy.value) return; opened.value = true; await load(1); }
+const worker = ref<ReminderWorkerStatus | null>(null), workerError = ref(''), statusLoading = ref(false);
+let life = 0, readVersion = 0, statusVersion = 0;
+async function openPanel() { if (opened.value || busy.value) return; opened.value = true; await Promise.all([load(1), loadWorkerStatus()]); }
+async function loadWorkerStatus() {
+  if (!opened.value || busy.value) return;
+  const ticket = ++statusVersion; statusLoading.value = true; workerError.value = ''; worker.value = null;
+  try { const result = await appointmentRemindersService.getWorkerStatus(); if (ticket === statusVersion) worker.value = result; }
+  catch { if (ticket === statusVersion) workerError.value = 'Không thể tải trạng thái nhắc tự động. Bạn vẫn có thể kiểm tra nhật ký hoặc mô phỏng thủ công.'; }
+  finally { if (ticket === statusVersion) statusLoading.value = false; }
+}
 async function load(target = 1) {
   if (!opened.value || busy.value) return;
   const id = String(appointmentId.value).trim() ? Number(appointmentId.value) : undefined;
@@ -59,9 +73,10 @@ async function simulate() {
     if (ticket === life) { busy.value = false; confirmed.value = false; await load(1); }
   }
 }
-function reset() { life++; readVersion++; opened.value = false; loading.value = false; confirmed.value = false; rows.value = []; scan.value = null; appointmentId.value = ''; total.value = 0; hasNext.value = false; readError.value = ''; writeError.value = ''; page.value = 1; }
+function reset() { life++; readVersion++; statusVersion++; opened.value = false; loading.value = false; statusLoading.value = false; worker.value = null; workerError.value = ''; confirmed.value = false; rows.value = []; scan.value = null; appointmentId.value = ''; total.value = 0; hasNext.value = false; readError.value = ''; writeError.value = ''; page.value = 1; }
 function closePanel() { if (!busy.value) reset(); }
 function localTime(value: string) { return value.replace('T', ' ').slice(0, 16); }
+function workerState(value: string) { return ({ NotStarted: 'Chưa chạy từ lúc mở máy chủ', Running: 'Đang quét', Success: 'Đã quét thành công', Conflict: 'Có cập nhật đồng thời; kiểm tra nhật ký', Failed: 'Quét thất bại; kiểm tra lại ở lần kế tiếp', Stopped: 'Đã dừng' } as Record<string, string>)[value] ?? 'Chưa xác định'; }
 function sentTime(value: string) { return new Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)); }
 onUnmounted(reset);
 </script>

@@ -8,8 +8,15 @@ export interface ReminderLog {
 export interface ReminderScan {
   eligibleCount: number; createdCount: number; alreadyRemindedCount: number; windowStart: string; windowEnd: string;
 }
+export interface ReminderWorkerStatus {
+  state: string; intervalMinutes: number; lastStartedAtUtc: string | null; lastCompletedAtUtc: string | null;
+  createdCount: number | null; alreadyRemindedCount: number | null;
+}
 export interface ReminderPage extends Omit<AppointmentPage, 'items'> { items: ReminderLog[]; }
 export const appointmentRemindersService = {
+  async getWorkerStatus(): Promise<ReminderWorkerStatus> {
+    return (await apiClient.get<ReminderWorkerStatus>('/appointments/reminder-worker-status')).data;
+  },
   async getLogs(page: number, appointmentId?: number): Promise<ReminderPage> {
     return (await apiClient.get<ReminderPage>('/appointments/reminder-logs', { params: { page, pageSize: 20, appointmentId } })).data;
   },

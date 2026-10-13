@@ -13,8 +13,12 @@ namespace Dental.Api.Controllers;
 [Route("api/appointments")]
 [Authorize(Policy = AppPolicies.AppointmentManage)]
 public sealed class AppointmentRemindersController(AppointmentReminderService service, ICurrentUser user,
-    SimulateAppointmentRemindersValidator simulateValidator, ReminderLogQueryValidator queryValidator) : ControllerBase
+    SimulateAppointmentRemindersValidator simulateValidator, ReminderLogQueryValidator queryValidator,
+    IAppointmentReminderWorkerStatus workerStatus) : ControllerBase
 {
+    [HttpGet("reminder-worker-status")]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
+    public IActionResult GetWorkerStatus() => Ok(workerStatus.GetStatus());
     [HttpPost("simulate-reminder")]
     public async Task<IActionResult> Simulate([FromBody] SimulateAppointmentRemindersRequest request, CancellationToken ct)
     {

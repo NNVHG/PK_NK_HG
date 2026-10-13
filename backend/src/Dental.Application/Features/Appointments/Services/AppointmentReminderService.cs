@@ -14,6 +14,14 @@ public sealed class AppointmentReminderService(IAppointmentReminderRepository re
     {
         if (role is not (RoleCodes.Admin or RoleCodes.Receptionist)) return Result<SimulateAppointmentRemindersResponse>.Failure(Error.Forbidden);
         if (!confirmed) return Result<SimulateAppointmentRemindersResponse>.Failure(Error.Validation);
+        return await ScanAsync(actorId, "Manual", ip, ct);
+    }
+
+    public Task<Result<SimulateAppointmentRemindersResponse>> ScanAutomaticallyAsync(CancellationToken ct = default)
+        => ScanAsync(null, "Automatic", null, ct);
+
+    private async Task<Result<SimulateAppointmentRemindersResponse>> ScanAsync(int? actorId, string source, string? ip, CancellationToken ct)
+    {
         try
         {
             return await uow.ExecuteSerializableTransactionAsync(async transactionCt =>
@@ -40,7 +48,7 @@ public sealed class AppointmentReminderService(IAppointmentReminderRepository re
                 {
                     await uow.SaveChangesAsync(transactionCt);
                     await audit.LogAsync("MOD_APP_REMINDERS_SIMULATED", "NotificationLog", userId: actorId,
-                        detail: JsonSerializer.Serialize(new { count = logs.Count, notificationIds = logs.Select(l => l.Id) }), ipAddress: ip, ct: transactionCt);
+                        detail: JsonSerializer.Serialize(new { source, count = logs.Count, notificationIds = logs.Select(l => l.Id) }), ipAddress: ip, ct: transactionCt);
                 }
                 return Result<SimulateAppointmentRemindersResponse>.Success(new(eligible, logs.Count, eligible - logs.Count, start, end));
             }, ct);

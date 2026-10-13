@@ -10,18 +10,20 @@ const compiled = ts.transpileModule(compileScript(descriptor, { id: 'reminder-te
 const page = { items: [{ id: 1, appointmentId: 7, messageContent: 'Synthetic message' }], page: 1, totalCount: 21, hasNextPage: true };
 const scan = { eligibleCount: 2, createdCount: 1, alreadyRemindedCount: 1, windowStart: '2026-10-14T08:30:00', windowEnd: '2026-10-14T09:30:00' };
 function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
-function fixture({ reads = [page], result = scan, failure = false } = {}) {
-  let cleanup; const gets = [], writes = [];
+const workerStatus = { state: 'Success', intervalMinutes: 30, lastStartedAtUtc: '2026-10-13T02:00:00Z', lastCompletedAtUtc: '2026-10-13T02:00:01Z', createdCount: 1, alreadyRemindedCount: 2 };
+function fixture({ reads = [page], result = scan, failure = false, statusReads = [workerStatus] } = {}) {
+  let cleanup; const gets = [], writes = [], statusGets = [];
   const imports = {
     vue: { defineComponent: c => c, ref: value => ({ value }), onUnmounted: cb => { cleanup = cb; } },
     axios: { isAxiosError: e => Boolean(e?.response) },
     '@/services/appointmentReminders': { appointmentRemindersService: {
+      getWorkerStatus: async () => { statusGets.push(true); const next = statusReads.shift() ?? workerStatus; if (next instanceof Error) throw next; return next; },
       getLogs: async (...args) => { gets.push(args); const next = reads.shift() ?? page; if (next instanceof Error) throw next; return next; },
       simulate: async () => { writes.push(true); if (failure) throw { response: { data: { message: 'Synthetic conflict' } } }; return result; },
     } },
   };
   const module = { exports: {} }; new Function('require', 'module', 'exports', compiled)(name => imports[name], module, module.exports);
-  const c = module.exports.default.setup({}, { expose() {} }); return { c, gets, writes, cleanup: () => cleanup() };
+  const c = module.exports.default.setup({}, { expose() {} }); return { c, gets, writes, statusGets, cleanup: () => cleanup() };
 }
 test('opening loads logs on demand without sending a reminder', async () => {
   const f = fixture(); assert.equal(f.gets.length, 0); await f.c.openPanel(); assert.deepEqual(f.c.rows.value, page.items); assert.equal(f.writes.length, 0);
@@ -61,4 +63,25 @@ test('unmount ignores late simulation result and cannot re-fetch logs', async ()
 test('failed read clears messages and retry can restore list', async () => {
   const f = fixture({ reads: [page, new Error('Synthetic read error'), page] }); await f.c.openPanel(); await f.c.load(1);
   assert.deepEqual(f.c.rows.value, []); assert.ok(f.c.readError.value); await f.c.load(1); assert.deepEqual(f.c.rows.value, page.items);
+});
+test('worker status loads on demand without a scan or persistent polling timer', async () => {
+  const f = fixture(); assert.equal(f.statusGets.length, 0); await f.c.openPanel(); assert.deepEqual(f.c.worker.value, workerStatus);
+  assert.equal(f.statusGets.length, 1); assert.equal(f.writes.length, 0); assert.match(f.c.workerState('Success'), /thành công/);
+});
+test('worker status failure does not prevent manual scan or reading stored logs', async () => {
+  const f = fixture({ statusReads: [new Error('Synthetic status failure')] }); await f.c.openPanel(); assert.ok(f.c.workerError.value);
+  assert.deepEqual(f.c.rows.value, page.items); f.c.confirmed.value = true; await f.c.simulate(); assert.equal(f.writes.length, 1);
+});
+test('status refresh can show conflict or failure instead of claiming success', async () => {
+  const f = fixture({ statusReads: [workerStatus, { ...workerStatus, state: 'Conflict', createdCount: null }] }); await f.c.openPanel(); await f.c.loadWorkerStatus();
+  assert.equal(f.c.worker.value.state, 'Conflict'); assert.equal(f.c.worker.value.createdCount, null); assert.match(f.c.workerState('Failed'), /thất bại/);
+});
+test('closing and unmount ignore late status and clear previously loaded result', async () => {
+  const d = deferred(), f = fixture({ statusReads: [d.promise] }); const open = f.c.openPanel(); f.c.closePanel(); d.resolve(workerStatus); await open;
+  assert.equal(f.c.worker.value, null); assert.equal(f.c.statusLoading.value, false);
+  const g = fixture(); await g.c.openPanel(); g.cleanup(); assert.equal(g.c.worker.value, null); assert.equal(g.c.workerError.value, '');
+});
+test('unknown or not-started worker state remains explicit', async () => {
+  const f = fixture({ statusReads: [{ ...workerStatus, state: 'NotStarted', createdCount: null, lastCompletedAtUtc: null }] }); await f.c.openPanel();
+  assert.equal(f.c.worker.value.lastCompletedAtUtc, null); assert.match(f.c.workerState('NotStarted'), /Chưa chạy/); assert.equal(f.c.workerState('UNKNOWN'), 'Chưa xác định');
 });
