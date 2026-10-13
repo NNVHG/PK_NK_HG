@@ -39,6 +39,9 @@ public sealed class AppointmentService
         string? ipAddress,
         CancellationToken ct = default)
     {
+        if (actorRoleCode is not (RoleCodes.Admin or RoleCodes.Receptionist or RoleCodes.Patient))
+            return Result<AppointmentResponse>.Failure(Error.Forbidden);
+
         var patient = await _patientRepository.GetByIdAsync(request.PatientId, ct);
         if (patient is null)
             return Result<AppointmentResponse>.Failure(Error.NotFound);

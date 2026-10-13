@@ -381,3 +381,7 @@ Migration `20261011133134_AllowFamilyPatientProfiles` chuyển index `Patients.U
 - Backup: `backup/main-20261011-2054`. Lịch sử merge được giữ; không xóa/sửa migration cũ hoặc thêm package. Chưa push trong lượt tích hợp này.
 
 Các chức năng PARTIAL vẫn chờ nghiệm thu tương ứng: ngân hàng live, máy in K80, UI gia đình và nhiều mặt răng. Bộ chạy ban đầu tạo dữ liệu tổng hợp trong CSDL Development Windows trước khi được sửa để dùng đúng Docker; dữ liệu đó được giữ nguyên, sự cố được ghi trong báo cáo local `docs/testing/MAIN_INTEGRATION_20261011_REPORT.md` và HISTORY_LOG, không che kết quả lỗi trước đó.
+
+## Đặt lịch tại quầy (F_APP_02)
+Lễ tân/Admin mở Đặt lịch tại quầy ở /appointments/counter, tìm hồ sơ theo tên/SĐT/mã, đối chiếu họ tên/ngày sinh/mã, chọn ngày/slot, notes tùy chọn rồi xác nhận với khách. Tối đa20 kết quả; thu hẹp từ khóa nếu chưa thấy hồ sơ. Hồ sơ không tài khoản vẫn đặt được.
+Đặt lịch không tự check-in. API POST /api/appointments kiểm giờ chuẩn/lịch trùng theo bệnh nhân; chưa phân nha sĩ/cấp cứu/đổi-hủy UI/nhắc hẹn. Gia cần nghiệm thu UI có đăng nhập.
