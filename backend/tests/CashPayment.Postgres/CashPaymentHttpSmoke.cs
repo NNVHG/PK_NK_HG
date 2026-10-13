@@ -66,6 +66,7 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.CheckInRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.QueueQueryRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.UpdateQueueStatusRequestValidator>();
+        builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.CallNextRequestValidator>();
         builder.Services.AddScoped<IUserRepository, UserRepository>();
         builder.Services.AddScoped<Dental.Application.Features.Appointments.Services.AppointmentService>();
         builder.Services.AddScoped<Dental.Application.Features.Appointments.Validators.CreateAppointmentRequestValidator>();
@@ -155,6 +156,7 @@ internal static class CashPaymentHttpSmoke
             await FamilyBookingHttpSmoke.RunAsync(client, options, cashierId, patientId, Authenticate, check);
             await CounterBookingHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await DailyQueueHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
+            await QueueCallNextHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await BankTransferHttpSmoke.RunAsync(client, options, cashierId, patientId, webhookKey, Authenticate, check);
         }
         finally { await app.StopAsync(); }

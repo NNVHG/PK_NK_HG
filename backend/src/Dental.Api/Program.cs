@@ -132,6 +132,7 @@ builder.Services.AddScoped<CancelAppointmentRequestValidator>();
 builder.Services.AddScoped<CheckInRequestValidator>();
 builder.Services.AddScoped<QueueQueryRequestValidator>();
 builder.Services.AddScoped<UpdateQueueStatusRequestValidator>();
+builder.Services.AddScoped<CallNextRequestValidator>();
 
 
 // ===== 5. FluentValidation =====

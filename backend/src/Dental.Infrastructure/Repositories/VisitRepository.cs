@@ -25,6 +25,11 @@ public sealed class VisitRepository : IVisitRepository
             visit.PatientId == patientId &&
             (visit.Status == VisitStatuses.Created || visit.Status == VisitStatuses.InProgress), ct);
 
+    public Task<bool> HasActiveVisitForDentistAsync(int dentistId, CancellationToken ct = default)
+        => _db.Visits.AnyAsync(visit =>
+            visit.DentistId == dentistId &&
+            visit.Status == VisitStatuses.InProgress, ct);
+
     public async Task AddAsync(Visit visit, CancellationToken ct = default)
         => await _db.Visits.AddAsync(visit, ct);
 

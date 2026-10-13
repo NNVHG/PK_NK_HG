@@ -9,6 +9,7 @@ public interface IVisitRepository
     Task<Visit?> GetByIdAsync(int visitId, CancellationToken ct = default);
     Task<Visit?> GetForUpdateAsync(int visitId, CancellationToken ct = default);
     Task<bool> HasOpenVisitAsync(int patientId, CancellationToken ct = default);
+    Task<bool> HasActiveVisitForDentistAsync(int dentistId, CancellationToken ct = default);
     Task AddAsync(Visit visit, CancellationToken ct = default);
     Task<PagedResult<Visit>> GetPatientVisitsAsync(
         int patientId,

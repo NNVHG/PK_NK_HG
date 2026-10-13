@@ -25,6 +25,26 @@ export interface QueueEntryResponse {
   notes: string | null;
 }
 
+export interface PublicQueueItemResponse {
+  queueEntryId: number;
+  queueNumber: number;
+  queueNumberDisplay: string;
+  maskedPatientName: string;
+  dentistName: string | null;
+  status: number;
+  statusText: string;
+  isPriority: boolean;
+}
+
+export interface PublicQueueMonitorResponse {
+  inConsultation: PublicQueueItemResponse[];
+  waiting: PublicQueueItemResponse[];
+}
+
+export interface CallNextPayload {
+  dentistId?: number | null;
+}
+
 export const queueService = {
   async getToday(page = 1, status?: number): Promise<PagedResult<QueueEntryResponse>> {
     const response = await apiClient.get<PagedResult<QueueEntryResponse>>('/queue', {
@@ -37,6 +57,16 @@ export const queueService = {
     const response = await apiClient.put<QueueEntryResponse>(`/queue/${queueEntryId}/status`, {
       newStatus: 2, dentistId
     });
+    return response.data;
+  },
+
+  async callNext(payload?: CallNextPayload): Promise<QueueEntryResponse> {
+    const response = await apiClient.post<QueueEntryResponse>('/queue/call-next', payload ?? {});
+    return response.data;
+  },
+
+  async getPublicDisplay(): Promise<PublicQueueMonitorResponse> {
+    const response = await apiClient.get<PublicQueueMonitorResponse>('/queue/display');
     return response.data;
   },
 
