@@ -4,6 +4,7 @@ namespace Dental.Application.Interfaces;
 
 public interface IUserRepository
 {
+    Task<IReadOnlyList<User>> GetActiveDentistsAsync(CancellationToken ct = default);
     Task<User?> FindByPhoneAsync(string phone, CancellationToken ct = default);
     Task<User?> FindByIdAsync(int userId, CancellationToken ct = default);
     Task<Role?> FindRoleByCodeAsync(string roleCode, CancellationToken ct = default);

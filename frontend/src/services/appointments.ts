@@ -20,7 +20,10 @@ export interface CreateAppointmentPayload {
   appointmentDate: string;
   slotTime: string;
   notes: string | null;
+  dentistId?: number | null;
 }
+
+export interface BookingDentist { dentistId: number; dentistName: string; }
 
 export interface AppointmentPage {
   items: AppointmentResponse[];
@@ -47,6 +50,9 @@ export interface SelfReschedulingEligibility {
 }
 
 export const appointmentsService = {
+  async getBookingDentists(): Promise<BookingDentist[]> {
+    return (await apiClient.get<BookingDentist[]>('/appointments/booking-dentists')).data;
+  },
   async selfReschedulingEligibility(id: number): Promise<SelfReschedulingEligibility> {
     return (await apiClient.get<SelfReschedulingEligibility>(`/appointments/${id}/rescheduling-eligibility`)).data;
   },

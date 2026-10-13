@@ -414,7 +414,7 @@ Lễ tân/Admin mở /appointments/desk, chọn Đổi lịch trên dòng Schedu
 
 Migration20261012175813_AddAppointmentRescheduleMetadata thêm Count default0/Reason nullable và đã áp dụng local. Không chạy Down nếu cần giữ hai trường lịch sử này. Đổi lịch dùng Serializable, kiểm trùng nha sĩ/bệnh nhân/slot và trả409 khi có thao tác đồng thời; UI không tự retry.
 
-Giới hạn: chưa cột AppointmentCode riêng, chưa sửa kiểm trùng nha sĩ ở luồng tạo lịch mới; test race chỉ giữa reschedule. Chờ Gia nghiệm thu UI có đăng nhập.
+Giới hạn: chưa cột AppointmentCode riêng. Kiểm trùng nha sĩ khi tạo lịch được bổ sung trong phần đặt lịch tại quầy bên dưới. Chờ Gia nghiệm thu UI có đăng nhập.
 
 ## Bệnh nhân tự đổi lịch (F_APP_03)
 
@@ -425,3 +425,13 @@ Chọn ngày/slot mới, nhập lý do bắt buộc tối đa 500 ký tự, tíc
 GET /api/appointments/{id}/rescheduling-eligibility chỉ Patient, ownership theo JWT và no-store; trả appointment, canReschedule, message, remainingChanges. PUT reschedule mở thêm Patient theo policy AppointmentReschedule và kiểm lại ownership/120 phút/count trong transaction Serializable; lịch ngoài tài khoản trả 404, sửa nha sĩ hoặc Notes bị 403. Admin/Receptionist vẫn hỗ trợ khi Patient hết lượt. Same-target replay chỉ đọc trạng thái, không tăng count, có thể trả 200 sau mốc/giới hạn; UI không mở thao tác mới khi eligibility=false.
 
 Lượt này không thay schema, dùng migration metadata có sẵn. Kiểm chứng: 681 backend unit, 118 frontend Node, 291 PostgreSQL/HTTP đạt; build backend/frontend OK. Chưa browser UAT. F_APP_03 tổng thể vẫn PARTIAL/chờ Gia nghiệm thu; Phase 2 chưa được mở.
+
+## Đặt lịch thường tại quầy, chọn nha sĩ (F_APP_02)
+
+Admin/Lễ tân mở /appointments/counter, tìm hồ sơ theo tên/SĐT/mã, chọn đúng bệnh nhân, chọn nha sĩ hoạt động hoặc “Chưa phân nha sĩ”, ngày và slot chuẩn 30 phút. Đối chiếu thông tin với khách, tích xác nhận rồi đặt. Tải lại nha sĩ nếu danh sách cũ; nha sĩ bị ngừng hoạt động sau khi tải vẫn bị backend từ chối lúc ghi.
+
+GET /api/appointments/booking-dentists chỉ Admin/Receptionist, no-store, trả dentistId/dentistName của nha sĩ hoạt động. POST appointments giữ DentistId tùy chọn; có nha sĩ thì chặn trùng lịch Scheduled cùng ngày/slot với thông báo 400 “Bác sĩ đã có lịch hẹn trong khung giờ này”. Kiểm tra này áp dụng cho cả request của Patient, vẫn kiểm ownership hồ sơ gia đình.
+
+Tạo lịch và đổi lịch đều dùng Serializable: khi hai thao tác ghi cùng slot nha sĩ, API trả APP_009/409 cho bên xung đột. UI giữ bản nháp, bỏ xác nhận và yêu cầu đối chiếu lịch trước khi thử tiếp; không tự gửi lại. Đặt thành công chỉ tạo Appointment, khách vào hàng đợi khi check-in. Không thay schema/package trong lượt này.
+
+Kiểm chứng 704 backend unit / 132 frontend Node / 324 PostgreSQL/HTTP đạt; backend build 0 warning/error và frontend build 191 modules. Đã kiểm race tạo-vs-tạo và tạo-vs-đổi bằng barrier, mỗi slot chỉ có một lịch; chưa browser UAT. Ca cấp cứu/chen ngang DL-229/DL-234 và nhắc hẹn chưa triển khai; F_APP_02 vẫn PARTIAL/chờ Gia nghiệm thu.

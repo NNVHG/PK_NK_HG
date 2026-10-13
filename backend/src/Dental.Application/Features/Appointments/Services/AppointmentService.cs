@@ -39,6 +39,21 @@ public sealed class AppointmentService
         string? ipAddress,
         CancellationToken ct = default)
     {
+        if (actorRoleCode is not (RoleCodes.Admin or RoleCodes.Receptionist or RoleCodes.Patient))
+            return Result<AppointmentResponse>.Failure(Error.Forbidden);
+        try
+        {
+            return await _unitOfWork.ExecuteSerializableTransactionAsync(
+                transactionCt => CreateCoreAsync(actorUserId, actorRoleCode, request, ipAddress, transactionCt), ct);
+        }
+        catch (ConcurrentOperationException) { return Result<AppointmentResponse>.Failure(Error.AppointmentConcurrent); }
+    }
+
+    private async Task<Result<AppointmentResponse>> CreateCoreAsync(
+        int actorUserId, string actorRoleCode, CreateAppointmentRequest request, string? ipAddress, CancellationToken ct)
+    {
+        if (!AppointmentSlots.IsValidSlot(request.SlotTime) || request.Notes?.Length > 500 || request.DentistId <= 0)
+            return Result<AppointmentResponse>.Failure(Error.Validation);
         var patient = await _patientRepository.GetByIdAsync(request.PatientId, ct);
         if (patient is null)
             return Result<AppointmentResponse>.Failure(Error.NotFound);
@@ -71,6 +86,8 @@ public sealed class AppointmentService
             var dentist = await _userRepository.FindByIdAsync(request.DentistId.Value, ct);
             if (dentist is null || !dentist.IsActive || dentist.Role?.RoleCode != RoleCodes.Dentist)
                 return Result<AppointmentResponse>.Failure(Error.Validation.Code, "Nha sĩ được chọn không hợp lệ hoặc không hoạt động.");
+            if (await _appointmentRepository.HasDentistBookingAsync(request.DentistId.Value, request.AppointmentDate, request.SlotTime, 0, ct))
+                return Result<AppointmentResponse>.Failure(Error.Validation.Code, "Bác sĩ đã có lịch hẹn trong khung giờ này.");
         }
 
         var appointment = new Appointment
@@ -100,6 +117,7 @@ public sealed class AppointmentService
                     nameof(Appointment.PatientId),
                     nameof(Appointment.AppointmentDate),
                     nameof(Appointment.SlotTime),
+                    nameof(Appointment.DentistId),
                     nameof(Appointment.Status)
                 }
             }),
@@ -108,6 +126,16 @@ public sealed class AppointmentService
 
         var created = await _appointmentRepository.GetByIdAsync(appointment.AppointmentId, ct);
         return Result<AppointmentResponse>.Success(ToResponse(created ?? appointment));
+    }
+
+    public async Task<Result<IReadOnlyList<BookingDentistResponse>>> GetBookingDentistsAsync(
+        string? actorRoleCode, CancellationToken ct = default)
+    {
+        if (actorRoleCode is not (RoleCodes.Admin or RoleCodes.Receptionist))
+            return Result<IReadOnlyList<BookingDentistResponse>>.Failure(Error.Forbidden);
+        var dentists = await _userRepository.GetActiveDentistsAsync(ct);
+        return Result<IReadOnlyList<BookingDentistResponse>>.Success(
+            dentists.Select(d => new BookingDentistResponse(d.UserId, d.FullName)).ToList());
     }
 
     public async Task<Result<PagedResult<AppointmentResponse>>> GetAppointmentsAsync(
