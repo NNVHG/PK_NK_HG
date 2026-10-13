@@ -35,6 +35,12 @@ const router = createRouter({
       meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST'] }
     },
     {
+      path: '/queue/today',
+      name: 'daily-queue',
+      component: () => import('@/views/DailyQueueView.vue'),
+      meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST', 'DENTIST', 'ASSISTANT'] }
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),

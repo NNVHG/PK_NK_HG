@@ -9,6 +9,7 @@
         <router-link v-if="authStore.role === 'PATIENT'" to="/appointments">Đặt lịch khám</router-link>
         <router-link v-if="['ADMIN', 'RECEPTIONIST'].includes(authStore.role ?? '')" to="/appointments/counter">Đặt lịch tại quầy</router-link>
         <template v-if="isStaff">
+          <router-link to="/queue/today">Hàng đợi hôm nay</router-link>
           <router-link to="/patients">Bệnh nhân</router-link>
         </template>
         <router-link v-if="isAdmin" to="/admin/staff">Tài khoản nhân viên</router-link>

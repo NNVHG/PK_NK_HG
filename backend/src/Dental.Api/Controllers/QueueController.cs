@@ -63,6 +63,7 @@ public sealed class QueueController : ControllerBase
     }
 
     [HttpGet]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
     [Authorize(Policy = AppPolicies.QueueView)]
     [ProducesResponseType(typeof(PagedResult<QueueEntryResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -77,6 +78,7 @@ public sealed class QueueController : ControllerBase
     }
 
     [HttpGet("{id:int}")]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
     [Authorize(Policy = AppPolicies.QueueView)]
     [ProducesResponseType(typeof(QueueEntryDetailResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
