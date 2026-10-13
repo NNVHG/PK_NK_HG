@@ -435,3 +435,13 @@ GET /api/appointments/booking-dentists chỉ Admin/Receptionist, no-store, trả
 Tạo lịch và đổi lịch đều dùng Serializable: khi hai thao tác ghi cùng slot nha sĩ, API trả APP_009/409 cho bên xung đột. UI giữ bản nháp, bỏ xác nhận và yêu cầu đối chiếu lịch trước khi thử tiếp; không tự gửi lại. Đặt thành công chỉ tạo Appointment, khách vào hàng đợi khi check-in. Không thay schema/package trong lượt này.
 
 Kiểm chứng 704 backend unit / 132 frontend Node / 324 PostgreSQL/HTTP đạt; backend build 0 warning/error và frontend build 191 modules. Đã kiểm race tạo-vs-tạo và tạo-vs-đổi bằng barrier, mỗi slot chỉ có một lịch; chưa browser UAT. Ca cấp cứu/chen ngang DL-229/DL-234 và nhắc hẹn chưa triển khai; F_APP_02 vẫn PARTIAL/chờ Gia nghiệm thu.
+
+## Mô phỏng nhắc hẹn 24 giờ và xem nhật ký (F_APP_04)
+
+Admin/Lễ tân mở /appointments/desk → Nhật ký nhắc lịch. Tích xác nhận rồi bấm Mô phỏng gửi nhắc lịch. Backend dùng giờ Việt Nam hiện tại để quét lịch Scheduled trong khoảng 23,5–24,5 giờ tới, bỏ qua lịch được đặt cách giờ khám dưới 24 giờ. Kết quả 0 là hợp lệ nếu chưa có lịch đủ điều kiện. Không có dữ liệu mẫu trong API; để demo cần lịch được đặt trước ít nhất 24 giờ và đang trong cửa sổ quét.
+
+Tin nhắc chỉ lưu nội bộ ở NotificationLogs với Channel=SMS_SIMULATED, Status=Sent; không gọi dịch vụ SMS. Nội dung tiếng Việt, giờ hẹn, họ tên, nha sĩ và Hotline theo DL-248. Khi chưa phân nha sĩ, nội dung ghi “nha sĩ được phân công”. Nhật ký lưu snapshot ngày/giờ hẹn để nhắc lại khi đổi sang mốc mới, bảo toàn nội dung cũ và không tạo trùng khi bấm lại cùng mốc. Quay lại đúng mốc từng nhắc sẽ dùng nhật ký cũ.
+
+Panel cho lọc ID lịch hẹn, phân trang 20 tin và tải lại; nội dung hiển thị dạng text. API chỉ Admin/Receptionist, GET no-store, không trả RecipientPhone trong DTO xem nhật ký. Audit chỉ ghi số lượng và ID, không ghi nội dung tin/số điện thoại. Nếu lỗi mạng hoặc APP_010/409, đối chiếu nhật ký và xác nhận lại; UI không tự gửi lại mutation.
+
+Migration20261013044654_AddAppointmentReminderLogs đã áp dụng local: bảng mới/FK Restrict và index, không sửa lịch cũ. Không chạy Down nếu cần giữ nhật ký. Kiểm chứng 737 backend unit / 142 frontend Node / 359 PostgreSQL/HTTP đạt; build backend 0 warning/error, frontend 195 modules. Chưa browser UAT; F_APP_04 vẫn PARTIAL, worker tự quét mỗi 30 phút chưa triển khai. Phase 2 chưa được mở.

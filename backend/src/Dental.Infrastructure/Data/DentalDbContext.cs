@@ -28,6 +28,7 @@ public sealed class DentalDbContext : DbContext
     public DbSet<DentalService> DentalServices => Set<DentalService>();
     public DbSet<ServicePrice> ServicePrices => Set<ServicePrice>();
     public DbSet<Appointment> Appointments => Set<Appointment>();
+    public DbSet<NotificationLog> NotificationLogs => Set<NotificationLog>();
     public DbSet<QueueEntry> QueueEntries => Set<QueueEntry>();
     public DbSet<QueueStatusHistory> QueueStatusHistories => Set<QueueStatusHistory>();
 
@@ -57,6 +58,7 @@ public sealed class DentalDbContext : DbContext
         modelBuilder.ApplyConfiguration(new DentalServiceConfiguration());
         modelBuilder.ApplyConfiguration(new ServicePriceConfiguration());
         modelBuilder.ApplyConfiguration(new AppointmentConfiguration());
+        modelBuilder.ApplyConfiguration(new NotificationLogConfiguration());
         modelBuilder.ApplyConfiguration(new QueueEntryConfiguration());
         modelBuilder.ApplyConfiguration(new QueueStatusHistoryConfiguration());
     }
@@ -81,6 +83,8 @@ public sealed class DentalDbContext : DbContext
 
     private void GuardAuditLogImmutability()
     {
+        if (ChangeTracker.Entries<NotificationLog>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("NotificationLog là nhật ký chỉ thêm mới — không được sửa hoặc xóa.");
         // DL-210 allows only a single increment of print metadata, never financial edits.
         if (ChangeTracker.Entries<PaymentTransaction>().Any(x => x.State == EntityState.Deleted ||
             (x.State == EntityState.Modified && (x.Properties.Any(p => p.IsModified && p.Metadata.Name != nameof(PaymentTransaction.PrintCount)) ||
