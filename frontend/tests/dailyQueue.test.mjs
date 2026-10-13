@@ -12,7 +12,9 @@ function deferred() { let resolve; const promise = new Promise(done => { resolve
 function fixture(responses = [result]) {
   let mount, cleanup; const calls = [];
   const imports = {
-    vue: { defineComponent: c => c, ref: value => ({ value }), onMounted: cb => { mount = cb; }, onUnmounted: cb => { cleanup = cb; } },
+    vue: { defineComponent: c => c, computed: get => ({ get value() { return get(); } }), ref: value => ({ value }), onMounted: cb => { mount = cb; }, onUnmounted: cb => { cleanup = cb; } },
+    '@/stores/auth': { useAuthStore: () => ({ role: 'RECEPTIONIST' }) },
+    '@/services/appointments': { appointmentsService: {} },
     '@/services/queue': { queueService: { getToday: async (...args) => {
       calls.push(args); const response = responses.shift() ?? result; if (response instanceof Error) throw response; return response;
     } } },

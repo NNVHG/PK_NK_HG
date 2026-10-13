@@ -9,8 +9,10 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
 // Explicit opt-in; synthetic data and a unique disposable database, never the clinic database.
-if (args.Length != 2 || args[0] != "--isolated-config")
-    throw new ArgumentException("Use --isolated-config <appsettings.Development.json>");
+if (args.Length is not (2 or 3) || args[0] != "--isolated-config" ||
+    args.Length == 3 && args[2] != "--queue-call-next-only")
+    throw new ArgumentException("Use --isolated-config <appsettings.Development.json> [--queue-call-next-only]");
+var queueCallNextOnly = args.Length == 3;
 using var config = JsonDocument.Parse(File.ReadAllText(args[1]));
 var connection = new NpgsqlConnectionStringBuilder(config.RootElement.GetProperty("ConnectionStrings").GetProperty("Default").GetString());
 var databaseName = "dental_cash_test_" + Guid.NewGuid().ToString("N");
@@ -29,6 +31,13 @@ try
     var visit = new Visit { Patient = patient, CreatedByUser = cashier, Status = VisitStatuses.Completed, IsLocked = true };
     var invoice = new Invoice { Visit = visit, CreatedByUser = cashier, InvoiceCode = "TEST-CASH-1", TotalAmount = 100000, Status = InvoiceStatus.PendingPayment, CreatedAt = DateTime.UtcNow };
     setup.Invoices.Add(invoice); await setup.SaveChangesAsync(); setup.ChangeTracker.Clear();
+    if (queueCallNextOnly)
+    {
+        await CashPaymentHttpSmoke.RunAsync(options, cashier.UserId, patient.PatientId, Check, queueCallNextOnly: true);
+        await QueueCallNextAtomicSmoke.RunAsync(options, cashier.UserId, Check);
+        Console.WriteLine($"PostgreSQL call-next checks: {checks}/{checks} PASS");
+        return;
+    }
     async Task<Dental.Application.Common.Result<PaymentTransaction>> Receive(CashPaymentRequest request)
     {
         await using var db = NewDb();
@@ -53,6 +62,7 @@ try
     await using var reopenDb = NewDb();
     Check((await new VisitReopenRepository(reopenDb).ReopenAsync(visit.VisitId, cashier.UserId, "Synthetic correction reason", null)).IsFailure, "Paid visit cannot reopen");
     await CashPaymentHttpSmoke.RunAsync(options, cashier.UserId, patient.PatientId, Check);
+    await QueueCallNextAtomicSmoke.RunAsync(options, cashier.UserId, Check);
     await CashConflictRollbackSmoke.RunAsync(options, patient.PatientId, cashier.UserId, Check);
     Console.WriteLine($"PostgreSQL payment checks: {checks}/{checks} PASS");
 }

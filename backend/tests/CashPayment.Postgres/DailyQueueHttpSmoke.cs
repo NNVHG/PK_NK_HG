@@ -20,6 +20,9 @@ internal static class DailyQueueHttpSmoke
             var patient = new Patient { FullName = $"Synthetic queue {i}", DateOfBirth = new(1990, 1, 1), Phone = $"099999996{i}" };
             var row = new QueueEntry { Patient = patient, QueueDate = i == 5 ? today.AddDays(-1) : today, QueueNumber = start + i + 1,
                 IsPriority = i < 2, CheckInTime = DateTime.UtcNow.AddMinutes(-i), Status = i == 4 ? QueueStatus.Completed : QueueStatus.Waiting };
+            // Check-in creates a Visit; read fixtures must also support the subsequent call-next flow.
+            row.Visit = new Visit { Patient = patient, CreatedByUserId = actorId,
+                Status = i == 4 ? VisitStatuses.Completed : VisitStatuses.Created, IsLocked = i == 4 };
             if (i < 2) row.Appointment = new Appointment { Patient = patient, AppointmentDate = today, SlotTime = new(9 - i, 0), CreatedByUserId = actorId, Status = AppointmentStatuses.CheckedIn };
             db.QueueEntries.Add(row); rows.Add(row);
         }

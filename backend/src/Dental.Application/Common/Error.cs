@@ -65,6 +65,7 @@ public record Error(string Code, string Message)
     public static readonly Error QueueCannotRevertCancelled    = new("CHK_007", "Lượt khám đã bị hủy, không thể thay đổi trạng thái.");
     public static readonly Error QueueNoWaitingPatients        = new("CHK_008", "Không có bệnh nhân nào đang chờ trong hàng đợi.");
     public static readonly Error DentistHasActiveVisit         = new("CHK_009", "Nha sĩ hiện đang có ca khám đang diễn ra. Vui lòng hoàn tất ca khám trước.");
+    public static readonly Error QueueConcurrent = new("CHK_010", "Có thao tác gọi ca đồng thời. Tải lại hàng đợi và đối chiếu nha sĩ trước khi thử tiếp.");
 
 
 }

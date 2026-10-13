@@ -389,7 +389,7 @@ Lễ tân/Admin mở Đặt lịch tại quầy ở /appointments/counter, tìm 
 ## Hàng đợi nội bộ hôm nay (F_CHK_02)
 Nhân viên mở Hàng đợi hôm nay tại /queue/today. Mặc định Đang chờ; chọn trạng thái hoặc Tất cả, dùng Trang trước/Trang sau và Tải lại. Danh sách chỉ ngày đang xét theo giờ Việt Nam của server,20dòng/trang; API nội bộ cũng hỗ trợ Date cho tra cứu hiện hành, UI này không chọn ngày lịch sử.
 Khách hẹn đúng giờ xếp trước theo giờ hẹn; khách thường/trễ hẹn theo thời điểm check-in. UI dùng thứ tự backend. STT A-001 cho thường/có hẹn, ưu tiên lịch hẹn không phải cấp cứuU. Patient không có quyền truy cập.
-Đây là danh sách nội bộ: chưa TVâmthanh/gọi số/cấp cứu/phân ghế, chưa sửa dọn lượt qua ngày DL-051. Chờ Gia nghiệm thu UI có đăng nhập.
+Đây là danh sách nội bộ. TV phòng chờ và gọi tiếp theo đã có source sau tích hợp main; hướng dẫn gọi tiếp theo bên dưới. Cấp cứu/phân ghế và dọn lượt qua ngày DL-051 chưa được nghiệm thu. Chờ Gia nghiệm thu UI có đăng nhập.
 ## Tra cứu và hủy lịch tại quầy (F_APP_03)
 
 Lễ tân/Admin mở Lịch hẹn tại quầy tại /appointments/desk, chọn ngày/trạng thái, tìm lịch và bấm Hủy lịch này. Đối chiếu tên/mã hồ sơ/ngày/giờ với khách, nhập lý do tùy chọn rồi xác nhận; Quay lại giữ nguyên lịch. Danh sách20dòng/trang; chỉ Scheduled được hủy.
@@ -474,3 +474,16 @@ Kiểm chứng 744 backend unit / 147 frontend Node / 380 PostgreSQL/HTTP đạt
 - Giữ cả chức năng của hai chuỗi, không thêm package hoặc sửa/xóa migration cũ. Backup: backup/main-20261013-1946. Báo cáo local: docs/testing/MAIN_INTEGRATION_20261013_REPORT.md. Không push trong lượt này.
 
 Chưa nghiệm thu mọi thao tác UI/TV/âm thanh trình duyệt; nhắc hẹn là mô phỏng SMS và worker theo nguồn hiện có, không gửi SMS thật. Luồng cấp cứu, bank live, máy K80 và các chức năng PARTIAL khác vẫn theo hiện trạng. Worker được kiểm bằng timer điều khiển và PostgreSQL thật, không tuyên bố đã chờ 30 phút thực tế.
+
+## Gọi tiếp theo an toàn (F_CHK_03)
+
+Admin/Nha sĩ mở /queue/today. Admin tải danh sách nha sĩ hoạt động, chọn nha sĩ rồi bấm Gọi tiếp theo; Nha sĩ gọi cho chính mình theo tài khoản đăng nhập. Lễ tân/Phụ tá chỉ xem hàng đợi, không có nút gọi. Ca được chọn theo thứ tự backend, không phụ thuộc bộ lọc hoặc trang đang xem.
+
+Gọi ca cập nhật QueueEntry, Visit và lịch sử trong giao dịch Serializable. Hai lượt gọi đồng thời chỉ có một lượt nhận được ca; bên xung đột nhận CHK_010/409. Nếu lỗi hoặc chưa tải lại được sau thành công, đối chiếu hàng đợi/nha sĩ rồi tải lại thành công trước khi gọi tiếp; UI không tự gửi lại POST. Nếu nha sĩ có Visit InProgress khác thì trả 409. Ca trở về Waiting sau chụp ảnh có thể tiếp tục chính Visit đó, giữ StartedAt cũ.
+
+Kiểm chứng riêng trên CSDL tạm, không dùng dữ liệu bệnh nhân thật (chạy từ backend):
+dotnet run --project tests/CashPayment.Postgres -p:UseAppHost=false --no-restore -- --isolated-config src/Dental.Api/appsettings.Development.json --queue-call-next-only
+
+Kết quả: 788/788 backend unit, 169/169 frontend Node, 58/58 PostgreSQL/HTTP cho hàng đợi/gọi khám; build backend 0 warning/error và frontend 201 modules; EF không pending model changes. Bộ PostgreSQL/HTTP đầy đủ dừng tại fixture nhắc hẹn: SlotTime cộng 20 phút qua nửa đêm nhưng AppointmentDate không đổi (AppointmentReminderHttpSmoke.cs), chưa sửa vì ngoài phạm vi F_CHK_03. Không coi kết quả 433/113 của lần tích hợp trước là kết quả lượt này.
+
+Giới hạn: chưa browser UAT/âm thanh TV trên thiết bị thật; race với PUT status hoặc các luồng ghi Visit khác chưa được kiểm chứng trong lượt này. AuditLogger dùng cơ chế best-effort hiện hữu. DL-214 mô tả Calling/InExam/Skipped/ghế và Phụ tá gọi khác với 5 trạng thái source theo DL-047 và quyền gọi DL-120; giữ DL nguyên văn, ghi nhận chênh lệch. F_CHK_03 tổng thể vẫn PARTIAL, chờ Gia nghiệm thu Phase 1.

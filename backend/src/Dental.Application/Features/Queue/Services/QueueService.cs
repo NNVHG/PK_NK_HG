@@ -380,10 +380,25 @@ public sealed class QueueService
         if (actorRole is not RoleCodes.Dentist and not RoleCodes.Admin)
             return Result<QueueEntryResponse>.Failure(Error.QueueTransitionForbidden);
 
+        try
+        {
+            return await _unitOfWork.ExecuteSerializableTransactionAsync(
+                transactionCt => CallNextCoreAsync(actorUserId, actorRole, request, ipAddress, transactionCt), ct);
+        }
+        catch (ConcurrentOperationException) { return Result<QueueEntryResponse>.Failure(Error.QueueConcurrent); }
+    }
+
+    private async Task<Result<QueueEntryResponse>> CallNextCoreAsync(
+        int actorUserId, string actorRole, CallNextRequest request, string? ipAddress, CancellationToken ct)
+    {
+
         int targetDentistId;
         if (actorRole == RoleCodes.Dentist)
         {
             targetDentistId = actorUserId;
+            var actor = await _userRepository.FindByIdAsync(actorUserId, ct);
+            if (actor is null || !actor.IsActive || actor.Role?.RoleCode != RoleCodes.Dentist)
+                return Result<QueueEntryResponse>.Failure(Error.QueueTransitionForbidden);
         }
         else
         {
@@ -397,14 +412,19 @@ public sealed class QueueService
             targetDentistId = request.DentistId.Value;
         }
 
-        // DL-045: Một Nha sĩ không thể đồng thời có 2 ca khám ở trạng thái InProgress
-        if (await _visitRepository.HasActiveVisitForDentistAsync(targetDentistId, ct))
-            return Result<QueueEntryResponse>.Failure(Error.DentistHasActiveVisit);
-
         var today = _vietnamClock.Today;
         var nextEntry = await _queueRepository.GetNextWaitingEntryAsync(today, targetDentistId, ct);
+        // Returning from imaging resumes the same Visit; only a different active Visit blocks the dentist.
+        if (await _visitRepository.HasActiveVisitForDentistAsync(targetDentistId, ct, nextEntry?.VisitId ?? nextEntry?.Visit?.VisitId))
+            return Result<QueueEntryResponse>.Failure(Error.DentistHasActiveVisit);
         if (nextEntry is null)
             return Result<QueueEntryResponse>.Failure(Error.QueueNoWaitingPatients);
+
+        if (nextEntry.Status != QueueStatus.Waiting || nextEntry.QueueDate != today || nextEntry.Visit is null ||
+            nextEntry.Visit.IsLocked || nextEntry.Visit.Status is not (VisitStatuses.Created or VisitStatuses.InProgress) ||
+            (nextEntry.DentistId.HasValue && nextEntry.DentistId != targetDentistId) ||
+            (nextEntry.Visit.DentistId.HasValue && nextEntry.Visit.DentistId != targetDentistId))
+            return Result<QueueEntryResponse>.Failure(Error.QueueInvalidStateTransition);
 
         nextEntry.Status = QueueStatus.InConsultation;
         nextEntry.DentistId = targetDentistId;
