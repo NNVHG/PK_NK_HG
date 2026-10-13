@@ -1,6 +1,7 @@
 <template>
   <main class="page">
     <h1>Lịch hẹn tại quầy</h1>
+    <AppointmentReminderPanel />
     <label for="day">Ngày hẹn</label><input id="day" v-model="date" type="date" :disabled="busy" @change="load(1)" />
     <label for="status">Trạng thái</label><select id="status" v-model="status" :disabled="busy" @change="load(1)">
       <option value="Scheduled">Đang chờ khám</option><option value="">Tất cả</option><option value="Cancelled">Đã hủy</option>
@@ -30,6 +31,7 @@
   </main>
 </template>
 <script setup lang="ts">
+import AppointmentReminderPanel from '@/components/AppointmentReminderPanel.vue';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import AppointmentRescheduling from '@/components/AppointmentRescheduling.vue';
 import axios from 'axios';

@@ -370,6 +370,67 @@ namespace Dental.Infrastructure.Migrations
                     b.ToTable("MedicalHistoryRecords");
                 });
 
+            modelBuilder.Entity("Dental.Domain.Entities.NotificationLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateOnly>("AppointmentDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("AppointmentId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("MessageContent")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("NotificationType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("PatientId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RecipientPhone")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("SentAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<TimeOnly>("SlotTime")
+                        .HasColumnType("time");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PatientId");
+
+                    b.HasIndex("AppointmentId", "NotificationType");
+
+                    b.HasIndex("AppointmentId", "NotificationType", "AppointmentDate", "SlotTime")
+                        .IsUnique()
+                        .HasDatabaseName("IX_NotificationLogs_ReminderOccurrence");
+
+                    b.ToTable("NotificationLogs", (string)null);
+                });
+
             modelBuilder.Entity("Dental.Domain.Entities.Patient", b =>
                 {
                     b.Property<int>("PatientId")
@@ -1130,6 +1191,25 @@ namespace Dental.Infrastructure.Migrations
                     b.Navigation("RecordedByUser");
 
                     b.Navigation("Visit");
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.NotificationLog", b =>
+                {
+                    b.HasOne("Dental.Domain.Entities.Appointment", "Appointment")
+                        .WithMany()
+                        .HasForeignKey("AppointmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.Patient", "Patient")
+                        .WithMany()
+                        .HasForeignKey("PatientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Appointment");
+
+                    b.Navigation("Patient");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.Patient", b =>

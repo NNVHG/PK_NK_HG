@@ -17,6 +17,13 @@ public class RbacPolicyTests
 {
     private readonly IAuthorizationService _authService;
 
+    [Fact]
+    public void ReminderControllerRequiresStaffManagePolicyAndNoStoreLogs()
+    {
+        Assert.Equal(ApiPolicies.AppointmentManage, typeof(AppointmentRemindersController).GetCustomAttribute<AuthorizeAttribute>()!.Policy);
+        Assert.True(typeof(AppointmentRemindersController).GetMethod(nameof(AppointmentRemindersController.GetLogs))!.GetCustomAttribute<ResponseCacheAttribute>()!.NoStore);
+    }
+
     [Theory]
     [InlineData(RoleCodes.Admin, true)] [InlineData(RoleCodes.Receptionist, true)] [InlineData(RoleCodes.Patient, true)]
     [InlineData(RoleCodes.Dentist, false)] [InlineData(RoleCodes.Assistant, false)]
