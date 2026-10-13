@@ -29,6 +29,12 @@ export interface AppointmentPage {
 }
 
 export const appointmentsService = {
+  async getForDesk(date: string, page = 1, status?: string): Promise<AppointmentPage> {
+    return (await apiClient.get<AppointmentPage>('/appointments/desk', { params: { date, page, pageSize: 20, status } })).data;
+  },
+  async cancel(id: number, reason: string | null): Promise<AppointmentResponse> {
+    return (await apiClient.put<AppointmentResponse>(`/appointments/${id}/cancel`, { reason })).data;
+  },
   async create(payload: CreateAppointmentPayload): Promise<AppointmentResponse> {
     const response = await apiClient.post<AppointmentResponse>('/appointments', payload);
     return response.data;

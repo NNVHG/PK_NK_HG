@@ -390,3 +390,10 @@ Lễ tân/Admin mở Đặt lịch tại quầy ở /appointments/counter, tìm 
 Nhân viên mở Hàng đợi hôm nay tại /queue/today. Mặc định Đang chờ; chọn trạng thái hoặc Tất cả, dùng Trang trước/Trang sau và Tải lại. Danh sách chỉ ngày đang xét theo giờ Việt Nam của server,20dòng/trang; API nội bộ cũng hỗ trợ Date cho tra cứu hiện hành, UI này không chọn ngày lịch sử.
 Khách hẹn đúng giờ xếp trước theo giờ hẹn; khách thường/trễ hẹn theo thời điểm check-in. UI dùng thứ tự backend. STT A-001 cho thường/có hẹn, ưu tiên lịch hẹn không phải cấp cứuU. Patient không có quyền truy cập.
 Đây là danh sách nội bộ: chưa TVâmthanh/gọi số/cấp cứu/phân ghế, chưa sửa dọn lượt qua ngày DL-051. Chờ Gia nghiệm thu UI có đăng nhập.
+## Tra cứu và hủy lịch tại quầy (F_APP_03)
+
+Lễ tân/Admin mở Lịch hẹn tại quầy tại /appointments/desk, chọn ngày/trạng thái, tìm lịch và bấm Hủy lịch này. Đối chiếu tên/mã hồ sơ/ngày/giờ với khách, nhập lý do tùy chọn rồi xác nhận; Quay lại giữ nguyên lịch. Danh sách20dòng/trang; chỉ Scheduled được hủy.
+
+Lý do được nối vào ghi chú hiện có, tổng tối đa500ký tự; form hiển thị số ký tự còn lại, không cắt ghi chú cũ. Thành công hủy và tải lại danh sách; nếu kết quả mạng chưa rõ, tải lại lịch để đối chiếu trước khi thử tiếp.
+
+GET /api/appointments/desk chỉ Admin/Receptionist và no-store. Backend hủy Patient kiểm ownership và mốc120phút DL-082; sát giờ liên hệ lễ tân, lễ tân/Admin vẫn hỗ trợ được. Lượt này chưa có UI đổi lịch hoặc tra cứu/hủy Patient; chờ Gia UAT trước khi đánh dấu toàn luồng hoàn thành.

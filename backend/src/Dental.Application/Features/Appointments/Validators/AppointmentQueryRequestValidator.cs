@@ -1,5 +1,6 @@
 using Dental.Application.Features.Appointments.DTOs;
 using FluentValidation;
+using Dental.Domain.Constants;
 
 namespace Dental.Application.Features.Appointments.Validators;
 
@@ -8,11 +9,14 @@ public sealed class AppointmentQueryRequestValidator : AbstractValidator<Appoint
     public AppointmentQueryRequestValidator()
     {
         RuleFor(x => x.Page)
-            .GreaterThanOrEqualTo(1)
+            .InclusiveBetween(1, 1_000_000)
             .WithMessage("Trang phải lớn hơn hoặc bằng 1.");
 
         RuleFor(x => x.PageSize)
             .InclusiveBetween(1, 100)
             .WithMessage("Số lượng mỗi trang phải từ 1 đến 100.");
+        RuleFor(x => x.PatientId).GreaterThan(0).When(x => x.PatientId.HasValue);
+        RuleFor(x => x.Status).Must(status => string.IsNullOrEmpty(status) || AppointmentStatuses.All.Contains(status))
+            .WithMessage("Trạng thái lịch hẹn không hợp lệ.");
     }
 }

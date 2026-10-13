@@ -208,6 +208,7 @@ public sealed class AppointmentServiceTests
         var result = await CreateService().CancelAppointmentAsync(
             appointmentId: 5,
             actorUserId: 2,
+            actorRoleCode: RoleCodes.Receptionist,
             new CancelAppointmentRequest("Bận việc đột xuất"),
             ipAddress: "127.0.0.1");
 

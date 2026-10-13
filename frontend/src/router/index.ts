@@ -53,6 +53,12 @@ const router = createRouter({
       meta: { requiresAuth: false }
     },
     {
+      path: '/appointments/desk',
+      name: 'appointment-desk',
+      component: () => import('@/views/AppointmentDeskView.vue'),
+      meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST'] }
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),
