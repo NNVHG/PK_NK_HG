@@ -60,6 +60,8 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddScoped<Dental.Application.Features.MOD_FDI.Validators.ToothConditionRequestValidator>();
         builder.Services.AddScoped<IAppointmentRepository, AppointmentRepository>();
         builder.Services.AddScoped<IAppointmentReminderRepository, AppointmentReminderRepository>();
+        builder.Services.AddSingleton<AppointmentReminderWorkerStatus>();
+        builder.Services.AddSingleton<IAppointmentReminderWorkerStatus>(sp => sp.GetRequiredService<AppointmentReminderWorkerStatus>());
         builder.Services.AddScoped<Dental.Application.Features.Appointments.Services.AppointmentReminderService>();
         builder.Services.AddScoped<Dental.Application.Features.Appointments.Validators.SimulateAppointmentRemindersValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Appointments.Validators.ReminderLogQueryValidator>();
@@ -158,6 +160,7 @@ internal static class CashPaymentHttpSmoke
             await PatientSelfReschedulingHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await DentistBookingHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await AppointmentReminderHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
+            await AutomaticReminderHttpSmoke.RunAsync(client, options, cashierId, Authenticate, app.Services.GetRequiredService<AppointmentReminderWorkerStatus>(), check);
             await BankTransferHttpSmoke.RunAsync(client, options, cashierId, patientId, webhookKey, Authenticate, check);
         }
         finally { await app.StopAsync(); }

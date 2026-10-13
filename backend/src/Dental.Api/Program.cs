@@ -80,6 +80,9 @@ builder.Services.AddScoped<IAppointmentReminderRepository, AppointmentReminderRe
 builder.Services.AddScoped<AppointmentReminderService>();
 builder.Services.AddScoped<SimulateAppointmentRemindersValidator>();
 builder.Services.AddScoped<ReminderLogQueryValidator>();
+builder.Services.AddSingleton<AppointmentReminderWorkerStatus>();
+builder.Services.AddSingleton<IAppointmentReminderWorkerStatus>(sp => sp.GetRequiredService<AppointmentReminderWorkerStatus>());
+builder.Services.AddHostedService<AppointmentReminderWorker>();
 builder.Services.AddScoped<IQueueRepository, QueueRepository>();
 
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();

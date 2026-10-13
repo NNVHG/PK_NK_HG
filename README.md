@@ -444,4 +444,14 @@ Tin nhắc chỉ lưu nội bộ ở NotificationLogs với Channel=SMS_SIMULATE
 
 Panel cho lọc ID lịch hẹn, phân trang 20 tin và tải lại; nội dung hiển thị dạng text. API chỉ Admin/Receptionist, GET no-store, không trả RecipientPhone trong DTO xem nhật ký. Audit chỉ ghi số lượng và ID, không ghi nội dung tin/số điện thoại. Nếu lỗi mạng hoặc APP_010/409, đối chiếu nhật ký và xác nhận lại; UI không tự gửi lại mutation.
 
-Migration20261013044654_AddAppointmentReminderLogs đã áp dụng local: bảng mới/FK Restrict và index, không sửa lịch cũ. Không chạy Down nếu cần giữ nhật ký. Kiểm chứng 737 backend unit / 142 frontend Node / 359 PostgreSQL/HTTP đạt; build backend 0 warning/error, frontend 195 modules. Chưa browser UAT; F_APP_04 vẫn PARTIAL, worker tự quét mỗi 30 phút chưa triển khai. Phase 2 chưa được mở.
+Migration20261013044654_AddAppointmentReminderLogs đã áp dụng local: bảng mới/FK Restrict và index, không sửa lịch cũ. Không chạy Down nếu cần giữ nhật ký. Kiểm chứng phần thủ công: 737 backend unit / 142 frontend Node / 359 PostgreSQL/HTTP đạt; build backend 0 warning/error, frontend 195 modules. Worker được bổ sung ở phần tiếp theo. Phase 2 chưa được mở.
+
+### Nhắc hẹn tự động mỗi 30 phút (F_APP_04)
+
+API đăng ký AppointmentReminderWorker: quét một lần khi máy chủ khởi động, sau đó mỗi 30 phút trong lúc API chạy. Mỗi lần dùng scope riêng và cùng logic/transaction với nút mô phỏng; các lần quét của worker chạy tuần tự. Hai nguồn dùng chung unique occurrence nên không tạo trùng tin. Lỗi/conflict được ghi trạng thái để kiểm tra, lần tiếp theo theo lịch 30 phút; không gửi lại tức thì.
+
+Nhật ký vẫn là SMS_SIMULATED, không SMS thực. Audit phân biệt source=Automatic với UserId/IP=null cho hệ thống; source=Manual giữ UserId nhân viên. Worker không log nội dung exception có thể chứa dữ liệu bệnh nhân. Không thay schema/package trong lượt này.
+
+Tại /appointments/desk → Nhật ký nhắc lịch, xem trạng thái nhắc tự động, thời gian hoàn tất gần nhất và số tin tạo/đã nhắc. Bấm Tải trạng thái nhắc tự động để cập nhật; trạng thái này thuộc lần chạy máy chủ hiện tại và reset khi khởi động lại, nhật ký trong DB vẫn giữ. GET /api/appointments/reminder-worker-status chỉ Admin/Receptionist, no-store, không chứa tên/số điện thoại/nội dung tin. Đóng panel không dừng worker trên máy chủ.
+
+Kiểm chứng 744 backend unit / 147 frontend Node / 380 PostgreSQL/HTTP đạt; build backend 0 warning/error và frontend 195 modules. Chu kỳ 30 phút được kiểm bằng timer điều khiển trong test, cùng worker thật và DB test; không tuyên bố đã chờ 30 phút thực tế hoặc đã browser UAT. F_APP_04 vẫn PARTIAL/chờ Gia nghiệm thu; API dừng thì không quét và không bù các cửa sổ đã bỏ lỡ khi tắt máy.

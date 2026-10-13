@@ -37,6 +37,17 @@ public sealed class AppointmentReminderTests
     }
     private void Candidates(params Appointment[] rows) => repository.GetCandidatesAsync(Arg.Any<DateOnly>(), Arg.Any<DateOnly>(), Arg.Any<CancellationToken>()).Returns(rows);
     private Task<Result<SimulateAppointmentRemindersResponse>> Run(string? role = RoleCodes.Receptionist, bool confirmed = true) => Service().SimulateAsync(10, role, confirmed, null);
+    [Fact] public async Task AutomaticScanUsesSystemActorAndExplicitSource()
+    {
+        Candidates(Row()); Assert.Equal(1, (await Service().ScanAutomaticallyAsync()).Value!.CreatedCount);
+        var args = audit.ReceivedCalls().Single().GetArguments(); Assert.Null(args[3]); Assert.Null(args[5]);
+        using var detail = JsonDocument.Parse((string)args[4]!); Assert.Equal("Automatic", detail.RootElement.GetProperty("source").GetString());
+    }
+    [Fact] public async Task ManualScanPreservesHumanActorAndExplicitSource()
+    {
+        Candidates(Row()); await Run(); var args = audit.ReceivedCalls().Single().GetArguments(); Assert.Equal(10, args[3]);
+        using var detail = JsonDocument.Parse((string)args[4]!); Assert.Equal("Manual", detail.RootElement.GetProperty("source").GetString());
+    }
     [Theory] [InlineData(RoleCodes.Admin)] [InlineData(RoleCodes.Receptionist)]
     public async Task StaffCreatesVietnameseSnapshotWithoutAuditPII(string role)
     {
