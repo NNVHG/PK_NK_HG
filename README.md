@@ -463,3 +463,14 @@ Nhật ký vẫn là SMS_SIMULATED, không SMS thực. Audit phân biệt source
 Tại /appointments/desk → Nhật ký nhắc lịch, xem trạng thái nhắc tự động, thời gian hoàn tất gần nhất và số tin tạo/đã nhắc. Bấm Tải trạng thái nhắc tự động để cập nhật; trạng thái này thuộc lần chạy máy chủ hiện tại và reset khi khởi động lại, nhật ký trong DB vẫn giữ. GET /api/appointments/reminder-worker-status chỉ Admin/Receptionist, no-store, không chứa tên/số điện thoại/nội dung tin. Đóng panel không dừng worker trên máy chủ.
 
 Kiểm chứng 744 backend unit / 147 frontend Node / 380 PostgreSQL/HTTP đạt; build backend 0 warning/error và frontend 195 modules. Chu kỳ 30 phút được kiểm bằng timer điều khiển trong test, cùng worker thật và DB test; không tuyên bố đã chờ 30 phút thực tế hoặc đã browser UAT. F_APP_04 vẫn PARTIAL/chờ Gia nghiệm thu; API dừng thì không quét và không bù các cửa sổ đã bỏ lỡ khi tắt máy.
+
+## Kiểm chứng tích hợp lịch hẹn và hàng đợi — 2026-10-13
+
+Đã tích hợp 11 nhánh đặt lịch tại quầy, hàng đợi/TV, hủy–đổi lịch và nhắc hẹn thủ công/tự động trên nhánh integrate/20261013. Bản sửa fixture gọi số giữ các assertion cũ, dùng nha sĩ/JWT thật trong CSDL kiểm thử, ngày Việt Nam và kiểm ca thực tế được chọn. Hai GET TV công khai được Gia duyệt theo DL-090/DL-132; API hàng đợi nội bộ vẫn JWT/RBAC.
+
+- Backend build: 0 warning/error; 778/778 unit test, không fail/skip; EF không pending model changes.
+- PostgreSQL 16 Docker Compose riêng: 20 migration từ CSDL trống và seeder Development đạt; 433/433 kiểm tra PostgreSQL/HTTP; 113/113 API ứng dụng thật với 5 vai trò đạt.
+- Frontend vue-tsc/Vite: 201 modules; 159/159 Node test; 22 route imports có đủ file, không trùng path.
+- Giữ cả chức năng của hai chuỗi, không thêm package hoặc sửa/xóa migration cũ. Backup: backup/main-20261013-1946. Báo cáo local: docs/testing/MAIN_INTEGRATION_20261013_REPORT.md. Không push trong lượt này.
+
+Chưa nghiệm thu mọi thao tác UI/TV/âm thanh trình duyệt; nhắc hẹn là mô phỏng SMS và worker theo nguồn hiện có, không gửi SMS thật. Luồng cấp cứu, bank live, máy K80 và các chức năng PARTIAL khác vẫn theo hiện trạng. Worker được kiểm bằng timer điều khiển và PostgreSQL thật, không tuyên bố đã chờ 30 phút thực tế.
