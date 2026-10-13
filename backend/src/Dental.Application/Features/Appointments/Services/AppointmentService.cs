@@ -115,7 +115,8 @@ public sealed class AppointmentService
 
     public async Task<Result<PagedResult<AppointmentResponse>>> GetAppointmentsAsync(
         AppointmentQueryRequest request,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        int? ownerUserId = null)
     {
         var (items, totalCount) = await _appointmentRepository.GetAppointmentsAsync(
             request.Date,
@@ -123,7 +124,8 @@ public sealed class AppointmentService
             request.Status,
             request.Page,
             request.PageSize,
-            ct);
+            ct,
+            ownerUserId);
 
         var page = PagedResult<AppointmentResponse>.Create(
             items.Select(ToResponse).ToList(),
@@ -132,6 +134,34 @@ public sealed class AppointmentService
             request.PageSize);
 
         return Result<PagedResult<AppointmentResponse>>.Success(page);
+    }
+
+    public async Task<Result<PagedResult<AppointmentResponse>>> GetAccessibleAppointmentsAsync(
+        AppointmentQueryRequest request, int actorUserId, string? role, CancellationToken ct = default)
+    {
+        if (role is not (RoleCodes.Admin or RoleCodes.Receptionist or RoleCodes.Dentist or RoleCodes.Assistant or RoleCodes.Patient))
+            return Result<PagedResult<AppointmentResponse>>.Failure(Error.Forbidden);
+        if (role == RoleCodes.Patient && request.PatientId.HasValue)
+        {
+            var patient = await _patientRepository.GetByIdAsync(request.PatientId.Value, ct);
+            if (patient?.UserId != actorUserId) return Result<PagedResult<AppointmentResponse>>.Failure(Error.NotFound);
+        }
+        return await GetAppointmentsAsync(request, ct, role == RoleCodes.Patient ? actorUserId : null);
+    }
+
+    public async Task<Result<AppointmentResponse>> GetAccessibleAppointmentByIdAsync(
+        int id, int actorUserId, string? role, CancellationToken ct = default)
+    {
+        if (role is not (RoleCodes.Admin or RoleCodes.Receptionist or RoleCodes.Dentist or RoleCodes.Assistant or RoleCodes.Patient))
+            return Result<AppointmentResponse>.Failure(Error.Forbidden);
+        var appointment = await _appointmentRepository.GetByIdAsync(id, ct);
+        if (appointment is null) return Result<AppointmentResponse>.Failure(Error.AppointmentNotFound);
+        if (role == RoleCodes.Patient)
+        {
+            var patient = await _patientRepository.GetByIdAsync(appointment.PatientId, ct);
+            if (patient?.UserId != actorUserId) return Result<AppointmentResponse>.Failure(Error.AppointmentNotFound);
+        }
+        return Result<AppointmentResponse>.Success(ToResponse(appointment));
     }
 
     public async Task<Result<AppointmentResponse>> GetAppointmentByIdAsync(

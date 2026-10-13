@@ -59,6 +59,12 @@ const router = createRouter({
       meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST'] }
     },
     {
+      path: '/appointments/mine',
+      name: 'patient-appointment-history',
+      component: () => import('@/views/PatientAppointmentHistoryView.vue'),
+      meta: { requiresAuth: true, roles: ['PATIENT'] }
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),
