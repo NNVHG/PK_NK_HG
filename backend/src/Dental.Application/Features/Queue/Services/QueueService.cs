@@ -554,5 +554,3 @@ public sealed class QueueService
         );
 
 }
-
-

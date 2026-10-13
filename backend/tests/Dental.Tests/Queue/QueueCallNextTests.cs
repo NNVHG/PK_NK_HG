@@ -258,4 +258,3 @@ public sealed class QueueCallNextTests
     }
 
 }
-
