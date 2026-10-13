@@ -133,6 +133,49 @@ internal static class QueueCallNextAtomicSmoke
             !await setup.AuditLogs.AnyAsync(a => a.EntityType == "QueueEntry" && a.EntityId == rollbackCancel.QueueEntryId),
             "Cancel waiting rollback leaves no history/audit");
         check((await Cancel(options, rollbackCancel)).IsSuccess, "Cancel waiting fresh request after rollback succeeds");
+        async Task<Result<QueueEntryResponse>> StartSelected(DbContextOptions<DentalDbContext> dbOptions, QueueEntry row, int dentistId)
+        {
+            await using var db = new DentalDbContext(dbOptions);
+            return await Service(db, row.QueueDate).UpdateQueueStatusAsync(row.QueueEntryId, dentistId, RoleCodes.Dentist, new(2, dentistId), null);
+        }
+        var selectedDentist = await Dentist(); var selectA = await Waiting(day.AddDays(7), 1); var selectB = await Waiting(day.AddDays(7), 2);
+        raceOptions = new DbContextOptionsBuilder<DentalDbContext>(options).AddInterceptors(new Rendezvous()).Options;
+        var selectedRace = await Task.WhenAll(StartSelected(raceOptions, selectA, selectedDentist.UserId), StartSelected(raceOptions, selectB, selectedDentist.UserId));
+        check(selectedRace.Count(r => r.IsSuccess) == 1 && selectedRace.Count(r => r.Error.Code == "CHK_010") == 1,
+            "Selected start different entries same dentist one commit/one conflict");
+        check(await setup.Visits.AsNoTracking().CountAsync(v => v.DentistId == selectedDentist.UserId && v.Status == VisitStatuses.InProgress) == 1,
+            "Selected start race cannot create two active Visits for dentist");
+        var selectedIds = new[] { selectA.QueueEntryId, selectB.QueueEntryId };
+        check(await setup.QueueStatusHistories.CountAsync(h => selectedIds.Contains(h.QueueEntryId)) == 1 &&
+            await setup.AuditLogs.CountAsync(a => a.EntityType == "QueueEntry" && a.EntityId.HasValue && selectedIds.Contains(a.EntityId.Value)) == 1,
+            "Selected start different-entry race commits one history/audit");
+        var cancelVsStartDentist = await Dentist(); var cancelVsStart = await Waiting(day.AddDays(8), 1);
+        raceOptions = new DbContextOptionsBuilder<DentalDbContext>(options).AddInterceptors(new Rendezvous()).Options;
+        var selectedCancelRace = await Task.WhenAll(StartSelected(raceOptions, cancelVsStart, cancelVsStartDentist.UserId), Cancel(raceOptions, cancelVsStart));
+        check(selectedCancelRace.Count(r => r.IsSuccess) == 1 && selectedCancelRace.Any(r => r.Error.Code is "CHK_010" or "CHK_012"),
+            "Selected start versus cancellation commits one outcome");
+        persisted = await setup.QueueEntries.AsNoTracking().Include(q => q.Visit).SingleAsync(q => q.QueueEntryId == cancelVsStart.QueueEntryId);
+        check((persisted.Status == QueueStatus.Cancelled && persisted.Visit!.Status == VisitStatuses.Cancelled) ||
+            (persisted.Status == QueueStatus.InConsultation && persisted.Visit!.Status == VisitStatuses.InProgress),
+            "Selected start versus cancel keeps Queue and Visit consistent");
+        var nextVsStartDentist = await Dentist(); var nextVsStart = await Waiting(day.AddDays(9), 1, nextVsStartDentist.UserId);
+        raceOptions = new DbContextOptionsBuilder<DentalDbContext>(options).AddInterceptors(new Rendezvous()).Options;
+        var selectedNextRace = await Task.WhenAll(StartSelected(raceOptions, nextVsStart, nextVsStartDentist.UserId), Call(raceOptions, nextVsStart.QueueDate, nextVsStartDentist.UserId));
+        check(selectedNextRace.Count(r => r.IsSuccess) == 1 && selectedNextRace.Count(r => r.Error.Code == "CHK_010") == 1,
+            "Selected start versus call-next claims same entry once");
+        check(await setup.QueueStatusHistories.CountAsync(h => h.QueueEntryId == nextVsStart.QueueEntryId) == 1,
+            "Selected start versus call-next persists one history");
+        var failSelectedDentist = await Dentist(); var failSelected = await Waiting(day.AddDays(10), 1); failed = false;
+        faultOptions = new DbContextOptionsBuilder<DentalDbContext>(options).AddInterceptors(new FailAfterWrite()).Options;
+        try { await StartSelected(faultOptions, failSelected, failSelectedDentist.UserId); }
+        catch (InvalidOperationException e) when (e.Message == "Synthetic call-next failure after write") { failed = true; }
+        persisted = await setup.QueueEntries.AsNoTracking().Include(q => q.Visit).SingleAsync(q => q.QueueEntryId == failSelected.QueueEntryId);
+        check(failed && persisted.Status == QueueStatus.Waiting && persisted.Visit!.Status == VisitStatuses.Created && persisted.Visit.StartedAt == null,
+            "Selected start failure after write rolls back Queue and Visit");
+        check(!await setup.QueueStatusHistories.AnyAsync(h => h.QueueEntryId == failSelected.QueueEntryId) &&
+            !await setup.AuditLogs.AnyAsync(a => a.EntityType == "QueueEntry" && a.EntityId == failSelected.QueueEntryId),
+            "Selected start rollback leaves no history/audit");
+
     }
     private sealed class FixedTime(DateTimeOffset now) : TimeProvider { public override DateTimeOffset GetUtcNow() => now; }
     private sealed class Rendezvous : SaveChangesInterceptor

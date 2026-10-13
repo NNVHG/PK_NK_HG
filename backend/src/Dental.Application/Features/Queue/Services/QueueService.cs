@@ -256,6 +256,57 @@ public sealed class QueueService
         { return Result<QueueEntryResponse>.Failure(Error.QueueWaitingCancellationConcurrent); }
     }
 
+    private async Task<Result<QueueEntryResponse>> StartSelectedAsync(
+        int queueEntryId, int actorUserId, string actorRole, UpdateQueueStatusRequest request,
+        string? ipAddress, CancellationToken ct)
+    {
+        if (actorRole is not (RoleCodes.Admin or RoleCodes.Dentist))
+            return Result<QueueEntryResponse>.Failure(Error.QueueTransitionForbidden);
+        if (queueEntryId <= 0 || request.DentistId is <= 0)
+            return Result<QueueEntryResponse>.Failure(Error.Validation);
+        if (actorRole == RoleCodes.Dentist && request.DentistId.HasValue && request.DentistId != actorUserId)
+            return Result<QueueEntryResponse>.Failure(Error.QueueTransitionForbidden);
+        try
+        {
+            return await _unitOfWork.ExecuteSerializableTransactionAsync(async transactionCt =>
+            {
+                var entry = await _queueRepository.GetByIdAsync(queueEntryId, transactionCt);
+                if (entry is null) return Result<QueueEntryResponse>.Failure(Error.QueueEntryNotFound);
+                var transition = QueueStateMachine.ValidateTransition(entry.Status, QueueStatus.InConsultation, actorRole);
+                if (transition.IsFailure) return Result<QueueEntryResponse>.Failure(transition.Error);
+                var dentistId = actorRole == RoleCodes.Dentist ? actorUserId : request.DentistId ?? entry.DentistId;
+                if (!dentistId.HasValue) return Result<QueueEntryResponse>.Failure(Error.QueueDentistRequired);
+                var dentist = await _userRepository.FindByIdAsync(dentistId.Value, transactionCt);
+                if (dentist is null || !dentist.IsActive || dentist.Role?.RoleCode != RoleCodes.Dentist)
+                    return Result<QueueEntryResponse>.Failure(Error.Validation);
+                if (entry.QueueDate != _vietnamClock.Today || entry.Visit is null || entry.Visit.IsLocked ||
+                    entry.Visit.Status is not (VisitStatuses.Created or VisitStatuses.InProgress))
+                    return Result<QueueEntryResponse>.Failure(Error.QueueInvalidStateTransition);
+                if ((entry.DentistId.HasValue && entry.DentistId != dentistId) ||
+                    (entry.Visit.DentistId.HasValue && entry.Visit.DentistId != dentistId))
+                    return Result<QueueEntryResponse>.Failure(Error.QueueTransitionForbidden);
+                if (await _visitRepository.HasActiveVisitForDentistAsync(dentistId.Value, transactionCt, entry.VisitId ?? entry.Visit.VisitId))
+                    return Result<QueueEntryResponse>.Failure(Error.DentistHasActiveVisit);
+                var now = DateTime.UtcNow;
+                entry.Status = QueueStatus.InConsultation; entry.DentistId = dentistId; entry.UpdatedAt = now;
+                entry.Visit.Status = VisitStatuses.InProgress; entry.Visit.DentistId = dentistId;
+                entry.Visit.StartedAt ??= now; entry.Visit.UpdatedAt = now;
+                await _queueRepository.AddStatusHistoryAsync(new QueueStatusHistory
+                {
+                    QueueEntryId = entry.QueueEntryId, FromStatus = QueueStatus.Waiting, ToStatus = QueueStatus.InConsultation,
+                    ChangedByUserId = actorUserId, ChangedAt = now,
+                    Reason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim()
+                }, transactionCt);
+                await _unitOfWork.SaveChangesAsync(transactionCt);
+                await _auditLogger.LogAsync(AuditActions.QueueStatusChanged, "QueueEntry", entry.QueueEntryId, actorUserId,
+                    JsonSerializer.Serialize(new { action = "StartSelected", dentistId, visitId = entry.VisitId,
+                        fromStatus = (int)QueueStatus.Waiting, toStatus = (int)QueueStatus.InConsultation }), ipAddress, transactionCt);
+                var refreshed = await _queueRepository.GetByIdAsync(entry.QueueEntryId, transactionCt);
+                return Result<QueueEntryResponse>.Success(ToResponse(refreshed ?? entry));
+            }, ct);
+        }
+        catch (ConcurrentOperationException) { return Result<QueueEntryResponse>.Failure(Error.QueueConcurrent); }
+    }
     public async Task<Result<QueueEntryResponse>> UpdateQueueStatusAsync(
         int queueEntryId,
         int actorUserId,
@@ -264,6 +315,8 @@ public sealed class QueueService
         string? ipAddress,
         CancellationToken ct = default)
     {
+        if (request.NewStatus == (int)QueueStatus.InConsultation)
+            return await StartSelectedAsync(queueEntryId, actorUserId, actorRole, request, ipAddress, ct);
         var entry = await _queueRepository.GetByIdAsync(queueEntryId, ct);
         if (entry is null)
             return Result<QueueEntryResponse>.Failure(Error.QueueEntryNotFound);
@@ -273,29 +326,7 @@ public sealed class QueueService
         if (transitionValidation.IsFailure)
             return Result<QueueEntryResponse>.Failure(transitionValidation.Error);
 
-        if (targetStatus == QueueStatus.InConsultation)
-        {
-            if (request.DentistId.HasValue)
-            {
-                var dentist = await _userRepository.FindByIdAsync(request.DentistId.Value, ct);
-                if (dentist is null || !dentist.IsActive || dentist.Role?.RoleCode != RoleCodes.Dentist)
-                    return Result<QueueEntryResponse>.Failure(Error.Validation.Code, "Nha sĩ được chọn không hợp lệ hoặc không hoạt động.");
-                entry.DentistId = request.DentistId.Value;
-            }
-
-            // DL-013: Bắt buộc chỉ định Nha sĩ khi bắt đầu khám
-            if (!entry.DentistId.HasValue)
-                return Result<QueueEntryResponse>.Failure(Error.QueueDentistRequired);
-
-            if (entry.Visit is not null)
-            {
-                entry.Visit.Status = VisitStatuses.InProgress;
-                entry.Visit.DentistId = entry.DentistId;
-                entry.Visit.StartedAt ??= DateTime.UtcNow;
-                entry.Visit.UpdatedAt = DateTime.UtcNow;
-            }
-        }
-        else if (targetStatus == QueueStatus.Waiting && entry.Status == QueueStatus.InImaging)
+        if (targetStatus == QueueStatus.Waiting && entry.Status == QueueStatus.InImaging)
         {
             // DL-053: Sau khi chụp X-quang xong quay lại hàng chờ với độ ưu tiên cao nhất, giữ DentistId
             entry.IsPriority = true;

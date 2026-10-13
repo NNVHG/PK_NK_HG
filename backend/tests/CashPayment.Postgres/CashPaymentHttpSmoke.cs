@@ -125,6 +125,7 @@ internal static class CashPaymentHttpSmoke
                 await DailyQueueHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
                 await QueueCallNextHttpSmoke.RunAsync(client, options, cashierId, Authenticate, AuthenticateActor, check);
                 await QueueWaitingCancellationHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
+            await QueueSelectedStartHttpSmoke.RunAsync(client, options, cashierId, Authenticate, AuthenticateActor, check);
                 return;
             }
             using (var response = await client.GetAsync(path)) check(response.StatusCode == HttpStatusCode.Unauthorized, "HTTP anonymous 401");
@@ -174,6 +175,7 @@ internal static class CashPaymentHttpSmoke
             await DailyQueueHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await QueueCallNextHttpSmoke.RunAsync(client, options, cashierId, Authenticate, AuthenticateActor, check);
             await QueueWaitingCancellationHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
+            await QueueSelectedStartHttpSmoke.RunAsync(client, options, cashierId, Authenticate, AuthenticateActor, check);
             await AppointmentCancelHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await PatientAppointmentReadHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await PatientSelfCancellationHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);

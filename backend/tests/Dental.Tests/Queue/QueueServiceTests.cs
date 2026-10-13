@@ -29,6 +29,8 @@ public sealed class QueueServiceTests
         // 2026-10-10 02:00:00 UTC (09:00:00 giờ Việt Nam)
         _timeProvider = new FixedTimeProvider(new DateTimeOffset(2026, 10, 10, 2, 0, 0, TimeSpan.Zero));
         _vietnamClock = new VietnamClock(_timeProvider);
+        _unitOfWork.ExecuteSerializableTransactionAsync(Arg.Any<Func<CancellationToken, Task<Result<QueueEntryResponse>>>>(), Arg.Any<CancellationToken>())
+            .Returns(call => call.Arg<Func<CancellationToken, Task<Result<QueueEntryResponse>>>>()(CancellationToken.None));
 
         _unitOfWork.ExecuteInTransactionAsync(Arg.Any<Func<CancellationToken, Task<Result<QueueEntryResponse>>>>(), Arg.Any<CancellationToken>())
             .Returns(call =>
@@ -355,6 +357,7 @@ public sealed class QueueServiceTests
         var entry = new QueueEntry
         {
             QueueEntryId = 15,
+            QueueDate = _vietnamClock.Today,
             PatientId = 1,
             DentistId = null,
             Status = QueueStatus.Waiting,

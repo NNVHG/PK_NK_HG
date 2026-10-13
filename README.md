@@ -499,3 +499,15 @@ Nếu ca vừa được gọi, đã hủy, thuộc ngày khác hoặc đã bắt
 Kiểm chứng 2026-10-14: 809/809 backend unit, 180/180 frontend Node và 484/484 PostgreSQL/HTTP full harness PASS; build backend 0 warning/error, frontend 201 modules, EF không pending model changes. Có barrier race hủy-vs-hủy/hủy-vs-call-next, kiểm queue/Visit/history/audit chỉ theo một kết quả đã commit, rollback sau write và check-in lại sau hủy.
 
 F_CHK_07 tổng thể PARTIAL: lượt này chỉ UI/endpoint hủy trước khám; các nút chuyển trạng thái khác và browser UAT còn chờ. PUT /queue/{id}/status cũ vẫn có luồng riêng, chưa chứng minh race với endpoint mới; DL-057 hủy InImaging khác source state machine hiện tại và DL-214 còn lệch tên trạng thái/ghế, đã ghi nhận, không sửa DL trong lượt này. Fixture nhắc hẹn có lỗi biên gần nửa đêm đã ghi từ lượt trước, hôm nay PASS tại giờ thực chạy nhưng fixture đó chưa được sửa. Phase 2 chưa mở.
+
+## Bắt đầu khám từ lượt đã chọn (F_CHK_04)
+
+Nha sĩ/Admin mở /clinical/diagnosis và chọn lượt Đang chờ hôm nay. Nha sĩ bắt đầu cho chính mình; Admin chọn nha sĩ hoạt động từ danh sách đã tải. Nếu lượt/Visit đã được gán nha sĩ, phải giữ nha sĩ đó; chuyển người phụ trách không thuộc thao tác bắt đầu này.
+
+Bấm Bắt đầu khám chuyển QueueEntry sang InConsultation và Visit sang InProgress trong giao dịch Serializable, lưu lịch sử và audit actor/ID/status. Nha sĩ đã có Visit InProgress khác bị 409; không được giả mạo DentistId khác. Lượt trở lại sau chụp ảnh tiếp tục chính Visit/nha sĩ, giữ StartedAt. Ca đã hủy/khóa/xong hoặc ngày khác bị từ chối.
+
+Thành công đọc lại cả QueueEntry và Visit rồi mở form ghi chẩn đoán hiện hữu. Khi lỗi hoặc refresh thất bại, màn hình khóa thao tác ghi, yêu cầu tải lại hồ sơ và đối chiếu; không tự gửi lại PUT. Chưa lưu chẩn đoán thì không đổi bệnh nhân; unmount xóa dữ liệu và bỏ response muộn.
+
+API giữ PUT /api/queue/{id}/status với newStatus=2, không thêm endpoint/package/schema. Các trạng thái khác giữ luồng cũ. Kiểm chứng: 830/830 backend unit,190/190 frontend Node,505/505 PostgreSQL/HTTP full harness, backend build0warning/error và frontend201modules; EF không pending model. Có barrier race hai lượt khác nhau cùng nha sĩ, start-vs-call-next/start-vs-cancel và rollback.
+
+Implementation trên codex/phase1-start-consultation, worktree riêng kế thừa15ffad2/ce5ecb9; main55a0a00 chưa chứa ba commit này. F_CHK_04 tổng thể PARTIAL/chờ Gia UAT, ghế/Calling/InExam theoDL214 chưa có. DL057 quyền hủy InImaging còn lệchsource ngoài scope; không sửaDL. AuditLoggerbest-effort và lỗi fixture reminder gần nửa đêm đã ghi trước chưa đổi; bộ505 PASS tại giờ chạy không chứng minh hết biên thời gian này.

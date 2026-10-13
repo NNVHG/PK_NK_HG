@@ -53,6 +53,11 @@ export const queueService = {
     return response.data;
   },
 
+  async getEntry(queueEntryId: number): Promise<QueueEntryResponse> {
+    const response = await apiClient.get<{ entry: QueueEntryResponse }>('/queue/' + queueEntryId);
+    return response.data.entry;
+  },
+
   async startConsultation(queueEntryId: number, dentistId: number): Promise<QueueEntryResponse> {
     const response = await apiClient.put<QueueEntryResponse>(`/queue/${queueEntryId}/status`, {
       newStatus: 2, dentistId

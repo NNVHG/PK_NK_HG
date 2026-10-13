@@ -45,6 +45,16 @@
           <template v-if="visit">
             <RouterLink v-if="!dirty && !busy" :to="`/clinical/visits/${visit.visitId}/fdi`">Mở sơ đồ và ghi tình trạng răng</RouterLink>
             <p>Trạng thái: {{ visitStatusLabel }}</p>
+            <template v-if="auth.role === 'ADMIN' && selected.status === 1 && !visit.isLocked">
+              <label for="start-dentist">Nha sĩ phụ trách</label>
+              <select id="start-dentist" v-model.number="startDentistId" :disabled="busy || dentistsLoading">
+                <option :value="0">Chọn nha sĩ</option>
+                <option v-for="dentist in dentists" :key="dentist.dentistId" :value="dentist.dentistId">{{ dentist.dentistName }} · #{{ dentist.dentistId }}</option>
+              </select>
+              <button type="button" :disabled="busy || dentistsLoading" @click="loadDentists">Tải nha sĩ</button>
+              <p v-if="dentistError" class="error" role="alert">{{ dentistError }}</p>
+            </template>
+            <p v-if="needsReview" class="error" role="alert">Tải lại hồ sơ và đối chiếu trạng thái trước khi thao tác tiếp.</p>
             <button v-if="canStart" type="button" :disabled="busy" @click="startConsultation">
               {{ starting ? 'Đang bắt đầu…' : 'Bắt đầu khám' }}
             </button>
@@ -74,11 +84,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import axios from 'axios';
 import { useAuthStore } from '@/stores/auth';
 import { queueService, type QueueEntryResponse } from '@/services/queue';
 import { visitsService } from '@/services/visits';
+import { appointmentsService, type BookingDentist } from '@/services/appointments';
 import type { VisitDetails } from '@/services/patients';
 
 const auth = useAuthStore();
@@ -97,11 +108,18 @@ const queueError = ref('');
 const visitError = ref('');
 const actionError = ref('');
 const successMessage = ref('');
+const needsReview = ref(false), dentists = ref<BookingDentist[]>([]), startDentistId = ref(0), dentistsLoading = ref(false), dentistError = ref('');
+let life = 0, queueVersion = 0, visitVersion = 0, dentistVersion = 0;
+const targetDentistId = computed(() => auth.role === 'DENTIST' ? auth.user?.userId : startDentistId.value);
 const busy = computed(() => loadingQueue.value || loadingVisit.value || starting.value || saving.value);
-const canEdit = computed(() => visit.value?.status === 'InProgress'
+const canEdit = computed(() => !needsReview.value && !visit.value?.isLocked && visit.value?.status === 'InProgress'
   && (auth.role === 'ADMIN' || (auth.role === 'DENTIST' && visit.value.dentistId === auth.user?.userId)));
-const canStart = computed(() => auth.role === 'DENTIST' && visit.value?.status === 'Created'
-  && selected.value?.status === 1 && (selected.value.dentistId === null || selected.value.dentistId === auth.user?.userId));
+const canStart = computed(() => !needsReview.value && !visit.value?.isLocked && ['Created', 'InProgress'].includes(visit.value?.status ?? '')
+  && selected.value?.status === 1 && ['ADMIN', 'DENTIST'].includes(auth.role)
+  && Number.isInteger(targetDentistId.value) && Number(targetDentistId.value) > 0
+  && (selected.value.dentistId === null || selected.value.dentistId === targetDentistId.value)
+  && (visit.value?.dentistId === null || visit.value?.dentistId === targetDentistId.value)
+  && (auth.role !== 'ADMIN' || (!dentistsLoading.value && dentists.value.some(d => d.dentistId === targetDentistId.value))));
 const dirty = computed(() => canEdit.value && Boolean(visit.value)
   && (diagnosis.value !== (visit.value?.diagnosis ?? '') || clinicalNotes.value !== (visit.value?.clinicalNotes ?? '')));
 const visitStatusLabel = computed(() => ({ Created: 'Chưa bắt đầu', InProgress: 'Đang khám', Completed: 'Đã kết thúc', Cancelled: 'Đã hủy' }[visit.value?.status ?? ''] ?? visit.value?.status));
@@ -113,12 +131,24 @@ function errorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
+async function loadDentists() {
+  if (auth.role !== 'ADMIN' || starting.value || saving.value) return;
+  const ticket = ++dentistVersion; dentistsLoading.value = true; dentists.value = []; dentistError.value = '';
+  try {
+    const result = await appointmentsService.getBookingDentists();
+    if (ticket !== dentistVersion) return;
+    dentists.value = result; if (!result.some(d => d.dentistId === startDentistId.value)) startDentistId.value = 0;
+  } catch { if (ticket === dentistVersion) { startDentistId.value = 0; dentistError.value = 'Không tải được nha sĩ hoạt động. Tải lại trước khi bắt đầu khám.'; } }
+  finally { if (ticket === dentistVersion) dentistsLoading.value = false; }
+}
 async function loadQueue(targetPage = 1) {
-  if (busy.value || dirty.value) return;
+  if (busy.value || dirty.value || !Number.isInteger(targetPage) || targetPage < 1 || targetPage > 1_000_000) return;
+  const ticket = ++queueVersion; entries.value = []; selected.value = null; visit.value = null; diagnosis.value = ''; clinicalNotes.value = ''; startDentistId.value = 0;
   loadingQueue.value = true;
   queueError.value = '';
   try {
     const result = await queueService.getToday(targetPage);
+    if (ticket !== queueVersion) return;
     entries.value = result.items;
     page.value = result.page;
     totalPages.value = result.totalPages;
@@ -127,45 +157,59 @@ async function loadQueue(targetPage = 1) {
     actionError.value = '';
     successMessage.value = '';
   } catch (error) {
+    if (ticket !== queueVersion) return;
     queueError.value = errorMessage(error, 'Không tải được lượt khám. Vui lòng thử lại.');
-  } finally { loadingQueue.value = false; }
+  } finally { if (ticket === queueVersion) loadingQueue.value = false; }
 }
 
 async function selectEntry(entry: QueueEntryResponse) {
   if (busy.value || dirty.value) return;
-  selected.value = entry;
+  selected.value = entry; startDentistId.value = entry.dentistId ?? 0;
+  needsReview.value = false;
   await reloadVisit();
 }
 
 async function reloadVisit() {
   if (!selected.value?.visitId) return;
+  const ticket = ++visitVersion;
   loadingVisit.value = true;
   visitError.value = '';
   actionError.value = '';
   successMessage.value = '';
   visit.value = null;
   try {
-    const result = await visitsService.getById(selected.value.visitId);
-    visit.value = result;
+    const [result, currentEntry] = await Promise.all([
+      visitsService.getById(selected.value.visitId), queueService.getEntry(selected.value.queueEntryId)
+    ]);
+    if (ticket !== visitVersion) return;
+    if (currentEntry.visitId !== result.visitId) throw new Error('Visit mismatch');
+    selected.value = currentEntry;
+    entries.value = entries.value.map(entry => entry.queueEntryId === currentEntry.queueEntryId ? currentEntry : entry);
+    if (currentEntry.dentistId !== null) startDentistId.value = currentEntry.dentistId;
+    needsReview.value = false; visit.value = result;
     diagnosis.value = result.diagnosis ?? '';
     clinicalNotes.value = result.clinicalNotes ?? '';
   } catch (error) {
+    if (ticket !== visitVersion) return; needsReview.value = true;
     visitError.value = errorMessage(error, 'Không tải được hồ sơ khám. Vui lòng thử lại.');
-  } finally { loadingVisit.value = false; }
+  } finally { if (ticket === visitVersion) loadingVisit.value = false; }
 }
 
 async function startConsultation() {
   if (busy.value || !canStart.value || !selected.value || !auth.user) return;
+  const ticket = life;
   starting.value = true;
   actionError.value = '';
   try {
-    const updated = await queueService.startConsultation(selected.value.queueEntryId, auth.user.userId);
+    const updated = await queueService.startConsultation(selected.value.queueEntryId, Number(targetDentistId.value));
+    if (ticket !== life) return; needsReview.value = true;
     entries.value = entries.value.map(entry => entry.queueEntryId === updated.queueEntryId ? updated : entry);
     selected.value = updated;
     await reloadVisit();
   } catch (error) {
+    if (ticket !== life) return; needsReview.value = true;
     actionError.value = errorMessage(error, 'Không bắt đầu được phiên khám. Tải lại hồ sơ để kiểm tra trạng thái.');
-  } finally { starting.value = false; }
+  } finally { if (ticket === life) starting.value = false; }
 }
 
 async function saveDiagnosis() {
@@ -176,21 +220,25 @@ async function saveDiagnosis() {
     actionError.value = 'Nhập chẩn đoán (tối đa 1000 ký tự), ghi chú tối đa 2000 ký tự.';
     return;
   }
+  const ticket = life;
   saving.value = true;
   try {
     const result = await visitsService.updateDiagnosis(visit.value.visitId, {
       diagnosis: diagnosis.value.trim(), clinicalNotes: clinicalNotes.value.trim() || null
     });
+    if (ticket !== life) return;
     visit.value = result;
     diagnosis.value = result.diagnosis ?? '';
     clinicalNotes.value = result.clinicalNotes ?? '';
     successMessage.value = 'Đã lưu chẩn đoán và ghi chú lâm sàng. Có thể tải lại hồ sơ để xem kết quả đã lưu.';
   } catch (error) {
+    if (ticket !== life) return;
     actionError.value = errorMessage(error, 'Không lưu được chẩn đoán. Kiểm tra lại quyền và trạng thái lần khám.');
-  } finally { saving.value = false; }
+  } finally { if (ticket === life) saving.value = false; }
 }
 
-onMounted(() => { void loadQueue(); });
+onMounted(() => Promise.all([loadQueue(), loadDentists()]));
+onUnmounted(() => { life++; queueVersion++; visitVersion++; dentistVersion++; entries.value = []; selected.value = null; visit.value = null; diagnosis.value = ''; clinicalNotes.value = ''; dentists.value = []; startDentistId.value = 0; dentistError.value = ''; actionError.value = ''; successMessage.value = ''; queueError.value = ''; visitError.value = ''; });
 </script>
 
 <style scoped>
