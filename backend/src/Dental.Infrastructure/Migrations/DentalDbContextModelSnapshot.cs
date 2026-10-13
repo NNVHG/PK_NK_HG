@@ -52,6 +52,15 @@ namespace Dental.Infrastructure.Migrations
                     b.Property<int>("PatientId")
                         .HasColumnType("integer");
 
+                    b.Property<int>("RescheduleCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<string>("RescheduleReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<TimeOnly>("SlotTime")
                         .HasColumnType("time");
 

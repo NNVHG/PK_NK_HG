@@ -413,3 +413,13 @@ Tại /appointments/mine, Patient chọn Tự hủy lịch ở dòng Scheduled. 
 Sau thành công danh sách tải lại. Nếu kết quả mạng chưa rõ, đối chiếu lại lịch trước khi thử tiếp; UI không tự gửi lại thao tác hủy. Lý do giới hạn theo phần ghi chú còn lại, không cắt nội dung cũ.
 
 GET cancellation-eligibility chỉ Patient/ownership/no-store; PUT cancel vẫn kiểm lại điều kiện lúc ghi, nên lần đọc hợp lệ trước đó không vượt được ngưỡng thời gian. Chưa có tự đổi lịch. Chờ Gia nghiệm thu dialog bằng browser có đăng nhập.
+
+## Đổi lịch tại quầy (F_APP_03)
+
+Lễ tân/Admin mở /appointments/desk, chọn Đổi lịch trên dòng Scheduled. Đối chiếu lịch hiện tại, chọn ngày và slot30phút mới, nhập lý do bắt buộc (tối đa500ký tự), tích xác nhận rồi gửi. Giữ nha sĩ đang gán; không chuyển nha sĩ qua UI này. Quay lại/ESC trước gửi giữ lịch cũ.
+
+Đổi lịch giữ ID hiện có, tăng số lần đổi và lưu lý do gần nhất riêng với Notes. Sau thành công, tra cứu ngày mới để thấy lịch cập nhật. API reschedule hiện yêu cầu thêm reason; client/script cũ cần gửi trường này. Same-target replay không tăng thêm count.
+
+Migration20261012175813_AddAppointmentRescheduleMetadata thêm Count default0/Reason nullable và đã áp dụng local. Không chạy Down nếu cần giữ hai trường lịch sử này. Đổi lịch dùng Serializable, kiểm trùng nha sĩ/bệnh nhân/slot và trả409 khi có thao tác đồng thời; UI không tự retry.
+
+Giới hạn: chưa Patient tự đổi, chưa cột AppointmentCode riêng, chưa sửa kiểm trùng nha sĩ ở luồng tạo lịch mới; test race chỉ giữa reschedule. Chờ Gia nghiệm thu UI có đăng nhập.

@@ -13,6 +13,7 @@ function deferred() { let resolve; const promise = new Promise(done => { resolve
 function fixture({ pages = [page], cancelResult, fail } = {}) {
   let mount, cleanup; const reads = [], writes = [];
   const imports = {
+    '@/components/AppointmentRescheduling.vue': {},
     vue: { defineComponent: c => c, ref: value => ({ value }), computed: get => ({ get value() { return get(); } }), onMounted: cb => { mount = cb; }, onUnmounted: cb => { cleanup = cb; } },
     axios: { isAxiosError: e => Boolean(e?.response) },
     '@/services/appointments': { appointmentsService: { getForDesk: async (...args) => { reads.push(args); return pages.shift() ?? page; },

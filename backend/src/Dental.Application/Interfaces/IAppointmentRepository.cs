@@ -6,8 +6,9 @@ public interface IAppointmentRepository
 {
     Task AddAsync(Appointment appointment, CancellationToken ct = default);
     Task<Appointment?> GetByIdAsync(int appointmentId, CancellationToken ct = default);
-    Task<int> GetSlotBookingCountAsync(DateOnly date, TimeOnly slotTime, CancellationToken ct = default);
-    Task<bool> HasActiveAppointmentOnDateAsync(int patientId, DateOnly date, CancellationToken ct = default);
+    Task<int> GetSlotBookingCountAsync(DateOnly date, TimeOnly slotTime, CancellationToken ct = default, int? excludedId = null);
+    Task<bool> HasActiveAppointmentOnDateAsync(int patientId, DateOnly date, CancellationToken ct = default, int? excludedId = null);
+    Task<bool> HasDentistBookingAsync(int dentistId, DateOnly date, TimeOnly slotTime, int excludedId, CancellationToken ct = default);
     Task<(IReadOnlyList<Appointment> Items, int TotalCount)> GetAppointmentsAsync(
         DateOnly? date,
         int? patientId,

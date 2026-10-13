@@ -1,0 +1,56 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { parse, compileScript } from '@vue/compiler-sfc';
+import ts from 'typescript';
+const { descriptor } = parse(await readFile(new URL('../src/components/AppointmentRescheduling.vue', import.meta.url), 'utf8'));
+const compiled = ts.transpileModule(compileScript(descriptor, { id: 'reschedule-test' }).content, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
+}).outputText;
+const current = { appointmentId: 7, status: 'Scheduled', appointmentDate: '2099-01-01', slotTime: '08:00:00', dentistId: 30, rescheduleCount: 2 };
+function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
+function fixture({ reads = [current], result, failure } = {}) {
+  let cleanup; const getCalls = [], writes = [], events = [];
+  const imports = {
+    vue: { defineComponent: c => c, ref: value => ({ value }), onUnmounted: cb => { cleanup = cb; } },
+    axios: { isAxiosError: e => Boolean(e?.response) },
+    '@/services/appointments': { appointmentsService: {
+      getById: async id => { getCalls.push(id); const response = reads.shift() ?? current; if (response instanceof Error) throw response; return response; },
+      reschedule: async (...args) => { writes.push(args); if (failure) throw { response: { data: { message: 'Synthetic conflict' } } }; return result ?? {}; },
+    } },
+  };
+  const module = { exports: {} }; new Function('require', 'module', 'exports', compiled)(name => imports[name], module, module.exports);
+  const c = module.exports.default.setup({ appointmentId: 7, patientName: 'Synthetic patient' }, { expose() {}, emit: (...args) => events.push(args) });
+  c.dialog.value = { open: false, showModal() { this.open = true; }, close() { this.open = false; } };
+  return { c, writes, events, getCalls, cleanup: () => cleanup() };
+}
+async function ready(f) { await f.c.open(); f.c.day.value = '2099-01-02'; f.c.time.value = '09:00'; f.c.reason.value = 'Synthetic shift'; f.c.confirmed.value = true; }
+test('loads current appointment only when opened', async () => {
+  const f = fixture(); assert.equal(f.getCalls.length, 0); await f.c.open(); assert.equal(f.c.day.value, current.appointmentDate); assert.equal(f.c.current.value.rescheduleCount, 2);
+});
+test('close clears form without moving appointment', async () => {
+  const f = fixture(); await ready(f); f.c.close(); await f.c.save(); assert.equal(f.writes.length, 0); assert.equal(f.c.reason.value, '');
+});
+test('confirmation sends target and reason, preserving dentist through API contract', async () => {
+  const f = fixture(); await ready(f); f.c.confirmed.value = false; await f.c.save(); assert.equal(f.writes.length, 0);
+  f.c.confirmed.value = true; await f.c.save(); assert.deepEqual(f.writes, [[7, '2099-01-02', '09:00:00', 'Synthetic shift']]); assert.deepEqual(f.events, [['rescheduled']]);
+});
+test('invalid date, unchanged slot, lunch slot and missing/long reason rejected', async () => {
+  for (const [key, value] of [['day', '2000-01-01'], ['time', '12:00'], ['reason', ' '], ['reason', 'x'.repeat(501)]]) {
+    const f = fixture(); await ready(f); f.c[key].value = value; await f.c.save(); assert.equal(f.writes.length, 0);
+  }
+  const f = fixture(); await ready(f); f.c.day.value = current.appointmentDate; f.c.time.value = '08:00'; await f.c.save(); assert.equal(f.writes.length, 0);
+});
+test('double submit and close during write cannot issue another move', async () => {
+  const d = deferred(), f = fixture({ result: d.promise }); await ready(f); const first = f.c.save(); await f.c.save(); f.c.close(); assert.equal(f.writes.length, 1); assert.equal(f.c.dialog.value.open, true); d.resolve({}); await first;
+});
+test('conflict keeps draft, rereads state and requires confirmation again', async () => {
+  const f = fixture({ failure: true }); await ready(f); await f.c.save(); assert.equal(f.c.reason.value, 'Synthetic shift'); assert.equal(f.c.confirmed.value, false); assert.equal(f.getCalls.length, 2); assert.equal(f.writes.length, 1);
+});
+test('closed or checked-in appointment cannot move', async () => {
+  const f = fixture({ reads: [{ ...current, status: 'CheckedIn' }] }); await ready(f); await f.c.save(); assert.equal(f.writes.length, 0);
+});
+test('unmount ignores pending detail and move responses', async () => {
+  const d = deferred(), f = fixture({ reads: [d.promise] }); const first = f.c.open(); f.cleanup(); d.resolve(current); await first; assert.equal(f.c.current.value, null);
+  const p = deferred(), g = fixture({ result: p.promise }); await ready(g); const move = g.c.save(); g.cleanup(); p.resolve({}); await move; assert.equal(g.events.length, 0); assert.equal(g.c.reason.value, '');
+});

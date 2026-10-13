@@ -22,17 +22,21 @@ public sealed class AppointmentRepository : IAppointmentRepository
             .Include(a => a.CreatedByUser)
             .FirstOrDefaultAsync(a => a.AppointmentId == appointmentId, ct);
 
-    public Task<int> GetSlotBookingCountAsync(DateOnly date, TimeOnly slotTime, CancellationToken ct = default)
+    public Task<int> GetSlotBookingCountAsync(DateOnly date, TimeOnly slotTime, CancellationToken ct = default, int? excludedId = null)
         => _db.Appointments
             .CountAsync(a => a.AppointmentDate == date &&
                              a.SlotTime == slotTime &&
-                             a.Status == AppointmentStatuses.Scheduled, ct);
+                             a.Status == AppointmentStatuses.Scheduled && (!excludedId.HasValue || a.AppointmentId != excludedId.Value), ct);
 
-    public Task<bool> HasActiveAppointmentOnDateAsync(int patientId, DateOnly date, CancellationToken ct = default)
+    public Task<bool> HasActiveAppointmentOnDateAsync(int patientId, DateOnly date, CancellationToken ct = default, int? excludedId = null)
         => _db.Appointments
             .AnyAsync(a => a.PatientId == patientId &&
                            a.AppointmentDate == date &&
-                           a.Status == AppointmentStatuses.Scheduled, ct);
+                           a.Status == AppointmentStatuses.Scheduled && (!excludedId.HasValue || a.AppointmentId != excludedId.Value), ct);
+
+    public Task<bool> HasDentistBookingAsync(int dentistId, DateOnly date, TimeOnly slotTime, int excludedId, CancellationToken ct = default)
+        => _db.Appointments.AnyAsync(a => a.DentistId == dentistId && a.AppointmentDate == date && a.SlotTime == slotTime &&
+            a.Status == AppointmentStatuses.Scheduled && a.AppointmentId != excludedId, ct);
 
     public async Task<(IReadOnlyList<Appointment> Items, int TotalCount)> GetAppointmentsAsync(
         DateOnly? date,

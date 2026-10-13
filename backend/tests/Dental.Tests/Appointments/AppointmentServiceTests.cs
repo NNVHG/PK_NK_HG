@@ -33,6 +33,8 @@ public sealed class AppointmentServiceTests
 
     public AppointmentServiceTests()
     {
+        _unitOfWork.ExecuteSerializableTransactionAsync(Arg.Any<Func<CancellationToken, Task<Result<AppointmentResponse>>>>(), Arg.Any<CancellationToken>())
+            .Returns(call => call.Arg<Func<CancellationToken, Task<Result<AppointmentResponse>>>>()(CancellationToken.None));
         // 2026-10-10 09:00:00 UTC (16:00:00 giờ Việt Nam)
         _timeProvider = new FixedTimeProvider(new DateTimeOffset(2026, 10, 10, 9, 0, 0, TimeSpan.Zero));
         _vietnamClock = new VietnamClock(_timeProvider);
@@ -237,7 +239,8 @@ public sealed class AppointmentServiceTests
         var result = await CreateService().RescheduleAppointmentAsync(
             appointmentId: 5,
             actorUserId: 2,
-            new RescheduleAppointmentRequest(newDate, new TimeOnly(14, 0)),
+            actorRoleCode: RoleCodes.Receptionist,
+            new RescheduleAppointmentRequest(newDate, new TimeOnly(14, 0), Reason: "Synthetic schedule change"),
             ipAddress: "127.0.0.1");
 
         Assert.True(result.IsSuccess);

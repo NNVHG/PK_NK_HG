@@ -9,6 +9,10 @@ export interface AppointmentResponse {
   slotTime: string;
   status: string;
   notes: string | null;
+  dentistId: number | null;
+  dentistName: string | null;
+  rescheduleCount: number;
+  rescheduleReason: string | null;
 }
 
 export interface CreateAppointmentPayload {
@@ -36,6 +40,12 @@ export interface SelfCancellationEligibility {
 }
 
 export const appointmentsService = {
+  async getById(id: number): Promise<AppointmentResponse> {
+    return (await apiClient.get<AppointmentResponse>(`/appointments/${id}`)).data;
+  },
+  async reschedule(id: number, appointmentDate: string, slotTime: string, reason: string): Promise<AppointmentResponse> {
+    return (await apiClient.put<AppointmentResponse>(`/appointments/${id}/reschedule`, { appointmentDate, slotTime, reason })).data;
+  },
   async selfCancellationEligibility(id: number): Promise<SelfCancellationEligibility> {
     return (await apiClient.get<SelfCancellationEligibility>(`/appointments/${id}/cancellation-eligibility`)).data;
   },
