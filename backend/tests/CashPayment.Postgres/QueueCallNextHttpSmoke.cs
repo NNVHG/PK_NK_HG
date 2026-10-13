@@ -1,10 +1,13 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Dental.Application.Common;
+using Dental.Application.Features.Queue.Services;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
 using Dental.Domain.Enums;
 using Dental.Infrastructure.Data;
+using Dental.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
 
 internal static class QueueCallNextHttpSmoke
@@ -14,10 +17,13 @@ internal static class QueueCallNextHttpSmoke
         DbContextOptions<DentalDbContext> options,
         int actorId,
         Action<string> authenticate,
+        Action<string, int> authenticateActor,
         Action<bool, string> check)
     {
         await using var db = new DentalDbContext(options);
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (!db.Database.GetDbConnection().Database.StartsWith("dental_cash_test_", StringComparison.Ordinal))
+            throw new InvalidOperationException("Fixture gọi số chỉ được chạy trên CSDL kiểm thử do bộ chạy sở hữu.");
+        var today = new VietnamClock(TimeProvider.System).Today;
 
         // 1. Kiểm tra màn hình TV công khai: AllowAnonymous, no-store, bảo vệ PII
         client.DefaultRequestHeaders.Authorization = null;
@@ -55,25 +61,22 @@ internal static class QueueCallNextHttpSmoke
         }
 
         // 3. Chuẩn bị dữ liệu ca chờ để Nha sĩ gọi vào khám
-        var dentist = await db.Users.FirstOrDefaultAsync(u => u.Role != null && u.Role.RoleCode == RoleCodes.Dentist && u.IsActive);
-        if (dentist == null)
+        var role = await db.Roles.FirstOrDefaultAsync(r => r.RoleCode == RoleCodes.Dentist);
+        if (role is null)
         {
-            var role = await db.Roles.FirstAsync(r => r.RoleCode == RoleCodes.Dentist);
-            dentist = new User
-            {
-                FullName = "BS. Smoke Test",
-                Phone = "0988776655",
-                PasswordHash = "dummy",
-                RoleId = role.RoleId,
-                IsActive = true
-            };
-            db.Users.Add(dentist);
-            await db.SaveChangesAsync();
+            role = new Role { RoleCode = RoleCodes.Dentist, RoleName = "Nha sĩ kiểm thử gọi số" };
+            db.Roles.Add(role);
         }
-
-        // Hủy bất kỳ ca InProgress nào của nha sĩ này trước đó để không bị chặn DL-045
-        var activeVisits = await db.Visits.Where(v => v.DentistId == dentist.UserId && v.Status == VisitStatuses.InProgress).ToListAsync();
-        foreach (var v in activeVisits) { v.Status = VisitStatuses.Completed; }
+        // Dùng nha sĩ riêng để không sửa ca khám của fixture khác nhằm vượt DL-045.
+        var dentist = new User
+        {
+            FullName = "BS. Smoke Test",
+            Phone = "TVTEST" + Guid.NewGuid().ToString("N")[..14],
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()),
+            Role = role,
+            IsActive = true
+        };
+        db.Users.Add(dentist);
 
         var startNum = await db.QueueEntries.MaxAsync(q => (int?)q.QueueNumber) ?? 0;
         var patient = new Patient { FullName = "Bùi Văn Kiểm Thử", DateOfBirth = new(1995, 5, 5), Phone = "0911223344" };
@@ -91,29 +94,47 @@ internal static class QueueCallNextHttpSmoke
         db.QueueEntries.Add(entry);
         await db.SaveChangesAsync();
 
+        // Bộ chạy trước có thể để lại ca hẹn ưu tiên; CallNext phải giữ thứ tự thật.
+        var expectedEntry = await new QueueRepository(db).GetNextWaitingEntryAsync(today, dentist.UserId);
+        check(expectedEntry is not null, "Queue fixture has eligible waiting entry today");
+        var expectedEntryId = expectedEntry!.QueueEntryId;
+        var expectedPatientName = expectedEntry.Patient.FullName;
+        var calledEntryId = 0;
+
         // 4. Nha sĩ gọi số tiếp theo thành công
-        authenticate(RoleCodes.Dentist);
+        authenticateActor(RoleCodes.Dentist, dentist.UserId);
         using (var response = await client.PostAsJsonAsync("/api/queue/call-next", new { }))
         {
             check(response.StatusCode == HttpStatusCode.OK, "Queue call-next Dentist 200");
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            calledEntryId = json.RootElement.GetProperty("queueEntryId").GetInt32();
+            check(calledEntryId == expectedEntryId, "Queue call-next preserves repository priority order");
             check(json.RootElement.GetProperty("status").GetInt32() == (int)QueueStatus.InConsultation, "Queue call-next status is InConsultation");
             check(json.RootElement.GetProperty("dentistId").GetInt32() > 0, "Queue call-next assigned dentistId");
+            check(json.RootElement.GetProperty("dentistId").GetInt32() == dentist.UserId, "Queue call-next assigns actual JWT dentist");
         }
+        check(await db.QueueStatusHistories.AnyAsync(h => h.QueueEntryId == calledEntryId &&
+            h.ToStatus == QueueStatus.InConsultation && h.ChangedByUserId == dentist.UserId), "Queue call-next history records actual JWT dentist");
 
         // 5. Kiểm tra lại /api/queue/display thấy ca đang khám có tên được che
         client.DefaultRequestHeaders.Authorization = null;
         using (var response = await client.GetAsync("/api/queue/display"))
         {
             check(response.StatusCode == HttpStatusCode.OK, "Queue display after call 200");
+            check(response.Headers.CacheControl?.NoStore == true, "Queue display after call no-store");
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             var currentItems = json.RootElement.GetProperty("inConsultation").EnumerateArray().ToList();
-            var matched = currentItems.FirstOrDefault(x => x.GetProperty("queueEntryId").GetInt32() == entry.QueueEntryId);
+            var matched = currentItems.FirstOrDefault(x => x.GetProperty("queueEntryId").GetInt32() == calledEntryId);
             check(matched.ValueKind != JsonValueKind.Undefined, "Called patient appears in display inConsultation");
             if (matched.ValueKind != JsonValueKind.Undefined)
             {
                 var masked = matched.GetProperty("maskedPatientName").GetString() ?? "";
-                check(masked.Contains("***"), $"Display masked name format ({masked})");
+                check(masked.Contains("***"), "Display masked name format");
+                check(masked == QueueService.MaskPatientName(expectedPatientName) && masked != expectedPatientName,
+                    "Display masks name of actual called patient");
+                check(!matched.TryGetProperty("patientName", out _) && !matched.TryGetProperty("patientPhone", out _) &&
+                    !matched.TryGetProperty("patientId", out _) && !matched.TryGetProperty("patientCode", out _) &&
+                    !matched.TryGetProperty("notes", out _), "Display excludes patient identity/contact/clinical fields");
             }
         }
     }

@@ -104,13 +104,14 @@ internal static class CashPaymentHttpSmoke
             db.Invoices.Add(invoice); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
             var path = $"/api/invoices/{invoice.Id}/payments";
             async Task<HttpResponseMessage> Post(CashPaymentRequest body) => await client.PostAsJsonAsync(path, body);
-            void Authenticate(string role)
+            void AuthenticateActor(string role, int actorUserId)
             {
                 var token = new JwtSecurityToken("cash-test", "cash-test",
-                    [new Claim(ClaimTypes.NameIdentifier, cashierId.ToString()), new Claim(ClaimTypes.Role, role)],
+                    [new Claim(ClaimTypes.NameIdentifier, actorUserId.ToString()), new Claim(ClaimTypes.Role, role)],
                     expires: DateTime.UtcNow.AddMinutes(5), signingCredentials: new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256));
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", new JwtSecurityTokenHandler().WriteToken(token));
             }
+            void Authenticate(string role) => AuthenticateActor(role, cashierId);
             using (var response = await client.GetAsync(path)) check(response.StatusCode == HttpStatusCode.Unauthorized, "HTTP anonymous 401");
             foreach (var role in new[] { RoleCodes.Patient, RoleCodes.Dentist, RoleCodes.Assistant })
             {
@@ -156,7 +157,7 @@ internal static class CashPaymentHttpSmoke
             await FamilyBookingHttpSmoke.RunAsync(client, options, cashierId, patientId, Authenticate, check);
             await CounterBookingHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await DailyQueueHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
-            await QueueCallNextHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
+            await QueueCallNextHttpSmoke.RunAsync(client, options, cashierId, Authenticate, AuthenticateActor, check);
             await BankTransferHttpSmoke.RunAsync(client, options, cashierId, patientId, webhookKey, Authenticate, check);
         }
         finally { await app.StopAsync(); }
