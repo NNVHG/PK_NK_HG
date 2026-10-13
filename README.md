@@ -487,3 +487,15 @@ dotnet run --project tests/CashPayment.Postgres -p:UseAppHost=false --no-restore
 Kết quả: 788/788 backend unit, 169/169 frontend Node, 58/58 PostgreSQL/HTTP cho hàng đợi/gọi khám; build backend 0 warning/error và frontend 201 modules; EF không pending model changes. Bộ PostgreSQL/HTTP đầy đủ dừng tại fixture nhắc hẹn: SlotTime cộng 20 phút qua nửa đêm nhưng AppointmentDate không đổi (AppointmentReminderHttpSmoke.cs), chưa sửa vì ngoài phạm vi F_CHK_03. Không coi kết quả 433/113 của lần tích hợp trước là kết quả lượt này.
 
 Giới hạn: chưa browser UAT/âm thanh TV trên thiết bị thật; race với PUT status hoặc các luồng ghi Visit khác chưa được kiểm chứng trong lượt này. AuditLogger dùng cơ chế best-effort hiện hữu. DL-214 mô tả Calling/InExam/Skipped/ghế và Phụ tá gọi khác với 5 trạng thái source theo DL-047 và quyền gọi DL-120; giữ DL nguyên văn, ghi nhận chênh lệch. F_CHK_03 tổng thể vẫn PARTIAL, chờ Gia nghiệm thu Phase 1.
+
+## Hủy lượt chờ chưa khám (F_CHK_07)
+
+Admin/Lễ tân mở /queue/today, chọn Hủy lượt chưa khám trên dòng Đang chờ. Đối chiếu số thứ tự, tên/mã bệnh nhân và ngày tiếp đón, nhập lý do tùy chọn (tối đa 500 ký tự), tích xác nhận rồi bấm Xác nhận hủy lượt. Quay lại hoặc tải lại trước khi gửi sẽ đóng form; không hủy lượt.
+
+Backend POST /api/queue/{id}/cancel-waiting yêu cầu confirmed=true, chỉ Admin/Receptionist. Chỉ lượt hôm nay ở Waiting với Visit Created, chưa StartedAt và không khóa được hủy. Hủy QueueEntry/Visit và thêm lịch sử trong giao dịch Serializable; giữ Appointment CheckedIn vì khách đã đến, không xóa hồ sơ/lịch hẹn hoặc đổi thành no-show. Visit đóng nên bệnh nhân có thể check-in mới.
+
+Nếu ca vừa được gọi, đã hủy, thuộc ngày khác hoặc đã bắt đầu khám/trở về từ chụp ảnh, trả CHK_011/409. Khi hai thao tác tranh cùng lượt, cancellation nhận CHK_012/409; call-next vẫn dùng CHK_010/409. UI không tự gửi lại POST, giữ lý do khi lỗi, bỏ xác nhận và yêu cầu tải lại thành công rồi đối chiếu lại. Lý do lưu trong lịch sử nội bộ, không đưa vào audit Detail.
+
+Kiểm chứng 2026-10-14: 809/809 backend unit, 180/180 frontend Node và 484/484 PostgreSQL/HTTP full harness PASS; build backend 0 warning/error, frontend 201 modules, EF không pending model changes. Có barrier race hủy-vs-hủy/hủy-vs-call-next, kiểm queue/Visit/history/audit chỉ theo một kết quả đã commit, rollback sau write và check-in lại sau hủy.
+
+F_CHK_07 tổng thể PARTIAL: lượt này chỉ UI/endpoint hủy trước khám; các nút chuyển trạng thái khác và browser UAT còn chờ. PUT /queue/{id}/status cũ vẫn có luồng riêng, chưa chứng minh race với endpoint mới; DL-057 hủy InImaging khác source state machine hiện tại và DL-214 còn lệch tên trạng thái/ghế, đã ghi nhận, không sửa DL trong lượt này. Fixture nhắc hẹn có lỗi biên gần nửa đêm đã ghi từ lượt trước, hôm nay PASS tại giờ thực chạy nhưng fixture đó chưa được sửa. Phase 2 chưa mở.

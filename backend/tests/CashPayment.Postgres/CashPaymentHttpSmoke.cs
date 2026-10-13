@@ -67,6 +67,7 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.QueueQueryRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.UpdateQueueStatusRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.CallNextRequestValidator>();
+        builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.CancelWaitingRequestValidator>();
         builder.Services.AddScoped<IAppointmentReminderRepository, AppointmentReminderRepository>();
         builder.Services.AddSingleton<AppointmentReminderWorkerStatus>();
         builder.Services.AddSingleton<IAppointmentReminderWorkerStatus>(sp => sp.GetRequiredService<AppointmentReminderWorkerStatus>());
@@ -123,6 +124,7 @@ internal static class CashPaymentHttpSmoke
             {
                 await DailyQueueHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
                 await QueueCallNextHttpSmoke.RunAsync(client, options, cashierId, Authenticate, AuthenticateActor, check);
+                await QueueWaitingCancellationHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
                 return;
             }
             using (var response = await client.GetAsync(path)) check(response.StatusCode == HttpStatusCode.Unauthorized, "HTTP anonymous 401");
@@ -171,6 +173,7 @@ internal static class CashPaymentHttpSmoke
             await CounterBookingHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await DailyQueueHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await QueueCallNextHttpSmoke.RunAsync(client, options, cashierId, Authenticate, AuthenticateActor, check);
+            await QueueWaitingCancellationHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await AppointmentCancelHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await PatientAppointmentReadHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await PatientSelfCancellationHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);

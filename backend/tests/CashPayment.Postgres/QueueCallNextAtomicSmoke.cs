@@ -96,6 +96,43 @@ internal static class QueueCallNextAtomicSmoke
         var resumedVisit = await setup.Visits.AsNoTracking().SingleAsync(v => v.VisitId == returning.VisitId);
         check(resumed.IsSuccess && resumed.Value!.VisitId == returning.VisitId && resumedVisit.StartedAt == started,
             "Call-next imaging return resumes same active Visit without replacing StartedAt");
+
+        async Task<Result<QueueEntryResponse>> Cancel(DbContextOptions<DentalDbContext> dbOptions, QueueEntry row)
+        {
+            await using var db = new DentalDbContext(dbOptions);
+            return await Service(db, row.QueueDate).CancelWaitingAsync(row.QueueEntryId, actorId, RoleCodes.Receptionist, new(true, "Synthetic reason"), null);
+        }
+        var cancelRaceEntry = await Waiting(day.AddDays(4), 1);
+        raceOptions = new DbContextOptionsBuilder<DentalDbContext>(options).AddInterceptors(new Rendezvous()).Options;
+        var cancelRace = await Task.WhenAll(Cancel(raceOptions, cancelRaceEntry), Cancel(raceOptions, cancelRaceEntry));
+        check(cancelRace.Count(r => r.IsSuccess) == 1 && cancelRace.Count(r => r.Error.Code == "CHK_012") == 1,
+            "Cancel waiting concurrent cancellations one commit/one CHK_012");
+        check(await setup.QueueStatusHistories.CountAsync(h => h.QueueEntryId == cancelRaceEntry.QueueEntryId) == 1 &&
+            await setup.AuditLogs.CountAsync(a => a.EntityType == "QueueEntry" && a.EntityId == cancelRaceEntry.QueueEntryId) == 1,
+            "Cancel waiting race persists one history and audit");
+        var racingDentist = await Dentist(); var claimOrCancel = await Waiting(day.AddDays(5), 1, racingDentist.UserId);
+        raceOptions = new DbContextOptionsBuilder<DentalDbContext>(options).AddInterceptors(new Rendezvous()).Options;
+        var mixedRace = await Task.WhenAll(Cancel(raceOptions, claimOrCancel), Call(raceOptions, claimOrCancel.QueueDate, racingDentist.UserId));
+        check(mixedRace.Count(r => r.IsSuccess) == 1 && mixedRace.Any(r => r.Error.Code is "CHK_010" or "CHK_012"),
+            "Cancel waiting versus call-next race has one committed outcome");
+        persisted = await setup.QueueEntries.AsNoTracking().Include(q => q.Visit).SingleAsync(q => q.QueueEntryId == claimOrCancel.QueueEntryId);
+        check((persisted.Status == QueueStatus.Cancelled && persisted.Visit!.Status == VisitStatuses.Cancelled && persisted.Visit.StartedAt == null) ||
+            (persisted.Status == QueueStatus.InConsultation && persisted.Visit!.Status == VisitStatuses.InProgress && persisted.Visit.DentistId == racingDentist.UserId),
+            "Cancel waiting versus call-next never splits queue and Visit status");
+        check(await setup.QueueStatusHistories.CountAsync(h => h.QueueEntryId == claimOrCancel.QueueEntryId) == 1 &&
+            await setup.AuditLogs.CountAsync(a => a.EntityType == "QueueEntry" && a.EntityId == claimOrCancel.QueueEntryId) == 1,
+            "Cancel waiting versus call-next persists winner history and audit once");
+        var rollbackCancel = await Waiting(day.AddDays(6), 1); failed = false;
+        faultOptions = new DbContextOptionsBuilder<DentalDbContext>(options).AddInterceptors(new FailAfterWrite()).Options;
+        try { await Cancel(faultOptions, rollbackCancel); }
+        catch (InvalidOperationException e) when (e.Message == "Synthetic call-next failure after write") { failed = true; }
+        persisted = await setup.QueueEntries.AsNoTracking().Include(q => q.Visit).SingleAsync(q => q.QueueEntryId == rollbackCancel.QueueEntryId);
+        check(failed && persisted.Status == QueueStatus.Waiting && persisted.Visit!.Status == VisitStatuses.Created && persisted.Visit.EndedAt == null,
+            "Cancel waiting failure after write rolls back queue and Visit");
+        check(!await setup.QueueStatusHistories.AnyAsync(h => h.QueueEntryId == rollbackCancel.QueueEntryId) &&
+            !await setup.AuditLogs.AnyAsync(a => a.EntityType == "QueueEntry" && a.EntityId == rollbackCancel.QueueEntryId),
+            "Cancel waiting rollback leaves no history/audit");
+        check((await Cancel(options, rollbackCancel)).IsSuccess, "Cancel waiting fresh request after rollback succeeds");
     }
     private sealed class FixedTime(DateTimeOffset now) : TimeProvider { public override DateTimeOffset GetUtcNow() => now; }
     private sealed class Rendezvous : SaveChangesInterceptor

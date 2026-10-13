@@ -65,6 +65,13 @@ export const queueService = {
     return response.data;
   },
 
+  async cancelWaiting(queueEntryId: number, reason: string | null): Promise<QueueEntryResponse> {
+    const response = await apiClient.post<QueueEntryResponse>(`/queue/${queueEntryId}/cancel-waiting`, {
+      confirmed: true, reason
+    });
+    return response.data;
+  },
+
   async getPublicDisplay(): Promise<PublicQueueMonitorResponse> {
     const response = await apiClient.get<PublicQueueMonitorResponse>('/queue/display');
     return response.data;

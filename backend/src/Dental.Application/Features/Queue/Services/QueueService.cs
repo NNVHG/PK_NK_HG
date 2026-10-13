@@ -217,6 +217,45 @@ public sealed class QueueService
         }, ct);
     }
 
+    public async Task<Result<QueueEntryResponse>> CancelWaitingAsync(
+        int queueEntryId, int actorUserId, string actorRole, CancelWaitingRequest request,
+        string? ipAddress, CancellationToken ct = default)
+    {
+        if (actorRole is not (RoleCodes.Admin or RoleCodes.Receptionist))
+            return Result<QueueEntryResponse>.Failure(Error.QueueTransitionForbidden);
+        if (queueEntryId <= 0 || !request.Confirmed || request.Reason?.Length > 500)
+            return Result<QueueEntryResponse>.Failure(Error.Validation);
+        try
+        {
+            return await _unitOfWork.ExecuteSerializableTransactionAsync(async transactionCt =>
+            {
+                var entry = await _queueRepository.GetByIdAsync(queueEntryId, transactionCt);
+                if (entry is null) return Result<QueueEntryResponse>.Failure(Error.QueueEntryNotFound);
+                // This action only cancels the pre-consultation check-in, never an imaging return or clinical Visit.
+                if (entry.QueueDate != _vietnamClock.Today || entry.Status != QueueStatus.Waiting ||
+                    entry.Visit is null || entry.Visit.Status != VisitStatuses.Created || entry.Visit.IsLocked ||
+                    entry.Visit.StartedAt.HasValue)
+                    return Result<QueueEntryResponse>.Failure(Error.QueueWaitingCancellationBlocked);
+                var now = DateTime.UtcNow;
+                entry.Status = QueueStatus.Cancelled; entry.UpdatedAt = now;
+                entry.Visit.Status = VisitStatuses.Cancelled; entry.Visit.EndedAt = now; entry.Visit.UpdatedAt = now;
+                await _queueRepository.AddStatusHistoryAsync(new QueueStatusHistory
+                {
+                    QueueEntryId = entry.QueueEntryId, FromStatus = QueueStatus.Waiting, ToStatus = QueueStatus.Cancelled,
+                    ChangedByUserId = actorUserId, ChangedAt = now,
+                    Reason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim()
+                }, transactionCt);
+                await _unitOfWork.SaveChangesAsync(transactionCt);
+                await _auditLogger.LogAsync(AuditActions.QueueStatusChanged, "QueueEntry", entry.QueueEntryId, actorUserId,
+                    JsonSerializer.Serialize(new { action = "CancelWaiting", fromStatus = (int)QueueStatus.Waiting,
+                        toStatus = (int)QueueStatus.Cancelled, visitId = entry.VisitId }), ipAddress, transactionCt);
+                return Result<QueueEntryResponse>.Success(ToResponse(entry));
+            }, ct);
+        }
+        catch (ConcurrentOperationException)
+        { return Result<QueueEntryResponse>.Failure(Error.QueueWaitingCancellationConcurrent); }
+    }
+
     public async Task<Result<QueueEntryResponse>> UpdateQueueStatusAsync(
         int queueEntryId,
         int actorUserId,
