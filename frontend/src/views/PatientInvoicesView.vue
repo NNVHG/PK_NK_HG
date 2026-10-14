@@ -18,13 +18,30 @@
       <strong>{{ row.invoiceCode }}</strong> · {{ row.patientName }} · {{ row.patientCode }}
       <p>{{ date(row.createdAt) }} · {{ statuses[row.status] ?? 'Không xác định' }}</p>
       <p>Tổng tiền {{ money(row.totalAmount) }} · Đã trả {{ money(row.paidAmount) }} · Còn nợ {{ money(row.remainingAmount) }}</p>
-      <button :disabled="invoicesBusy" @click="selectInvoice(row.invoiceId)">Xem các lần thanh toán</button>
+      <button :disabled="invoicesBusy" @click="selectInvoice(row.invoiceId)">Xem chi tiết và thanh toán</button>
     </li></ul>
     <nav v-if="invoicesLoaded" aria-label="Phân trang hóa đơn">
       <span>{{ invoiceTotal }} hóa đơn · Trang {{ invoicePage }}</span>
       <button :disabled="invoicesBusy || invoicePage <= 1" @click="loadInvoices(invoicePage - 1)">Trước</button>
       <button :disabled="invoicesBusy || invoicePage >= invoicePages" @click="loadInvoices(invoicePage + 1)">Sau</button>
     </nav>
+    <section v-if="selected" aria-label="Chi tiết hóa đơn">
+      <h2>{{ selected.invoiceCode }} · Chi tiết hóa đơn</h2>
+      <p>Tên dịch vụ và giá được ghi tại thời điểm lập hóa đơn.</p>
+      <button :disabled="itemsBusy" @click="loadItems(1)">Tải lại chi tiết</button>
+      <p v-if="itemsBusy" role="status">Đang tải chi tiết…</p>
+      <p v-if="itemError" role="alert">{{ itemError }}</p>
+      <p v-if="itemsLoaded && !items.length">Hóa đơn này chưa có dòng dịch vụ.</p>
+      <ul><li v-for="item in items" :key="item.itemId">
+        <strong>{{ item.name }}</strong> · {{ item.code }}
+        <p>Số lượng {{ item.quantity }} · Đơn giá {{ money(item.unitPrice) }} · Thành tiền {{ money(item.totalAmount) }}</p>
+      </li></ul>
+      <nav v-if="itemsLoaded" aria-label="Phân trang chi tiết hóa đơn">
+        <span>{{ itemTotal }} dòng · Trang {{ itemPage }}</span>
+        <button :disabled="itemsBusy || itemPage <= 1" @click="loadItems(itemPage - 1)">Trước</button>
+        <button :disabled="itemsBusy || itemPage >= itemPages" @click="loadItems(itemPage + 1)">Sau</button>
+      </nav>
+    </section>
     <section v-if="selected" aria-label="Các lần thanh toán">
       <h2>{{ selected.invoiceCode }} · Các lần thanh toán</h2>
       <button :disabled="paymentsBusy" @click="loadPayments(1)">Tải lại thanh toán</button>
@@ -47,7 +64,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { patientsService, type PatientSummary } from '@/services/patients';
-import { invoicePortalApi, type PortalPayment } from '@/services/invoicePortal';
+import { invoicePortalApi, type PortalPayment, type PortalInvoiceItem } from '@/services/invoicePortal';
 import type { InvoiceLookupResponse } from '@/services/invoiceLookup';
 const auth = useAuthStore();
 const allowed = computed(() => auth.role === 'PATIENT');
@@ -58,11 +75,14 @@ const invoices = ref<InvoiceLookupResponse[]>([]), invoicePage = ref(1), invoice
 const invoicesBusy = ref(false), invoicesLoaded = ref(false), invoiceError = ref('');
 const selected = ref<InvoiceLookupResponse | null>(null), payments = ref<PortalPayment[]>([]);
 const paymentPage = ref(1), paymentPages = ref(0), paymentTotal = ref(0), paymentsBusy = ref(false), paymentsLoaded = ref(false), paymentError = ref('');
+const items = ref<PortalInvoiceItem[]>([]), itemPage = ref(1), itemPages = ref(0), itemTotal = ref(0);
+const itemsBusy = ref(false), itemsLoaded = ref(false), itemError = ref('');
 const statuses = ['Nháp', 'Chờ thanh toán', 'Thanh toán một phần', 'Đã thanh toán', 'Đã hủy'];
 const money = (value: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
 const date = (value: string) => new Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', dateStyle: 'short', timeStyle: 'medium' }).format(new Date(value));
-let profileVersion = 0, invoiceVersion = 0, paymentVersion = 0;
-function clearPayments() { paymentVersion++; selected.value = null; payments.value = []; paymentsBusy.value = false; paymentsLoaded.value = false; paymentTotal.value = 0; paymentPages.value = 0; paymentPage.value = 1; paymentError.value = ''; }
+let profileVersion = 0, invoiceVersion = 0, paymentVersion = 0, itemVersion = 0;
+function clearItems() { itemVersion++; items.value = []; itemsBusy.value = false; itemsLoaded.value = false; itemPage.value = 1; itemPages.value = 0; itemTotal.value = 0; itemError.value = ''; }
+function clearPayments() { clearItems(); paymentVersion++; selected.value = null; payments.value = []; paymentsBusy.value = false; paymentsLoaded.value = false; paymentTotal.value = 0; paymentPages.value = 0; paymentPage.value = 1; paymentError.value = ''; }
 function clearInvoices() { invoiceVersion++; invoices.value = []; invoicesBusy.value = false; invoicesLoaded.value = false; invoiceTotal.value = 0; invoicePages.value = 0; invoicePage.value = 1; invoiceError.value = ''; clearPayments(); }
 async function loadProfiles() {
   const ticket = ++profileVersion; profiles.value = []; patientId.value = 0; profileError.value = ''; clearInvoices();
@@ -89,8 +109,20 @@ async function loadInvoices(target = 1) {
 }
 async function selectInvoice(id: number) {
   if (!validProfile.value || invoicesBusy.value || !invoicesLoaded.value) return;
-  const row = invoices.value.find(i => i.invoiceId === id); if (!row || (paymentsBusy.value && selected.value?.invoiceId === id)) return;
-  clearPayments(); selected.value = row; await loadPayments(1);
+  const row = invoices.value.find(i => i.invoiceId === id); if (!row || ((paymentsBusy.value || itemsBusy.value) && selected.value?.invoiceId === id)) return;
+  clearPayments(); selected.value = row; await Promise.all([loadItems(1), loadPayments(1)]);
+}
+async function loadItems(target = 1) {
+  if (!validProfile.value || !selected.value || itemsBusy.value || !Number.isInteger(target) || target < 1 || target > 1000000 ||
+      (target !== 1 && (!itemsLoaded.value || target > itemPages.value))) return;
+  const ticket = ++itemVersion; const invoiceId = selected.value.invoiceId;
+  items.value = []; itemsLoaded.value = false; itemsBusy.value = true; itemError.value = '';
+  try {
+    const result = await invoicePortalApi.items(patientId.value, invoiceId, target);
+    if (ticket !== itemVersion || !allowed.value) return;
+    items.value = result.items; itemPage.value = result.page; itemPages.value = result.totalPages; itemTotal.value = result.totalCount; itemsLoaded.value = true;
+  } catch { if (ticket === itemVersion) { itemTotal.value = 0; itemPages.value = 0; itemError.value = 'Không tải được chi tiết hóa đơn. Chọn lại hóa đơn hoặc thử lại.'; } }
+  finally { if (ticket === itemVersion) itemsBusy.value = false; }
 }
 async function loadPayments(target = 1) {
   if (!validProfile.value || !selected.value || paymentsBusy.value || !Number.isInteger(target) || target < 1 || target > 1000000 ||

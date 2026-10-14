@@ -31,4 +31,15 @@ public sealed class InvoicePortalRepository(DentalDbContext db) : IInvoicePortal
             .Select(p => new InvoicePortalPaymentResponse(p.Id, p.InvoiceId, p.Amount, p.PaymentMethod, p.PaidAt, p.Source == "Simulation")).ToListAsync(ct);
         return PagedResult<InvoicePortalPaymentResponse>.Create(rows, count, page, pageSize);
     }
+    public async Task<PagedResult<InvoicePortalItemResponse>?> GetItemsAsync(int invoiceId, int patientId, int userId, int page, int pageSize, CancellationToken ct = default)
+    {
+        if (!await db.Invoices.AsNoTracking().AnyAsync(i => i.Id == invoiceId && i.Visit.PatientId == patientId && i.Visit.Patient.UserId == userId, ct)) return null;
+        // Repeat ownership for count and rows; use stored invoice snapshots, not current catalogue prices.
+        var query = db.InvoiceItems.AsNoTracking().Where(item => item.InvoiceId == invoiceId &&
+            item.Invoice.Visit.PatientId == patientId && item.Invoice.Visit.Patient.UserId == userId);
+        var count = await query.CountAsync(ct);
+        var rows = await query.OrderBy(item => item.Id).Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(item => new InvoicePortalItemResponse(item.Id, item.Code, item.Name, item.Quantity, item.UnitPrice, item.TotalAmount)).ToListAsync(ct);
+        return PagedResult<InvoicePortalItemResponse>.Create(rows, count, page, pageSize);
+    }
 }

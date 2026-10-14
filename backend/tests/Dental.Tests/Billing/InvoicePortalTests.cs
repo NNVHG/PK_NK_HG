@@ -8,9 +8,12 @@ public sealed class InvoicePortalTests
 {
     private sealed class Repository : IInvoicePortalRepository
     {
-        public bool Owns = true; public int OwnershipCalls, InvoiceCalls, PaymentCalls;
+        public bool Owns = true; public int ItemCalls; public (int, int, int, int, int)? Items;
+        public PagedResult<InvoicePortalItemResponse>? ItemRows = PagedResult<InvoicePortalItemResponse>.Create([], 0, 1, 20); public int OwnershipCalls, InvoiceCalls, PaymentCalls;
         public (int, int)? Owner; public (int, int, int, int)? List; public (int, int, int, int, int)? Payments;
         public PagedResult<InvoicePortalPaymentResponse>? Rows = PagedResult<InvoicePortalPaymentResponse>.Create([], 0, 1, 20);
+        public Task<PagedResult<InvoicePortalItemResponse>?> GetItemsAsync(int invoiceId, int patientId, int userId, int page, int size, CancellationToken ct = default)
+        { ItemCalls++; Items = (invoiceId, patientId, userId, page, size); return Task.FromResult(ItemRows); }
         public Task<bool> OwnsPatientAsync(int patientId, int userId, CancellationToken ct = default)
         { OwnershipCalls++; Owner = (patientId, userId); return Task.FromResult(Owns); }
         public Task<PagedResult<InvoiceLookupResponse>> GetInvoicesAsync(int patientId, int userId, int page, int size, CancellationToken ct = default)
@@ -79,5 +82,60 @@ public sealed class InvoicePortalTests
     {
         var r = new Repository(); var result = await new InvoicePortalService(r, new()).ListAsync(new() { PatientId = "23", Page = page, PageSize = size }, 7, "PATIENT");
         Assert.True(result.IsSuccess); Assert.Equal((23, 7, page, size), r.List);
+    }
+    [Theory] [InlineData(null)] [InlineData("")] [InlineData("0")] [InlineData("-1")] [InlineData("abc")] [InlineData("2147483648")]
+    public async Task Items_require_valid_explicit_profile403(string? patientId)
+    {
+        var r = new Repository(); var result = await new InvoicePortalService(r, new()).ItemsAsync(9, new() { PatientId = patientId }, 7, "PATIENT");
+        Assert.Equal("GEN_002", result.Error.Code); Assert.Equal(0, r.OwnershipCalls + r.ItemCalls);
+    }
+    [Theory] [InlineData("ADMIN")] [InlineData("RECEPTIONIST")] [InlineData("DENTIST")] [InlineData("ASSISTANT")] [InlineData(null)]
+    public async Task Items_patient_only403(string? role)
+    {
+        var r = new Repository(); var result = await new InvoicePortalService(r, new()).ItemsAsync(9, new() { PatientId = "23" }, 7, role);
+        Assert.Equal("GEN_002", result.Error.Code); Assert.Equal(0, r.OwnershipCalls + r.ItemCalls);
+    }
+    [Theory] [InlineData(0)] [InlineData(-1)]
+    public async Task Items_invalid_identity403(int userId)
+    {
+        var r = new Repository(); var result = await new InvoicePortalService(r, new()).ItemsAsync(9, new() { PatientId = "23" }, userId, "PATIENT");
+        Assert.Equal("GEN_002", result.Error.Code); Assert.Equal(0, r.OwnershipCalls + r.ItemCalls);
+    }
+    [Theory] [InlineData(0, 20)] [InlineData(1000001, 20)] [InlineData(1, 0)] [InlineData(1, 51)]
+    public async Task Items_invalid_page400_before_repository(int page, int size)
+    {
+        var r = new Repository(); var result = await new InvoicePortalService(r, new()).ItemsAsync(9, new() { PatientId = "23", Page = page, PageSize = size }, 7, "PATIENT");
+        Assert.Equal("GEN_003", result.Error.Code); Assert.Equal(0, r.OwnershipCalls + r.ItemCalls);
+    }
+    [Fact]
+    public async Task Items_foreign_profile403_never_reads()
+    {
+        var r = new Repository { Owns = false }; var result = await new InvoicePortalService(r, new()).ItemsAsync(9, new() { PatientId = "23" }, 7, "PATIENT");
+        Assert.Equal("GEN_002", result.Error.Code); Assert.Equal((23, 7), r.Owner); Assert.Equal(0, r.ItemCalls);
+    }
+    [Theory] [InlineData(0)] [InlineData(-1)]
+    public async Task Items_invalid_invoice400_never_reads(int id)
+    {
+        var r = new Repository(); var result = await new InvoicePortalService(r, new()).ItemsAsync(id, new() { PatientId = "23" }, 7, "PATIENT");
+        Assert.Equal("GEN_003", result.Error.Code); Assert.Equal(0, r.ItemCalls);
+    }
+    [Fact]
+    public async Task Items_wrong_missing_foreign_invoice403()
+    {
+        var r = new Repository { ItemRows = null }; var result = await new InvoicePortalService(r, new()).ItemsAsync(9, new() { PatientId = "23" }, 7, "PATIENT");
+        Assert.Equal("GEN_002", result.Error.Code); Assert.Equal((9, 23, 7, 1, 20), r.Items);
+    }
+    [Fact]
+    public async Task Items_forward_exact_scope_page_and_snapshot()
+    {
+        var r = new Repository { ItemRows = PagedResult<InvoicePortalItemResponse>.Create([new(4, "OLD", "Snapshot", 2, 50000, 100000)], 1, 2, 10) };
+        var result = await new InvoicePortalService(r, new()).ItemsAsync(9, new() { PatientId = "23", Page = 2, PageSize = 10 }, 7, "PATIENT");
+        Assert.True(result.IsSuccess); Assert.Same(r.ItemRows, result.Value); Assert.Equal((9, 23, 7, 2, 10), r.Items);
+    }
+    [Theory] [InlineData(1, 1)] [InlineData(1000000, 50)]
+    public async Task Items_valid_page_bounds_empty200(int page, int size)
+    {
+        var r = new Repository(); var result = await new InvoicePortalService(r, new()).ItemsAsync(9, new() { PatientId = "23", Page = page, PageSize = size }, 7, "PATIENT");
+        Assert.True(result.IsSuccess); Assert.Empty(result.Value!.Items); Assert.Equal((9, 23, 7, page, size), r.Items);
     }
 }

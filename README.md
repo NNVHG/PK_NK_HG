@@ -550,3 +550,9 @@ Kiểm chứng 2026-10-14 18:01:919unit/239Nodeserial/668fullPGHTTP PASS; backen
 Patient đăngnhập, mở menu Hóa đơn gia đình (/invoices/mine), chọn rõ hồ sơ active thuộc tài khoản, xem hóađơn/côngnợ/phântrang. Chọn Xem các lần thanh toán để đọc cash/bank đãghi nhận/amountghi vào invoice/ngàyVN/nhãnMÔPHỎNG. Chọnprofilekhác/reloadprofiles/đổiaccount xóa dữliệu cũ; responsemuộnbịbỏ.
 GET /api/portal/invoices và /api/portal/invoices/{invoiceId}/payments requiredpatientId, Patientonly/JWT/no-store/SQLprofile+UserId trướccount/page. Missing/invalid/foreignprofile403; wrong/foreign/missinginvoice403; invalidpage/invoice400. APIreadonlychoarchivedowned, pickerchỉactivehiệnhữu. Côngnợ/history làsnapshot khiGET, Tảilại đểđọc mới; chưaPortalfilters/details/inactivepicker.
 Kiểm chứng 2026-10-14 22:02:947unit/252Nodeserial/714fullPGHTTPprimaryPASS, backend/harness0warning/error/frontendbuildPASS/EFkhôngpendingmodel. PGprimaryaccepting,ownedDBremoved; chưabrowserUAT. Branch codex/phase1-patient-invoices từ8431b7bc chưa tíchhợpmain55a0a00. PARTIAL/chờGiaUAT, DỪNG/khôngPhase2. Q297planningmớiđangmở khôngchặnDL106Portal.
+
+## Chi tiết hóa đơn gia đình (F_BIL_08)
+
+Đăng nhập Bệnh nhân → Hóa đơn gia đình (/invoices/mine) → chọn hồ sơ → chọn **Xem chi tiết và thanh toán**. Phần chi tiết hiển thị mã/tên dịch vụ, số lượng, đơn giá và thành tiền đã lưu trong hóa đơn; có phân trang và Tải lại chi tiết. Các lần thanh toán nằm ở phần riêng bên dưới. Đổi hồ sơ/hóa đơn sẽ xóa chi tiết cũ và bỏ response muộn; lỗi tải có nút thử lại. Picker hiện chỉ liệt kê hồ sơ hoạt động.
+
+GET /api/portal/invoices/{invoiceId}/items yêu cầu JWT Patient và patientId thuộc tài khoản; count/rows kiểm tra lại ownership, no-store, mặc định20/max50 dòng, thứ tự itemId tăng dần. Giá đọc từ snapshot hóa đơn, gồm lịch sử hóa đơn đã hủy; không tính lại theo danh mục hiện tại. Chưa nghiệm thu UI trình duyệt; toàn chức năng vẫn PARTIAL.

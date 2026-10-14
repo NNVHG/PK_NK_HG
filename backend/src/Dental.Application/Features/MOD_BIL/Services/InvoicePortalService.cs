@@ -22,6 +22,15 @@ public sealed class InvoicePortalService(IInvoicePortalRepository repository, In
         return rows is null ? Result<PagedResult<InvoicePortalPaymentResponse>>.Failure(Error.Forbidden)
             : Result<PagedResult<InvoicePortalPaymentResponse>>.Success(rows);
     }
+    public async Task<Result<PagedResult<InvoicePortalItemResponse>>> ItemsAsync(int invoiceId, InvoicePortalQuery request, int userId, string? role, CancellationToken ct = default)
+    {
+        var scope = await ValidateScopeAsync(request, userId, role, ct);
+        if (scope.IsFailure) return Result<PagedResult<InvoicePortalItemResponse>>.Failure(scope.Error);
+        if (invoiceId <= 0) return Result<PagedResult<InvoicePortalItemResponse>>.Failure(Error.Validation);
+        var rows = await repository.GetItemsAsync(invoiceId, scope.Value!, userId, request.Page, request.PageSize, ct);
+        return rows is null ? Result<PagedResult<InvoicePortalItemResponse>>.Failure(Error.Forbidden)
+            : Result<PagedResult<InvoicePortalItemResponse>>.Success(rows);
+    }
     private async Task<Result<int>> ValidateScopeAsync(InvoicePortalQuery request, int userId, string? role, CancellationToken ct)
     {
         if (role != RoleCodes.Patient || userId <= 0 ||

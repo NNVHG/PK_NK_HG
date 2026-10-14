@@ -26,4 +26,12 @@ public sealed class InvoicePortalController(InvoicePortalService service, ICurre
         var result = await service.PaymentsAsync(invoiceId, request, userId, user.RoleCode, ct);
         return result.IsSuccess ? Ok(result.Value) : StatusCode(result.Error.Code == "GEN_003" ? 400 : 403, new { code = result.Error.Code, message = result.Error.Message });
     }
+    [HttpGet("{invoiceId:int}/items")]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
+    public async Task<IActionResult> Items(int invoiceId, [FromQuery] InvoicePortalQuery request, CancellationToken ct)
+    {
+        if (user.UserId is not int userId) return Unauthorized();
+        var result = await service.ItemsAsync(invoiceId, request, userId, user.RoleCode, ct);
+        return result.IsSuccess ? Ok(result.Value) : StatusCode(result.Error.Code == "GEN_003" ? 400 : 403, new { code = result.Error.Code, message = result.Error.Message });
+    }
 }
