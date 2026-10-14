@@ -20,7 +20,7 @@ public sealed class InvoicePortalController(InvoicePortalService service, ICurre
     }
     [HttpGet]
     [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
-    public async Task<IActionResult> List([FromQuery] InvoicePortalQuery request, CancellationToken ct)
+    public async Task<IActionResult> List([FromQuery] InvoicePortalListQuery request, CancellationToken ct)
     {
         if (user.UserId is not int userId) return Unauthorized();
         var result = await service.ListAsync(request, userId, user.RoleCode, ct);

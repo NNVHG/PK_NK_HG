@@ -11,10 +11,27 @@
       </select>
     </label>
     <p v-if="!profilesBusy && !profileError && !profiles.length">Chưa có hồ sơ thuộc tài khoản.</p>
+    <form @submit.prevent="searchInvoices">
+      <label>Trạng thái
+        <select v-model="status" :disabled="invoicesBusy || !validProfile">
+          <option value="">Tất cả</option><option v-for="(name, index) in statuses" :key="index" :value="String(index)">{{ name }}</option>
+        </select>
+      </label>
+      <label>Từ ngày lập (giờ Việt Nam)
+        <input v-model="fromDate" type="date" min="0001-01-02" max="9999-12-31" :disabled="invoicesBusy || !validProfile" />
+      </label>
+      <label>Đến ngày lập (bao gồm cả ngày)
+        <input v-model="toDate" type="date" min="0001-01-01" max="9999-12-30" :disabled="invoicesBusy || !validProfile" />
+      </label>
+      <button :disabled="invoicesBusy || !validProfile">Lọc hóa đơn</button>
+      <button type="button" :disabled="invoicesBusy || !validProfile" @click="resetInvoiceFilters">Xóa bộ lọc</button>
+    </form>
     <button :disabled="invoicesBusy || !validProfile" @click="loadInvoices(1)">Tải lại hóa đơn</button>
+    <p v-if="invoicesLoaded">Đã áp dụng: {{ applied.status == null ? 'Tất cả trạng thái' : statuses[applied.status] }} ·
+      Từ {{ applied.fromDate ? birth(applied.fromDate) : 'không giới hạn' }} đến {{ applied.toDate ? birth(applied.toDate) : 'không giới hạn' }} (giờ Việt Nam)</p>
     <p v-if="invoicesBusy" role="status">Đang tải hóa đơn…</p>
     <p v-if="invoiceError" role="alert">{{ invoiceError }}</p>
-    <p v-if="invoicesLoaded && !invoices.length">Hồ sơ này chưa có hóa đơn.</p>
+    <p v-if="invoicesLoaded && !invoices.length">Không có hóa đơn trong trang và bộ lọc này.</p>
     <ul><li v-for="row in invoices" :key="row.invoiceId">
       <strong>{{ row.invoiceCode }}</strong> · {{ row.patientName }} · {{ row.patientCode }}
       <p>{{ date(row.createdAt) }} · {{ statuses[row.status] ?? 'Không xác định' }}</p>
@@ -64,7 +81,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
-import { invoicePortalApi, type PortalPayment, type PortalInvoiceItem, type PortalInvoiceProfile } from '@/services/invoicePortal';
+import { invoicePortalApi, type PortalPayment, type PortalInvoiceItem, type PortalInvoiceProfile, type PortalInvoiceFilters } from '@/services/invoicePortal';
 import type { InvoiceLookupResponse } from '@/services/invoiceLookup';
 const auth = useAuthStore();
 const allowed = computed(() => auth.role === 'PATIENT');
@@ -73,6 +90,8 @@ const patientId = ref(0), profilesBusy = ref(false), profileError = ref('');
 const validProfile = computed(() => allowed.value && Number.isInteger(patientId.value) && patientId.value > 0 && profiles.value.some(p => p.patientId === patientId.value));
 const invoices = ref<InvoiceLookupResponse[]>([]), invoicePage = ref(1), invoicePages = ref(0), invoiceTotal = ref(0);
 const invoicesBusy = ref(false), invoicesLoaded = ref(false), invoiceError = ref('');
+const status = ref(''), fromDate = ref(''), toDate = ref('');
+const applied = ref<PortalInvoiceFilters>({});
 const selected = ref<InvoiceLookupResponse | null>(null), payments = ref<PortalPayment[]>([]);
 const paymentPage = ref(1), paymentPages = ref(0), paymentTotal = ref(0), paymentsBusy = ref(false), paymentsLoaded = ref(false), paymentError = ref('');
 const items = ref<PortalInvoiceItem[]>([]), itemPage = ref(1), itemPages = ref(0), itemTotal = ref(0);
@@ -85,7 +104,30 @@ let profileVersion = 0, invoiceVersion = 0, paymentVersion = 0, itemVersion = 0;
 function clearItems() { itemVersion++; items.value = []; itemsBusy.value = false; itemsLoaded.value = false; itemPage.value = 1; itemPages.value = 0; itemTotal.value = 0; itemError.value = ''; }
 function clearPayments() { clearItems(); paymentVersion++; selected.value = null; payments.value = []; paymentsBusy.value = false; paymentsLoaded.value = false; paymentTotal.value = 0; paymentPages.value = 0; paymentPage.value = 1; paymentError.value = ''; }
 function clearInvoices() { invoiceVersion++; invoices.value = []; invoicesBusy.value = false; invoicesLoaded.value = false; invoiceTotal.value = 0; invoicePages.value = 0; invoicePage.value = 1; invoiceError.value = ''; clearPayments(); }
-async function loadProfiles() {
+function clearFilters() { status.value = ''; fromDate.value = ''; toDate.value = ''; applied.value = {}; }
+function validDate(value: string) {
+  if (!value) return true;
+  if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value) || value < '0001-01-01') return false;
+  try { return new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value; } catch { return false; }
+}
+async function searchInvoices() {
+  if (!validProfile.value || profilesBusy.value || invoicesBusy.value) return;
+  clearInvoices();
+  if (!['', '0', '1', '2', '3', '4'].includes(status.value)) { invoiceError.value = 'Chọn trạng thái hóa đơn hợp lệ.'; return; }
+  if (!validDate(fromDate.value) || !validDate(toDate.value) ||
+      (fromDate.value && fromDate.value < '0001-01-02') || (toDate.value && toDate.value > '9999-12-30') ||
+      (fromDate.value && toDate.value && fromDate.value > toDate.value)) {
+    invoiceError.value = 'Nhập khoảng ngày lập hóa đơn hợp lệ; từ ngày không sau đến ngày.'; return;
+  }
+  applied.value = { ...(status.value !== '' ? { status: Number(status.value) } : {}),
+    ...(fromDate.value ? { fromDate: fromDate.value } : {}), ...(toDate.value ? { toDate: toDate.value } : {}) };
+  await loadInvoices(1);
+}
+async function resetInvoiceFilters() {
+  if (!validProfile.value || profilesBusy.value || invoicesBusy.value) return;
+  clearFilters(); await loadInvoices(1);
+}
+async function loadProfiles() { clearFilters();
   const ticket = ++profileVersion; profiles.value = []; patientId.value = 0; profileError.value = ''; clearInvoices();
   if (!allowed.value) { profilesBusy.value = false; return; }
   profilesBusy.value = true;
@@ -95,14 +137,14 @@ async function loadProfiles() {
   } catch { if (ticket === profileVersion) profileError.value = 'Không tải được hồ sơ. Tải lại để chọn đúng hồ sơ của tài khoản.'; }
   finally { if (ticket === profileVersion) profilesBusy.value = false; }
 }
-async function changeProfile() { clearInvoices(); if (validProfile.value) await loadInvoices(1); }
+async function changeProfile() { clearFilters(); clearInvoices(); if (validProfile.value) await loadInvoices(1); }
 async function loadInvoices(target = 1) {
   if (!validProfile.value || profilesBusy.value || invoicesBusy.value || !Number.isInteger(target) || target < 1 || target > 1000000 ||
       (target !== 1 && (!invoicesLoaded.value || target > invoicePages.value))) return;
   const requestedPatient = patientId.value; const ticket = ++invoiceVersion;
   clearPayments(); invoices.value = []; invoicesLoaded.value = false; invoicesBusy.value = true; invoiceError.value = '';
   try {
-    const result = await invoicePortalApi.list(requestedPatient, target);
+    const result = await invoicePortalApi.list(requestedPatient, target, { ...applied.value });
     if (ticket !== invoiceVersion || !allowed.value) return;
     invoices.value = result.items; invoicePage.value = result.page; invoicePages.value = result.totalPages; invoiceTotal.value = result.totalCount; invoicesLoaded.value = true;
   } catch { if (ticket === invoiceVersion) { invoiceTotal.value = 0; invoicePages.value = 0; invoiceError.value = 'Không tải được hóa đơn của hồ sơ đã chọn. Vui lòng thử lại.'; } }
@@ -139,7 +181,7 @@ async function loadPayments(target = 1) {
 }
 watch(() => [auth.role, auth.user?.userId], loadProfiles);
 onMounted(loadProfiles);
-onUnmounted(() => { profileVersion++; profiles.value = []; patientId.value = 0; clearInvoices(); });
+onUnmounted(() => { profileVersion++; profiles.value = []; patientId.value = 0; clearFilters(); clearInvoices(); });
 </script>
 <style scoped>
 .page { max-width: 900px; margin: auto; padding: 1rem; }

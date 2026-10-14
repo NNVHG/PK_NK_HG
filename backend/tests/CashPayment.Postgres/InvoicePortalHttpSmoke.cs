@@ -221,6 +221,7 @@ internal static class InvoicePortalHttpSmoke
         check(await db.Patients.Where(p => p.PatientId == inactive.PatientId).AnyAsync(p => !p.IsActive), "Portal read never reactivates archived profile");
         check(await db.AuditLogs.CountAsync() == audits && await db.PaymentTransactions.CountAsync() == transactions &&
             await db.Invoices.CountAsync() == invoiceCount, "Portal reads never mutate financial records or audit");
+        await InvoicePortalFilterHttpSmoke.RunAsync(client, options, actor, owner.UserId, other.UserId, authenticateActor, check);
         authenticate(RoleCodes.Admin);
     }
 }

@@ -1,5 +1,5 @@
 namespace Dental.Application.Features.MOD_BIL.DTOs;
-public sealed class InvoicePortalQuery
+public class InvoicePortalQuery
 {
     public string? PatientId { get; set; }
     public int Page { get; set; } = 1;

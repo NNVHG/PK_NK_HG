@@ -45,6 +45,7 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddScoped<IInvoicePortalRepository, InvoicePortalRepository>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.InvoicePortalService>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.InvoicePortalQueryValidator>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.InvoicePortalListQueryValidator>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.InvoiceHistoryService>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.InvoiceHistoryQueryValidator>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.InvoiceLookupService>();

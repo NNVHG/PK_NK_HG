@@ -548,7 +548,7 @@ Kiểm chứng 2026-10-14 18:01:919unit/239Nodeserial/668fullPGHTTP PASS; backen
 
 ## F_BIL_08 — Hóa đơn gia đình trên Portal
 Patient đăngnhập, mở menu Hóa đơn gia đình (/invoices/mine), chọn rõ hồ sơ thuộc tài khoản, gồm hồ sơ đã ngừng hoạt động, xem hóađơn/côngnợ/phântrang. Chọn Xem chi tiết và thanh toán để đọc cash/bank đãghi nhận/amountghi vào invoice/ngàyVN/nhãnMÔPHỎNG. Chọnprofilekhác/reloadprofiles/đổiaccount xóa dữliệu cũ; responsemuộnbịbỏ.
-GET /api/portal/invoices và /api/portal/invoices/{invoiceId}/payments requiredpatientId, Patientonly/JWT/no-store/SQLprofile+UserId trướccount/page. Missing/invalid/foreignprofile403; wrong/foreign/missinginvoice403; invalidpage/invoice400. APIreadonlychoarchivedowned, picker dùng GET /api/portal/invoices/profiles với tên/ngày sinh/mã/trạng thái. Côngnợ/history làsnapshot khiGET, Tảilại đểđọc mới; chưa có bộ lọc Portal; chi tiết và picker inactive đã có.
+GET /api/portal/invoices và /api/portal/invoices/{invoiceId}/payments requiredpatientId, Patientonly/JWT/no-store/SQLprofile+UserId trướccount/page. Missing/invalid/foreignprofile403; wrong/foreign/missinginvoice403; invalidpage/invoice400. APIreadonlychoarchivedowned, picker dùng GET /api/portal/invoices/profiles với tên/ngày sinh/mã/trạng thái. Côngnợ/history làsnapshot khiGET, Tảilại đểđọc mới; đã có bộ lọc Portal theo trạng thái/ngày lập, chi tiết và picker inactive.
 Kiểm chứng 2026-10-14 22:02:947unit/252Nodeserial/714fullPGHTTPprimaryPASS, backend/harness0warning/error/frontendbuildPASS/EFkhôngpendingmodel. PGprimaryaccepting,ownedDBremoved; chưabrowserUAT. Branch codex/phase1-patient-invoices từ8431b7bc chưa tíchhợpmain55a0a00. PARTIAL/chờGiaUAT, DỪNG/khôngPhase2. Q297planningmớiđangmở khôngchặnDL106Portal.
 
 ## Chi tiết hóa đơn gia đình (F_BIL_08)
@@ -563,3 +563,12 @@ GET /api/portal/invoices/{invoiceId}/items yêu cầu JWT Patient và patientId 
 Bệnh nhân mở **Hóa đơn gia đình** (/invoices/mine), chọn hồ sơ theo họ tên, ngày sinh và mã. Hồ sơ đã ngừng hoạt động có nhãn riêng và vẫn chọn được để xem hóa đơn, chi tiết dịch vụ, các lần thanh toán. Không tự chọn hồ sơ đầu tiên. **Tải lại hồ sơ** xóa dữ liệu tài chính cũ và yêu cầu chọn lại.
 
 GET /api/portal/invoices/profiles chỉ trả hồ sơ có Patient.UserId bằng UserId trong JWT, gồm cả inactive; DTO chỉ có patientId, patientCode, fullName, dateOfBirth, isActive. Hồ sơ hoạt động xếp trước, sau đó theo mã. Endpoint chỉ đọc, Patient-only, no-store. Các truy vấn hóa đơn/chi tiết/thanh toán vẫn yêu cầu patientId và kiểm tra ownership lại; hồ sơ đổi chủ bị từ chối. Chức năng vẫn PARTIAL, chờ Gia nghiệm thu trình duyệt.
+
+
+## Lọc hóa đơn gia đình (F_BIL_08)
+
+Bệnh nhân mở **Hóa đơn gia đình** (/invoices/mine) → chọn hồ sơ → chọn trạng thái và/hoặc từ ngày, đến ngày → **Lọc hóa đơn**. Ngày là ngày lập hóa đơn theo giờ Việt Nam; đến ngày bao gồm trọn ngày. Để trống một phía để không giới hạn phía đó. **Xóa bộ lọc** xem lại tất cả hóa đơn của hồ sơ đã chọn.
+
+Phân trang và **Tải lại hóa đơn** giữ bộ lọc đã áp dụng, kể cả khi ô nhập đang sửa. UI hiển thị điều kiện đã áp dụng; bộ lọc mới đưa về trang1 và xóa hóa đơn/chi tiết/thanh toán đã chọn. Đổi hồ sơ hoặc tài khoản xóa bộ lọc và dữ liệu cũ. Ngày lỗi, khoảng ngày ngược và trạng thái không hợp lệ bị chặn ở cả UI và API.
+
+GET /api/portal/invoices nhận optional status0..4/fromDate/toDate. Backend lọc CreatedAt theo UTC+7 (từ00:00, trước00:00 ngày kế sau ToDate), giao với PatientId + JWT ownership trước count/page. Bộ lọc chỉ giới hạn lịch sử đang được phép xem. Chưa nghiệm thu UI trình duyệt, F_BIL_08 vẫn PARTIAL.
