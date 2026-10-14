@@ -572,3 +572,11 @@ Bệnh nhân mở **Hóa đơn gia đình** (/invoices/mine) → chọn hồ sơ
 Phân trang và **Tải lại hóa đơn** giữ bộ lọc đã áp dụng, kể cả khi ô nhập đang sửa. UI hiển thị điều kiện đã áp dụng; bộ lọc mới đưa về trang1 và xóa hóa đơn/chi tiết/thanh toán đã chọn. Đổi hồ sơ hoặc tài khoản xóa bộ lọc và dữ liệu cũ. Ngày lỗi, khoảng ngày ngược và trạng thái không hợp lệ bị chặn ở cả UI và API.
 
 GET /api/portal/invoices nhận optional status0..4/fromDate/toDate. Backend lọc CreatedAt theo UTC+7 (từ00:00, trước00:00 ngày kế sau ToDate), giao với PatientId + JWT ownership trước count/page. Bộ lọc chỉ giới hạn lịch sử đang được phép xem. Chưa nghiệm thu UI trình duyệt, F_BIL_08 vẫn PARTIAL.
+
+## Lọc danh sách tại quầy bằng mã hóa đơn đầy đủ (F_BIL_08)
+
+Admin/Lễ tân mở /invoices → nhập **Mã hóa đơn đầy đủ** trong phần Danh sách hóa đơn → **Tìm hóa đơn**. Mã được trim/chuyển chữ hoa và so khớp toàn bộ. Để trống bỏ điều kiện mã; mã giao với mã bệnh nhân/tên/SĐT/trạng thái/ngày lập. Không có kết quả phù hợp thì danh sách rỗng; không tự bỏ bộ lọc khác.
+
+Phân trang giữ mã đã áp dụng; sửa ô nhập chỉ áp dụng sau khi bấm Tìm hóa đơn. Chọn một dòng vẫn tra cứu chính xác lại trước khi xem các lần thu/biên lai hoặc thu tiền. Query GET /api/invoices?invoiceCode=... chỉ Admin/Receptionist/JWT/no-store, mã hợp lệ gồm 1–50 chữ/số ASCII hoặc dấu gạch nối. Mã lỗi bị chặn ở cả UI và API.
+
+Kiểm thử tự động đạt; UAT UI vẫn BLOCKED theo Q-298 về DB demo thiếu schema, chưa có nghiệm thu của Gia.

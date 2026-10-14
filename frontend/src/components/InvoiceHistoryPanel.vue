@@ -2,6 +2,9 @@
   <section aria-label="Lịch sử hóa đơn tại quầy">
     <h2>Danh sách hóa đơn</h2>
     <form @submit.prevent="search">
+      <label>Mã hóa đơn đầy đủ (để trống xem tất cả)
+        <input v-model="invoiceCode" type="search" maxlength="50" autocomplete="off" :disabled="busy || disabled" placeholder="INV-20261015-0001" />
+      </label>
       <label>Tên hoặc SĐT bệnh nhân
         <input v-model="keyword" type="search" maxlength="100" autocomplete="off" :disabled="busy || disabled" />
       </label>
@@ -50,6 +53,7 @@ const auth = useAuthStore();
 const allowed = computed(() => ['ADMIN', 'RECEPTIONIST'].includes(auth.role));
 const patientCode = ref('');
 const keyword = ref('');
+const invoiceCode = ref('');
 const status = ref('');
 const fromDate = ref('');
 const toDate = ref('');
@@ -83,6 +87,11 @@ async function search() {
   if (!allowed.value || props.disabled || busy.value) return;
   rows.value = []; loaded.value = false; totalCount.value = 0; totalPages.value = 0; error.value = '';
   if (keyword.value.length > 100) { error.value = 'Tên/SĐT tìm kiếm không được quá 100 ký tự.'; return; }
+  const exactCode = invoiceCode.value.trim();
+  if (exactCode && !/^[A-Za-z0-9-]{1,50}$/.test(exactCode)) {
+    error.value = 'Nhập mã hóa đơn đầy đủ, tối đa 50 chữ/số ASCII hoặc dấu gạch nối.'; return;
+  }
+  const normalizedInvoiceCode = exactCode.toUpperCase();
   const term = keyword.value.trim();
   const code = patientCode.value.trim().toUpperCase();
   if (!validCode(code) || !['', '0', '1', '2', '3', '4'].includes(status.value)) {
@@ -93,8 +102,9 @@ async function search() {
       (fromDate.value && toDate.value && fromDate.value > toDate.value)) {
     error.value = 'Nhập khoảng ngày lập hóa đơn hợp lệ; từ ngày không sau đến ngày.'; return;
   }
+  invoiceCode.value = normalizedInvoiceCode;
   patientCode.value = code;
-  applied = { pageSize: 20, ...(term ? { keyword: term } : {}), ...(fromDate.value ? { fromDate: fromDate.value } : {}), ...(toDate.value ? { toDate: toDate.value } : {}), ...(code ? { patientCode: code } : {}), ...(status.value !== '' ? { status: Number(status.value) } : {}) };
+  applied = { pageSize: 20, ...(normalizedInvoiceCode ? { invoiceCode: normalizedInvoiceCode } : {}), ...(term ? { keyword: term } : {}), ...(fromDate.value ? { fromDate: fromDate.value } : {}), ...(toDate.value ? { toDate: toDate.value } : {}), ...(code ? { patientCode: code } : {}), ...(status.value !== '' ? { status: Number(status.value) } : {}) };
   await loadPage(1);
 }
 async function loadPage(target: number) {
@@ -112,7 +122,7 @@ function selectInvoice(row: InvoiceLookupResponse) {
   if (!allowed.value || props.disabled || busy.value || !loaded.value || !rows.value.some(x => x.invoiceId === row.invoiceId && x.invoiceCode === row.invoiceCode)) return;
   emit('selected', row.invoiceCode);
 }
-onUnmounted(() => { version++; rows.value = []; patientCode.value = ''; keyword.value = ''; status.value = ''; fromDate.value = ''; toDate.value = ''; totalCount.value = 0; totalPages.value = 0; loaded.value = false; applied = { pageSize: 20 }; });
+onUnmounted(() => { version++; rows.value = []; patientCode.value = ''; keyword.value = ''; invoiceCode.value = ''; status.value = ''; fromDate.value = ''; toDate.value = ''; totalCount.value = 0; totalPages.value = 0; loaded.value = false; applied = { pageSize: 20 }; });
 </script>
 <style scoped>
 section { border: 1px solid #ccc; padding: 1rem; margin: 1rem 0; }

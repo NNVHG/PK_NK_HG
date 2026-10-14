@@ -11,7 +11,7 @@ public sealed class InvoiceHistorySearchTests
     {
         public int Calls; public string? Keyword; public (int?, int?, int, int)? Filters; public DateTime? From, Until;
         public Task<PagedResult<InvoiceLookupResponse>> GetPageAsync(int? number, int? status, int page, int size,
-            DateTime? fromUtc = null, DateTime? untilUtc = null, string? keyword = null, CancellationToken ct = default)
+            DateTime? fromUtc = null, DateTime? untilUtc = null, string? keyword = null, string? invoiceCode = null, CancellationToken ct = default)
         { Calls++; Keyword = keyword; Filters = (number, status, page, size); From = fromUtc; Until = untilUtc;
           return Task.FromResult(PagedResult<InvoiceLookupResponse>.Create([], 0, page, size)); }
     }

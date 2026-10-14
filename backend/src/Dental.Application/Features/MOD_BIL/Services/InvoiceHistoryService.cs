@@ -17,6 +17,6 @@ public sealed class InvoiceHistoryService(IInvoiceHistoryRepository repository, 
         DateTime? untilUtc = request.ToDate is DateOnly to
             ? DateTime.SpecifyKind(to.AddDays(1).ToDateTime(TimeOnly.MinValue).AddHours(-7), DateTimeKind.Utc) : null;
         return Result<PagedResult<InvoiceLookupResponse>>.Success(
-            await repository.GetPageAsync(number, request.Status, request.Page, request.PageSize, fromUtc, untilUtc, string.IsNullOrWhiteSpace(request.Keyword) ? null : request.Keyword.Trim(), ct));
+            await repository.GetPageAsync(number, request.Status, request.Page, request.PageSize, fromUtc, untilUtc, string.IsNullOrWhiteSpace(request.Keyword) ? null : request.Keyword.Trim(), string.IsNullOrWhiteSpace(request.InvoiceCode) ? null : request.InvoiceCode.Trim().ToUpperInvariant(), ct));
     }
 }

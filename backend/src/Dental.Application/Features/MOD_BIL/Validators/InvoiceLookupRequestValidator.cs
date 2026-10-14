@@ -5,7 +5,7 @@ public sealed class InvoiceLookupRequestValidator : AbstractValidator<InvoiceLoo
 {
     public InvoiceLookupRequestValidator()
         => RuleFor(x => x.Code).Must(IsValidCode).WithMessage("Mã hóa đơn gồm 1–50 chữ/số ASCII hoặc dấu gạch nối.");
-    private static bool IsValidCode(string? code)
+    public static bool IsValidCode(string? code)
     {
         if (string.IsNullOrWhiteSpace(code)) return false;
         var value = code.Trim();

@@ -10,7 +10,7 @@ public sealed class InvoiceHistoryTests
     private sealed class Repository : IInvoiceHistoryRepository
     {
         public int Calls; public (int?, int?, int, int)? Query;
-        public Task<PagedResult<InvoiceLookupResponse>> GetPageAsync(int? number, int? status, int page, int size, DateTime? fromUtc = null, DateTime? untilUtc = null, string? keyword = null, CancellationToken ct = default)
+        public Task<PagedResult<InvoiceLookupResponse>> GetPageAsync(int? number, int? status, int page, int size, DateTime? fromUtc = null, DateTime? untilUtc = null, string? keyword = null, string? invoiceCode = null, CancellationToken ct = default)
         { Calls++; Query = (number, status, page, size); return Task.FromResult(PagedResult<InvoiceLookupResponse>.Create([], 0, page, size)); }
     }
     [Theory] [InlineData("ADMIN")] [InlineData("RECEPTIONIST")]

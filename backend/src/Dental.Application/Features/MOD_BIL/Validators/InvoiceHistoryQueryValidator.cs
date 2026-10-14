@@ -6,6 +6,8 @@ public sealed class InvoiceHistoryQueryValidator : AbstractValidator<InvoiceHist
 {
     public InvoiceHistoryQueryValidator()
     {
+        RuleFor(x => x.InvoiceCode).Must(code => string.IsNullOrWhiteSpace(code) || InvoiceLookupRequestValidator.IsValidCode(code))
+            .WithMessage("Mã hóa đơn đầy đủ gồm tối đa 50 chữ/số ASCII hoặc dấu gạch nối.");
         RuleFor(x => x.Keyword).MaximumLength(100);
         RuleFor(x => x.PatientCode).Must(code => TryParsePatientCode(code, out _))
             .WithMessage("Nhập mã bệnh nhân đầy đủ theo định dạng BN000001.");

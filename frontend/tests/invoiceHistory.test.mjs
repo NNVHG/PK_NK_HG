@@ -133,3 +133,37 @@ test('unmount clears keyword and ignores late results', async () => {
   const f = fixture(); let resolve; f.pending(new Promise(done => { resolve = done; })); f.c.keyword.value = '0900'; const first = f.c.search();
   f.cleanup(); resolve({ items: [row], page: 1, totalPages: 1, totalCount: 1 }); await first; assert.equal(f.c.keyword.value, ''); assert.deepEqual(f.c.rows.value, []);
 });
+
+
+test('full invoice code canonicalized and held through paging while draft edited', async () => {
+  const f = fixture('RECEPTIONIST'); f.c.invoiceCode.value = ' inv-x '; await f.c.search();
+  assert.equal(f.c.invoiceCode.value, 'INV-X'); assert.equal(f.reads[0].invoiceCode, 'INV-X');
+  f.c.invoiceCode.value = 'INV-OTHER'; await f.c.loadPage(2); assert.equal(f.reads.at(-1).invoiceCode, 'INV-X');
+  await f.c.search(); assert.equal(f.reads.at(-1).invoiceCode, 'INV-OTHER'); assert.equal(f.reads.at(-1).page, 1);
+});
+test('invoice code AND every existing filter travels in same query', async () => {
+  const f = fixture(); f.c.invoiceCode.value = ' inv-x '; f.c.keyword.value = ' Trần '; f.c.patientCode.value = 'bn000123'; f.c.status.value = '0';
+  f.c.fromDate.value = '2026-10-15'; f.c.toDate.value = '2026-10-15'; await f.c.search();
+  assert.deepEqual(f.reads[0], { invoiceCode: 'INV-X', keyword: 'Trần', patientCode: 'BN000123', status: 0, fromDate: '2026-10-15', toDate: '2026-10-15', page: 1, pageSize: 20 });
+});
+test('invalid full code drops old rows and never issues broad fallback query', async () => {
+  for (const code of ['INV X', 'INV%', 'INV_', "INV'", 'HÓA-01', 'INV１２', 'ınv-01', '<script>', 'A'.repeat(51)]) {
+    const f = fixture(); await f.c.search(); f.c.invoiceCode.value = code; await f.c.search();
+    assert.equal(f.reads.length, 1); assert.deepEqual(f.c.rows.value, []); assert.ok(f.c.error.value); assert.equal(f.c.loaded.value, false);
+  }
+});
+test('blank invoice code removes applied exact filter and fifty canonical characters remain valid', async () => {
+  const f = fixture(); f.c.invoiceCode.value = 'a'.repeat(50); await f.c.search(); assert.equal(f.reads[0].invoiceCode, 'A'.repeat(50));
+  f.c.invoiceCode.value = '  '; await f.c.search(); assert.deepEqual(f.reads.at(-1), { page: 1, pageSize: 20 });
+});
+test('code search error preserves draft for retry then unmount clears code and late rows', async () => {
+  const f = fixture(); f.c.invoiceCode.value = 'inv-x'; f.error(new Error('offline')); await f.c.search();
+  assert.equal(f.c.invoiceCode.value, 'INV-X'); assert.deepEqual(f.c.rows.value, []); f.error(null);
+  let finish; f.pending(new Promise(resolve => { finish = resolve; })); const pending = f.c.search(); f.cleanup();
+  finish({ items: [row], page: 1, totalPages: 1, totalCount: 1 }); await pending;
+  assert.equal(f.c.invoiceCode.value, ''); assert.deepEqual(f.c.rows.value, []);
+});
+test('code filter respects disabled payment lock and denied role guards', async () => {
+  const f = fixture(); f.c.invoiceCode.value = 'INV-X'; f.props.disabled = true; await f.c.search(); assert.equal(f.reads.length, 0);
+  const denied = fixture('PATIENT'); denied.c.invoiceCode.value = 'INV-X'; await denied.c.search(); assert.equal(denied.reads.length, 0);
+});
