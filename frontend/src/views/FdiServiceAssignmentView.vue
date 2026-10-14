@@ -14,6 +14,16 @@
         <label><input v-model="general" type="checkbox" :disabled="busy" /> Dịch vụ toàn hàm / tổng quát</label>
         <FdiDentalChart v-model="selection" :multiple="true" :readonly="busy || general" />
         <p v-if="!general">Răng được chỉ định: {{ selectedTeeth.join(', ') || 'Chưa chọn' }}. Mỗi răng tạo một dòng dịch vụ; mặt điều trị chọn bên dưới.</p>
+        <form aria-label="Tìm dịch vụ để chỉ định" @submit.prevent="searchCatalog">
+          <label for="service-keyword">Tìm dịch vụ theo tên hoặc mã (tối đa 100 ký tự)</label>
+          <input id="service-keyword" v-model="keyword" maxlength="100" :disabled="busy" />
+          <div class="pagination">
+            <button type="submit" :disabled="busy">Tìm dịch vụ</button>
+            <button type="button" :disabled="busy" @click="clearSearch">Xóa tìm kiếm</button>
+          </div>
+          <p v-if="searchError" class="error" role="alert">{{ searchError }}</p>
+          <p v-if="appliedKeyword">Đang lọc theo: {{ appliedKeyword }}</p>
+        </form>
         <form @submit.prevent="assign">
           <label>Dịch vụ
             <select v-model="serviceId" :disabled="busy || Boolean(catalogError)" required>
@@ -30,6 +40,7 @@
             <button type="button" :disabled="busy" @click="loadCatalog(catalogPage)">Tải lại dịch vụ</button>
           </div>
           <p v-if="catalogError" class="error" role="alert">{{ catalogError }}</p>
+          <p v-if="!busy && !catalogError && !catalog.length">Không có dịch vụ phù hợp. Thử tên/mã khác hoặc xóa tìm kiếm.</p>
           <label v-if="!general">Mặt áp dụng cho mọi răng đã chọn
             <select v-model="surface" :disabled="busy">
               <option :value="null">Toàn răng</option>
@@ -120,6 +131,7 @@ const catalog = ref<CatalogOption[]>([]);
 const catalogPage = ref(1);
 const catalogPages = ref(1);
 const catalogError = ref('');
+const keyword = ref(''), appliedKeyword = ref(''), searchError = ref('');
 const selectedTeeth = computed(() => [...new Set(selection.value.map(x => x.toothNumber))].sort((a, b) => a - b));
 const canEdit = computed(() => visit.value?.status === 'InProgress' && !visit.value.isLocked &&
   (auth.role === 'ADMIN' || auth.role === 'DENTIST' && visit.value.dentistId === auth.user?.userId));
@@ -131,12 +143,23 @@ let version = 0;
 async function fetchCatalog(page: number, ticket: number) {
   catalogError.value = ''; catalog.value = []; serviceId.value = null;
   try {
-    const data = await visitServicesApi.catalog(page);
+    const data = await visitServicesApi.catalog(page, appliedKeyword.value);
     if (ticket !== version) return;
     catalog.value = data.items; catalogPage.value = page; catalogPages.value = data.totalPages;
   } catch (cause) { if (ticket === version) catalogError.value = message(cause); }
 }
+async function searchCatalog() {
+  if (busy.value || !canEdit.value) return;
+  if (keyword.value.length > 100) { searchError.value = 'Từ khóa không được vượt quá 100 ký tự.'; return; }
+  searchError.value = ''; appliedKeyword.value = keyword.value.trim();
+  await loadCatalog(1);
+}
+async function clearSearch() {
+  if (busy.value || !canEdit.value) return;
+  keyword.value = ''; await searchCatalog();
+}
 async function loadCatalog(page: number) {
+  if (busy.value || !canEdit.value || !Number.isInteger(page) || page < 1 || page > 1_000_000) return;
   const ticket = version; busy.value = true;
   try { await fetchCatalog(page, ticket); }
   finally { if (ticket === version) busy.value = false; }
@@ -146,7 +169,7 @@ async function load() {
   busy.value = true; error.value = ''; success.value = ''; visit.value = null; store.reset();
   selection.value = []; serviceId.value = null; general.value = false; surface.value = null; quantity.value = 1;
   deleteId.value = null; deleteReason.value = '';
-  catalog.value = []; catalogError.value = '';
+  catalog.value = []; catalogError.value = ''; keyword.value = ''; appliedKeyword.value = ''; searchError.value = '';
   if (!Number.isInteger(visitId.value) || visitId.value <= 0) { error.value = 'Mã lần khám không hợp lệ.'; busy.value = false; return; }
   try {
     const [details, records] = await Promise.all([visitsService.getById(visitId.value), visitServicesApi.get(visitId.value)]);
@@ -177,7 +200,7 @@ async function assign() {
   finally { if (ticket === version) busy.value = false; }
 }
 watch(visitId, load, { immediate: true });
-onUnmounted(() => { version++; store.reset(); });
+onUnmounted(() => { version++; store.reset(); visit.value = null; catalog.value = []; serviceId.value = null; keyword.value = ''; appliedKeyword.value = ''; searchError.value = ''; selection.value = []; error.value = ''; success.value = ''; deleteId.value = null; deleteReason.value = ''; });
 </script>
 
 <style scoped>

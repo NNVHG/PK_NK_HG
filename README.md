@@ -511,3 +511,15 @@ Thành công đọc lại cả QueueEntry và Visit rồi mở form ghi chẩn �
 API giữ PUT /api/queue/{id}/status với newStatus=2, không thêm endpoint/package/schema. Các trạng thái khác giữ luồng cũ. Kiểm chứng: 830/830 backend unit,190/190 frontend Node,505/505 PostgreSQL/HTTP full harness, backend build0warning/error và frontend201modules; EF không pending model. Có barrier race hai lượt khác nhau cùng nha sĩ, start-vs-call-next/start-vs-cancel và rollback.
 
 Implementation trên codex/phase1-start-consultation, worktree riêng kế thừa15ffad2/ce5ecb9; main55a0a00 chưa chứa ba commit này. F_CHK_04 tổng thể PARTIAL/chờ Gia UAT, ghế/Calling/InExam theoDL214 chưa có. DL057 quyền hủy InImaging còn lệchsource ngoài scope; không sửaDL. AuditLoggerbest-effort và lỗi fixture reminder gần nửa đêm đã ghi trước chưa đổi; bộ505 PASS tại giờ chạy không chứng minh hết biên thời gian này.
+
+## Tìm dịch vụ để chỉ định theo răng (F_FDI_04)
+
+Admin/nha sĩ phụ trách mở /clinical/visits/{visitId}/services khi Visit đang khám và chưa khóa. Chọn răng người lớn/trẻ em hoặc dịch vụ toàn hàm, nhập tên/mã dịch vụ rồi bấm Tìm dịch vụ. Từ khóa tối đa100ký tự, được trim; tìm chuỗi không phân biệt hoa/thường, vẫn phân biệt dấu tiếng Việt. Phân trang giữ từ khóa đã áp dụng; đang nhập từ khóa mới chưa bấm Tìm thì kết quả cũ vẫn dùng bộ lọc đã hiển thị. Xóa tìm kiếm trở về trang1.
+
+Đổi tìm kiếm/trang xóa lựa chọn dịch vụ cũ nhưng giữ răng/mặt/số lượng để chọn tiếp. Kết quả rỗng được hiển thị rõ; lỗi tải xóa options và chặn chỉ định từ ID cũ. Giá chưa hiệu lực hiển thị rõ và không chọn được. Route change/unmount xóa từ khóa và bỏ response muộn; tìm kiếm chỉ đọc, không tự chỉ định.
+
+GET /api/services hiện hữu dùng keyword/isActive=true/page/pageSize20, phân trang backend tối đa1000000/pageSize100, keyword100; response no-store. Quyền catalog hiện hữu Admin/Dentist/Assistant giữ nguyên, UI chỉ định chỉAdmin/nha sĩ phụ trách. Khi lưu chỉ định, API kiểm lại dịch vụ active và chốt giá hiệu lực trong CSDL, không dùng giá tra cứu cũ.
+
+Kiểm chứng 2026-10-14:842/842unit,202/202Node,536/536PostgreSQL/HTTP fullPASS; backend/harnessbuild0warning/error và frontend201modules; EFkhôngpendingmodel. Đã kiểm tìm tên/mã/chữhoa-tiếngViệt/ký tự%literal, inactive/futureprice, phân trang lọc, search→chỉ định cho răng11/51 mặtB và giá thay đổi sau tra cứu.
+
+Nhánh codex/phase1-fdi-service-search kế thừae2f197d trongworktree riêng, chưa tích hợp main55a0a00. F_FDI_04 vẫnPARTIAL/chờGiaUAT/gợi ýdịchvụ và nhiều mặt; không xử lý mâu thuẫn độ dài Surfaces10(DL168)/20(DL201), không sửaDL/mởPhase2. Không thay logic lưu/snapshot/chuyển trạng thái, không thêm schema/package.
