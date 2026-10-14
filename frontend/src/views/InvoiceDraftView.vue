@@ -12,10 +12,11 @@
       <section v-if="canUnlock" aria-label="Mở lại khám để điều chỉnh">
         <h2>Mở lại khám để điều chỉnh</h2>
         <p>Hóa đơn chưa thu tiền hiện tại sẽ được hủy và giữ trong lịch sử. Sau điều chỉnh, hệ thống sinh hóa đơn với mã mới.</p>
+        <p>Nếu nha sĩ phụ trách đang khám ca khác, hãy đợi nha sĩ hoàn tất ca đó rồi tải lại hồ sơ để xác nhận mở lại.</p>
         <label>Lý do mở khóa (bắt buộc, 10–500 ký tự)
           <textarea v-model="unlockReason" minlength="10" maxlength="500" :disabled="busy" />
         </label>
-        <button :disabled="busy || unlockReason.trim().length < 10" @click="unlock">Xác nhận mở khóa và hủy hóa đơn chưa thu</button>
+        <button :disabled="busy || !ready || unlockReason.trim().length < 10 || unlockReason.trim().length > 500" @click="unlock">Xác nhận mở khóa và hủy hóa đơn chưa thu</button>
       </section>
       <template v-if="canComplete">
         <RouterLink :to="`/clinical/visits/${visitId}/services`">Kiểm tra dịch vụ đã chỉ định</RouterLink>
@@ -79,12 +80,13 @@ const { invoice } = storeToRefs(store);
 const visitId = computed(() => Number(route.params.visitId));
 const visit = ref<VisitDetails | null>(null);
 const busy = ref(false);
+const ready = ref(false);
 const error = ref('');
 const success = ref('');
 const confirmed = ref(false);
 const unlockReason = ref('');
 const unlockHistory = ref<VisitUnlockHistory[]>([]);
-const canUnlock = computed(() => auth.role === 'ADMIN' && visit.value?.status === 'Completed' && visit.value.isLocked &&
+const canUnlock = computed(() => ready.value && auth.role === 'ADMIN' && visit.value?.status === 'Completed' && visit.value.isLocked &&
   (!invoice.value || invoice.value.paidAmount === 0 && [0, 1].includes(invoice.value.status)));
 const statuses: Record<number, string> = { 0: 'Nháp', 1: 'Chờ thanh toán', 2: 'Thanh toán một phần', 3: 'Đã thanh toán', 4: 'Đã hủy' };
 const canComplete = computed(() => visit.value?.status === 'InProgress' && !visit.value.isLocked &&
@@ -96,7 +98,7 @@ function message(cause: unknown) {
 }
 async function load() {
   const ticket = ++version;
-  busy.value = true; error.value = ''; success.value = ''; visit.value = null; store.replace(null); confirmed.value = false; unlockReason.value = ''; unlockHistory.value = [];
+  ready.value = false; busy.value = true; error.value = ''; success.value = ''; visit.value = null; store.replace(null); confirmed.value = false; unlockReason.value = ''; unlockHistory.value = [];
   if (!Number.isInteger(visitId.value) || visitId.value <= 0) { error.value = 'Mã lần khám không hợp lệ.'; busy.value = false; return; }
   try {
     const details = await visitsService.getById(visitId.value);
@@ -112,7 +114,8 @@ async function load() {
       const records = await invoiceDraftApi.unlockHistory(visitId.value);
       if (ticket === version) unlockHistory.value = records;
     }
-  } catch (cause) { if (ticket === version) { error.value = message(cause); visit.value = null; } }
+    if (ticket === version) ready.value = true;
+  } catch (cause) { if (ticket === version) { error.value = message(cause); ready.value = false; visit.value = null; store.replace(null); unlockHistory.value = []; } }
   finally { if (ticket === version) busy.value = false; }
 }
 async function onPaymentReceived(payment: CashPaymentResponse) {
@@ -136,12 +139,17 @@ async function unlock() {
     await invoiceDraftApi.unlock(visitId.value, reason);
     if (ticket !== version) return;
     const refreshVersion = version + 1; await load();
-    if (refreshVersion === version && visit.value?.status === 'InProgress')
+    if (refreshVersion === version && ready.value && visit.value?.status === 'InProgress')
       success.value = oldCode ? `Đã mở lại khám và hủy hóa đơn ${oldCode}. Hóa đơn mới dùng mã mới.` : 'Đã mở lại khám để điều chỉnh.';
   } catch (cause) {
     if (ticket !== version) return;
     const failureMessage = message(cause); const refreshVersion = version + 1;
-    await load(); if (refreshVersion === version) error.value = failureMessage;
+    await load();
+    if (refreshVersion === version) {
+      const refreshError = error.value;
+      error.value = refreshError ? failureMessage + ' ' + refreshError + ' Tải lại hồ sơ trước khi mở lại.' : failureMessage;
+      if (auth.role === 'ADMIN') unlockReason.value = reason;
+    }
   } finally { if (ticket === version) busy.value = false; }
 }
 async function complete() {
@@ -161,7 +169,8 @@ async function complete() {
   } finally { if (ticket === version) busy.value = false; }
 }
 watch(visitId, load, { immediate: true });
-onUnmounted(() => { version++; store.replace(null); });
+watch(() => [auth.role, auth.user?.userId], load);
+onUnmounted(() => { version++; ready.value = false; visit.value = null; unlockHistory.value = []; unlockReason.value = ''; error.value = ''; success.value = ''; confirmed.value = false; store.replace(null); });
 </script>
 
 <style scoped>

@@ -29,7 +29,10 @@ public sealed class VisitReopenRepository(DentalDbContext db) : IVisitReopenRepo
                 (x.Status == VisitStatuses.Created || x.Status == VisitStatuses.InProgress), ct);
             var hasPreviousPayment = await db.Invoices.AnyAsync(x => x.VisitId == visitId && x.PaidAmount != 0, ct)
                 || await db.PaymentTransactions.AnyAsync(x => x.Invoice.VisitId == visitId && x.Amount > 0, ct);
-            var validation = VisitReopenRules.Validate(visit, invoice, otherOpen, hasPreviousPayment);
+            // Reopening also starts a consultation; enforce the same one-active-visit rule as call/start (DL-120).
+            var dentistBusy = visit.DentistId is int dentistId && await db.Visits.AnyAsync(x =>
+                x.VisitId != visitId && x.DentistId == dentistId && x.Status == VisitStatuses.InProgress, ct);
+            var validation = VisitReopenRules.Validate(visit, invoice, otherOpen, hasPreviousPayment, dentistBusy);
             if (validation.IsFailure) return Fail(validation.Error);
             var queue = await db.QueueEntries.FirstOrDefaultAsync(x => x.VisitId == visitId, ct);
             if (queue is null || queue.Status != QueueStatus.Completed)
@@ -60,7 +63,7 @@ public sealed class VisitReopenRepository(DentalDbContext db) : IVisitReopenRepo
         catch (Exception error) when (error is PostgresException { SqlState: "40001" or "40P01" or "23505" } ||
             error is DbUpdateException { InnerException: PostgresException { SqlState: "40001" or "40P01" or "23505" } })
         {
-            await transaction.RollbackAsync(CancellationToken.None);
+            // Disposal rolls back an unfinished transaction; a failed COMMIT may already have ended it.
             return Fail(new Error("BIL_006", "Có thao tác đồng thời; tải lại hồ sơ trước khi thử lại."));
         }
         finally { if (!committed) db.ChangeTracker.Clear(); }

@@ -7,7 +7,7 @@ namespace Dental.Application.Features.MOD_BIL.Services;
 
 public static class VisitReopenRules
 {
-    public static Result Validate(Visit visit, Invoice? invoice, bool otherOpenVisit, bool hasPreviousPayment = false)
+    public static Result Validate(Visit visit, Invoice? invoice, bool otherOpenVisit, bool hasPreviousPayment = false, bool dentistHasOtherConsultation = false)
     {
         if (visit.Status != VisitStatuses.Completed || !visit.IsLocked)
             return Result.Failure(new Error("BIL_008", "Chỉ mở lại lần khám đã hoàn tất và khóa."));
@@ -15,6 +15,8 @@ public static class VisitReopenRules
             return Result.Failure(new Error("BIL_009", "Bệnh nhân đang có lần khám khác chưa kết thúc."));
         if (hasPreviousPayment || invoice is not null && (invoice.PaidAmount != 0 || invoice.Status is not (InvoiceStatus.Draft or InvoiceStatus.PendingPayment)))
             return Result.Failure(new Error("BIL_010", "Không mở khóa hồ sơ có hóa đơn đã thanh toán hoặc không thể hủy."));
+        if (dentistHasOtherConsultation)
+            return Result.Failure(new Error("BIL_012", "Nha sĩ phụ trách đang khám ca khác. Chỉ mở lại sau khi nha sĩ hoàn tất ca đang khám."));
         return Result.Success();
     }
 }

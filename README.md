@@ -580,3 +580,11 @@ Admin/Lễ tân mở /invoices → nhập **Mã hóa đơn đầy đủ** trong 
 Phân trang giữ mã đã áp dụng; sửa ô nhập chỉ áp dụng sau khi bấm Tìm hóa đơn. Chọn một dòng vẫn tra cứu chính xác lại trước khi xem các lần thu/biên lai hoặc thu tiền. Query GET /api/invoices?invoiceCode=... chỉ Admin/Receptionist/JWT/no-store, mã hợp lệ gồm 1–50 chữ/số ASCII hoặc dấu gạch nối. Mã lỗi bị chặn ở cả UI và API.
 
 Kiểm thử tự động đạt; UAT UI vẫn BLOCKED theo Q-298 về DB demo thiếu schema, chưa có nghiệm thu của Gia.
+
+## Mở lại khám an toàn để điều chỉnh hóa đơn (F_BIL_07)
+
+Admin mở /clinical/visits/{visitId}/invoice-draft → tải hồ sơ → nhập lý do 10–500 ký tự → Xác nhận mở khóa và hủy hóa đơn chưa thu. Nếu nha sĩ phụ trách đang có ca InProgress khác, API trả409/BIL_012 và giữ nguyên lượt khám, hóa đơn, hàng đợi, lịch sử. Đợi nha sĩ hoàn tất ca đó, tải lại rồi xác nhận lại.
+
+Khi mở lại thành công, Visit trở về InProgress, bỏ khóa, Queue trở về InConsultation, hóa đơn chưa thu cũ chuyển Cancelled và giữ nguyên các dòng snapshot. Lý do lưu trong lịch sử mở khóa bảo vệ; audit chỉ tham chiếu ID. Sau điều chỉnh, hoàn tất khám lại theo luồng hiện hữu. Hồ sơ đã thu tiền vẫn không được mở lại.
+
+UI chỉ mở lại sau khi tải thành công hồ sơ/hóa đơn/lịch sử. Lỗi POST giữ lý do để xác nhận lại sau khi đối chiếu; lỗi GET xóa snapshot và chặn mở lại đến khi tải thành công. Đổi tài khoản/route hoặc rời trang bỏ dữ liệu cũ/response muộn. Kiểm thử đồng thời và rollback đã đạt; UAT UI vẫn BLOCKED theo Q-298, chưa Gia nghiệm thu.
