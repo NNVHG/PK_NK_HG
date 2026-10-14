@@ -29,12 +29,14 @@ public static class Policies
     public const string FdiConditionWrite = "FdiConditionWrite";
     public const string FdiServiceAssign = "FdiServiceAssign";
     public const string InvoiceDraftView = "InvoiceDraftView";
+    public const string InvoicePortalRead = "InvoicePortalRead";
     public const string CashPaymentWrite = "CashPaymentWrite";
 
 
     public static void AddApplicationPolicies(this AuthorizationOptions opts)
     {
         opts.AddPolicy(AppointmentReschedule, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Receptionist, RoleCodes.Patient));
+        opts.AddPolicy(InvoicePortalRead, policy => policy.RequireRole(RoleCodes.Patient));
         opts.AddPolicy(CashPaymentWrite, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Receptionist));
         opts.AddPolicy(FdiConditionWrite, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist));
         opts.AddPolicy(FdiServiceAssign, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist));

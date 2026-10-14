@@ -5,6 +5,12 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
+      path: '/invoices/mine',
+      name: 'patient-invoices',
+      component: () => import('@/views/PatientInvoicesView.vue'),
+      meta: { requiresAuth: true, roles: ['PATIENT'] }
+    },
+    {
       path: '/invoices',
       name: 'invoice-desk',
       component: () => import('@/views/InvoicesView.vue'),

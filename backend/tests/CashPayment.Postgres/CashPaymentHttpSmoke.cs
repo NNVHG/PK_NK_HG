@@ -42,6 +42,9 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddScoped<ICashPaymentRepository, CashPaymentRepository>();
         builder.Services.AddScoped<IInvoiceLookupRepository, InvoiceLookupRepository>();
         builder.Services.AddScoped<IInvoiceHistoryRepository, InvoiceHistoryRepository>();
+        builder.Services.AddScoped<IInvoicePortalRepository, InvoicePortalRepository>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.InvoicePortalService>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.InvoicePortalQueryValidator>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.InvoiceHistoryService>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.InvoiceHistoryQueryValidator>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.InvoiceLookupService>();
@@ -203,6 +206,7 @@ internal static class CashPaymentHttpSmoke
             await DentistBookingHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await AppointmentReminderHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await AutomaticReminderHttpSmoke.RunAsync(client, options, cashierId, Authenticate, app.Services.GetRequiredService<AppointmentReminderWorkerStatus>(), check);
+            await InvoicePortalHttpSmoke.RunAsync(client, options, cashierId, Authenticate, AuthenticateActor, check);
             await InvoicePatientSearchHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await InvoiceDateFilterHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await InvoiceHistoryHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
