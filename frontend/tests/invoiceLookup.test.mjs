@@ -64,3 +64,8 @@ test('payment invalidates a stale manual refresh and reads debt again', async ()
   await f.c.onPaid({ invoiceId: 42, id: 9, amount: 40 }); resolve(row); await old;
   assert.equal(f.c.invoice.value.remainingAmount, 60); assert.equal(f.c.lastPayment.value.id, 9); assert.equal(f.c.reviewRequired.value, false);
 });
+
+test('history selection re-reads exact invoice and is locked after opening cash', async () => {
+  const f = fixture(); await f.c.selectFromHistory('INV-9'); assert.equal(f.reads[0], 'INV-9');
+  f.c.confirmed.value = true; f.c.openPayment(); await f.c.selectFromHistory('OTHER'); assert.equal(f.reads.length, 1); assert.equal(f.c.code.value, 'INV-9');
+});

@@ -41,6 +41,9 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddScoped(_ => new DentalDbContext(options));
         builder.Services.AddScoped<ICashPaymentRepository, CashPaymentRepository>();
         builder.Services.AddScoped<IInvoiceLookupRepository, InvoiceLookupRepository>();
+        builder.Services.AddScoped<IInvoiceHistoryRepository, InvoiceHistoryRepository>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.InvoiceHistoryService>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.InvoiceHistoryQueryValidator>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.InvoiceLookupService>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.InvoiceLookupRequestValidator>();
         builder.Services.AddScoped<CashPaymentService>();
@@ -200,6 +203,7 @@ internal static class CashPaymentHttpSmoke
             await DentistBookingHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await AppointmentReminderHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await AutomaticReminderHttpSmoke.RunAsync(client, options, cashierId, Authenticate, app.Services.GetRequiredService<AppointmentReminderWorkerStatus>(), check);
+            await InvoiceHistoryHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await InvoiceLookupHttpSmoke.RunAsync(client, options, cashierId, patientId, Authenticate, check);
             await BankTransferHttpSmoke.RunAsync(client, options, cashierId, patientId, webhookKey, Authenticate, check);
         }

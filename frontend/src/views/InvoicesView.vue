@@ -1,6 +1,7 @@
 <template>
   <main class="invoice-desk">
     <h1>Tra cứu hóa đơn tại quầy</h1>
+    <InvoiceHistoryPanel v-if="!paymentOpen" :disabled="busy" @selected="selectFromHistory" />
     <form @submit.prevent="lookup">
       <label>Mã hóa đơn <input v-model="code" maxlength="50" autocomplete="off" :disabled="busy || paymentOpen" /></label>
       <button :disabled="busy || paymentOpen || !allowed">Tra cứu</button>
@@ -39,6 +40,7 @@ import { invoiceLookupApi, type InvoiceLookupResponse } from '@/services/invoice
 import InvoiceCashPayment from '@/components/InvoiceCashPayment.vue';
 import PaymentReceiptModal from '@/components/PaymentReceiptModal.vue';
 import type { CashPaymentResponse } from '@/services/cashPayments';
+import InvoiceHistoryPanel from '@/components/InvoiceHistoryPanel.vue';
 const lastPayment = ref<CashPaymentResponse | null>(null);
 const auth = useAuthStore();
 const allowed = computed(() => ['ADMIN', 'RECEPTIONIST'].includes(auth.role));
@@ -53,6 +55,11 @@ const statuses = ['Nháp', 'Chờ thanh toán', 'Thanh toán một phần', 'Đ�
 const eligible = computed(() => allowed.value && !!invoice.value && [1, 2, 3].includes(invoice.value.status));
 const money = (value: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
 let version = 0;
+async function selectFromHistory(selectedCode: string) {
+  if (!allowed.value || busy.value || paymentOpen.value) return;
+  code.value = selectedCode;
+  await lookup();
+}
 async function lookup() {
   if (!allowed.value || busy.value || paymentOpen.value) return;
   invoice.value = null; confirmed.value = false; error.value = '';
