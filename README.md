@@ -547,12 +547,19 @@ GET /api/invoices thêm keyword optional; filter trướccount/page, no-store/JW
 Kiểm chứng 2026-10-14 18:01:919unit/239Nodeserial/668fullPGHTTP PASS; backend/harness0warning/error/frontendbuildPASS/EFkhôngpendingmodel. PGHTTP dùng clusterPostgreSQL18.6 tạm loopback/C.UTF-8builtin bằng binaries hiện hữu, syntheticDB/clusterđãstop vàdọn. Clusterchính đang57P03/recovery/rejecting, không sửa/configrestart và chưa nghiệmthu trênclusterchính. Branch codex/phase1-invoice-patient-search từ0f5de0ce chưa tíchhợpmain55a0a00. PARTIAL/chờGiaUAT/Portal/môi trườngPGchính; DỪNG, khôngPhase2.
 
 ## F_BIL_08 — Hóa đơn gia đình trên Portal
-Patient đăngnhập, mở menu Hóa đơn gia đình (/invoices/mine), chọn rõ hồ sơ active thuộc tài khoản, xem hóađơn/côngnợ/phântrang. Chọn Xem các lần thanh toán để đọc cash/bank đãghi nhận/amountghi vào invoice/ngàyVN/nhãnMÔPHỎNG. Chọnprofilekhác/reloadprofiles/đổiaccount xóa dữliệu cũ; responsemuộnbịbỏ.
-GET /api/portal/invoices và /api/portal/invoices/{invoiceId}/payments requiredpatientId, Patientonly/JWT/no-store/SQLprofile+UserId trướccount/page. Missing/invalid/foreignprofile403; wrong/foreign/missinginvoice403; invalidpage/invoice400. APIreadonlychoarchivedowned, pickerchỉactivehiệnhữu. Côngnợ/history làsnapshot khiGET, Tảilại đểđọc mới; chưaPortalfilters/details/inactivepicker.
+Patient đăngnhập, mở menu Hóa đơn gia đình (/invoices/mine), chọn rõ hồ sơ thuộc tài khoản, gồm hồ sơ đã ngừng hoạt động, xem hóađơn/côngnợ/phântrang. Chọn Xem chi tiết và thanh toán để đọc cash/bank đãghi nhận/amountghi vào invoice/ngàyVN/nhãnMÔPHỎNG. Chọnprofilekhác/reloadprofiles/đổiaccount xóa dữliệu cũ; responsemuộnbịbỏ.
+GET /api/portal/invoices và /api/portal/invoices/{invoiceId}/payments requiredpatientId, Patientonly/JWT/no-store/SQLprofile+UserId trướccount/page. Missing/invalid/foreignprofile403; wrong/foreign/missinginvoice403; invalidpage/invoice400. APIreadonlychoarchivedowned, picker dùng GET /api/portal/invoices/profiles với tên/ngày sinh/mã/trạng thái. Côngnợ/history làsnapshot khiGET, Tảilại đểđọc mới; chưa có bộ lọc Portal; chi tiết và picker inactive đã có.
 Kiểm chứng 2026-10-14 22:02:947unit/252Nodeserial/714fullPGHTTPprimaryPASS, backend/harness0warning/error/frontendbuildPASS/EFkhôngpendingmodel. PGprimaryaccepting,ownedDBremoved; chưabrowserUAT. Branch codex/phase1-patient-invoices từ8431b7bc chưa tíchhợpmain55a0a00. PARTIAL/chờGiaUAT, DỪNG/khôngPhase2. Q297planningmớiđangmở khôngchặnDL106Portal.
 
 ## Chi tiết hóa đơn gia đình (F_BIL_08)
 
-Đăng nhập Bệnh nhân → Hóa đơn gia đình (/invoices/mine) → chọn hồ sơ → chọn **Xem chi tiết và thanh toán**. Phần chi tiết hiển thị mã/tên dịch vụ, số lượng, đơn giá và thành tiền đã lưu trong hóa đơn; có phân trang và Tải lại chi tiết. Các lần thanh toán nằm ở phần riêng bên dưới. Đổi hồ sơ/hóa đơn sẽ xóa chi tiết cũ và bỏ response muộn; lỗi tải có nút thử lại. Picker hiện chỉ liệt kê hồ sơ hoạt động.
+Đăng nhập Bệnh nhân → Hóa đơn gia đình (/invoices/mine) → chọn hồ sơ → chọn **Xem chi tiết và thanh toán**. Phần chi tiết hiển thị mã/tên dịch vụ, số lượng, đơn giá và thành tiền đã lưu trong hóa đơn; có phân trang và Tải lại chi tiết. Các lần thanh toán nằm ở phần riêng bên dưới. Đổi hồ sơ/hóa đơn sẽ xóa chi tiết cũ và bỏ response muộn; lỗi tải có nút thử lại. Picker liệt kê hồ sơ thuộc tài khoản, gồm hồ sơ đã ngừng hoạt động.
 
 GET /api/portal/invoices/{invoiceId}/items yêu cầu JWT Patient và patientId thuộc tài khoản; count/rows kiểm tra lại ownership, no-store, mặc định20/max50 dòng, thứ tự itemId tăng dần. Giá đọc từ snapshot hóa đơn, gồm lịch sử hóa đơn đã hủy; không tính lại theo danh mục hiện tại. Chưa nghiệm thu UI trình duyệt; toàn chức năng vẫn PARTIAL.
+
+
+## Hồ sơ đã ngừng hoạt động trong lịch sử hóa đơn (F_BIL_08)
+
+Bệnh nhân mở **Hóa đơn gia đình** (/invoices/mine), chọn hồ sơ theo họ tên, ngày sinh và mã. Hồ sơ đã ngừng hoạt động có nhãn riêng và vẫn chọn được để xem hóa đơn, chi tiết dịch vụ, các lần thanh toán. Không tự chọn hồ sơ đầu tiên. **Tải lại hồ sơ** xóa dữ liệu tài chính cũ và yêu cầu chọn lại.
+
+GET /api/portal/invoices/profiles chỉ trả hồ sơ có Patient.UserId bằng UserId trong JWT, gồm cả inactive; DTO chỉ có patientId, patientCode, fullName, dateOfBirth, isActive. Hồ sơ hoạt động xếp trước, sau đó theo mã. Endpoint chỉ đọc, Patient-only, no-store. Các truy vấn hóa đơn/chi tiết/thanh toán vẫn yêu cầu patientId và kiểm tra ownership lại; hồ sơ đổi chủ bị từ chối. Chức năng vẫn PARTIAL, chờ Gia nghiệm thu trình duyệt.

@@ -7,6 +7,15 @@ using Microsoft.EntityFrameworkCore;
 namespace Dental.Infrastructure.Repositories;
 public sealed class InvoicePortalRepository(DentalDbContext db) : IInvoicePortalRepository
 {
+    public async Task<IReadOnlyList<InvoicePortalProfileResponse>> GetProfilesAsync(int userId, CancellationToken ct = default)
+    {
+        // Inactive owned profiles remain available for financial history. Ownership comes only from JWT.
+        var rows = await db.Patients.AsNoTracking().Where(p => p.UserId == userId)
+            .OrderByDescending(p => p.IsActive).ThenBy(p => p.PatientNumber).ThenBy(p => p.PatientId)
+            .Select(p => new { p.PatientId, p.PatientNumber, p.FullName, p.DateOfBirth, p.IsActive }).ToListAsync(ct);
+        return rows.Select(p => new InvoicePortalProfileResponse(p.PatientId,
+            "BN" + p.PatientNumber.ToString("D6", CultureInfo.InvariantCulture), p.FullName, p.DateOfBirth, p.IsActive)).ToList();
+    }
     public Task<bool> OwnsPatientAsync(int patientId, int userId, CancellationToken ct = default)
         => db.Patients.AsNoTracking().AnyAsync(p => p.PatientId == patientId && p.UserId == userId, ct);
     public async Task<PagedResult<InvoiceLookupResponse>> GetInvoicesAsync(int patientId, int userId, int page, int pageSize, CancellationToken ct = default)

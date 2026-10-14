@@ -21,8 +21,8 @@ internal static class InvoicePortalHttpSmoke
             ?? new Role { RoleCode = RoleCodes.Patient, RoleName = "Synthetic portal patient" };
         User Owner(string name) => new() { FullName = name, Role = role, Phone = "07" + Random.Shared.Next(10000000, 99999999),
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()), IsActive = true };
-        var owner = Owner("Synthetic portal account A"); var other = Owner("Synthetic portal account B");
-        db.Users.AddRange(owner, other); await db.SaveChangesAsync();
+        var owner = Owner("Synthetic portal account A"); var other = Owner("Synthetic portal account B"); var emptyOwner = Owner("Synthetic portal empty family");
+        db.Users.AddRange(owner, other, emptyOwner); await db.SaveChangesAsync();
         var sharedPhone = "03" + Random.Shared.Next(10000000, 99999999);
         Patient Profile(string name, User user, bool active = true) => new() { FullName = name, UserId = user.UserId, Phone = sharedPhone,
             DateOfBirth = new DateOnly(2000, 1, 1), IsActive = active };
@@ -178,6 +178,47 @@ internal static class InvoicePortalHttpSmoke
         await db.Patients.Where(p => p.PatientId == a.PatientId).ExecuteUpdateAsync(s => s.SetProperty(p => p.UserId, (int?)owner.UserId));
         check(await db.InvoiceItems.CountAsync() == itemCount && await db.Invoices.Where(i => i.Id == invoice.Id).AnyAsync(i => i.TotalAmount == 100000 && i.PaidAmount == 70000 && i.Status == InvoiceStatus.PartiallyPaid),
             "Portal item reads preserve snapshots invoice amounts/status");
+        client.DefaultRequestHeaders.Authorization = null;
+        using (var r = await client.GetAsync("/api/portal/invoices/profiles")) check(r.StatusCode == HttpStatusCode.Unauthorized, "Portal profiles anonymous401");
+        foreach (var denied in new[] { RoleCodes.Admin, RoleCodes.Receptionist, RoleCodes.Dentist, RoleCodes.Assistant })
+        {
+            authenticateActor(denied, owner.UserId);
+            using var r = await client.GetAsync("/api/portal/invoices/profiles"); check(r.StatusCode == HttpStatusCode.Forbidden, "Portal profiles staff403 " + denied);
+        }
+        authenticateActor(RoleCodes.Patient, owner.UserId);
+        using (var r = await client.GetAsync("/api/portal/invoices/profiles?userId=" + other.UserId + "&patientId=" + foreign.PatientId + "&isActive=true"))
+        {
+            var rows = (await r.Content.ReadFromJsonAsync<List<InvoicePortalProfileResponse>>())!;
+            check(r.StatusCode == HttpStatusCode.OK && r.Headers.CacheControl?.NoStore == true, "Portal profiles200 no-store");
+            check(rows.Select(p => p.PatientId).SequenceEqual(new[] { a.PatientId, b.PatientId, inactive.PatientId }), "Portal profiles JWT scope includes all family active first code order");
+            check(rows.All(p => p.PatientId != foreign.PatientId) && rows.Single(p => p.PatientId == inactive.PatientId).IsActive == false, "Portal profile spoof cannot hide inactive or expose shared-phone foreign profile");
+            check(rows.Single(p => p.PatientId == a.PatientId) == new InvoicePortalProfileResponse(a.PatientId, a.PatientCode, a.FullName, a.DateOfBirth, true), "Portal profile exact five values including birth/code");
+        }
+        using (var r = await client.GetAsync("/api/portal/invoices/profiles"))
+        {
+            var json = await r.Content.ReadFromJsonAsync<JsonElement>();
+            check(json[0].EnumerateObject().Select(p => p.Name).Order().SequenceEqual(new[] { "patientId", "patientCode", "fullName", "dateOfBirth", "isActive" }.Order()), "Portal profile DTO excludes contact CCCD and internal identifiers");
+        }
+        using (var r = await client.GetAsync("/api/patients/mine"))
+        { var json = await r.Content.ReadFromJsonAsync<JsonElement>(); check(json.GetArrayLength() == 2 && json.EnumerateArray().All(p => p.GetProperty("patientId").GetInt32() != inactive.PatientId), "Patient active picker contract preserved"); }
+        using (var r = await client.GetAsync(List(inactive.PatientId)))
+        { var page = await r.Content.ReadFromJsonAsync<PagedResult<InvoiceLookupResponse>>(); check(page?.Items.Single().InvoiceId == archived.Id, "Selected archived profile own invoice accessible"); }
+        using (var r = await client.GetAsync(Items(archived.Id, inactive.PatientId)))
+        { var page = await r.Content.ReadFromJsonAsync<PagedResult<InvoicePortalItemResponse>>(); check(page?.Items.Single().ItemId == inactiveItem.Id, "Selected archived profile own item accessible"); }
+        using (var r = await client.GetAsync(Payments(archived.Id, inactive.PatientId)))
+        { var page = await r.Content.ReadFromJsonAsync<PagedResult<InvoicePortalPaymentResponse>>(); check(page?.TotalCount == 0, "Selected archived profile payment history empty200"); }
+        authenticateActor(RoleCodes.Patient, emptyOwner.UserId);
+        using (var r = await client.GetAsync("/api/portal/invoices/profiles"))
+        { var rows = await r.Content.ReadFromJsonAsync<List<InvoicePortalProfileResponse>>(); check(r.StatusCode == HttpStatusCode.OK && rows?.Count == 0, "Portal valid empty family profiles200"); }
+        authenticateActor(RoleCodes.Patient, other.UserId);
+        using (var r = await client.GetAsync("/api/portal/invoices/profiles"))
+        { var rows = await r.Content.ReadFromJsonAsync<List<InvoicePortalProfileResponse>>(); check(rows?.Count == 1 && rows[0].PatientId == foreign.PatientId, "Portal other account receives only own profiles despite shared phone"); }
+        check((await repo.GetProfilesAsync(owner.UserId)).Count == 3, "Portal profile repository ownership initial");
+        await db.Patients.Where(p => p.PatientId == inactive.PatientId).ExecuteUpdateAsync(s => s.SetProperty(p => p.UserId, (int?)other.UserId));
+        check((await repo.GetProfilesAsync(owner.UserId)).All(p => p.PatientId != inactive.PatientId), "Portal selector refresh drops reowned inactive profile");
+        check(await repo.GetItemsAsync(archived.Id, inactive.PatientId, owner.UserId, 1, 20) is null, "Portal financial read rejects stale archived selector after owner change");
+        await db.Patients.Where(p => p.PatientId == inactive.PatientId).ExecuteUpdateAsync(s => s.SetProperty(p => p.UserId, (int?)owner.UserId));
+        check(await db.Patients.Where(p => p.PatientId == inactive.PatientId).AnyAsync(p => !p.IsActive), "Portal read never reactivates archived profile");
         check(await db.AuditLogs.CountAsync() == audits && await db.PaymentTransactions.CountAsync() == transactions &&
             await db.Invoices.CountAsync() == invoiceCount, "Portal reads never mutate financial records or audit");
         authenticate(RoleCodes.Admin);

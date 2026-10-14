@@ -10,6 +10,14 @@ namespace Dental.Api.Controllers;
 [Authorize(Policy = AppPolicies.InvoicePortalRead)]
 public sealed class InvoicePortalController(InvoicePortalService service, ICurrentUser user) : ControllerBase
 {
+    [HttpGet("profiles")]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
+    public async Task<IActionResult> Profiles(CancellationToken ct)
+    {
+        if (user.UserId is not int userId) return Unauthorized();
+        var result = await service.ProfilesAsync(userId, user.RoleCode, ct);
+        return result.IsSuccess ? Ok(result.Value) : StatusCode(403, new { code = result.Error.Code, message = result.Error.Message });
+    }
     [HttpGet]
     [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
     public async Task<IActionResult> List([FromQuery] InvoicePortalQuery request, CancellationToken ct)

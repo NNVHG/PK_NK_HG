@@ -3,13 +3,14 @@
     <h1>Hóa đơn gia đình</h1>
     <button :disabled="profilesBusy" @click="loadProfiles">Tải lại hồ sơ</button>
     <p v-if="profileError" role="alert">{{ profileError }}</p>
+    <p>Chọn hồ sơ để xem lịch sử hóa đơn, gồm hồ sơ đã ngừng hoạt động.</p>
     <label>Hồ sơ
       <select v-model.number="patientId" :disabled="profilesBusy" @change="changeProfile">
         <option :value="0">Chọn hồ sơ</option>
-        <option v-for="profile in profiles" :key="profile.patientId" :value="profile.patientId">{{ profile.fullName }} · {{ profile.patientCode }}</option>
+        <option v-for="profile in profiles" :key="profile.patientId" :value="profile.patientId">{{ profile.fullName }} · {{ birth(profile.dateOfBirth) }} · {{ profile.patientCode }}{{ profile.isActive ? '' : ' · Đã ngừng hoạt động' }}</option>
       </select>
     </label>
-    <p v-if="!profilesBusy && !profileError && !profiles.length">Chưa có hồ sơ hoạt động thuộc tài khoản.</p>
+    <p v-if="!profilesBusy && !profileError && !profiles.length">Chưa có hồ sơ thuộc tài khoản.</p>
     <button :disabled="invoicesBusy || !validProfile" @click="loadInvoices(1)">Tải lại hóa đơn</button>
     <p v-if="invoicesBusy" role="status">Đang tải hóa đơn…</p>
     <p v-if="invoiceError" role="alert">{{ invoiceError }}</p>
@@ -63,12 +64,11 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
-import { patientsService, type PatientSummary } from '@/services/patients';
-import { invoicePortalApi, type PortalPayment, type PortalInvoiceItem } from '@/services/invoicePortal';
+import { invoicePortalApi, type PortalPayment, type PortalInvoiceItem, type PortalInvoiceProfile } from '@/services/invoicePortal';
 import type { InvoiceLookupResponse } from '@/services/invoiceLookup';
 const auth = useAuthStore();
 const allowed = computed(() => auth.role === 'PATIENT');
-const profiles = ref<Pick<PatientSummary, 'patientId' | 'patientCode' | 'fullName'>[]>([]);
+const profiles = ref<PortalInvoiceProfile[]>([]);
 const patientId = ref(0), profilesBusy = ref(false), profileError = ref('');
 const validProfile = computed(() => allowed.value && Number.isInteger(patientId.value) && patientId.value > 0 && profiles.value.some(p => p.patientId === patientId.value));
 const invoices = ref<InvoiceLookupResponse[]>([]), invoicePage = ref(1), invoicePages = ref(0), invoiceTotal = ref(0);
@@ -79,6 +79,7 @@ const items = ref<PortalInvoiceItem[]>([]), itemPage = ref(1), itemPages = ref(0
 const itemsBusy = ref(false), itemsLoaded = ref(false), itemError = ref('');
 const statuses = ['Nháp', 'Chờ thanh toán', 'Thanh toán một phần', 'Đã thanh toán', 'Đã hủy'];
 const money = (value: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
+const birth = (value: string) => value.split('-').reverse().join('/');
 const date = (value: string) => new Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', dateStyle: 'short', timeStyle: 'medium' }).format(new Date(value));
 let profileVersion = 0, invoiceVersion = 0, paymentVersion = 0, itemVersion = 0;
 function clearItems() { itemVersion++; items.value = []; itemsBusy.value = false; itemsLoaded.value = false; itemPage.value = 1; itemPages.value = 0; itemTotal.value = 0; itemError.value = ''; }
@@ -89,8 +90,8 @@ async function loadProfiles() {
   if (!allowed.value) { profilesBusy.value = false; return; }
   profilesBusy.value = true;
   try {
-    const rows = await patientsService.getMyProfiles();
-    if (ticket === profileVersion && allowed.value) profiles.value = rows.map(p => ({ patientId: p.patientId, patientCode: p.patientCode, fullName: p.fullName }));
+    const rows = await invoicePortalApi.profiles();
+    if (ticket === profileVersion && allowed.value) profiles.value = rows.map(p => ({ patientId: p.patientId, patientCode: p.patientCode, fullName: p.fullName, dateOfBirth: p.dateOfBirth, isActive: p.isActive }));
   } catch { if (ticket === profileVersion) profileError.value = 'Không tải được hồ sơ. Tải lại để chọn đúng hồ sơ của tài khoản.'; }
   finally { if (ticket === profileVersion) profilesBusy.value = false; }
 }

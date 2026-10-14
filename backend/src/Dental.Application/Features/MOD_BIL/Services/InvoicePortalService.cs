@@ -7,6 +7,11 @@ using Dental.Domain.Constants;
 namespace Dental.Application.Features.MOD_BIL.Services;
 public sealed class InvoicePortalService(IInvoicePortalRepository repository, InvoicePortalQueryValidator validator)
 {
+    public async Task<Result<IReadOnlyList<InvoicePortalProfileResponse>>> ProfilesAsync(int userId, string? role, CancellationToken ct = default)
+    {
+        if (role != RoleCodes.Patient || userId <= 0) return Result<IReadOnlyList<InvoicePortalProfileResponse>>.Failure(Error.Forbidden);
+        return Result<IReadOnlyList<InvoicePortalProfileResponse>>.Success(await repository.GetProfilesAsync(userId, ct));
+    }
     public async Task<Result<PagedResult<InvoiceLookupResponse>>> ListAsync(InvoicePortalQuery request, int userId, string? role, CancellationToken ct = default)
     {
         var scope = await ValidateScopeAsync(request, userId, role, ct);

@@ -8,6 +8,10 @@ public sealed class InvoicePortalTests
 {
     private sealed class Repository : IInvoicePortalRepository
     {
+        public int ProfileCalls; public int? ProfileUser;
+        public IReadOnlyList<InvoicePortalProfileResponse> Profiles = [];
+        public Task<IReadOnlyList<InvoicePortalProfileResponse>> GetProfilesAsync(int userId, CancellationToken ct = default)
+        { ProfileCalls++; ProfileUser = userId; return Task.FromResult(Profiles); }
         public bool Owns = true; public int ItemCalls; public (int, int, int, int, int)? Items;
         public PagedResult<InvoicePortalItemResponse>? ItemRows = PagedResult<InvoicePortalItemResponse>.Create([], 0, 1, 20); public int OwnershipCalls, InvoiceCalls, PaymentCalls;
         public (int, int)? Owner; public (int, int, int, int)? List; public (int, int, int, int, int)? Payments;
@@ -137,5 +141,32 @@ public sealed class InvoicePortalTests
     {
         var r = new Repository(); var result = await new InvoicePortalService(r, new()).ItemsAsync(9, new() { PatientId = "23", Page = page, PageSize = size }, 7, "PATIENT");
         Assert.True(result.IsSuccess); Assert.Empty(result.Value!.Items); Assert.Equal((9, 23, 7, page, size), r.Items);
+    }
+    [Theory] [InlineData("ADMIN")] [InlineData("RECEPTIONIST")] [InlineData("DENTIST")] [InlineData("ASSISTANT")] [InlineData(null)]
+    public async Task Profiles_patient_only403_without_query(string? role)
+    {
+        var r = new Repository(); var result = await new InvoicePortalService(r, new()).ProfilesAsync(7, role);
+        Assert.Equal("GEN_002", result.Error.Code); Assert.Equal(0, r.ProfileCalls);
+    }
+    [Theory] [InlineData(0)] [InlineData(-1)]
+    public async Task Profiles_invalid_identity403_without_query(int userId)
+    {
+        var r = new Repository(); var result = await new InvoicePortalService(r, new()).ProfilesAsync(userId, "PATIENT");
+        Assert.Equal("GEN_002", result.Error.Code); Assert.Equal(0, r.ProfileCalls);
+    }
+    [Fact]
+    public async Task Profiles_use_JWT_user_preserve_inactive_and_do_not_read_financial_data()
+    {
+        var r = new Repository { Profiles = [new(23, "BN000023", "Synthetic profile", new DateOnly(2000, 1, 2), false)] };
+        var result = await new InvoicePortalService(r, new()).ProfilesAsync(7, "PATIENT");
+        Assert.True(result.IsSuccess); Assert.Same(r.Profiles, result.Value); Assert.False(result.Value!.Single().IsActive);
+        Assert.Equal(7, r.ProfileUser); Assert.Equal(1, r.ProfileCalls);
+        Assert.Equal(0, r.OwnershipCalls + r.InvoiceCalls + r.PaymentCalls + r.ItemCalls);
+    }
+    [Fact]
+    public async Task Profiles_no_owned_family_returns_empty200()
+    {
+        var r = new Repository(); var result = await new InvoicePortalService(r, new()).ProfilesAsync(7, "PATIENT");
+        Assert.True(result.IsSuccess); Assert.Empty(result.Value!); Assert.Equal(7, r.ProfileUser);
     }
 }
