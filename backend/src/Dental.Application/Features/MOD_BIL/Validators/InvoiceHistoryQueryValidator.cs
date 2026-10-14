@@ -9,6 +9,11 @@ public sealed class InvoiceHistoryQueryValidator : AbstractValidator<InvoiceHist
         RuleFor(x => x.PatientCode).Must(code => TryParsePatientCode(code, out _))
             .WithMessage("Nhập mã bệnh nhân đầy đủ theo định dạng BN000001.");
         RuleFor(x => x.Status).Must(status => status is null or >= 0 and <= 4);
+        // Boundaries prevent UTC conversion or the exclusive next-day bound from overflowing DateTime.
+        RuleFor(x => x.FromDate).Must(date => date is null || date >= new DateOnly(1, 1, 2));
+        RuleFor(x => x.ToDate).Must(date => date is null || date <= new DateOnly(9999, 12, 30));
+        RuleFor(x => x).Must(query => query.FromDate is null || query.ToDate is null || query.FromDate <= query.ToDate)
+            .WithMessage("Từ ngày không được sau đến ngày.");
         RuleFor(x => x.Page).InclusiveBetween(1, 1000000);
         RuleFor(x => x.PageSize).InclusiveBetween(1, 50);
     }

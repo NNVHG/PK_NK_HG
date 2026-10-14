@@ -65,3 +65,41 @@ test('duplicate submit blocked and unmount discards late private list', async ()
   f.cleanup(); resolve({ items: [row], page: 1, totalPages: 1, totalCount: 1 }); await first;
   assert.deepEqual(f.c.rows.value, []); assert.equal(f.c.loaded.value, false); assert.equal(f.c.patientCode.value, ''); assert.deepEqual(f.emits, []);
 });
+
+test('date query uses inclusive calendar strings and pagination preserves applied dates', async () => {
+  const f = fixture(); f.c.fromDate.value = '2026-10-14'; f.c.toDate.value = '2026-10-14'; await f.c.search();
+  assert.deepEqual(f.reads[0], { page: 1, pageSize: 20, fromDate: '2026-10-14', toDate: '2026-10-14' });
+  f.c.fromDate.value = '2026-10-15'; f.c.toDate.value = '2026-10-16'; await f.c.loadPage(2);
+  assert.equal(f.reads[1].fromDate, '2026-10-14'); assert.equal(f.reads[1].toDate, '2026-10-14');
+  await f.c.search(); assert.equal(f.reads.at(-1).page, 1); assert.equal(f.reads.at(-1).fromDate, '2026-10-15');
+});
+test('dates intersect patient and state filters', async () => {
+  const f = fixture(); f.c.patientCode.value = 'BN000123'; f.c.status.value = '2';
+  f.c.fromDate.value = '2026-10-14'; f.c.toDate.value = '2026-10-16'; await f.c.search();
+  assert.deepEqual(f.reads[0], { page: 1, pageSize: 20, patientCode: 'BN000123', status: 2, fromDate: '2026-10-14', toDate: '2026-10-16' });
+});
+test('invalid calendar, reversed or overflow dates clear old rows before request', async () => {
+  for (const [from, to] of [['2026-10-15', '2026-10-14'], ['2026-02-29', ''], ['', '2026-04-31'], ['0001-01-01', ''], ['', '9999-12-31'], ['0000-01-01', ''], ['2026-1-1', '']]) {
+    const f = fixture(); await f.c.search(); f.c.fromDate.value = from; f.c.toDate.value = to; await f.c.search();
+    assert.equal(f.reads.length, 1); assert.deepEqual(f.c.rows.value, []); assert.ok(f.c.error.value);
+  }
+});
+test('either date can be omitted and clearing dates removes query parameters', async () => {
+  const f = fixture(); f.c.fromDate.value = '2026-10-14'; await f.c.search(); assert.equal(f.reads[0].toDate, undefined);
+  f.c.fromDate.value = ''; f.c.toDate.value = '2026-10-14'; await f.c.search(); assert.equal(f.reads[1].fromDate, undefined);
+  f.c.toDate.value = ''; await f.c.search(); assert.deepEqual(f.reads[2], { page: 1, pageSize: 20 });
+});
+test('leap and long date ranges stay valid for paginated invoice history', async () => {
+  const f = fixture(); f.c.fromDate.value = '2024-02-29'; f.c.toDate.value = '2024-02-29'; await f.c.search();
+  f.c.fromDate.value = '1970-01-01'; f.c.toDate.value = '2099-12-31'; await f.c.search(); assert.equal(f.reads.length, 2);
+});
+test('failed date read retains filter to retry; unmount clears dates', async () => {
+  const f = fixture(); f.c.fromDate.value = '2026-10-14'; f.c.toDate.value = '2026-10-14'; f.error(new Error('network')); await f.c.search();
+  assert.equal(f.c.fromDate.value, '2026-10-14'); f.error(null); await f.c.search(); assert.equal(f.c.error.value, '');
+  f.cleanup(); assert.equal(f.c.fromDate.value, ''); assert.equal(f.c.toDate.value, '');
+});
+
+test('displayed invoice date matches Vietnam filter even when UTC date is previous day', () => {
+  const f = fixture(); const text = f.c.formatDate('2026-10-13T17:00:00Z');
+  assert.ok(text.includes('14/10/2026')); assert.ok(text.includes('00:00:00'));
+});
