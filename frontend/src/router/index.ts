@@ -5,6 +5,12 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
+      path: '/invoices',
+      name: 'invoice-desk',
+      component: () => import('@/views/InvoicesView.vue'),
+      meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST'] }
+    },
+    {
       path: '/appointments/counter',
       name: 'counter-booking',
       component: () => import('@/views/CounterBookingView.vue'),

@@ -14,6 +14,7 @@
           <router-link to="/queue/today">Hàng đợi hôm nay</router-link>
           <router-link to="/patients">Bệnh nhân</router-link>
         </template>
+        <router-link v-if="['ADMIN', 'RECEPTIONIST'].includes(authStore.role)" to="/invoices">Tra cứu hóa đơn</router-link>
         <router-link v-if="isAdmin" to="/admin/staff">Tài khoản nhân viên</router-link>
         <router-link v-if="isAdmin" to="/admin/audit-logs">Nhật ký thao tác</router-link>
       </nav>

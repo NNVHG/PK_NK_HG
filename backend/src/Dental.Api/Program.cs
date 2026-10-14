@@ -38,6 +38,9 @@ builder.Services.AddScoped<IInvoiceDraftGenerator>(services => services.GetRequi
 builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.InvoiceVisitRequestValidator>();
 builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
 builder.Services.AddScoped<ICashPaymentRepository, CashPaymentRepository>();
+        builder.Services.AddScoped<IInvoiceLookupRepository, InvoiceLookupRepository>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.InvoiceLookupService>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.InvoiceLookupRequestValidator>();
 builder.Services.AddScoped<IReceiptRepository, ReceiptRepository>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.ReceiptPrintService>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.ReceiptRequestValidator>();
