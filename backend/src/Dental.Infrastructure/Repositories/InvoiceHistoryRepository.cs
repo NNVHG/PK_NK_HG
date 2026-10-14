@@ -8,13 +8,18 @@ namespace Dental.Infrastructure.Repositories;
 public sealed class InvoiceHistoryRepository(DentalDbContext db) : IInvoiceHistoryRepository
 {
     public async Task<PagedResult<InvoiceLookupResponse>> GetPageAsync(int? patientNumber, int? status, int page, int pageSize,
-        DateTime? fromUtc = null, DateTime? untilUtc = null, CancellationToken ct = default)
+        DateTime? fromUtc = null, DateTime? untilUtc = null, string? keyword = null, CancellationToken ct = default)
     {
         var query = db.Invoices.AsNoTracking();
         if (patientNumber is int number) query = query.Where(i => i.Visit.Patient.PatientNumber == number);
         if (status is int state) query = query.Where(i => (int)i.Status == state);
         if (fromUtc is DateTime from) query = query.Where(i => i.CreatedAt >= from);
         if (untilUtc is DateTime until) query = query.Where(i => i.CreatedAt < until);
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            var term = keyword.Trim().ToLowerInvariant();
+            query = query.Where(i => i.Visit.Patient.FullName.ToLower().Contains(term) || i.Visit.Patient.Phone.Contains(term));
+        }
         var total = await query.CountAsync(ct);
         var rows = await query.OrderByDescending(i => i.CreatedAt).ThenByDescending(i => i.Id)
             .Skip((page - 1) * pageSize).Take(pageSize)

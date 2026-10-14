@@ -4,5 +4,5 @@ namespace Dental.Application.Interfaces;
 public interface IInvoiceHistoryRepository
 {
     Task<PagedResult<InvoiceLookupResponse>> GetPageAsync(int? patientNumber, int? status, int page, int pageSize,
-        DateTime? fromUtc = null, DateTime? untilUtc = null, CancellationToken ct = default);
+        DateTime? fromUtc = null, DateTime? untilUtc = null, string? keyword = null, CancellationToken ct = default);
 }

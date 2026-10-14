@@ -103,3 +103,33 @@ test('displayed invoice date matches Vietnam filter even when UTC date is previo
   const f = fixture(); const text = f.c.formatDate('2026-10-13T17:00:00Z');
   assert.ok(text.includes('14/10/2026')); assert.ok(text.includes('00:00:00'));
 });
+
+test('name or phone keyword trimmed and pagination keeps applied value', async () => {
+  const f = fixture(); f.c.keyword.value = '  Trần  '; await f.c.search(); assert.equal(f.reads[0].keyword, 'Trần');
+  f.c.keyword.value = '0900'; await f.c.loadPage(2); assert.equal(f.reads[1].keyword, 'Trần');
+  await f.c.search(); assert.equal(f.reads.at(-1).page, 1); assert.equal(f.reads.at(-1).keyword, '0900');
+});
+test('keyword combines with patient, status and Vietnam date filters', async () => {
+  const f = fixture(); f.c.keyword.value = '0900'; f.c.patientCode.value = 'BN000123'; f.c.status.value = '2';
+  f.c.fromDate.value = '2026-10-14'; f.c.toDate.value = '2026-10-14'; await f.c.search();
+  assert.deepEqual(f.reads[0], { keyword: '0900', patientCode: 'BN000123', status: 2, fromDate: '2026-10-14', toDate: '2026-10-14', page: 1, pageSize: 20 });
+});
+test('keyword100 accepted; keyword101 clears old rows and sends no query', async () => {
+  const f = fixture(); f.c.keyword.value = 'A'.repeat(100); await f.c.search(); assert.equal(f.reads[0].keyword.length, 100);
+  f.c.keyword.value = 'A'.repeat(101); await f.c.search(); assert.equal(f.reads.length, 1); assert.deepEqual(f.c.rows.value, []); assert.ok(f.c.error.value);
+});
+test('blank or cleared keyword omits parameter and resets page', async () => {
+  const f = fixture(); f.c.keyword.value = '0900'; await f.c.search(); await f.c.loadPage(2);
+  f.c.keyword.value = '   '; await f.c.search(); assert.deepEqual(f.reads.at(-1), { page: 1, pageSize: 20 });
+});
+test('literal percent underscore and apostrophe sent unchanged', async () => {
+  for (const keyword of ['100%_', "O'Neil"]) { const f = fixture(); f.c.keyword.value = keyword; await f.c.search(); assert.equal(f.reads[0].keyword, keyword); }
+});
+test('failed keyword search retains draft for retry and clears patient results', async () => {
+  const f = fixture(); f.c.keyword.value = '0900'; await f.c.search(); f.error(new Error('network')); await f.c.search();
+  assert.equal(f.c.keyword.value, '0900'); assert.deepEqual(f.c.rows.value, []); f.error(null); await f.c.search(); assert.equal(f.c.error.value, '');
+});
+test('unmount clears keyword and ignores late results', async () => {
+  const f = fixture(); let resolve; f.pending(new Promise(done => { resolve = done; })); f.c.keyword.value = '0900'; const first = f.c.search();
+  f.cleanup(); resolve({ items: [row], page: 1, totalPages: 1, totalCount: 1 }); await first; assert.equal(f.c.keyword.value, ''); assert.deepEqual(f.c.rows.value, []);
+});

@@ -2,6 +2,9 @@
   <section aria-label="Lịch sử hóa đơn tại quầy">
     <h2>Danh sách hóa đơn</h2>
     <form @submit.prevent="search">
+      <label>Tên hoặc SĐT bệnh nhân
+        <input v-model="keyword" type="search" maxlength="100" autocomplete="off" :disabled="busy || disabled" />
+      </label>
       <label>Mã bệnh nhân (để trống xem tất cả)
         <input v-model="patientCode" maxlength="12" autocomplete="off" :disabled="busy || disabled" placeholder="BN000001" />
       </label>
@@ -46,6 +49,7 @@ const emit = defineEmits<{ selected: [code: string] }>();
 const auth = useAuthStore();
 const allowed = computed(() => ['ADMIN', 'RECEPTIONIST'].includes(auth.role));
 const patientCode = ref('');
+const keyword = ref('');
 const status = ref('');
 const fromDate = ref('');
 const toDate = ref('');
@@ -78,6 +82,8 @@ function validDate(value: string) {
 async function search() {
   if (!allowed.value || props.disabled || busy.value) return;
   rows.value = []; loaded.value = false; totalCount.value = 0; totalPages.value = 0; error.value = '';
+  if (keyword.value.length > 100) { error.value = 'Tên/SĐT tìm kiếm không được quá 100 ký tự.'; return; }
+  const term = keyword.value.trim();
   const code = patientCode.value.trim().toUpperCase();
   if (!validCode(code) || !['', '0', '1', '2', '3', '4'].includes(status.value)) {
     error.value = 'Nhập đúng mã bệnh nhân đầy đủ và trạng thái hợp lệ.'; return;
@@ -88,7 +94,7 @@ async function search() {
     error.value = 'Nhập khoảng ngày lập hóa đơn hợp lệ; từ ngày không sau đến ngày.'; return;
   }
   patientCode.value = code;
-  applied = { pageSize: 20, ...(fromDate.value ? { fromDate: fromDate.value } : {}), ...(toDate.value ? { toDate: toDate.value } : {}), ...(code ? { patientCode: code } : {}), ...(status.value !== '' ? { status: Number(status.value) } : {}) };
+  applied = { pageSize: 20, ...(term ? { keyword: term } : {}), ...(fromDate.value ? { fromDate: fromDate.value } : {}), ...(toDate.value ? { toDate: toDate.value } : {}), ...(code ? { patientCode: code } : {}), ...(status.value !== '' ? { status: Number(status.value) } : {}) };
   await loadPage(1);
 }
 async function loadPage(target: number) {
@@ -106,7 +112,7 @@ function selectInvoice(row: InvoiceLookupResponse) {
   if (!allowed.value || props.disabled || busy.value || !loaded.value || !rows.value.some(x => x.invoiceId === row.invoiceId && x.invoiceCode === row.invoiceCode)) return;
   emit('selected', row.invoiceCode);
 }
-onUnmounted(() => { version++; rows.value = []; patientCode.value = ''; status.value = ''; fromDate.value = ''; toDate.value = ''; totalCount.value = 0; totalPages.value = 0; loaded.value = false; applied = { pageSize: 20 }; });
+onUnmounted(() => { version++; rows.value = []; patientCode.value = ''; keyword.value = ''; status.value = ''; fromDate.value = ''; toDate.value = ''; totalCount.value = 0; totalPages.value = 0; loaded.value = false; applied = { pageSize: 20 }; });
 </script>
 <style scoped>
 section { border: 1px solid #ccc; padding: 1rem; margin: 1rem 0; }

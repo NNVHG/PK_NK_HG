@@ -11,7 +11,7 @@ public sealed class InvoiceHistoryDateTests
     {
         public int Calls; public DateTime? From, Until;
         public Task<PagedResult<InvoiceLookupResponse>> GetPageAsync(int? number, int? status, int page, int size,
-            DateTime? fromUtc = null, DateTime? untilUtc = null, CancellationToken ct = default)
+            DateTime? fromUtc = null, DateTime? untilUtc = null, string? keyword = null, CancellationToken ct = default)
         { Calls++; From = fromUtc; Until = untilUtc; return Task.FromResult(PagedResult<InvoiceLookupResponse>.Create([], 0, page, size)); }
     }
     [Theory] [InlineData("ADMIN")] [InlineData("RECEPTIONIST")]

@@ -6,6 +6,7 @@ public sealed class InvoiceHistoryQueryValidator : AbstractValidator<InvoiceHist
 {
     public InvoiceHistoryQueryValidator()
     {
+        RuleFor(x => x.Keyword).MaximumLength(100);
         RuleFor(x => x.PatientCode).Must(code => TryParsePatientCode(code, out _))
             .WithMessage("Nhập mã bệnh nhân đầy đủ theo định dạng BN000001.");
         RuleFor(x => x.Status).Must(status => status is null or >= 0 and <= 4);
