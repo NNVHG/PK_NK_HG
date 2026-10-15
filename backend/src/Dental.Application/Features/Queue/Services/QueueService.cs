@@ -14,6 +14,7 @@ public sealed class QueueService
     private readonly IAppointmentRepository _appointmentRepository;
     private readonly IPatientRepository _patientRepository;
     private readonly IVisitRepository _visitRepository;
+    private readonly IInvoiceRepository _invoiceRepository;
     private readonly IUserRepository _userRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IAuditLogger _auditLogger;
@@ -25,6 +26,7 @@ public sealed class QueueService
         IAppointmentRepository appointmentRepository,
         IPatientRepository patientRepository,
         IVisitRepository visitRepository,
+        IInvoiceRepository invoiceRepository,
         IUserRepository userRepository,
         IUnitOfWork unitOfWork,
         IAuditLogger auditLogger,
@@ -35,11 +37,24 @@ public sealed class QueueService
         _appointmentRepository = appointmentRepository;
         _patientRepository = patientRepository;
         _visitRepository = visitRepository;
+        _invoiceRepository = invoiceRepository;
         _userRepository = userRepository;
         _unitOfWork = unitOfWork;
         _auditLogger = auditLogger;
         _vietnamClock = vietnamClock;
         _invoiceDraft = invoiceDraft;
+    }
+
+    public async Task<Result<OutstandingDebtResponse>> GetOutstandingDebtAsync(int patientId, CancellationToken ct = default)
+    {
+        var patient = await _patientRepository.GetByIdAsync(patientId, ct);
+        if (patient is null)
+            return Result<OutstandingDebtResponse>.Failure(Error.NotFound);
+        if (!patient.IsActive)
+            return Result<OutstandingDebtResponse>.Failure(Error.PatientInactive);
+
+        var debt = await _invoiceRepository.GetOutstandingDebtForPatientAsync(patientId, ct);
+        return Result<OutstandingDebtResponse>.Success(new(debt.TotalOutstandingDebt, debt.InvoiceCodes));
     }
 
     public async Task<Result<QueueEntryResponse>> CheckInAsync(

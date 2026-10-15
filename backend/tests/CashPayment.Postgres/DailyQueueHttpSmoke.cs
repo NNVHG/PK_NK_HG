@@ -27,6 +27,19 @@ internal static class DailyQueueHttpSmoke
             db.QueueEntries.Add(row); rows.Add(row);
         }
         await db.SaveChangesAsync();
+        var debtVisits = Enumerable.Range(0, 5)
+            .Select(_ => new Visit { PatientId = rows[0].PatientId, CreatedByUserId = actorId,
+                Status = VisitStatuses.Completed, IsLocked = true })
+            .ToArray();
+        db.Visits.AddRange(debtVisits);
+        await db.SaveChangesAsync();
+        db.Invoices.AddRange(
+            new Invoice { VisitId = debtVisits[0].VisitId, CreatedByUserId = actorId, InvoiceCode = "TEST-DEBT-PENDING", TotalAmount = 1000, PaidAmount = 300, Status = InvoiceStatus.PendingPayment, CreatedAt = DateTime.UtcNow.AddDays(-3) },
+            new Invoice { VisitId = debtVisits[1].VisitId, CreatedByUserId = actorId, InvoiceCode = "TEST-DEBT-PARTIAL", TotalAmount = 2000, PaidAmount = 1500, Status = InvoiceStatus.PartiallyPaid, CreatedAt = DateTime.UtcNow.AddDays(-2) },
+            new Invoice { VisitId = debtVisits[2].VisitId, CreatedByUserId = actorId, InvoiceCode = "TEST-DEBT-DRAFT", TotalAmount = 3000, Status = InvoiceStatus.Draft, CreatedAt = DateTime.UtcNow.AddDays(-1) },
+            new Invoice { VisitId = debtVisits[3].VisitId, CreatedByUserId = actorId, InvoiceCode = "TEST-DEBT-CANCELLED", TotalAmount = 4000, Status = InvoiceStatus.Cancelled, CreatedAt = DateTime.UtcNow },
+            new Invoice { VisitId = debtVisits[4].VisitId, CreatedByUserId = actorId, InvoiceCode = "TEST-DEBT-PAID", TotalAmount = 5000, PaidAmount = 5000, Status = InvoiceStatus.Paid, CreatedAt = DateTime.UtcNow });
+        await db.SaveChangesAsync();
         var audits = await db.AuditLogs.CountAsync();
         client.DefaultRequestHeaders.Authorization = null;
         using (var response = await client.GetAsync("/api/queue")) check(response.StatusCode == HttpStatusCode.Unauthorized, "Queue list anonymous 401");
@@ -49,6 +62,39 @@ internal static class DailyQueueHttpSmoke
         }
         foreach (var query in new[] { "status=6", "dentistId=0", "page=1000001", "pageSize=101" })
         { using var response = await client.GetAsync($"/api/queue?{query}"); check(response.StatusCode == HttpStatusCode.BadRequest, $"Queue invalid {query} 400"); }
-        check(await db.AuditLogs.CountAsync() == audits && await db.QueueEntries.CountAsync(q => rows.Select(r => r.QueueEntryId).Contains(q.QueueEntryId)) == 6, "Queue GET never changes queue or audit");
+
+        var debtUrl = $"/api/queue/check-in/{rows[0].PatientId}/outstanding-debt";
+        client.DefaultRequestHeaders.Authorization = null;
+        using (var response = await client.GetAsync(debtUrl)) check(response.StatusCode == HttpStatusCode.Unauthorized, "Check-in debt anonymous 401");
+        authenticate(RoleCodes.Patient);
+        using (var response = await client.GetAsync(debtUrl)) check(response.StatusCode == HttpStatusCode.Forbidden, "Check-in debt Patient 403");
+        foreach (var role in new[] { RoleCodes.Dentist, RoleCodes.Assistant })
+        {
+            authenticate(role);
+            using var response = await client.GetAsync(debtUrl);
+            check(response.StatusCode == HttpStatusCode.Forbidden, $"Check-in debt {role} 403");
+        }
+        foreach (var role in new[] { RoleCodes.Admin, RoleCodes.Receptionist })
+        {
+            authenticate(role);
+            using var response = await client.GetAsync(debtUrl);
+            check(response.StatusCode == HttpStatusCode.OK, $"Check-in debt {role} 200");
+            check(response.Headers.CacheControl?.NoStore == true, $"Check-in debt {role} no-store");
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var codes = json.RootElement.GetProperty("invoiceCodes").EnumerateArray().Select(code => code.GetString()).ToArray();
+            check(json.RootElement.GetProperty("totalOutstandingDebt").GetDecimal() == 1200m &&
+                  codes.SequenceEqual(new[] { "TEST-DEBT-PENDING", "TEST-DEBT-PARTIAL" }),
+                $"Check-in debt {role} only unpaid positive balances");
+        }
+        authenticate(RoleCodes.Receptionist);
+        using (var response = await client.GetAsync($"/api/queue/check-in/{rows[1].PatientId}/outstanding-debt"))
+        {
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            check(response.StatusCode == HttpStatusCode.OK && json.RootElement.GetProperty("totalOutstandingDebt").GetDecimal() == 0m &&
+                  json.RootElement.GetProperty("invoiceCodes").GetArrayLength() == 0, "Check-in debt no open balance returns empty summary");
+        }
+        using (var response = await client.GetAsync("/api/queue/check-in/0/outstanding-debt"))
+            check(response.StatusCode == HttpStatusCode.BadRequest, "Check-in debt nonpositive patient id 400");
+        check(await db.AuditLogs.CountAsync() == audits && await db.QueueEntries.CountAsync(q => rows.Select(r => r.QueueEntryId).Contains(q.QueueEntryId)) == 6, "Queue and debt GET never change queue or audit");
     }
 }

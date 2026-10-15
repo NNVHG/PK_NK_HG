@@ -17,6 +17,7 @@ public sealed class QueueCallNextTests
     private readonly IAppointmentRepository _appointmentRepository = Substitute.For<IAppointmentRepository>();
     private readonly IPatientRepository _patientRepository = Substitute.For<IPatientRepository>();
     private readonly IVisitRepository _visitRepository = Substitute.For<IVisitRepository>();
+    private readonly IInvoiceRepository _invoiceRepository = Substitute.For<IInvoiceRepository>();
     private readonly IUserRepository _userRepository = Substitute.For<IUserRepository>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly IAuditLogger _auditLogger = Substitute.For<IAuditLogger>();
@@ -38,6 +39,7 @@ public sealed class QueueCallNextTests
             _appointmentRepository,
             _patientRepository,
             _visitRepository,
+            _invoiceRepository,
             _userRepository,
             _unitOfWork,
             _auditLogger,

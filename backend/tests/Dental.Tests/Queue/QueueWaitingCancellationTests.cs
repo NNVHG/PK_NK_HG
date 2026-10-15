@@ -19,7 +19,7 @@ public sealed class QueueWaitingCancellationTests
     private readonly IAuditLogger audit = Substitute.For<IAuditLogger>();
     private readonly VietnamClock clock = new(new FixedTimeProvider(new DateTimeOffset(2026, 10, 14, 2, 0, 0, TimeSpan.Zero)));
     private QueueService Service() => new(queues, Substitute.For<IAppointmentRepository>(), Substitute.For<IPatientRepository>(),
-        Substitute.For<IVisitRepository>(), Substitute.For<IUserRepository>(), uow, audit, clock, Substitute.For<IInvoiceDraftGenerator>());
+        Substitute.For<IVisitRepository>(), Substitute.For<IInvoiceRepository>(), Substitute.For<IUserRepository>(), uow, audit, clock, Substitute.For<IInvoiceDraftGenerator>());
     public QueueWaitingCancellationTests()
     {
         uow.ExecuteSerializableTransactionAsync(Arg.Any<Func<CancellationToken, Task<Result<QueueEntryResponse>>>>(), Arg.Any<CancellationToken>())

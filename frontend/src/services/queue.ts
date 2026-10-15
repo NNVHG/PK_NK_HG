@@ -46,6 +46,11 @@ export interface CallNextPayload {
   dentistId?: number | null;
 }
 
+export interface OutstandingDebtResponse {
+  totalOutstandingDebt: number;
+  invoiceCodes: string[];
+}
+
 export const queueService = {
   async getToday(page = 1, status?: number): Promise<PagedResult<QueueEntryResponse>> {
     const response = await apiClient.get<PagedResult<QueueEntryResponse>>('/queue', {
@@ -85,6 +90,11 @@ export const queueService = {
 
   async checkIn(payload: CheckInPayload): Promise<QueueEntryResponse> {
     const response = await apiClient.post<QueueEntryResponse>('/queue/check-in', payload);
+    return response.data;
+  },
+
+  async getOutstandingDebt(patientId: number): Promise<OutstandingDebtResponse> {
+    const response = await apiClient.get<OutstandingDebtResponse>(`/queue/check-in/${patientId}/outstanding-debt`);
     return response.data;
   }
 };

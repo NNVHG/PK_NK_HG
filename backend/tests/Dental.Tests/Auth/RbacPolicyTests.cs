@@ -467,6 +467,8 @@ public class RbacPolicyTests
 
         Assert.Equal(ApiPolicies.QueueCheckIn, Assert.Single(methods[nameof(QueueController.CheckIn)]
             .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+        Assert.Equal(ApiPolicies.QueueCheckIn, Assert.Single(methods[nameof(QueueController.GetOutstandingDebt)]
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
         Assert.Equal(ApiPolicies.QueueView, Assert.Single(methods[nameof(QueueController.GetQueue)]
             .GetCustomAttributes<AuthorizeAttribute>()).Policy);
         Assert.Equal(ApiPolicies.QueueView, Assert.Single(methods[nameof(QueueController.GetQueueDetail)]

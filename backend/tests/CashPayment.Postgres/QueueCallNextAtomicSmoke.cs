@@ -41,7 +41,7 @@ internal static class QueueCallNextAtomicSmoke
             var clock = new VietnamClock(new FixedTime(new DateTimeOffset(date.Year, date.Month, date.Day, 2, 0, 0, TimeSpan.Zero)));
             var visits = new VisitRepository(db); var patients = new PatientRepository(db);
             var audit = new AuditLogger(db, NullLogger<AuditLogger>.Instance);
-            return new(new QueueRepository(db), new AppointmentRepository(db), patients, visits, new UserRepository(db),
+            return new(new QueueRepository(db), new AppointmentRepository(db), patients, visits, new InvoiceRepository(db), new UserRepository(db),
                 new UnitOfWork(db), audit, clock, new InvoiceDraftService(new InvoiceRepository(db), visits, patients, audit, clock));
         }
         async Task<Result<QueueEntryResponse>> Call(DbContextOptions<DentalDbContext> dbOptions, DateOnly date, int dentistId)
