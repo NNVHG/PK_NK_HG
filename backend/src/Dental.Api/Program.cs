@@ -33,6 +33,8 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddScoped<IRolePermissionMatrixProvider, RolePermissionMatrixProvider>();
+builder.Services.AddScoped<RolePermissionMatrixService>();
 builder.Services.AddScoped<IInvoiceDiscountRepository, InvoiceDiscountRepository>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.InvoiceDiscountService>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.DiscountPresetRequestValidator>();

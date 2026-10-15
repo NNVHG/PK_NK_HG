@@ -1,0 +1,67 @@
+using System.Reflection;
+using Dental.Application.Common;
+using Dental.Application.Features.Auth.DTOs;
+using Dental.Application.Interfaces;
+using Dental.Domain.Constants;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Infrastructure;
+
+namespace Dental.Api.Policies;
+
+/// <summary>MOD_AUTH/Q-299: read the actual registered policies; labels describe them without granting permissions.</summary>
+public sealed class RolePermissionMatrixProvider(IAuthorizationPolicyProvider policies) : IRolePermissionMatrixProvider
+{
+    private static readonly PermissionRoleResponse[] Roles = [
+        new(RoleCodes.Admin, "Quản trị viên"), new(RoleCodes.Receptionist, "Lễ tân/Thu ngân"),
+        new(RoleCodes.Dentist, "Nha sĩ"), new(RoleCodes.Assistant, "Phụ tá"), new(RoleCodes.Patient, "Bệnh nhân")];
+
+    private static readonly IReadOnlyDictionary<string, (string Name, string Module, string Conditions)> Labels =
+        new Dictionary<string, (string, string, string)>
+        {
+            [Policies.AdminOnly] = ("Quản trị hệ thống", "MOD_AUTH", "Chỉ Admin; từng thao tác còn kiểm tra ràng buộc dữ liệu."),
+            [Policies.StaffAny] = ("Truy cập nghiệp vụ nhân viên", "MOD_AUTH", "Các nghiệp vụ nội bộ; không áp dụng cho tài khoản bệnh nhân."),
+            [Policies.PatientManage] = ("Tạo hồ sơ hành chính bệnh nhân", "MOD_PAT", "Thông tin cá nhân do Lễ tân hoặc Admin quản lý."),
+            [Policies.PatientEdit] = ("Sửa thông tin hành chính", "MOD_PAT", "Phụ tá không sửa tên, số điện thoại hoặc dữ liệu hành chính."),
+            [Policies.PatientView] = ("Xem hồ sơ bệnh nhân", "MOD_PAT", "Bệnh nhân chỉ xem hồ sơ thuộc tài khoản của mình."),
+            [Policies.MedicalHistoryWrite] = ("Ghi tiền sử bệnh lý", "MOD_PAT", "Còn kiểm tra lần khám và trạng thái hồ sơ."),
+            [Policies.VitalSignsWrite] = ("Ghi sinh hiệu", "MOD_PAT", "Còn kiểm tra lần khám và trạng thái hồ sơ."),
+            [Policies.PatientSafetyAlertsView] = ("Xem cảnh báo an toàn", "MOD_PAT", "Dữ liệu nội bộ trong phạm vi công việc của nhân viên."),
+            [Policies.ServiceCatalogView] = ("Xem danh mục dịch vụ", "MOD_MST", "Nha sĩ/Phụ tá được xem; tạo/sửa danh mục và bảng giá chỉ Admin."),
+            [Policies.AppointmentCreate] = ("Đặt lịch khám", "MOD_APP", "Bệnh nhân chỉ đặt cho hồ sơ thuộc tài khoản của mình."),
+            [Policies.AppointmentView] = ("Xem lịch hẹn", "MOD_APP", "Bệnh nhân chỉ xem lịch hẹn thuộc tài khoản của mình."),
+            [Policies.AppointmentManage] = ("Quản lý lịch hẹn tại quầy", "MOD_APP", "Còn kiểm tra trạng thái và thời gian của lịch hẹn."),
+            [Policies.AppointmentReschedule] = ("Đổi lịch hẹn", "MOD_APP", "Còn kiểm tra hồ sơ sở hữu, trạng thái và thời gian được đổi lịch."),
+            [Policies.QueueCheckIn] = ("Tiếp đón và check-in", "MOD_CHK", "Chỉ thao tác nội bộ; kiểm tra lịch hẹn/lần khám trong ngày."),
+            [Policies.QueueView] = ("Xem hàng đợi nội bộ", "MOD_CHK", "Màn TV công khai là luồng đọc riêng với tên bệnh nhân đã che."),
+            [Policies.QueueStatusUpdate] = ("Chuyển trạng thái hàng đợi", "MOD_CHK", "Mỗi bước chuyển kiểm tra quyền riêng: Nha sĩ khám/chỉ định chụp; Phụ tá hoàn tất chụp."),
+            [Policies.ClinicalDiagnosisUpdate] = ("Khám và ghi chẩn đoán", "MOD_PAT", "Chỉ Admin hoặc nha sĩ phụ trách; lần khám đang mở, chưa khóa."),
+            [Policies.FdiConditionWrite] = ("Ghi tình trạng răng", "MOD_FDI", "Chỉ Admin hoặc nha sĩ phụ trách; lần khám đang mở, chưa khóa."),
+            [Policies.FdiServiceAssign] = ("Chỉ định dịch vụ điều trị", "MOD_FDI", "Chỉ Admin hoặc nha sĩ phụ trách; còn kiểm tra lần khám và dịch vụ đang dùng."),
+            [Policies.InvoiceDraftView] = ("Xem hóa đơn theo lần khám", "MOD_BIL", "Bệnh nhân chỉ xem hóa đơn thuộc hồ sơ của mình."),
+            [Policies.CashPaymentWrite] = ("Thu tiền và xem giao dịch", "MOD_BIL", "Khám đã hoàn tất; hóa đơn còn nợ; không thu vượt số còn phải trả."),
+            [Policies.InvoiceDiscountWrite] = ("Áp dụng giảm giá", "MOD_BIL", "Lễ tân chỉ dùng mẫu trong hạn mức; giảm tùy chỉnh dành cho Admin; hóa đơn chưa thu tiền.")
+        };
+
+    public async Task<Result<RolePermissionMatrixResponse>> GetAsync(CancellationToken ct = default)
+    {
+        var rows = new List<RolePermissionResponse>();
+        var codes = typeof(Policies).GetFields(BindingFlags.Public | BindingFlags.Static)
+            .Where(x => x.IsLiteral && x.FieldType == typeof(string)).Select(x => (string)x.GetRawConstantValue()!)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal);
+        foreach (var code in codes)
+        {
+            ct.ThrowIfCancellationRequested();
+            var policy = await policies.GetPolicyAsync(code);
+            var requirements = policy?.Requirements.OfType<RolesAuthorizationRequirement>().ToArray();
+            // A new policy/requirement must be described before the read-only matrix can claim to represent it.
+            if (policy is null || requirements is not { Length: > 0 } || !Labels.TryGetValue(code, out var label) ||
+                policy.Requirements.Any(x => x is not (RolesAuthorizationRequirement or DenyAnonymousAuthorizationRequirement)) ||
+                requirements.SelectMany(x => x.AllowedRoles).Any(role => !Roles.Any(x => x.Code == role)))
+                return Result<RolePermissionMatrixResponse>.Failure(new Error("AUTH_050", "Ma trận quyền chưa đồng bộ cấu hình. Vui lòng liên hệ quản trị hệ thống."));
+            var allowed = Roles.Where(role => requirements.All(rule => rule.AllowedRoles.Contains(role.Code, StringComparer.Ordinal)))
+                .Select(role => role.Code).ToArray();
+            rows.Add(new(code, label.Name, label.Module, allowed, label.Conditions));
+        }
+        return Result<RolePermissionMatrixResponse>.Success(new(Roles.ToArray(), rows.OrderBy(x => x.Module).ThenBy(x => x.Code).ToArray()));
+    }
+}
