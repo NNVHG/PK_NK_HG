@@ -32,6 +32,26 @@ public sealed class ToothConditionsController(ToothConditionService service, ICu
         return result.IsFailure ? Failure(result.Error) : StatusCode(201, result.Value);
     }
 
+    [HttpPut("{conditionId:int}")]
+    [Authorize(Policy = AppPolicies.FdiConditionWrite)]
+    public async Task<IActionResult> Update(int visitId, int conditionId, ToothConditionRequest request, CancellationToken ct)
+    {
+        if (user.UserId is not int userId) return Unauthorized();
+        var result = await service.UpdateAsync(visitId, conditionId, request, userId, user.RoleCode,
+            HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
+        return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
+    }
+
+    [HttpDelete("{conditionId:int}")]
+    [Authorize(Policy = AppPolicies.FdiConditionWrite)]
+    public async Task<IActionResult> Delete(int visitId, int conditionId, CancellationToken ct)
+    {
+        if (user.UserId is not int userId) return Unauthorized();
+        var result = await service.DeleteAsync(visitId, conditionId, userId, user.RoleCode,
+            HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
+        return result.IsFailure ? Failure(result.Error) : NoContent();
+    }
+
     private IActionResult Failure(Error error) => StatusCode(error.Code switch
     {
         "GEN_001" => 404, "GEN_002" => 403, "FDI_003" => 409, _ => 400

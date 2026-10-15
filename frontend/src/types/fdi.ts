@@ -67,6 +67,17 @@ export const ALL_SURFACES: ToothSurface[] = [
   'occlusal'
 ];
 
+export function formatSurfaceCodes(value: string | null): string {
+  if (!value) return 'Toàn răng';
+  const byCode = Object.values(SURFACE_METADATA).reduce<Record<string, string>>((result, surface) => {
+    result[surface.code] = surface.nameVi;
+    return result;
+  }, {});
+  const codes = value.toUpperCase().replace(/[\s,-]/g, '').split('');
+  if (codes.some(code => !byCode[code])) return value;
+  return [...new Set(codes)].map(code => byCode[code]).join(', ');
+}
+
 // Danh sách mã FDI chuẩn (ISO 3950)
 export const ADULT_UPPER_RIGHT = [18, 17, 16, 15, 14, 13, 12, 11] as const;
 export const ADULT_UPPER_LEFT = [21, 22, 23, 24, 25, 26, 27, 28] as const;

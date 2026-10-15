@@ -9,17 +9,18 @@ const compiled = ts.transpileModule(compileScript(descriptor, { id: 'tooth-note-
 }).outputText;
 function fixture(role = 'DENTIST') {
   let pending, fail = false, cleanup, reload;
-  const calls = [], rows = { value: [{ id: 1, note: 'Original note' }] }, route = { params: { visitId: '1' } };
+  const calls = [], updates = [], deletes = [], rows = { value: [{ id: 1, visitId: 1, toothNumber: 11, surface: 'O', conditionCode: 'CARIES', note: 'Original note', createdAt: '2026-10-15T00:00:00Z' }] }, route = { params: { visitId: '1' } };
   const imports = {
     vue: { defineComponent: c => c, ref: value => ({ value }), computed: get => ({ get value() { return get(); } }),
       watch: (_get, cb) => { reload = cb; }, onUnmounted: cb => { cleanup = cb; } },
     pinia: { storeToRefs: () => ({ rows }) }, 'vue-router': { useRoute: () => route },
     axios: { isAxiosError: e => Boolean(e.response) },
     '@/components/fdi/FdiDentalChart.vue': {}, '@/components/fdi/ToothHistoryDrawer.vue': {},
-    '@/services/fdi': { FDI_CONDITIONS: { CARIES: 'Sâu răng' }, fdiService: { get: async () => [], add: async (...args) => {
+    '@/services/fdi': { FDI_CONDITIONS: { CARIES: 'Sâu răng', RESTORED: 'Đã trám' }, fdiService: { get: async () => [], add: async (...args) => {
       calls.push(args); if (fail) throw { response: { data: { message: 'Lần khám đã khóa' } } };
       return pending ?? { id: 2, note: args[4] };
-    } } },
+    }, update: async (...args) => { updates.push(args); return { id: args[1], visitId: args[0], toothNumber: args[2], surface: args[3], conditionCode: args[4], note: args[5], createdAt: '2026-10-15T00:00:00Z' }; },
+    delete: async (...args) => { deletes.push(args); } } },
     '@/stores/fdi': { useFdiStore: () => ({ reset: () => { rows.value = []; }, replace: data => { rows.value = data; }, prepend: data => { rows.value = [data, ...rows.value]; } }) },
     '@/services/visits': { visitsService: { getById: async () => ({ visitId: Number(route.params.visitId), patientId: 1, status: 'InProgress', isLocked: false, dentistId: 7 }) } },
     '@/types/fdi': { SURFACE_METADATA: { occlusal: { code: 'O', nameVi: 'Mặt nhai' } }, ALL_SURFACES: ['occlusal'] },
@@ -30,7 +31,7 @@ function fixture(role = 'DENTIST') {
   const c = module.exports.default.setup({}, { expose() {} });
   c.visit.value = { visitId: 1, patientId: 1, status: 'InProgress', isLocked: false, dentistId: 7 };
   c.selection.value = [{ toothNumber: 11, surface: 'occlusal' }];
-  return { c, calls, rows, fail: () => { fail = true; }, cleanup: () => cleanup(), reload: async () => { route.params.visitId = '4'; await reload(); },
+  return { c, calls, updates, deletes, rows, fail: () => { fail = true; }, cleanup: () => cleanup(), reload: async () => { route.params.visitId = '4'; await reload(); },
     defer: () => { let resolve; pending = new Promise(done => { resolve = done; }); return resolve; } };
 }
 test('save sends trimmed multiline note for selected tooth and retains old record', async () => {
@@ -66,4 +67,14 @@ test('route change clears draft and old response cannot enter new store', async 
 test('unmount ignores late clinical response', async () => {
   const f = fixture(); const resolve = f.defer(); const first = f.c.save(); f.cleanup(); resolve({ id: 2, note: 'Synthetic note' }); await first;
   assert.deepEqual(f.rows.value, []); assert.equal(f.c.success.value, '');
+});
+test('edit updates the selected snapshot and preserves the rest of the visit history', async () => {
+  const f = fixture(); const original = f.rows.value[0]; f.c.edit(original); f.c.code.value = 'RESTORED'; f.c.note.value = 'corrected'; await f.c.save();
+  assert.deepEqual(f.updates, [[1, 1, 11, 'O', 'RESTORED', 'corrected']]);
+  assert.equal(f.rows.value.length, 1); assert.equal(f.rows.value[0].conditionCode, 'RESTORED'); assert.equal(f.c.editingId.value, null);
+});
+test('delete requires an explicit second confirmation and removes only selected row', async () => {
+  const f = fixture(); f.rows.value.push({ id: 9, visitId: 1, toothNumber: 12 });
+  f.c.pendingDeleteId.value = 1; await f.c.remove(f.rows.value[0]);
+  assert.deepEqual(f.deletes, [[1, 1]]); assert.deepEqual(f.rows.value.map(row => row.id), [9]);
 });

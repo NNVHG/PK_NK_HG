@@ -5,5 +5,7 @@ namespace Dental.Application.Interfaces;
 public interface IToothConditionRepository
 {
     Task<IReadOnlyList<ToothCondition>> GetForVisitAsync(int visitId, CancellationToken ct = default);
+    Task<ToothCondition?> GetForUpdateAsync(int visitId, int conditionId, CancellationToken ct = default);
     Task AddAsync(ToothCondition condition, CancellationToken ct = default);
+    void Remove(ToothCondition condition);
 }

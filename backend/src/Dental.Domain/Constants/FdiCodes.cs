@@ -3,7 +3,8 @@ namespace Dental.Domain.Constants;
 public static class FdiCodes
 {
     public static readonly string[] Conditions =
-        ["CARIES", "RESTORED", "MISSING", "CROWN", "PULPITIS", "IMPLANT", "CALCULUS", "NORMAL"];
+        ["CARIES", "RESTORED", "MISSING", "CROWN", "PULPITIS", "IMPLANT", "CALCULUS", "NORMAL",
+         "GINGIVITIS", "PERIODONTITIS", "IMPACTED"];
 
     public static bool IsTooth(int number)
         => number / 10 is >= 1 and <= 4 && number % 10 is >= 1 and <= 8

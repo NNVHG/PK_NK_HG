@@ -24,5 +24,11 @@ export const visitServicesApi = {
   },
   async catalog(page: number, keyword = ''): Promise<CatalogPage> {
     return (await apiClient.get<CatalogPage>('/services', { params: { isActive: true, page, pageSize: 20, ...(keyword.trim() ? { keyword: keyword.trim() } : {}) } })).data;
+  },
+  async findActiveByCode(code: string): Promise<CatalogOption | null> {
+    const result = (await apiClient.get<CatalogPage>('/services', {
+      params: { keyword: code, isActive: true, page: 1, pageSize: 100 }
+    })).data;
+    return result.items.find(item => item.code === code && item.currentPrice !== null) ?? null;
   }
 };
