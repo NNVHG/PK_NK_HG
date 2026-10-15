@@ -43,6 +43,7 @@ PROJECT_STATUS.md
 
 
 # ===== Database Backups / Volumes =====
+backups/
 postgres-data/
 *.dump
 *.sql.bak
