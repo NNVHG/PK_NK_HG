@@ -128,6 +128,64 @@ public sealed class ToothConditionTests
     }
 
     [Fact]
+    public async Task Update_ChangesOnlyCurrentVisitSnapshotAndAuditsWithoutClinicalText()
+    {
+        var row = new ToothCondition { Id = 4, VisitId = 1, ToothNumber = 11, Surface = "O", ConditionCode = "CARIES", Note = "old" };
+        visits.GetForUpdateAsync(1, Arg.Any<CancellationToken>()).Returns(new Visit { VisitId = 1, Status = VisitStatuses.InProgress, DentistId = 2 });
+        conditions.GetForUpdateAsync(1, 4, Arg.Any<CancellationToken>()).Returns(row);
+
+        var result = await Service.UpdateAsync(1, 4, new(12, "B-L", "RESTORED", "  treatment done  "), 2, RoleCodes.Dentist, null);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal((12, "BL", "RESTORED", "treatment done"),
+            (row.ToothNumber, row.Surface, row.ConditionCode, row.Note));
+        await unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await audit.Received(1).LogAsync("MOD_FDI_CONDITION_UPDATED", "ToothCondition", 4, 2,
+            "{\"action\":\"condition_updated\"}", null, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Update_RejectsSnapshotFromAnotherVisit()
+    {
+        visits.GetForUpdateAsync(1, Arg.Any<CancellationToken>()).Returns(new Visit { Status = VisitStatuses.InProgress, DentistId = 2 });
+        conditions.GetForUpdateAsync(1, 4, Arg.Any<CancellationToken>()).Returns((ToothCondition?)null);
+
+        var result = await Service.UpdateAsync(1, 4, new(11, null, "RESTORED"), 2, RoleCodes.Dentist, null);
+
+        Assert.Equal(Error.NotFound, result.Error);
+        await unitOfWork.DidNotReceiveWithAnyArgs().SaveChangesAsync(default);
+    }
+
+    [Theory]
+    [InlineData("Completed", false)] [InlineData("InProgress", true)]
+    public async Task Delete_RejectsClosedOrLockedVisit(string status, bool locked)
+    {
+        visits.GetForUpdateAsync(1, Arg.Any<CancellationToken>()).Returns(new Visit { Status = status, IsLocked = locked, DentistId = 2 });
+
+        var result = await Service.DeleteAsync(1, 4, 2, RoleCodes.Dentist, null);
+
+        Assert.Equal(ToothConditionService.VisitClosed, result.Error);
+        await conditions.DidNotReceiveWithAnyArgs().GetForUpdateAsync(default, default, default);
+        await unitOfWork.DidNotReceiveWithAnyArgs().SaveChangesAsync(default);
+    }
+
+    [Fact]
+    public async Task Delete_RemovesOnlyCurrentVisitSnapshotAndAuditsSafeReference()
+    {
+        var row = new ToothCondition { Id = 4, VisitId = 1, ToothNumber = 11, ConditionCode = "CARIES", Note = "private clinical note" };
+        visits.GetForUpdateAsync(1, Arg.Any<CancellationToken>()).Returns(new Visit { Status = VisitStatuses.InProgress, DentistId = 2 });
+        conditions.GetForUpdateAsync(1, 4, Arg.Any<CancellationToken>()).Returns(row);
+
+        var result = await Service.DeleteAsync(1, 4, 2, RoleCodes.Dentist, null);
+
+        Assert.True(result.IsSuccess);
+        conditions.Received(1).Remove(row);
+        await unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await audit.Received(1).LogAsync("MOD_FDI_CONDITION_DELETED", "ToothCondition", 4, 2,
+            "{\"action\":\"condition_deleted\"}", null, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Get_RejectsOtherPatientsWithNotFound()
     {
         visits.GetByIdAsync(1, Arg.Any<CancellationToken>()).Returns(new Visit { PatientId = 5 });

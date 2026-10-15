@@ -25,7 +25,8 @@
           <textarea v-model="note" :disabled="busy" maxlength="500" rows="3" placeholder="Ghi nhận chuyên môn cho răng/mặt răng đã chọn" />
           <small>{{ note.length }}/500 ký tự · Lưu cùng bản ghi tình trạng mới, giữ lịch sử cũ.</small>
         </label>
-        <button type="submit" :disabled="busy || !selection.length">Ghi nhận tình trạng</button>
+        <button type="submit" :disabled="busy || !selection.length">{{ editingId ? 'Lưu chỉnh sửa tình trạng' : 'Ghi nhận tình trạng sau điều trị' }}</button>
+        <button v-if="editingId" type="button" :disabled="busy" @click="cancelEditing">Hủy chỉnh sửa</button>
       </form>
       <h2>Tình trạng đã ghi trong lần khám</h2>
       <p v-if="!rows.length">Chưa ghi nhận tình trạng răng.</p>
@@ -37,6 +38,15 @@
           <small>{{ new Date(row.createdAt).toLocaleString('vi-VN') }}</small>
           <button type="button" :disabled="busy" @click="locate(row)">Xem trên sơ đồ</button>
           <button type="button" :disabled="busy" @click="openHistory({ toothNumber: row.toothNumber })">Lịch sử răng</button>
+          <template v-if="canEdit">
+            <button type="button" :disabled="busy" @click="edit(row)">Sửa bản ghi</button>
+            <button v-if="pendingDeleteId !== row.id" type="button" :disabled="busy" @click="pendingDeleteId = row.id">Xóa bản ghi</button>
+            <span v-else role="group" :aria-label="`Xác nhận xóa tình trạng răng ${row.toothNumber}`">
+              <span>Chỉ xóa bản ghi trong lần khám đang mở này.</span>
+              <button type="button" :disabled="busy" @click="remove(row)">Xác nhận xóa</button>
+              <button type="button" :disabled="busy" @click="pendingDeleteId = null">Giữ lại</button>
+            </span>
+          </template>
         </li>
       </ul>
     </template>
@@ -67,6 +77,8 @@ const selection = ref<SelectedToothSurface[]>([]);
 const dentition = ref<DentitionType>('adult');
 const code = ref<ConditionCode>('CARIES');
 const note = ref('');
+const editingId = ref<number | null>(null);
+const pendingDeleteId = ref<number | null>(null);
 const busy = ref(false);
 const error = ref('');
 const success = ref('');
@@ -85,11 +97,25 @@ function locate(row: ToothCondition) {
       .map(surface => ({ toothNumber: row.toothNumber, surface }))
     : [{ toothNumber: row.toothNumber }];
 }
+function edit(row: ToothCondition) {
+  if (!canEdit.value || busy.value) return;
+  editingId.value = row.id;
+  pendingDeleteId.value = null;
+  locate(row);
+  code.value = row.conditionCode;
+  note.value = row.note || '';
+}
+function cancelEditing() {
+  editingId.value = null;
+  selection.value = [];
+  note.value = '';
+  code.value = 'CARIES';
+}
 let loadVersion = 0;
 async function load() {
   const version = ++loadVersion;
   busy.value = true; error.value = ''; success.value = ''; visit.value = null; fdiStore.reset(); selection.value = [];
-  note.value = '';
+  note.value = ''; editingId.value = null; pendingDeleteId.value = null;
   if (!Number.isInteger(visitId.value) || visitId.value <= 0) {
     error.value = 'Mã lần khám không hợp lệ.'; busy.value = false; return;
   }
@@ -117,11 +143,30 @@ async function save() {
   busy.value = true; error.value = ''; success.value = '';
   try {
     const surface = selected.surface ? SURFACE_METADATA[selected.surface].code : null;
-    const saved = await fdiService.add(id, selected.toothNumber, surface, code.value, note.value.trim() || null);
+    const saved = editingId.value
+      ? await fdiService.update(id, editingId.value, selected.toothNumber, surface, code.value, note.value.trim() || null)
+      : await fdiService.add(id, selected.toothNumber, surface, code.value, note.value.trim() || null);
     if (id !== visitId.value || version !== loadVersion) return;
-    fdiStore.prepend(saved); selection.value = [];
+    if (editingId.value) fdiStore.replace(rows.value.map(row => row.id === saved.id ? saved : row));
+    else fdiStore.prepend(saved);
+    editingId.value = null; selection.value = [];
     note.value = '';
-    success.value = 'Đã ghi nhận tình trạng răng. Có thể tải lại để xem dữ liệu đã lưu.';
+    success.value = 'Đã lưu tình trạng răng. Có thể tải lại để xem dữ liệu đã lưu.';
+  } catch (cause) { if (id === visitId.value && version === loadVersion) error.value = message(cause); }
+  finally { if (id === visitId.value && version === loadVersion) busy.value = false; }
+}
+async function remove(row: ToothCondition) {
+  if (!canEdit.value || busy.value || pendingDeleteId.value !== row.id) return;
+  const id = visitId.value;
+  const version = loadVersion;
+  busy.value = true; error.value = ''; success.value = '';
+  try {
+    await fdiService.delete(id, row.id);
+    if (id !== visitId.value || version !== loadVersion) return;
+    fdiStore.replace(rows.value.filter(item => item.id !== row.id));
+    pendingDeleteId.value = null;
+    if (editingId.value === row.id) cancelEditing();
+    success.value = 'Đã xóa bản ghi tình trạng trong lần khám đang mở.';
   } catch (cause) { if (id === visitId.value && version === loadVersion) error.value = message(cause); }
   finally { if (id === visitId.value && version === loadVersion) busy.value = false; }
 }

@@ -15,5 +15,11 @@ export const fdiService = {
   },
   async add(visitId: number, toothNumber: number, surface: string | null, conditionCode: ConditionCode, note: string | null = null): Promise<ToothCondition> {
     return (await apiClient.post<ToothCondition>(`/visits/${visitId}/tooth-conditions`, { toothNumber, surface, conditionCode, note })).data;
-  }
+  },
+  async update(visitId: number, conditionId: number, toothNumber: number, surface: string | null, conditionCode: ConditionCode, note: string | null = null): Promise<ToothCondition> {
+    return (await apiClient.put<ToothCondition>(`/visits/${visitId}/tooth-conditions/${conditionId}`, { toothNumber, surface, conditionCode, note })).data;
+  },
+  async delete(visitId: number, conditionId: number): Promise<void> {
+    await apiClient.delete(`/visits/${visitId}/tooth-conditions/${conditionId}`);
+  },
 };
