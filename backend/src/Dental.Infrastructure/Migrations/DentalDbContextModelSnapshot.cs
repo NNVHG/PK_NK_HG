@@ -45,6 +45,15 @@ namespace Dental.Infrastructure.Migrations
                     b.Property<int?>("DentistId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("EmergencyReason")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<bool>("IsEmergency")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("Notes")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");

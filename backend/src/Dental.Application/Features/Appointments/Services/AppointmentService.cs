@@ -41,6 +41,8 @@ public sealed class AppointmentService
     {
         if (actorRoleCode is not (RoleCodes.Admin or RoleCodes.Receptionist or RoleCodes.Patient))
             return Result<AppointmentResponse>.Failure(Error.Forbidden);
+        if (request.IsEmergency && actorRoleCode is not (RoleCodes.Admin or RoleCodes.Receptionist))
+            return Result<AppointmentResponse>.Failure(Error.Forbidden);
         try
         {
             return await _unitOfWork.ExecuteSerializableTransactionAsync(
@@ -52,7 +54,13 @@ public sealed class AppointmentService
     private async Task<Result<AppointmentResponse>> CreateCoreAsync(
         int actorUserId, string actorRoleCode, CreateAppointmentRequest request, string? ipAddress, CancellationToken ct)
     {
-        if (!AppointmentSlots.IsValidSlot(request.SlotTime) || request.Notes?.Length > 500 || request.DentistId <= 0)
+        var validTime = request.IsEmergency
+            ? request.SlotTime.Ticks % TimeSpan.TicksPerMinute == 0
+            : AppointmentSlots.IsValidSlot(request.SlotTime);
+        var reason = request.EmergencyReason?.Trim();
+        if (!validTime || request.Notes?.Length > 500 || request.DentistId <= 0 ||
+            (request.IsEmergency && (reason is null || reason.Length is < 5 or > 255)) ||
+            (!request.IsEmergency && (request.EmergencyReason is not null || request.ConfirmedDentistConflictAppointmentId.HasValue)))
             return Result<AppointmentResponse>.Failure(Error.Validation);
         var patient = await _patientRepository.GetByIdAsync(request.PatientId, ct);
         if (patient is null)
@@ -81,13 +89,33 @@ public sealed class AppointmentService
         if (currentSlotCount >= AppointmentSlots.MaxBookingsPerSlot)
             return Result<AppointmentResponse>.Failure(Error.AppointmentSlotFull);
 
+        var overriddenAppointmentId = (int?)null;
         if (request.DentistId.HasValue)
         {
             var dentist = await _userRepository.FindByIdAsync(request.DentistId.Value, ct);
             if (dentist is null || !dentist.IsActive || dentist.Role?.RoleCode != RoleCodes.Dentist)
                 return Result<AppointmentResponse>.Failure(Error.Validation.Code, "Nha sĩ được chọn không hợp lệ hoặc không hoạt động.");
-            if (await _appointmentRepository.HasDentistBookingAsync(request.DentistId.Value, request.AppointmentDate, request.SlotTime, 0, ct))
-                return Result<AppointmentResponse>.Failure(Error.Validation.Code, "Bác sĩ đã có lịch hẹn trong khung giờ này.");
+
+            var conflict = await _appointmentRepository.GetDentistBookingConflictAsync(
+                request.DentistId.Value, request.AppointmentDate, request.SlotTime, 0, ct);
+            if (conflict is not null)
+            {
+                if (!request.IsEmergency)
+                    return Result<AppointmentResponse>.Failure(Error.Validation.Code, "Bác sĩ đã có lịch hẹn trong khung giờ này.");
+
+                if (request.ConfirmedDentistConflictAppointmentId != conflict.AppointmentId)
+                {
+                    var dentistName = conflict.Dentist?.FullName ?? dentist.FullName;
+                    var patientName = conflict.Patient?.FullName ?? "Bệnh nhân";
+                    var warning = $"Nha sĩ {dentistName} đã có lịch với bệnh nhân {patientName} lúc {conflict.SlotTime:HH:mm}. Bạn có chắc chắn muốn xếp chen ngang ca cấp cứu này không?";
+                    var details = new AppointmentDentistConflictDetails(
+                        conflict.AppointmentId, dentistName, patientName, conflict.AppointmentDate, conflict.SlotTime);
+                    return Result<AppointmentResponse>.Failure(new Error(
+                        Error.AppointmentDentistConflict.Code, warning, details));
+                }
+
+                overriddenAppointmentId = conflict.AppointmentId;
+            }
         }
 
         var appointment = new Appointment
@@ -98,6 +126,8 @@ public sealed class AppointmentService
             DentistId = request.DentistId,
             Status = AppointmentStatuses.Scheduled,
             Notes = request.Notes?.Trim(),
+            IsEmergency = request.IsEmergency,
+            EmergencyReason = request.IsEmergency ? reason : null,
             CreatedByUserId = actorUserId,
             CreatedAt = DateTime.UtcNow
         };
@@ -112,14 +142,27 @@ public sealed class AppointmentService
             userId: actorUserId,
             detail: JsonSerializer.Serialize(new
             {
-                changedFields = new[]
-                {
-                    nameof(Appointment.PatientId),
-                    nameof(Appointment.AppointmentDate),
-                    nameof(Appointment.SlotTime),
-                    nameof(Appointment.DentistId),
-                    nameof(Appointment.Status)
-                }
+                changedFields = request.IsEmergency
+                    ? new[]
+                    {
+                        nameof(Appointment.PatientId),
+                        nameof(Appointment.AppointmentDate),
+                        nameof(Appointment.SlotTime),
+                        nameof(Appointment.DentistId),
+                        nameof(Appointment.Status),
+                        nameof(Appointment.IsEmergency),
+                        nameof(Appointment.EmergencyReason)
+                    }
+                    : new[]
+                    {
+                        nameof(Appointment.PatientId),
+                        nameof(Appointment.AppointmentDate),
+                        nameof(Appointment.SlotTime),
+                        nameof(Appointment.DentistId),
+                        nameof(Appointment.Status)
+                    },
+                confirmedDentistConflictOverride = overriddenAppointmentId.HasValue,
+                overriddenAppointmentId
             }),
             ipAddress: ipAddress,
             ct: ct);
@@ -423,7 +466,9 @@ public sealed class AppointmentService
             a.CreatedByUserId,
             a.CreatedAt,
             a.RescheduleCount,
-            a.RescheduleReason
+            a.RescheduleReason,
+            a.IsEmergency,
+            a.EmergencyReason
         );
 
 }

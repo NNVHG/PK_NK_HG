@@ -27,6 +27,8 @@ public sealed class AppointmentConfiguration : IEntityTypeConfiguration<Appointm
             .HasMaxLength(500);
         builder.Property(a => a.RescheduleCount).HasDefaultValue(0);
         builder.Property(a => a.RescheduleReason).HasMaxLength(500);
+        builder.Property(a => a.IsEmergency).HasDefaultValue(false).IsRequired();
+        builder.Property(a => a.EmergencyReason).HasMaxLength(255);
 
         builder.Property(a => a.CreatedAt)
             .HasColumnType("timestamptz")

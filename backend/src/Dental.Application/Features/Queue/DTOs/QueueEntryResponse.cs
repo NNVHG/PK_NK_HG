@@ -17,5 +17,6 @@ public sealed record QueueEntryResponse(
     int Status,
     string StatusText,
     string? Notes,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    bool IsEmergency = false
 );

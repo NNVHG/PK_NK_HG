@@ -38,6 +38,14 @@ public sealed class AppointmentRepository : IAppointmentRepository
         => _db.Appointments.AnyAsync(a => a.DentistId == dentistId && a.AppointmentDate == date && a.SlotTime == slotTime &&
             a.Status == AppointmentStatuses.Scheduled && a.AppointmentId != excludedId, ct);
 
+    public Task<Appointment?> GetDentistBookingConflictAsync(int dentistId, DateOnly date, TimeOnly slotTime, int excludedId, CancellationToken ct = default)
+        => _db.Appointments
+            .AsNoTracking()
+            .Include(a => a.Patient)
+            .Include(a => a.Dentist)
+            .FirstOrDefaultAsync(a => a.DentistId == dentistId && a.AppointmentDate == date && a.SlotTime == slotTime &&
+                a.Status == AppointmentStatuses.Scheduled && a.AppointmentId != excludedId, ct);
+
     public async Task<(IReadOnlyList<Appointment> Items, int TotalCount)> GetAppointmentsAsync(
         DateOnly? date,
         int? patientId,

@@ -69,7 +69,8 @@ public sealed class QueueRepository : IQueueRepository
 
         // DL-046/054: đúng hẹn theo giờ hẹn; thường/trễ hẹn theo giờ check-in.
         var items = await query
-            .OrderByDescending(q => q.IsPriority)
+            .OrderByDescending(q => q.Appointment != null && q.Appointment.IsEmergency)
+            .ThenByDescending(q => q.IsPriority)
             .ThenBy(q => q.IsPriority && q.Appointment != null ? q.Appointment.SlotTime : TimeOnly.MaxValue)
             .ThenBy(q => q.CheckInTime)
             .ThenBy(q => q.QueueNumber)
@@ -96,7 +97,8 @@ public sealed class QueueRepository : IQueueRepository
         }
 
         return await query
-            .OrderByDescending(q => q.IsPriority)
+            .OrderByDescending(q => q.Appointment != null && q.Appointment.IsEmergency)
+            .ThenByDescending(q => q.IsPriority)
             .ThenBy(q => q.IsPriority && q.Appointment != null ? q.Appointment.SlotTime : TimeOnly.MaxValue)
             .ThenBy(q => q.CheckInTime)
             .ThenBy(q => q.QueueNumber)

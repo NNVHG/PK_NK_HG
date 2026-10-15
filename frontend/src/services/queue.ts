@@ -20,6 +20,7 @@ export interface QueueEntryResponse {
   queueDate: string;
   queueNumber: number;
   isPriority: boolean;
+  isEmergency?: boolean;
   status: number;
   statusText: string;
   notes: string | null;

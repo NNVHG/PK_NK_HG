@@ -9,11 +9,17 @@
     </select><button :disabled="loading || busy" @click="load(1)">Tra cứu / tải lại</button>
     <p v-if="loading" role="status">Đang tải lịch hẹn…</p><p v-if="error" role="alert">{{ error }}</p><p v-if="success" role="status">{{ success }}</p>
     <p v-if="!loading && !error && !rows.length">Không có lịch hẹn phù hợp.</p>
-    <ul><li v-for="row in rows" :key="row.appointmentId">
-      <strong>#{{ row.appointmentId }} · {{ row.patientName }} · {{ row.patientCode }}</strong>
-      <p>{{ row.appointmentDate }} · {{ row.slotTime.slice(0, 5) }} · {{ row.status }}</p>
-      <button v-if="row.status === 'Scheduled'" :disabled="busy || loading" @click="select(row)">Hủy lịch này</button>
-      <AppointmentRescheduling v-if="row.status === 'Scheduled' && !selected" :appointment-id="row.appointmentId" :patient-name="row.patientName" @rescheduled="onRescheduled" />
+    <ul><li v-for="group in displayGroups" :key="group.key" :class="{ 'emergency-group': group.isEmergency }">
+      <div class="appointment-group">
+        <article v-for="row in group.items" :key="row.appointmentId" class="appointment-card" :class="{ 'emergency-card': row.isEmergency }">
+          <strong>#{{ row.appointmentId }} · {{ row.patientName }} · {{ row.patientCode }}</strong>
+          <span v-if="row.isEmergency" class="emergency-badge">CẤP CỨU</span>
+          <p>{{ row.appointmentDate }} · {{ row.slotTime.slice(0, 5) }} · {{ row.status }}</p>
+          <p v-if="row.isEmergency && row.emergencyReason" class="emergency-reason">Lý do cấp cứu: {{ row.emergencyReason }}</p>
+          <button v-if="row.status === 'Scheduled'" :disabled="busy || loading" @click="select(row)">Hủy lịch này</button>
+          <AppointmentRescheduling v-if="row.status === 'Scheduled' && !selected" :appointment-id="row.appointmentId" :patient-name="row.patientName" @rescheduled="onRescheduled" />
+        </article>
+      </div>
     </li></ul>
     <form v-if="selected" @submit.prevent="cancel">
       <h2>Xác nhận hủy #{{ selected.appointmentId }} · {{ selected.patientName }}</h2>
@@ -41,6 +47,18 @@ const status = ref('Scheduled'), rows = ref<AppointmentResponse[]>([]), page = r
 const selected = ref<AppointmentResponse | null>(null), reason = ref(''), confirmed = ref(false);
 const busy = ref(false), loading = ref(false), error = ref(''), success = ref('');
 const reasonLimit = computed(() => Math.max(0, 500 - (selected.value?.notes?.length ?? 0) - (selected.value?.notes ? 1 : 0) - '[Lý do hủy: ]'.length));
+const displayGroups = computed(() => {
+  const grouped = new Map<string, AppointmentResponse[]>();
+  for (const row of rows.value) {
+    const key = row.dentistId
+      ? `${row.appointmentDate}:${row.slotTime}:${row.dentistId}`
+      : `appointment:${row.appointmentId}`;
+    const items = grouped.get(key) ?? [];
+    items.push(row);
+    grouped.set(key, items);
+  }
+  return Array.from(grouped, ([key, items]) => ({ key, items, isEmergency: items.some(row => row.isEmergency) }));
+});
 let version = 0;
 function close() { selected.value = null; reason.value = ''; confirmed.value = false; }
 async function load(targetPage = 1) {
@@ -81,6 +99,14 @@ onMounted(() => load()); onUnmounted(() => { version++; close(); rows.value = []
 </script>
 <style scoped>
 .page { max-width: 850px; margin: auto; padding: 1.5rem; } button, input, select, textarea { font: inherit; padding: .5rem; margin: .4rem; }
-ul { list-style: none; padding: 0; } li, form { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin: .7rem 0; }
+ul { list-style: none; padding: 0; } ul > li { padding: 0; margin: .7rem 0; }
+.appointment-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: .75rem; }
+.appointment-card, form { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin: 0; }
 form { display: grid; } [role=alert] { color: #b91c1c; } [role=status] { color: #13795b; }
+.emergency-group .appointment-card { border-color: #b91c1c; }
+.emergency-card { border-left: 5px solid #b91c1c; background: #fff8f8; }
+.emergency-badge { display: inline-block; margin-left: .5rem; padding: .2rem .55rem; border-radius: 999px; color: #fff; background: #b91c1c; font-size: .8rem; font-weight: 800; }
+.emergency-reason { color: #7f1d1d; }
+@media (prefers-reduced-motion: no-preference) { .emergency-badge { animation: emergency-pulse 1.2s ease-in-out infinite alternate; } }
+@keyframes emergency-pulse { from { box-shadow: 0 0 0 0 #b91c1c33; } to { box-shadow: 0 0 0 5px #b91c1c55; } }
 </style>

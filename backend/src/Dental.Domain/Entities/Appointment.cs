@@ -17,6 +17,8 @@ public sealed class Appointment : BaseEntity
     public string? Notes { get; set; }
     public int RescheduleCount { get; set; }
     public string? RescheduleReason { get; set; }
+    public bool IsEmergency { get; set; }
+    public string? EmergencyReason { get; set; }
     public int CreatedByUserId { get; set; }
 
     public Patient Patient { get; set; } = null!;

@@ -92,6 +92,8 @@ public sealed class QueueService
 
         // Xử lý lịch hẹn và tính độ ưu tiên (DL-046 & DL-054)
         var isPriority = false;
+        var isEmergency = false;
+        Appointment? selectedAppointment = null;
         if (request.AppointmentId.HasValue)
         {
             var appointment = await _appointmentRepository.GetByIdAsync(request.AppointmentId.Value, ct);
@@ -104,10 +106,12 @@ public sealed class QueueService
             if (appointment.Status != AppointmentStatuses.Scheduled)
                 return Result<QueueEntryResponse>.Failure(Error.AppointmentCannotCheckIn);
 
+            selectedAppointment = appointment;
+            isEmergency = appointment.IsEmergency;
             var scheduledDateTime = appointment.AppointmentDate.ToDateTime(appointment.SlotTime);
             var nowVietnam = _vietnamClock.Now;
-            isPriority = nowVietnam >= scheduledDateTime.AddMinutes(-30) &&
-                         nowVietnam <= scheduledDateTime.AddMinutes(15);
+            isPriority = isEmergency || (nowVietnam >= scheduledDateTime.AddMinutes(-30) &&
+                                         nowVietnam <= scheduledDateTime.AddMinutes(15));
 
             appointment.Status = AppointmentStatuses.CheckedIn;
             appointment.UpdatedAt = DateTime.UtcNow;
@@ -120,7 +124,7 @@ public sealed class QueueService
                 return Result<QueueEntryResponse>.Failure(Error.Validation.Code, "Nha sĩ được chọn không hợp lệ hoặc không hoạt động.");
         }
 
-        return await ExecuteCheckInTransactionAsync(actorUserId, request, today, isPriority, ipAddress, ct);
+        return await ExecuteCheckInTransactionAsync(actorUserId, request, today, isPriority, isEmergency, selectedAppointment, ipAddress, ct);
     }
 
     private async Task<Result<QueueEntryResponse>> ExecuteCheckInTransactionAsync(
@@ -128,6 +132,8 @@ public sealed class QueueService
         CheckInRequest request,
         DateOnly today,
         bool isPriority,
+        bool isEmergency,
+        Appointment? appointment,
         string? ipAddress,
         CancellationToken ct)
     {
@@ -158,6 +164,7 @@ public sealed class QueueService
                 {
                     PatientId = request.PatientId,
                     AppointmentId = request.AppointmentId,
+                    Appointment = appointment,
                     DentistId = request.DentistId,
                     VisitId = visit.VisitId,
                     QueueDate = today,
@@ -188,7 +195,8 @@ public sealed class QueueService
                 ToStatus = QueueStatus.Waiting,
                 ChangedByUserId = actorUserId,
                 ChangedAt = DateTime.UtcNow,
-                Reason = isPriority ? "Tiếp đón check-in (Ưu tiên đúng giờ)" : "Tiếp đón check-in"
+                Reason = isEmergency ? "Tiếp đón check-in (Lịch cấp cứu)"
+                    : isPriority ? "Tiếp đón check-in (Ưu tiên đúng giờ)" : "Tiếp đón check-in"
             };
 
             await _queueRepository.AddStatusHistoryAsync(history, transactionCt);
@@ -560,7 +568,8 @@ public sealed class QueueService
             (int)q.Status,
             QueueStatusDescriptions.GetDescription(q.Status),
             q.Notes,
-            q.CreatedAt
+            q.CreatedAt,
+            q.Appointment?.IsEmergency ?? false
         );
 
     private static QueueStatusHistoryResponse ToHistoryResponse(QueueStatusHistory h)

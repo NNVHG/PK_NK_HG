@@ -4,7 +4,7 @@ namespace Dental.Application.Common;
 /// Mã lỗi nghiệp vụ kèm thông điệp.
 /// Mã lỗi dạng GEN_xxx hoặc MOD_xxx theo quy ước dự án.
 /// </summary>
-public record Error(string Code, string Message)
+public record Error(string Code, string Message, object? Details = null)
 {
     public static readonly Error None           = new(string.Empty, string.Empty);
 
@@ -53,6 +53,7 @@ public record Error(string Code, string Message)
     public static readonly Error AppointmentCannotReschedule   = new("APP_007", "Chỉ có thể đổi lịch hẹn đang ở trạng thái chờ khám.");
     public static readonly Error AppointmentConcurrent = new("APP_009", "Có thao tác đặt hoặc đổi lịch đồng thời. Tải lại lịch để đối chiếu trước khi thử tiếp.");
     public static readonly Error AppointmentReminderConcurrent = new("APP_010", "Nhật ký nhắc hẹn vừa được cập nhật đồng thời. Tải lại nhật ký để đối chiếu trước khi thử tiếp.");
+    public static readonly Error AppointmentDentistConflict = new("APP_011", "Nha sĩ đã có lịch hẹn trong khung giờ này.");
     public static readonly Error AppointmentCannotCheckIn      = new("APP_008", "Lịch hẹn không ở trạng thái chờ khám hoặc đã được tiếp đón.");
 
     // Lỗi tiếp đón & hàng đợi (MOD_CHK)
