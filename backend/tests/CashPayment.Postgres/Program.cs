@@ -10,10 +10,11 @@ using Npgsql;
 
 // Explicit opt-in; synthetic data and a unique disposable database, never the clinic database.
 if (args.Length is not (2 or 3) || args[0] != "--isolated-config" ||
-    args.Length == 3 && args[2] is not ("--queue-call-next-only" or "--invoice-discounts-only"))
-    throw new ArgumentException("Use --isolated-config <appsettings.Development.json> [--queue-call-next-only|--invoice-discounts-only]");
+    args.Length == 3 && args[2] is not ("--queue-call-next-only" or "--invoice-discounts-only" or "--service-catalog-only"))
+    throw new ArgumentException("Use --isolated-config <appsettings.Development.json> [--queue-call-next-only|--invoice-discounts-only|--service-catalog-only]");
 var queueCallNextOnly = args.Length == 3 && args[2] == "--queue-call-next-only";
 var invoiceDiscountsOnly = args.Length == 3 && args[2] == "--invoice-discounts-only";
+var serviceCatalogOnly = args.Length == 3 && args[2] == "--service-catalog-only";
 using var config = JsonDocument.Parse(File.ReadAllText(args[1]));
 var connection = new NpgsqlConnectionStringBuilder(config.RootElement.GetProperty("ConnectionStrings").GetProperty("Default").GetString());
 var databaseName = "dental_cash_test_" + Guid.NewGuid().ToString("N");
@@ -32,6 +33,12 @@ try
     var visit = new Visit { Patient = patient, CreatedByUser = cashier, Status = VisitStatuses.Completed, IsLocked = true };
     var invoice = new Invoice { Visit = visit, CreatedByUser = cashier, InvoiceCode = "TEST-CASH-1", TotalAmount = 100000, Status = InvoiceStatus.PendingPayment, CreatedAt = DateTime.UtcNow };
     setup.Invoices.Add(invoice); await setup.SaveChangesAsync(); setup.ChangeTracker.Clear();
+    if (serviceCatalogOnly)
+    {
+        await CashPaymentHttpSmoke.RunAsync(options, cashier.UserId, patient.PatientId, Check, serviceCatalogOnly: true);
+        Console.WriteLine($"PostgreSQL service-catalog checks: {checks}/{checks} PASS");
+        return;
+    }
     if (invoiceDiscountsOnly)
     {
         await CashPaymentHttpSmoke.RunAsync(options, cashier.UserId, patient.PatientId, Check, invoiceDiscountsOnly: true);

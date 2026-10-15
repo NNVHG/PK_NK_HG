@@ -15,6 +15,7 @@
           <router-link to="/patients">Bệnh nhân</router-link>
         </template>
         <router-link v-if="isAdmin" to="/admin/staff">Tài khoản nhân viên</router-link>
+        <router-link v-if="isAdmin" to="/admin/services">Dịch vụ & bảng giá</router-link>
         <router-link v-if="isAdmin" to="/admin/audit-logs">Nhật ký thao tác</router-link>
       </nav>
       <div class="user-menu">
