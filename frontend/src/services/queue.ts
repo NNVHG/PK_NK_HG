@@ -45,7 +45,12 @@ export interface CallNextPayload {
   dentistId?: number | null;
 }
 
+export interface CallingDentist { dentistId: number; dentistName: string; }
+
 export const queueService = {
+  async getCallingDentists(): Promise<CallingDentist[]> {
+    return (await apiClient.get<CallingDentist[]>('/queue/call-dentists')).data;
+  },
   async getToday(page = 1, status?: number): Promise<PagedResult<QueueEntryResponse>> {
     const response = await apiClient.get<PagedResult<QueueEntryResponse>>('/queue', {
       params: { page, pageSize: 20, ...(status === undefined ? {} : { status }) }

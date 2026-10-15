@@ -6,7 +6,7 @@ namespace Dental.Application.Features.Queue.Services;
 
 /// <summary>
 /// Máy trạng thái hàng đợi theo DL-047, DL-053.
-/// 5 trạng thái: Waiting(1), InConsultation(2), Completed(3), Cancelled(4), InImaging(5).
+/// Calling(6) is separate from the clinical start, per DL-214/DL-258.
 /// </summary>
 public static class QueueStateMachine
 {
@@ -25,6 +25,12 @@ public static class QueueStateMachine
         // 2. Kiểm tra các bước chuyển hợp lệ theo quy trình
         return (currentStatus, targetStatus) switch
         {
+            (QueueStatus.Waiting, QueueStatus.Calling) =>
+                roleCode is RoleCodes.Admin or RoleCodes.Dentist or RoleCodes.Assistant
+                    ? Result.Success() : Result.Failure(Error.QueueTransitionForbidden),
+            (QueueStatus.Calling, QueueStatus.InConsultation) =>
+                roleCode is RoleCodes.Admin or RoleCodes.Dentist
+                    ? Result.Success() : Result.Failure(Error.QueueTransitionForbidden),
             // Chờ khám (1) -> Đang khám (2): Nha sĩ, Admin (DL-047, DL-013)
             (QueueStatus.Waiting, QueueStatus.InConsultation) =>
                 roleCode is RoleCodes.Dentist or RoleCodes.Admin

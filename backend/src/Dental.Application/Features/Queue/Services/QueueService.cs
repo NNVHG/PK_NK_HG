@@ -288,19 +288,22 @@ public sealed class QueueService
                 if (await _visitRepository.HasActiveVisitForDentistAsync(dentistId.Value, transactionCt, entry.VisitId ?? entry.Visit.VisitId))
                     return Result<QueueEntryResponse>.Failure(Error.DentistHasActiveVisit);
                 var now = DateTime.UtcNow;
+                if (await _queueRepository.HasCallingForDentistAsync(_vietnamClock.Today, dentistId.Value, transactionCt, entry.QueueEntryId))
+                    return Result<QueueEntryResponse>.Failure(Error.QueueDentistAlreadyCalling);
+                var previousStatus = entry.Status;
                 entry.Status = QueueStatus.InConsultation; entry.DentistId = dentistId; entry.UpdatedAt = now;
                 entry.Visit.Status = VisitStatuses.InProgress; entry.Visit.DentistId = dentistId;
                 entry.Visit.StartedAt ??= now; entry.Visit.UpdatedAt = now;
                 await _queueRepository.AddStatusHistoryAsync(new QueueStatusHistory
                 {
-                    QueueEntryId = entry.QueueEntryId, FromStatus = QueueStatus.Waiting, ToStatus = QueueStatus.InConsultation,
+                    QueueEntryId = entry.QueueEntryId, FromStatus = previousStatus, ToStatus = QueueStatus.InConsultation,
                     ChangedByUserId = actorUserId, ChangedAt = now,
                     Reason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim()
                 }, transactionCt);
                 await _unitOfWork.SaveChangesAsync(transactionCt);
-                await _auditLogger.LogAsync(AuditActions.QueueStatusChanged, "QueueEntry", entry.QueueEntryId, actorUserId,
+                await _auditLogger.LogRequiredAsync(AuditActions.QueueStatusChanged, "QueueEntry", entry.QueueEntryId, actorUserId,
                     JsonSerializer.Serialize(new { action = "StartSelected", dentistId, visitId = entry.VisitId,
-                        fromStatus = (int)QueueStatus.Waiting, toStatus = (int)QueueStatus.InConsultation }), ipAddress, transactionCt);
+                        fromStatus = (int)previousStatus, toStatus = (int)QueueStatus.InConsultation }), ipAddress, transactionCt);
                 var refreshed = await _queueRepository.GetByIdAsync(entry.QueueEntryId, transactionCt);
                 return Result<QueueEntryResponse>.Success(ToResponse(refreshed ?? entry));
             }, ct);
@@ -361,6 +364,9 @@ public sealed class QueueService
         string? ipAddress,
         CancellationToken ct = default)
     {
+        // Calling must go through the dedicated call-next operation, never the generic status update.
+        if (request.NewStatus == (int)QueueStatus.Calling)
+            return Result<QueueEntryResponse>.Failure(Error.Validation);
         if (request.NewStatus == (int)QueueStatus.InConsultation)
             return await StartSelectedAsync(queueEntryId, actorUserId, actorRole, request, ipAddress, ct);
         if (request.NewStatus is (int)QueueStatus.InImaging or (int)QueueStatus.Waiting)
@@ -482,6 +488,14 @@ public sealed class QueueService
         return Result<QueueEntryDetailResponse>.Success(detail);
     }
 
+    public async Task<Result<IReadOnlyList<CallingDentistResponse>>> GetCallingDentistsAsync(string? actorRole, CancellationToken ct = default)
+    {
+        if (actorRole is not (RoleCodes.Admin or RoleCodes.Dentist or RoleCodes.Assistant))
+            return Result<IReadOnlyList<CallingDentistResponse>>.Failure(Error.Forbidden);
+        var dentists = await _userRepository.GetActiveDentistsAsync(ct);
+        return Result<IReadOnlyList<CallingDentistResponse>>.Success(dentists.Select(d => new CallingDentistResponse(d.UserId, d.FullName)).ToArray());
+    }
+
     public async Task<Result<QueueEntryResponse>> CallNextAsync(
         int actorUserId,
         string actorRole,
@@ -489,8 +503,12 @@ public sealed class QueueService
         string? ipAddress,
         CancellationToken ct = default)
     {
-        // DL-120: Chỉ Nha sĩ hoặc Admin mới được gọi khám
-        if (actorRole is not RoleCodes.Dentist and not RoleCodes.Admin)
+        // DL-258: invitation is distinct from starting a clinical Visit.
+        if (actorRole is not (RoleCodes.Dentist or RoleCodes.Admin or RoleCodes.Assistant))
+            return Result<QueueEntryResponse>.Failure(Error.QueueTransitionForbidden);
+        if (actorUserId <= 0 || request.DentistId is <= 0)
+            return Result<QueueEntryResponse>.Failure(Error.Validation);
+        if (actorRole == RoleCodes.Dentist && request.DentistId.HasValue && request.DentistId != actorUserId)
             return Result<QueueEntryResponse>.Failure(Error.QueueTransitionForbidden);
 
         try
@@ -526,7 +544,9 @@ public sealed class QueueService
         }
 
         var today = _vietnamClock.Today;
-        var nextEntry = await _queueRepository.GetNextWaitingEntryAsync(today, targetDentistId, ct);
+        if (await _queueRepository.HasCallingForDentistAsync(today, targetDentistId, ct))
+            return Result<QueueEntryResponse>.Failure(Error.QueueDentistAlreadyCalling);
+        var nextEntry = await _queueRepository.GetNextWaitingEntryAsync(today, targetDentistId, ct, assignedOnly: actorRole == RoleCodes.Assistant);
         // Returning from imaging resumes the same Visit; only a different active Visit blocks the dentist.
         if (await _visitRepository.HasActiveVisitForDentistAsync(targetDentistId, ct, nextEntry?.VisitId ?? nextEntry?.Visit?.VisitId))
             return Result<QueueEntryResponse>.Failure(Error.DentistHasActiveVisit);
@@ -538,33 +558,27 @@ public sealed class QueueService
             (nextEntry.DentistId.HasValue && nextEntry.DentistId != targetDentistId) ||
             (nextEntry.Visit.DentistId.HasValue && nextEntry.Visit.DentistId != targetDentistId))
             return Result<QueueEntryResponse>.Failure(Error.QueueInvalidStateTransition);
+        if (actorRole == RoleCodes.Assistant && nextEntry.DentistId != targetDentistId)
+            return Result<QueueEntryResponse>.Failure(Error.QueueTransitionForbidden);
 
-        nextEntry.Status = QueueStatus.InConsultation;
+        nextEntry.Status = QueueStatus.Calling;
         nextEntry.DentistId = targetDentistId;
         nextEntry.UpdatedAt = DateTime.UtcNow;
-
-        if (nextEntry.Visit is not null)
-        {
-            nextEntry.Visit.Status = VisitStatuses.InProgress;
-            nextEntry.Visit.DentistId = targetDentistId;
-            nextEntry.Visit.StartedAt ??= DateTime.UtcNow;
-            nextEntry.Visit.UpdatedAt = DateTime.UtcNow;
-        }
 
         var history = new QueueStatusHistory
         {
             QueueEntryId = nextEntry.QueueEntryId,
             FromStatus = QueueStatus.Waiting,
-            ToStatus = QueueStatus.InConsultation,
+            ToStatus = QueueStatus.Calling,
             ChangedByUserId = actorUserId,
             ChangedAt = DateTime.UtcNow,
-            Reason = "Gọi vào khám (Call Next - DL-120)"
+            Reason = "Mời vào phòng (Calling - DL-258)"
         };
 
         await _queueRepository.AddStatusHistoryAsync(history, ct);
         await _unitOfWork.SaveChangesAsync(ct);
 
-        await _auditLogger.LogAsync(
+        await _auditLogger.LogRequiredAsync(
             action: AuditActions.QueueStatusChanged,
             entityType: "QueueEntry",
             entityId: nextEntry.QueueEntryId,
@@ -576,7 +590,7 @@ public sealed class QueueService
                 dentistId = targetDentistId,
                 queueNumber = nextEntry.QueueNumber,
                 fromStatus = (int)QueueStatus.Waiting,
-                toStatus = (int)QueueStatus.InConsultation
+                toStatus = (int)QueueStatus.Calling
             }),
             ipAddress: ipAddress,
             ct: ct);
@@ -626,8 +640,9 @@ public sealed class QueueService
         var entries = await _queueRepository.GetPublicDisplayQueueAsync(today, ct);
 
         var inConsultation = entries
-            .Where(q => q.Status == QueueStatus.InConsultation)
-            .OrderByDescending(q => q.UpdatedAt ?? q.CreatedAt)
+            .Where(q => q.Status is QueueStatus.InConsultation or QueueStatus.Calling)
+            .OrderByDescending(q => q.Status == QueueStatus.Calling)
+            .ThenByDescending(q => q.UpdatedAt ?? q.CreatedAt)
             .Take(5)
             .Select(ToPublicResponse)
             .ToList();

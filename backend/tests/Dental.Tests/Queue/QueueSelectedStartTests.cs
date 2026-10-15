@@ -39,7 +39,7 @@ public sealed class QueueSelectedStartTests
         Assert.True((await Start(role)).IsSuccess); Assert.Equal(QueueStatus.InConsultation, row.Status);
         Assert.Equal(5, row.DentistId); Assert.Equal(5, row.Visit!.DentistId); Assert.Equal(VisitStatuses.InProgress, row.Visit.Status); Assert.NotNull(row.Visit.StartedAt);
         await queues.Received(1).AddStatusHistoryAsync(Arg.Is<QueueStatusHistory>(h => h.ChangedByUserId == 5 && h.ToStatus == QueueStatus.InConsultation), Arg.Any<CancellationToken>());
-        await audit.Received(1).LogAsync(AuditActions.QueueStatusChanged, "QueueEntry", 7, 5, Arg.Is<string>(s => s.Contains("StartSelected")), null, Arg.Any<CancellationToken>());
+        await audit.Received(1).LogRequiredAsync(AuditActions.QueueStatusChanged, "QueueEntry", 7, 5, Arg.Is<string>(s => s.Contains("StartSelected")), null, Arg.Any<CancellationToken>());
     }
     [Theory] [InlineData(RoleCodes.Receptionist)] [InlineData(RoleCodes.Assistant)] [InlineData(RoleCodes.Patient)]
     public async Task ForbiddenRolesCannotReadOrWrite(string role)

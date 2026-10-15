@@ -33,6 +33,7 @@ public sealed class RolePermissionMatrixProvider(IAuthorizationPolicyProvider po
             [Policies.AppointmentReschedule] = ("Đổi lịch hẹn", "MOD_APP", "Còn kiểm tra hồ sơ sở hữu, trạng thái và thời gian được đổi lịch."),
             [Policies.QueueCheckIn] = ("Tiếp đón và check-in", "MOD_CHK", "Chỉ thao tác nội bộ; kiểm tra lịch hẹn/lần khám trong ngày."),
             [Policies.QueueView] = ("Xem hàng đợi nội bộ", "MOD_CHK", "Màn TV công khai là luồng đọc riêng với tên bệnh nhân đã che."),
+            [Policies.QueueCall] = ("Gọi số mời vào phòng", "MOD_CHK", "Phụ tá gọi lượt đã có nha sĩ; gọi số không bắt đầu hoặc ghi ca khám. Bắt đầu khám chỉ Nha sĩ/Admin (DL-258)."),
             [Policies.QueueStatusUpdate] = ("Chuyển trạng thái hàng đợi", "MOD_CHK", "Mỗi bước chuyển kiểm tra quyền riêng: Nha sĩ khám/chỉ định chụp; Phụ tá hoàn tất chụp."),
             [Policies.ClinicalDiagnosisUpdate] = ("Khám và ghi chẩn đoán", "MOD_PAT", "Chỉ Admin hoặc nha sĩ phụ trách; lần khám đang mở, chưa khóa."),
             [Policies.FdiConditionWrite] = ("Ghi tình trạng răng", "MOD_FDI", "Chỉ Admin hoặc nha sĩ phụ trách; lần khám đang mở, chưa khóa."),

@@ -10,6 +10,7 @@ public sealed class UpdateQueueStatusRequestValidator : AbstractValidator<Update
     {
         RuleFor(x => x.NewStatus)
             .Must(status => Enum.IsDefined(typeof(QueueStatus), status))
+            .Must(status => status != (int)QueueStatus.Calling)
             .WithMessage("Trạng thái mới không hợp lệ. Giá trị cho phép: 1 (Chờ khám), 2 (Đang khám), 3 (Khám xong), 4 (Đã hủy), 5 (Chụp X-quang).");
 
         RuleFor(x => x.DentistId).GreaterThan(0).When(x => x.NewStatus == 2 && x.DentistId.HasValue);

@@ -55,14 +55,14 @@ internal static class QueueCallNextAtomicSmoke
         var sameRace = await Task.WhenAll(Call(raceOptions, day, sameDentist.UserId), Call(raceOptions, day, sameDentist.UserId));
         check(sameRace.Count(r => r.IsSuccess) == 1 && sameRace.Count(r => r.Error.Code == "CHK_010") == 1,
             "Call-next same-dentist race has one commit and one CHK_010");
-        check(await setup.QueueEntries.AsNoTracking().CountAsync(q => q.QueueDate == day && q.Status == QueueStatus.InConsultation) == 1 &&
-            await setup.Visits.AsNoTracking().CountAsync(v => v.DentistId == sameDentist.UserId && v.Status == VisitStatuses.InProgress) == 1,
-            "Call-next same-dentist race persists one active queue and Visit");
+        check(await setup.QueueEntries.AsNoTracking().CountAsync(q => q.QueueDate == day && q.Status == QueueStatus.Calling) == 1 &&
+            await setup.Visits.AsNoTracking().CountAsync(v => v.DentistId == sameDentist.UserId && v.Status == VisitStatuses.InProgress) == 0,
+            "Call-next same-dentist race persists one Calling and no started clinical Visit");
         check(await setup.QueueStatusHistories.CountAsync(h => h.QueueEntryId == first.QueueEntryId) == 1 &&
             await setup.AuditLogs.CountAsync(a => a.EntityType == "QueueEntry" && a.EntityId == first.QueueEntryId && a.Action == AuditActions.QueueStatusChanged) == 1 &&
             !await setup.QueueStatusHistories.AnyAsync(h => h.QueueEntryId == second.QueueEntryId), "Call-next race writes one history/audit only");
         var busy = await Call(options, day, sameDentist.UserId);
-        check(busy.IsFailure && busy.Error.Code == Error.DentistHasActiveVisit.Code, "Call-next sequential retry cannot start a second Visit");
+        check(busy.IsFailure && busy.Error.Code == Error.QueueDentistAlreadyCalling.Code, "Call-next sequential retry cannot invite a second patient");
 
         var left = await Dentist(); var right = await Dentist(); var shared = await Waiting(day.AddDays(1), 1);
         raceOptions = new DbContextOptionsBuilder<DentalDbContext>(options).AddInterceptors(new Rendezvous()).Options;
@@ -71,9 +71,9 @@ internal static class QueueCallNextAtomicSmoke
         check(sharedRace.Count(r => r.IsSuccess) == 1 && sharedRace.Count(r => r.Error.Code == "CHK_010") == 1,
             "Call-next two-dentist race claims shared waiting entry once");
         var persisted = await setup.QueueEntries.AsNoTracking().Include(q => q.Visit).SingleAsync(q => q.QueueEntryId == shared.QueueEntryId);
-        check(persisted.DentistId == winner.DentistId && persisted.Visit!.DentistId == winner.DentistId &&
+        check(persisted.DentistId == winner.DentistId && persisted.Visit!.DentistId == null && persisted.Visit.Status == VisitStatuses.Created && persisted.Visit.StartedAt == null &&
             await setup.QueueStatusHistories.CountAsync(h => h.QueueEntryId == shared.QueueEntryId) == 1,
-            "Call-next shared claim preserves winning dentist across queue/Visit/history");
+            "Call-next shared claim reserves queue for winning dentist without starting Visit");
 
         var rollbackDentist = await Dentist(); var rollback = await Waiting(day.AddDays(2), 1);
         var faultOptions = new DbContextOptionsBuilder<DentalDbContext>(options).AddInterceptors(new FailAfterWrite()).Options;
@@ -117,7 +117,7 @@ internal static class QueueCallNextAtomicSmoke
             "Cancel waiting versus call-next race has one committed outcome");
         persisted = await setup.QueueEntries.AsNoTracking().Include(q => q.Visit).SingleAsync(q => q.QueueEntryId == claimOrCancel.QueueEntryId);
         check((persisted.Status == QueueStatus.Cancelled && persisted.Visit!.Status == VisitStatuses.Cancelled && persisted.Visit.StartedAt == null) ||
-            (persisted.Status == QueueStatus.InConsultation && persisted.Visit!.Status == VisitStatuses.InProgress && persisted.Visit.DentistId == racingDentist.UserId),
+            (persisted.Status == QueueStatus.Calling && persisted.Visit!.Status == VisitStatuses.Created && persisted.Visit.DentistId == null && persisted.DentistId == racingDentist.UserId),
             "Cancel waiting versus call-next never splits queue and Visit status");
         check(await setup.QueueStatusHistories.CountAsync(h => h.QueueEntryId == claimOrCancel.QueueEntryId) == 1 &&
             await setup.AuditLogs.CountAsync(a => a.EntityType == "QueueEntry" && a.EntityId == claimOrCancel.QueueEntryId) == 1,

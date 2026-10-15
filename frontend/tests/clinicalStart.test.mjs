@@ -73,3 +73,15 @@ test('dirty diagnosis blocks switching patient or queue reload', async () => {
   const f = fixture(); await f.mount(); await f.c.selectEntry(f.state.row); await f.c.startConsultation(); f.c.diagnosis.value = 'Unsaved';
   await f.c.selectEntry({ ...row, queueEntryId: 99 }); await f.c.loadQueue(); assert.equal(f.c.selected.value.queueEntryId, 7);
 });
+
+test('Calling stays uneditable until explicit Dentist/Admin clinical start', async () => {
+  for (const role of ['DENTIST', 'ADMIN']) {
+    const f = fixture({ role }); f.state.row.status = 6; f.state.row.dentistId = 5;
+    await f.mount(); await f.c.selectEntry(f.state.row); assert.equal(f.c.canEdit.value, false); assert.equal(f.c.canStart.value, true);
+    assert.equal(f.writes.length, 0); await f.c.startConsultation(); assert.deepEqual(f.writes, [[7, 5]]); assert.equal(f.c.canEdit.value, true);
+  }
+});
+test('Assistant cannot start an invited Calling entry', async () => {
+  const f = fixture({ role: 'ASSISTANT' }); f.state.row.status = 6; f.state.row.dentistId = 5;
+  await f.mount(); await f.c.selectEntry(f.state.row); await f.c.startConsultation(); assert.equal(f.writes.length, 0); assert.equal(f.c.canEdit.value, false);
+});

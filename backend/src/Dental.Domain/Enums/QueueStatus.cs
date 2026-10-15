@@ -1,8 +1,7 @@
 namespace Dental.Domain.Enums;
 
 /// <summary>
-/// Trạng thái hàng đợi theo DL-047 (enum int với 5 giá trị).
-/// 1 = Waiting, 2 = InConsultation, 3 = Completed, 4 = Cancelled, 5 = InImaging.
+/// Queue status: preserve persisted values 1..5; Calling is the separate invitation step (DL-214/DL-258).
 /// </summary>
 public enum QueueStatus
 {
@@ -10,5 +9,6 @@ public enum QueueStatus
     InConsultation = 2,   // Đang khám
     Completed = 3,        // Khám xong (hoàn tất)
     Cancelled = 4,        // Đã hủy
-    InImaging = 5         // Đang chụp ảnh
+    InImaging = 5,        // Đang chụp ảnh
+    Calling = 6          // Đang mời vào phòng, chưa bắt đầu khám
 }

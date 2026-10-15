@@ -12,6 +12,7 @@ public static class QueueStatusDescriptions
     public const string Completed = "Khám xong";
     public const string Cancelled = "Đã hủy";
     public const string InImaging = "Đang chụp ảnh";
+    public const string Calling = "Đang mời vào phòng";
 
     public static string GetDescription(QueueStatus status) => status switch
     {
@@ -20,6 +21,7 @@ public static class QueueStatusDescriptions
         QueueStatus.Completed => Completed,
         QueueStatus.Cancelled => Cancelled,
         QueueStatus.InImaging => InImaging,
+        QueueStatus.Calling => Calling,
         _ => "Không xác định"
     };
 }

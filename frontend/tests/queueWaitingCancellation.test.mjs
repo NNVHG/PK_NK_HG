@@ -16,6 +16,7 @@ function fixture({ role = 'RECEPTIONIST', failure = false, result = row, readFai
     '@/stores/auth': { useAuthStore: () => ({ role }) },
     '@/services/appointments': { appointmentsService: { getBookingDentists: async () => [{ dentistId: 5, dentistName: 'Synthetic dentist' }] } },
     '@/services/queue': { queueService: {
+      getCallingDentists: async () => [{ dentistId: 5, dentistName: 'Synthetic dentist' }],
       getToday: async () => { reads.push(true); if (reads.length > readFailureAfter) throw new Error('Synthetic read error'); return { items: [row], page: 1, totalCount: 1, hasNextPage: false }; },
       cancelWaiting: async (...args) => { writes.push(args); if (failure) throw { response: { data: { message: 'Synthetic409' } } }; return result; },
       callNext: async () => { calls.push(true); return row; },

@@ -147,3 +147,21 @@ test('unmount clears polling and clock timers', async () => {
     f.cleanup();
   }
 });
+
+test('only Calling is recorded for sound, and ending a call permits later recall', async () => {
+  const f = fixture([mockData, { ...mockData, inConsultation: [{ ...mockData.inConsultation[0], status: 6 }] }, mockData,
+    { ...mockData, inConsultation: [{ ...mockData.inConsultation[0], status: 6 }] }]);
+  try {
+    await f.c.loadQueueData(); assert.equal(f.c.seenCallIds.has(10), false);
+    await f.c.loadQueueData(); assert.equal(f.c.seenCallIds.has(10), true);
+    await f.c.loadQueueData(); assert.equal(f.c.seenCallIds.has(10), false);
+    await f.c.loadQueueData(); assert.equal(f.c.seenCallIds.has(10), true);
+  } finally { f.cleanup(); }
+});
+
+test('late Calling response after unmount cannot restore the monitor or announcement', async () => {
+  let done; const pending = new Promise(resolve => { done = resolve; }); const f = fixture([pending]);
+  const loading = f.c.loadQueueData(); f.cleanup();
+  done({ ...mockData, inConsultation: [{ ...mockData.inConsultation[0], status: 6 }] }); await loading;
+  assert.equal(f.c.inConsultation.value.length, 0); assert.equal(f.c.seenCallIds.size, 0); assert.equal(f.c.soundEnabled.value, false);
+});

@@ -39,6 +39,7 @@ public sealed class QueueRepository : IQueueRepository
             .Include(q => q.Visit)
             .Where(q => q.PatientId == patientId &&
                         (q.Status == QueueStatus.Waiting ||
+                         q.Status == QueueStatus.Calling ||
                          q.Status == QueueStatus.InConsultation ||
                          q.Status == QueueStatus.InImaging))
             .ToListAsync(ct);
@@ -83,7 +84,11 @@ public sealed class QueueRepository : IQueueRepository
         return (items, totalCount);
     }
 
-    public async Task<QueueEntry?> GetNextWaitingEntryAsync(DateOnly date, int? dentistId, CancellationToken ct = default)
+    public Task<bool> HasCallingForDentistAsync(DateOnly date, int dentistId, CancellationToken ct = default, int? excludedQueueEntryId = null)
+        => _db.QueueEntries.AnyAsync(q => q.QueueDate == date && q.DentistId == dentistId && q.Status == QueueStatus.Calling &&
+            (!excludedQueueEntryId.HasValue || q.QueueEntryId != excludedQueueEntryId.Value), ct);
+
+    public async Task<QueueEntry?> GetNextWaitingEntryAsync(DateOnly date, int? dentistId, CancellationToken ct = default, bool assignedOnly = false)
     {
         var query = _db.QueueEntries
             .Include(q => q.Patient)
@@ -94,7 +99,7 @@ public sealed class QueueRepository : IQueueRepository
 
         if (dentistId.HasValue)
         {
-            query = query.Where(q => q.DentistId == null || q.DentistId == dentistId.Value);
+            query = query.Where(q => q.DentistId == dentistId.Value || (!assignedOnly && q.DentistId == null));
         }
 
         return await query
@@ -117,7 +122,7 @@ public sealed class QueueRepository : IQueueRepository
             .Include(q => q.Appointment)
             .Include(q => q.StatusHistories.Where(h => h.FromStatus == QueueStatus.InImaging && h.ToStatus == QueueStatus.Waiting))
             .Where(q => q.QueueDate == date &&
-                        (q.Status == QueueStatus.InConsultation || q.Status == QueueStatus.Waiting))
+                        (q.Status == QueueStatus.InConsultation || q.Status == QueueStatus.Calling || q.Status == QueueStatus.Waiting))
             .ToListAsync(ct);
     }
 

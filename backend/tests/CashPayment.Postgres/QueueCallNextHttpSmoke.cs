@@ -112,14 +112,14 @@ internal static class QueueCallNextHttpSmoke
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             calledEntryId = json.RootElement.GetProperty("queueEntryId").GetInt32();
             check(calledEntryId == expectedEntryId, "Queue call-next preserves repository priority order");
-            check(json.RootElement.GetProperty("status").GetInt32() == (int)QueueStatus.InConsultation, "Queue call-next status is InConsultation");
+            check(json.RootElement.GetProperty("status").GetInt32() == (int)QueueStatus.Calling, "Queue call-next status is Calling without starting Visit");
             check(json.RootElement.GetProperty("dentistId").GetInt32() > 0, "Queue call-next assigned dentistId");
             check(json.RootElement.GetProperty("dentistId").GetInt32() == dentist.UserId, "Queue call-next assigns actual JWT dentist");
         }
         check(await db.QueueStatusHistories.AnyAsync(h => h.QueueEntryId == calledEntryId &&
-            h.ToStatus == QueueStatus.InConsultation && h.ChangedByUserId == dentist.UserId), "Queue call-next history records actual JWT dentist");
+            h.ToStatus == QueueStatus.Calling && h.ChangedByUserId == dentist.UserId), "Queue call-next history records actual JWT dentist");
         using (var response = await client.PostAsJsonAsync("/api/queue/call-next", new { }))
-            check(response.StatusCode == HttpStatusCode.Conflict, "Queue call-next active dentist cannot call second Visit409");
+            check(response.StatusCode == HttpStatusCode.Conflict, "Queue call-next pending invitation blocks another call409");
 
         // 5. Kiểm tra lại /api/queue/display thấy ca đang khám có tên được che
         client.DefaultRequestHeaders.Authorization = null;
@@ -142,6 +142,12 @@ internal static class QueueCallNextHttpSmoke
                     !matched.TryGetProperty("notes", out _), "Display excludes patient identity/contact/clinical fields");
             }
         }
+
+        authenticateActor(RoleCodes.Dentist, dentist.UserId);
+        using (var response = await client.PutAsJsonAsync($"/api/queue/{calledEntryId}/status", new { newStatus = 2, dentistId = dentist.UserId }))
+            check(response.StatusCode == HttpStatusCode.OK, "Invited entry requires explicit clinical start200");
+        using (var response = await client.PostAsJsonAsync("/api/queue/call-next", new { }))
+            check(response.StatusCode == HttpStatusCode.Conflict, "Active clinical Visit still blocks a different patient409");
 
         // Real HTTP recall of the same Visit after the existing imaging-return transition.
         db.ChangeTracker.Clear();
