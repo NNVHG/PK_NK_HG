@@ -10,7 +10,7 @@
     <p v-if="!loading && !error && !items.length">Chưa có lịch sử trong phạm vi đã chọn.</p>
     <ol v-if="!loading && !error" class="timeline">
       <li v-for="item in items" :key="`${item.eventType}-${item.id}`">
-        <strong>{{ item.toothNumber === null ? 'Toàn hàm / tổng quát' : `Răng ${item.toothNumber}` }} · {{ item.surface || 'Toàn răng' }}</strong>
+        <strong>{{ item.toothNumber === null ? 'Toàn hàm / tổng quát' : `Răng ${item.toothNumber}` }} · {{ formatSurfaceCodes(item.surface) }}</strong>
         <p>{{ new Date(item.createdAt).toLocaleString('vi-VN') }} · Lần khám #{{ item.visitId }}</p>
         <p>Ngày khám: {{ new Date(item.visitDate).toLocaleString('vi-VN') }} · Nha sĩ: {{ item.dentistName || 'Chưa được phân công' }}</p>
         <p v-if="item.conditionCode">Tình trạng: {{ conditionLabel(item.conditionCode) }}</p>
@@ -28,6 +28,7 @@ import { ref, watch, onUnmounted } from 'vue';
 import axios from 'axios';
 import { toothHistoryApi, type ToothHistoryItem } from '@/services/toothHistory';
 import { FDI_CONDITIONS } from '@/services/fdi';
+import { formatSurfaceCodes } from '@/types/fdi';
 const props = defineProps<{ patientId: number }>();
 const dialog = ref<HTMLDialogElement | null>(null);
 const tooth = ref<number | null>(null), allJaw = ref(false), visible = ref(false);
