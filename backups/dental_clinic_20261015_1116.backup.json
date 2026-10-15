@@ -1,0 +1,9 @@
+{
+  "database": "dental_clinic",
+  "host": "localhost",
+  "port": 5432,
+  "backupPath": "E:\\Projects\\PK_NK_HG\\backups\\dental_clinic_20261015_1116.sql",
+  "sha256": "6b9039952f1cbd8e5d4a45b012a35263ef8f54a7042ed711e41d369565404e9b",
+  "createdAtUtc": "2026-10-15T04:16:02.3645294+00:00",
+  "databaseFingerprint": "fbf660fb2850783dcd72da17c596676a92663876c701b90dedde44cd3dd5b460"
+}
