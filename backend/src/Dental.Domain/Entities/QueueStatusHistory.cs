@@ -11,10 +11,10 @@ public sealed class QueueStatusHistory
     public int QueueEntryId { get; set; }
     public QueueStatus? FromStatus { get; set; }
     public QueueStatus ToStatus { get; set; }
-    public int ChangedByUserId { get; set; }
+    public int? ChangedByUserId { get; set; }
     public DateTime ChangedAt { get; set; } = DateTime.UtcNow;
     public string? Reason { get; set; }
 
     public QueueEntry QueueEntry { get; set; } = null!;
-    public User ChangedByUser { get; set; } = null!;
+    public User? ChangedByUser { get; set; }
 }

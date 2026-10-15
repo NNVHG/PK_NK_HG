@@ -43,11 +43,23 @@ public sealed class QueueService
     }
 
     public async Task<Result<QueueEntryResponse>> CheckInAsync(
-        int actorUserId,
-        CheckInRequest request,
-        string? ipAddress,
-        CancellationToken ct = default)
+        int actorUserId, CheckInRequest request, string? ipAddress, CancellationToken ct = default)
     {
+        if (actorUserId <= 0) return Result<QueueEntryResponse>.Failure(Error.Validation);
+        try
+        {
+            return await _unitOfWork.ExecuteSerializableTransactionAsync(
+                transactionCt => CheckInCoreAsync(actorUserId, request, ipAddress, transactionCt), ct);
+        }
+        catch (ConcurrentOperationException) { return Result<QueueEntryResponse>.Failure(Error.QueueConcurrent); }
+    }
+
+    private async Task<Result<QueueEntryResponse>> CheckInCoreAsync(
+        int actorUserId, CheckInRequest request, string? ipAddress, CancellationToken ct)
+    {
+        // DL-260 closes the current reception day at 23:30; avoid immediately expiring a new ticket.
+        if (TimeOnly.FromDateTime(_vietnamClock.Now) >= QueueExpiryRules.Cutoff)
+            return Result<QueueEntryResponse>.Failure(Error.Validation.Code, "Đã qua mốc đóng lượt chưa khám 23:30. Vui lòng tiếp đón vào ngày mới.");
         var patient = await _patientRepository.GetByIdAsync(request.PatientId, ct);
         if (patient is null)
             return Result<QueueEntryResponse>.Failure(Error.NotFound);
@@ -56,45 +68,24 @@ public sealed class QueueService
 
         var today = _vietnamClock.Today;
 
-        // Xử lý tồn đọng qua ngày và kiểm tra mục mở (DL-045, DL-051)
+        // Validate all preconditions before staging any cancellation or appointment change.
         var openQueueEntries = await _queueRepository.GetOpenQueueEntriesForPatientAsync(request.PatientId, ct);
-        foreach (var openEntry in openQueueEntries)
-        {
-            if (openEntry.QueueDate < today)
-            {
-                openEntry.Status = QueueStatus.Cancelled;
-                openEntry.UpdatedAt = DateTime.UtcNow;
-                if (openEntry.Visit is { Status: VisitStatuses.Created or VisitStatuses.InProgress } v)
-                {
-                    v.Status = VisitStatuses.Cancelled;
-                    v.EndedAt = DateTime.UtcNow;
-                    v.UpdatedAt = DateTime.UtcNow;
-                }
-
-                await _queueRepository.AddStatusHistoryAsync(new QueueStatusHistory
-                {
-                    QueueEntryId = openEntry.QueueEntryId,
-                    FromStatus = openEntry.Status,
-                    ToStatus = QueueStatus.Cancelled,
-                    ChangedByUserId = actorUserId,
-                    ChangedAt = DateTime.UtcNow,
-                    Reason = "Tự động hủy qua ngày (DL-051)"
-                }, ct);
-            }
-            else
-            {
-                return Result<QueueEntryResponse>.Failure(Error.QueueEntryAlreadyOpen);
-            }
-        }
-
-        if (await _visitRepository.HasOpenVisitAsync(request.PatientId, ct))
-            return Result<QueueEntryResponse>.Failure(Error.VisitAlreadyOpen);
+        var cutoff = QueueExpiryRules.LastExpiredDate(_vietnamClock.Now);
+        var expired = openQueueEntries.Where(e => QueueExpiryRules.IsExpired(e, cutoff)).ToArray();
+        if (openQueueEntries.Any(e => !QueueExpiryRules.IsExpired(e, cutoff)))
+            return Result<QueueEntryResponse>.Failure(Error.QueueEntryAlreadyOpen);
+        var expiringVisitIds = expired.Select(e => e.Visit!.VisitId).ToArray();
+        var hasOtherOpenVisit = expired.Length == 0
+            ? await _visitRepository.HasOpenVisitAsync(request.PatientId, ct)
+            : await _visitRepository.HasOtherOpenVisitAsync(request.PatientId, expiringVisitIds, ct);
+        if (hasOtherOpenVisit) return Result<QueueEntryResponse>.Failure(Error.VisitAlreadyOpen);
 
         // Xử lý lịch hẹn và tính độ ưu tiên (DL-046 & DL-054)
         var isPriority = false;
+        Appointment? appointment = null;
         if (request.AppointmentId.HasValue)
         {
-            var appointment = await _appointmentRepository.GetByIdAsync(request.AppointmentId.Value, ct);
+            appointment = await _appointmentRepository.GetByIdAsync(request.AppointmentId.Value, ct);
             if (appointment is null || appointment.PatientId != request.PatientId)
                 return Result<QueueEntryResponse>.Failure(Error.AppointmentNotFound);
 
@@ -109,8 +100,6 @@ public sealed class QueueService
             isPriority = nowVietnam >= scheduledDateTime.AddMinutes(-30) &&
                          nowVietnam <= scheduledDateTime.AddMinutes(15);
 
-            appointment.Status = AppointmentStatuses.CheckedIn;
-            appointment.UpdatedAt = DateTime.UtcNow;
         }
 
         if (request.DentistId.HasValue)
@@ -120,10 +109,24 @@ public sealed class QueueService
                 return Result<QueueEntryResponse>.Failure(Error.Validation.Code, "Nha sĩ được chọn không hợp lệ hoặc không hoạt động.");
         }
 
-        return await ExecuteCheckInTransactionAsync(actorUserId, request, today, isPriority, ipAddress, ct);
+        foreach (var entry in expired)
+        {
+            var history = QueueExpiryRules.Cancel(entry, actorUserId, _vietnamClock.UtcNow);
+            await _queueRepository.AddStatusHistoryAsync(history, ct);
+            await _unitOfWork.SaveChangesAsync(ct);
+            await _auditLogger.LogRequiredAsync(AuditActions.QueueStatusChanged, "QueueEntry", entry.QueueEntryId, actorUserId,
+                JsonSerializer.Serialize(new { action = "ExpireUnstarted", source = "CheckIn", fromStatus = (int?)history.FromStatus,
+                    toStatus = (int)history.ToStatus, visitId = entry.VisitId }), ipAddress, ct);
+        }
+        if (appointment is not null)
+        {
+            appointment.Status = AppointmentStatuses.CheckedIn;
+            appointment.UpdatedAt = _vietnamClock.UtcNow;
+        }
+        return await CreateCheckInAsync(actorUserId, request, today, isPriority, ipAddress, ct);
     }
 
-    private async Task<Result<QueueEntryResponse>> ExecuteCheckInTransactionAsync(
+    private async Task<Result<QueueEntryResponse>> CreateCheckInAsync(
         int actorUserId,
         CheckInRequest request,
         DateOnly today,
@@ -131,90 +134,61 @@ public sealed class QueueService
         string? ipAddress,
         CancellationToken ct)
     {
-        return await _unitOfWork.ExecuteInTransactionAsync(async transactionCt =>
+        var visit = new Visit
         {
-            var visit = new Visit
+            PatientId = request.PatientId,
+            Status = VisitStatuses.Created,
+            DentistId = null,
+            CreatedByUserId = actorUserId,
+            CreatedAt = _vietnamClock.UtcNow
+        };
+
+        await _visitRepository.AddAsync(visit, ct);
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        var nextNumber = await _queueRepository.GetNextQueueNumberAsync(today, ct);
+        var entry = new QueueEntry
+        {
+            PatientId = request.PatientId, AppointmentId = request.AppointmentId, DentistId = request.DentistId,
+            VisitId = visit.VisitId, QueueDate = today, QueueNumber = nextNumber, IsPriority = isPriority,
+            CheckInTime = _vietnamClock.UtcNow, Status = QueueStatus.Waiting, Notes = request.Notes?.Trim(), CreatedAt = _vietnamClock.UtcNow
+        };
+        await _queueRepository.AddAsync(entry, ct);
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        var history = new QueueStatusHistory
+        {
+            QueueEntryId = entry.QueueEntryId,
+            FromStatus = null,
+            ToStatus = QueueStatus.Waiting,
+            ChangedByUserId = actorUserId,
+            ChangedAt = _vietnamClock.UtcNow,
+            Reason = isPriority ? "Tiếp đón check-in (Ưu tiên đúng giờ)" : "Tiếp đón check-in"
+        };
+
+        await _queueRepository.AddStatusHistoryAsync(history, ct);
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        await _auditLogger.LogRequiredAsync(
+            action: AuditActions.QueueCheckedIn,
+            entityType: "QueueEntry",
+            entityId: entry.QueueEntryId,
+            userId: actorUserId,
+            detail: JsonSerializer.Serialize(new
             {
-                PatientId = request.PatientId,
-                Status = VisitStatuses.Created,
-                DentistId = null,
-                CreatedByUserId = actorUserId,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            await _visitRepository.AddAsync(visit, transactionCt);
-            await _unitOfWork.SaveChangesAsync(transactionCt);
-
-            QueueEntry entry;
-            const int maxRetries = 3;
-            var attempt = 0;
-
-            while (true)
-            {
-                attempt++;
-                var nextNumber = await _queueRepository.GetNextQueueNumberAsync(today, transactionCt);
-
-                entry = new QueueEntry
+                changedFields = new[]
                 {
-                    PatientId = request.PatientId,
-                    AppointmentId = request.AppointmentId,
-                    DentistId = request.DentistId,
-                    VisitId = visit.VisitId,
-                    QueueDate = today,
-                    QueueNumber = nextNumber,
-                    IsPriority = isPriority,
-                    CheckInTime = DateTime.UtcNow,
-                    Status = QueueStatus.Waiting,
-                    Notes = request.Notes?.Trim(),
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                await _queueRepository.AddAsync(entry, transactionCt);
-
-                try
-                {
-                    await _unitOfWork.SaveChangesAsync(transactionCt);
-                    break;
+                    nameof(QueueEntry.QueueNumber),
+                    nameof(QueueEntry.IsPriority),
+                    nameof(QueueEntry.Status),
+                    nameof(QueueEntry.VisitId)
                 }
-                catch (Exception) when (attempt < maxRetries)
-                {
-                }
-            }
+            }),
+            ipAddress: ipAddress,
+            ct: ct);
 
-            var history = new QueueStatusHistory
-            {
-                QueueEntryId = entry.QueueEntryId,
-                FromStatus = null,
-                ToStatus = QueueStatus.Waiting,
-                ChangedByUserId = actorUserId,
-                ChangedAt = DateTime.UtcNow,
-                Reason = isPriority ? "Tiếp đón check-in (Ưu tiên đúng giờ)" : "Tiếp đón check-in"
-            };
-
-            await _queueRepository.AddStatusHistoryAsync(history, transactionCt);
-            await _unitOfWork.SaveChangesAsync(transactionCt);
-
-            await _auditLogger.LogAsync(
-                action: AuditActions.QueueCheckedIn,
-                entityType: "QueueEntry",
-                entityId: entry.QueueEntryId,
-                userId: actorUserId,
-                detail: JsonSerializer.Serialize(new
-                {
-                    changedFields = new[]
-                    {
-                        nameof(QueueEntry.QueueNumber),
-                        nameof(QueueEntry.IsPriority),
-                        nameof(QueueEntry.Status),
-                        nameof(QueueEntry.VisitId)
-                    }
-                }),
-                ipAddress: ipAddress,
-                ct: transactionCt);
-
-            var createdEntry = await _queueRepository.GetByIdAsync(entry.QueueEntryId, transactionCt);
-            return Result<QueueEntryResponse>.Success(ToResponse(createdEntry ?? entry));
-        }, ct);
+        var createdEntry = await _queueRepository.GetByIdAsync(entry.QueueEntryId, ct);
+        return Result<QueueEntryResponse>.Success(ToResponse(createdEntry ?? entry));
     }
 
     public async Task<Result<QueueEntryResponse>> CancelWaitingAsync(
@@ -676,7 +650,7 @@ public sealed class QueueService
             (int)h.ToStatus,
             QueueStatusDescriptions.GetDescription(h.ToStatus),
             h.ChangedByUserId,
-            h.ChangedByUser?.FullName ?? string.Empty,
+            h.ChangedByUser?.FullName ?? (h.ChangedByUserId is null ? "Hệ thống" : string.Empty),
             h.ChangedAt,
             h.Reason
         );

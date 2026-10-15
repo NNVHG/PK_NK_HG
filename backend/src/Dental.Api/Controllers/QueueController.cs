@@ -161,6 +161,18 @@ public sealed class QueueController : ControllerBase
         return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
     }
 
+    [HttpPost("cleanup-expired")]
+    [Authorize(Policy = AppPolicies.QueueCheckIn)]
+    public async Task<IActionResult> CleanupExpired([FromBody] QueueCleanupRequest request,
+        [FromServices] QueueCleanupRequestValidator validator, [FromServices] QueueCleanupService cleanup, CancellationToken ct)
+    {
+        var validation = await validator.ValidateAsync(request, ct);
+        if (!validation.IsValid) return ToValidationProblem(validation);
+        if (_currentUser.UserId is not int actorId) return Unauthorized();
+        var result = await cleanup.RunManuallyAsync(actorId, _currentUser.RoleCode, request.Confirmed, ct);
+        return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
+    }
+
     [HttpPost("call-next")]
     [Authorize(Policy = AppPolicies.QueueCall)]
     [ProducesResponseType(typeof(QueueEntryResponse), StatusCodes.Status200OK)]

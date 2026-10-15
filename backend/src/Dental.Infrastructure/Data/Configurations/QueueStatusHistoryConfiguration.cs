@@ -18,6 +18,9 @@ public sealed class QueueStatusHistoryConfiguration : IEntityTypeConfiguration<Q
             .HasConversion<int>()
             .IsRequired();
 
+        // Null actor identifies the automatic expiry worker; never impersonate a staff member.
+        builder.Property(h => h.ChangedByUserId).IsRequired(false);
+
         builder.Property(h => h.ChangedAt)
             .HasColumnType("timestamptz")
             .IsRequired();

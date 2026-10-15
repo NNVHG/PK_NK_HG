@@ -12,6 +12,8 @@ public sealed class VietnamClock
         _timeZone = ResolveVietnamTimeZone();
     }
 
+    public DateTime UtcNow => _timeProvider.GetUtcNow().UtcDateTime;
+
     public DateOnly Today
         => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(_timeProvider.GetUtcNow(), _timeZone).DateTime);
 

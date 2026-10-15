@@ -48,7 +48,12 @@ export interface CallNextPayload {
 
 export interface CallingDentist { dentistId: number; dentistName: string; }
 
+export interface QueueCleanupResponse { cancelledCount: number; lastExpiredDate: string; }
+
 export const queueService = {
+  async cleanupExpired(): Promise<QueueCleanupResponse> {
+    return (await apiClient.post<QueueCleanupResponse>('/queue/cleanup-expired', { confirmed: true })).data;
+  },
   async getCallingDentists(): Promise<CallingDentist[]> {
     return (await apiClient.get<CallingDentist[]>('/queue/call-dentists')).data;
   },

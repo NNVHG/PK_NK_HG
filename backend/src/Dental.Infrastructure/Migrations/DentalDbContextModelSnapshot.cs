@@ -726,7 +726,7 @@ namespace Dental.Infrastructure.Migrations
                     b.Property<DateTime>("ChangedAt")
                         .HasColumnType("timestamptz");
 
-                    b.Property<int>("ChangedByUserId")
+                    b.Property<int?>("ChangedByUserId")
                         .HasColumnType("integer");
 
                     b.Property<int?>("FromStatus")
@@ -1347,8 +1347,7 @@ namespace Dental.Infrastructure.Migrations
                     b.HasOne("Dental.Domain.Entities.User", "ChangedByUser")
                         .WithMany()
                         .HasForeignKey("ChangedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Dental.Domain.Entities.QueueEntry", "QueueEntry")
                         .WithMany("StatusHistories")

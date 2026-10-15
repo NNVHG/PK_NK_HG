@@ -115,6 +115,9 @@ builder.Services.AddScoped<VitalSignService>();
 builder.Services.AddScoped<ServiceCatalogService>();
 builder.Services.AddScoped<AppointmentService>();
 builder.Services.AddScoped<QueueService>();
+builder.Services.AddScoped<QueueCleanupService>();
+builder.Services.AddScoped<QueueCleanupRequestValidator>();
+builder.Services.AddHostedService<QueueCleanupWorker>();
 
 builder.Services.AddScoped<CreatePatientRequestValidator>();
 builder.Services.AddScoped<PatientDuplicateCheckRequestValidator>();
