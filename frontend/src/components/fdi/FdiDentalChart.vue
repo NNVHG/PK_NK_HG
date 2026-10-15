@@ -99,6 +99,8 @@
                 :tooth-number="num"
                 :selected-surfaces="getSurfacesForTooth(num)"
                 :is-whole-tooth-selected="isWholeToothSelected(num)"
+                :condition-by-surface="conditionsForTooth(num)"
+                :missing-tooth="isMissingTooth(num)"
                 :readonly="readonly"
                 @surface-click="(s) => onSurfaceClick(num, s)"
                 @tooth-click="() => onToothClick(num)"
@@ -112,6 +114,8 @@
                 :tooth-number="num"
                 :selected-surfaces="getSurfacesForTooth(num)"
                 :is-whole-tooth-selected="isWholeToothSelected(num)"
+                :condition-by-surface="conditionsForTooth(num)"
+                :missing-tooth="isMissingTooth(num)"
                 :readonly="readonly"
                 @surface-click="(s) => onSurfaceClick(num, s)"
                 @tooth-click="() => onToothClick(num)"
@@ -132,6 +136,8 @@
                 :tooth-number="num"
                 :selected-surfaces="getSurfacesForTooth(num)"
                 :is-whole-tooth-selected="isWholeToothSelected(num)"
+                :condition-by-surface="conditionsForTooth(num)"
+                :missing-tooth="isMissingTooth(num)"
                 :readonly="readonly"
                 @surface-click="(s) => onSurfaceClick(num, s)"
                 @tooth-click="() => onToothClick(num)"
@@ -145,6 +151,8 @@
                 :tooth-number="num"
                 :selected-surfaces="getSurfacesForTooth(num)"
                 :is-whole-tooth-selected="isWholeToothSelected(num)"
+                :condition-by-surface="conditionsForTooth(num)"
+                :missing-tooth="isMissingTooth(num)"
                 :readonly="readonly"
                 @surface-click="(s) => onSurfaceClick(num, s)"
                 @tooth-click="() => onToothClick(num)"
@@ -175,6 +183,8 @@
                 :tooth-number="num"
                 :selected-surfaces="getSurfacesForTooth(num)"
                 :is-whole-tooth-selected="isWholeToothSelected(num)"
+                :condition-by-surface="conditionsForTooth(num)"
+                :missing-tooth="isMissingTooth(num)"
                 :readonly="readonly"
                 @surface-click="(s) => onSurfaceClick(num, s)"
                 @tooth-click="() => onToothClick(num)"
@@ -188,6 +198,8 @@
                 :tooth-number="num"
                 :selected-surfaces="getSurfacesForTooth(num)"
                 :is-whole-tooth-selected="isWholeToothSelected(num)"
+                :condition-by-surface="conditionsForTooth(num)"
+                :missing-tooth="isMissingTooth(num)"
                 :readonly="readonly"
                 @surface-click="(s) => onSurfaceClick(num, s)"
                 @tooth-click="() => onToothClick(num)"
@@ -208,6 +220,8 @@
                 :tooth-number="num"
                 :selected-surfaces="getSurfacesForTooth(num)"
                 :is-whole-tooth-selected="isWholeToothSelected(num)"
+                :condition-by-surface="conditionsForTooth(num)"
+                :missing-tooth="isMissingTooth(num)"
                 :readonly="readonly"
                 @surface-click="(s) => onSurfaceClick(num, s)"
                 @tooth-click="() => onToothClick(num)"
@@ -221,6 +235,8 @@
                 :tooth-number="num"
                 :selected-surfaces="getSurfacesForTooth(num)"
                 :is-whole-tooth-selected="isWholeToothSelected(num)"
+                :condition-by-surface="conditionsForTooth(num)"
+                :missing-tooth="isMissingTooth(num)"
                 :readonly="readonly"
                 @surface-click="(s) => onSurfaceClick(num, s)"
                 @tooth-click="() => onToothClick(num)"
@@ -244,8 +260,11 @@
         <span class="legend-badge"><strong>D</strong> Mặt xa (Distal)</span>
         <span class="legend-badge"><strong>O</strong> Mặt nhai (Occlusal)</span>
         <span class="legend-divider">|</span>
-        <span class="legend-color normal"><span class="swatch white"></span> Chưa chọn</span>
+        <span class="legend-color normal"><span class="swatch white"></span> Khỏe mạnh / chưa ghi</span>
         <span class="legend-color selected"><span class="swatch blue"></span> Đang chọn</span>
+        <span v-for="item in TOOTH_CONDITION_LEGEND" :key="item.color" class="legend-color">
+          <span class="swatch" :class="`status-${item.color}`"></span>{{ item.label }}
+        </span>
       </div>
 
       <!-- Tóm tắt đang chọn -->
@@ -264,6 +283,7 @@ import {
   type DentitionType,
   type ToothSurface,
   type SelectedToothSurface,
+  type LatestToothCondition,
   ALL_SURFACES,
   SURFACE_METADATA,
   ADULT_UPPER_RIGHT,
@@ -273,7 +293,10 @@ import {
   CHILD_UPPER_RIGHT,
   CHILD_UPPER_LEFT,
   CHILD_LOWER_RIGHT,
-  CHILD_LOWER_LEFT
+  CHILD_LOWER_LEFT,
+  latestConditionBySurface,
+  toothConditionColor,
+  TOOTH_CONDITION_LEGEND
 } from '@/types/fdi';
 import FdiTooth from './FdiTooth.vue';
 
@@ -284,6 +307,7 @@ interface Props {
   multiple?: boolean;
   selectedTooth?: number | null;
   selectedSurface?: ToothSurface | null;
+  latestConditions?: LatestToothCondition[];
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -292,7 +316,8 @@ const props = withDefaults(defineProps<Props>(), {
   readonly: false,
   multiple: true,
   selectedTooth: null,
-  selectedSurface: null
+  selectedSurface: null,
+  latestConditions: () => []
 });
 
 const emit = defineEmits<{
@@ -371,6 +396,15 @@ function isWholeToothSelected(toothNumber: number): boolean {
   if (hasWholeItem) return true;
   const surfaces = getSurfacesForTooth(toothNumber);
   return surfaces.length >= ALL_SURFACES.length;
+}
+
+const latestBySurface = computed(() => latestConditionBySurface(props.latestConditions));
+function conditionsForTooth(toothNumber: number): Partial<Record<ToothSurface, string>> {
+  return latestBySurface.value.get(toothNumber) ?? {};
+}
+function isMissingTooth(toothNumber: number): boolean {
+  const conditions = conditionsForTooth(toothNumber);
+  return ALL_SURFACES.every(surface => toothConditionColor(conditions[surface]) === 'missing');
 }
 
 const selectedCount = computed(() => {
@@ -791,6 +825,13 @@ const selectionSummaryText = computed(() => {
   background: #0284c7;
   border-color: #0369a1;
 }
+
+.swatch.status-healthy { background: #ffffff; border-color: #e0e0e0; }
+.swatch.status-caries { background: #f44336; border-color: #d32f2f; }
+.swatch.status-restored { background: #2196f3; border-color: #1976d2; }
+.swatch.status-missing { background: #9e9e9e; border-color: #616161; }
+.swatch.status-treatment { background: #ff9800; border-color: #ef6c00; }
+.swatch.status-prosthetic { background: #9c27b0; border-color: #6a1b9a; }
 
 .selection-summary {
   display: flex;

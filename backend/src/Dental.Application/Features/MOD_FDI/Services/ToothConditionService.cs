@@ -30,6 +30,19 @@ public sealed class ToothConditionService(IVisitRepository visits, IPatientRepos
         return Result<IReadOnlyList<ToothConditionResponse>>.Success(rows.Select(Map).ToArray());
     }
 
+    public async Task<Result<IReadOnlyList<LatestToothConditionResponse>>> GetLatestForPatientAsync(int patientId,
+        int userId, string? role, CancellationToken ct = default)
+    {
+        if (patientId <= 0) return Result<IReadOnlyList<LatestToothConditionResponse>>.Failure(Error.Validation);
+        if (role != RoleCodes.Patient && !RoleCodes.StaffRoles.Contains(role))
+            return Result<IReadOnlyList<LatestToothConditionResponse>>.Failure(Error.Forbidden);
+        var patient = await patients.GetByIdAsync(patientId, ct);
+        if (patient is null || role == RoleCodes.Patient && patient.UserId != userId)
+            return Result<IReadOnlyList<LatestToothConditionResponse>>.Failure(Error.NotFound);
+        return Result<IReadOnlyList<LatestToothConditionResponse>>.Success(
+            await conditions.GetLatestForPatientAsync(patientId, ct));
+    }
+
     public async Task<Result<ToothConditionResponse>> AddAsync(int visitId, ToothConditionRequest request,
         int userId, string? role, string? ip, CancellationToken ct = default)
     {

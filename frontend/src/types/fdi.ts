@@ -16,6 +16,58 @@ export interface SurfaceMetadata {
   descriptionVi: string;
 }
 
+export interface LatestToothCondition {
+  id: number;
+  toothNumber: number;
+  surface: string | null;
+  conditionCode: string;
+  createdAt: string;
+}
+
+export type ToothConditionColor = 'healthy' | 'caries' | 'restored' | 'missing' | 'treatment' | 'prosthetic';
+export const TOOTH_CONDITION_LEGEND: Array<{ color: ToothConditionColor; label: string }> = [
+  { color: 'healthy', label: 'Khỏe mạnh' },
+  { color: 'caries', label: 'Sâu/bệnh lý' },
+  { color: 'restored', label: 'Đã trám' },
+  { color: 'missing', label: 'Mất răng' },
+  { color: 'treatment', label: 'Đang điều trị' },
+  { color: 'prosthetic', label: 'Mão/cầu răng' }
+];
+
+const CONDITION_COLORS: Record<string, ToothConditionColor> = {
+  NORMAL: 'healthy', CARIES: 'caries', CALCULUS: 'caries', GINGIVITIS: 'caries', PERIODONTITIS: 'caries',
+  RESTORED: 'restored', MISSING: 'missing', PULPITIS: 'treatment', IMPACTED: 'treatment',
+  CROWN: 'prosthetic', IMPLANT: 'prosthetic'
+};
+
+export function toothConditionColor(conditionCode: string | undefined): ToothConditionColor | undefined {
+  return conditionCode ? CONDITION_COLORS[conditionCode] : undefined;
+}
+
+export function latestConditionBySurface(rows: LatestToothCondition[]): Map<number, Partial<Record<ToothSurface, string>>> {
+  const winners = new Map<string, LatestToothCondition>();
+  for (const row of rows) {
+    for (const surface of ALL_SURFACES) {
+      if (row.surface && !row.surface.toUpperCase().includes(SURFACE_METADATA[surface].code)) continue;
+      const key = `${row.toothNumber}:${surface}`;
+      const previous = winners.get(key);
+      const nextTime = Date.parse(row.createdAt);
+      const previousTime = previous ? Date.parse(previous.createdAt) : Number.NEGATIVE_INFINITY;
+      if (!previous || nextTime > previousTime || nextTime === previousTime && row.id > previous.id)
+        winners.set(key, row);
+    }
+  }
+
+  const result = new Map<number, Partial<Record<ToothSurface, string>>>();
+  for (const [key, row] of winners) {
+    const [tooth, surface] = key.split(':');
+    const toothNumber = Number(tooth);
+    if (!result.has(toothNumber)) result.set(toothNumber, {});
+    result.get(toothNumber)![surface as ToothSurface] = row.conditionCode;
+  }
+  return result;
+}
+
 export interface ToothInfo {
   number: number;
   nameVi: string;

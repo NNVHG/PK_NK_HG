@@ -13,6 +13,17 @@ namespace Dental.Api.Controllers;
 [Authorize]
 public sealed class ToothConditionsController(ToothConditionService service, ICurrentUser user) : ControllerBase
 {
+    [HttpGet("~/api/patients/{patientId:int}/teeth/latest-conditions")]
+    [Authorize(Policy = AppPolicies.PatientView)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> GetLatestForPatient(int patientId, CancellationToken ct)
+    {
+        if (user.UserId is not int userId) return Unauthorized();
+        Response.Headers.CacheControl = "no-store";
+        var result = await service.GetLatestForPatientAsync(patientId, userId, user.RoleCode, ct);
+        return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
+    }
+
     [HttpGet]
     [Authorize(Policy = AppPolicies.PatientView)]
     public async Task<IActionResult> Get(int visitId, CancellationToken ct)
