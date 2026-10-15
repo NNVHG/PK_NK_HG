@@ -7,6 +7,8 @@ export interface InvoiceItem {
 export interface InvoiceDraft {
   id: number; visitId: number; invoiceCode: string; status: number; totalAmount: number;
   paidAmount: number; remainingAmount: number; createdAt: string; items: InvoiceItem[];
+  discountAmount: number; finalAmount: number; discountType: string | null; discountValue: number | null;
+  discountPresetId: number | null; discountReason: string | null;
 }
 export interface VisitUnlockHistory { id: number; actorUserId: number; cancelledInvoiceId: number | null; reason: string; createdAt: string; }
 export const invoiceDraftApi = {

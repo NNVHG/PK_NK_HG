@@ -5,6 +5,7 @@ export interface ReceiptPrintDto {
   cashierName: string; paidAt: string; paymentMethod: string; source: string | null;
   amount: number; amountTendered: number | null; changeAmount: number | null; note: string | null;
   finalAmount: number; paidAmount: number; remainingAmount: number; printCount: number; printNumber: number; printedAt: string | null;
+  subTotalAmount: number; discountAmount: number;
   items: { name: string; quantity: number; unitPrice: number; totalAmount: number }[];
 }
 export const paymentReceiptsApi = {

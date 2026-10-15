@@ -26,9 +26,10 @@ public sealed class ReceiptRepository(DentalDbContext db) : IReceiptRepository
         var invoice = p.Invoice; var patient = invoice.Visit.Patient;
         return new(invoice.Id, invoice.InvoiceCode, p.Id, "Nha khoa H&G", address, phone, patient.FullName,
             patient.PatientCode, patient.DateOfBirth.Year, p.Cashier.FullName, p.PaidAt, p.PaymentMethod, p.Source,
-            p.Amount, p.AmountTendered, p.ChangeAmount, p.Note, invoice.TotalAmount, invoice.PaidAmount,
-            invoice.TotalAmount - invoice.PaidAmount, p.PrintCount, number, printedAt,
-            invoice.Items.OrderBy(i => i.Id).Select(i => new ReceiptLineDto(i.Name, i.Quantity, i.UnitPrice, i.TotalAmount)).ToArray());
+            p.Amount, p.AmountTendered, p.ChangeAmount, p.Note, invoice.FinalAmount, invoice.PaidAmount,
+            invoice.FinalAmount - invoice.PaidAmount, p.PrintCount, number, printedAt,
+            invoice.Items.OrderBy(i => i.Id).Select(i => new ReceiptLineDto(i.Name, i.Quantity, i.UnitPrice, i.TotalAmount)).ToArray())
+            { DiscountAmount = invoice.DiscountAmount, SubTotalAmount = invoice.TotalAmount };
     }
     public async Task<Result<ReceiptPrintDto>> GetAsync(ReceiptRequest request, CancellationToken ct = default)
     {

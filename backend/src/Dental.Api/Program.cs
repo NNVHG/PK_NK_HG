@@ -33,6 +33,10 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddScoped<IInvoiceDiscountRepository, InvoiceDiscountRepository>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.InvoiceDiscountService>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.DiscountPresetRequestValidator>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.ApplyInvoiceDiscountRequestValidator>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.InvoiceDraftService>();
 builder.Services.AddScoped<IInvoiceDraftGenerator>(services => services.GetRequiredService<Dental.Application.Features.MOD_BIL.Services.InvoiceDraftService>());
 builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.InvoiceVisitRequestValidator>();

@@ -22,6 +22,19 @@ public sealed class InvoiceDraftServiceTests
     private static Visit Completed() => new() { VisitId = 8, PatientId = 6, DentistId = 5,
         Status = VisitStatuses.Completed, IsLocked = true };
 
+    [Fact]
+    public async Task Get_DiscountedInvoice_ExposesGrossDiscountFinalAndOutstandingSeparately()
+    {
+        visits.GetByIdAsync(8, Arg.Any<CancellationToken>()).Returns(Completed());
+        invoices.GetForVisitAsync(8, Arg.Any<CancellationToken>()).Returns(new Invoice {
+            Id = 4, VisitId = 8, TotalAmount = 1200000, DiscountAmount = 250000, PaidAmount = 100000,
+            DiscountType = "Percentage", DiscountValue = 25, DiscountPresetId = 9, DiscountReason = "Synthetic reason" });
+        var response = (await Service().GetAsync(8, 1, RoleCodes.Receptionist)).Value!;
+        Assert.Equal(1200000, response.TotalAmount); Assert.Equal(250000, response.DiscountAmount);
+        Assert.Equal(950000, response.FinalAmount); Assert.Equal(850000, response.RemainingAmount);
+        Assert.Equal(9, response.DiscountPresetId);
+    }
+
     [Theory]
     [InlineData(RoleCodes.Patient)]
     [InlineData(RoleCodes.Receptionist)]

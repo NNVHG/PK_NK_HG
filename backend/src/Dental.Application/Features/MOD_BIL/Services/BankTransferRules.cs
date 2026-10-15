@@ -24,7 +24,7 @@ public static class BankTransferRules
         if (received <= 0 || received > InvoiceServiceSnapshot.MaximumAmount || decimal.Truncate(received) != received)
             return Result.Failure(Error.Validation);
         // Q-167: bank amount received is separate; only the outstanding debt is credited.
-        return CashPaymentRules.Apply(invoice, Math.Min(received, invoice.TotalAmount - invoice.PaidAmount));
+        return CashPaymentRules.Apply(invoice, Math.Min(received, invoice.FinalAmount - invoice.PaidAmount));
     }
     public static string? ExcessNote(decimal excess) => excess > 0
         ? $"Chuyển dư {excess.ToString("0", CultureInfo.InvariantCulture)} VND, cần hoàn lại cho khách" : null;

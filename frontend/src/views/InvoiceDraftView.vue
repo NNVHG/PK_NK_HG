@@ -2,7 +2,7 @@
   <main class="invoice-page">
     <RouterLink to="/">← Trang chủ</RouterLink>
     <h1>Hóa đơn nháp · Lần khám #{{ visitId }}</h1>
-    <button :disabled="busy" @click="load">Tải lại hồ sơ</button>
+    <button :disabled="busy || discountBusy" @click="load">Tải lại hồ sơ</button>
     <p v-if="busy" role="status">Đang xử lý…</p>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
     <p v-if="success" role="status">{{ success }}</p>
@@ -13,9 +13,9 @@
         <h2>Mở lại khám để điều chỉnh</h2>
         <p>Hóa đơn chưa thu tiền hiện tại sẽ được hủy và giữ trong lịch sử. Sau điều chỉnh, hệ thống sinh hóa đơn với mã mới.</p>
         <label>Lý do mở khóa (bắt buộc, 10–500 ký tự)
-          <textarea v-model="unlockReason" minlength="10" maxlength="500" :disabled="busy" />
+          <textarea v-model="unlockReason" minlength="10" maxlength="500" :disabled="busy || discountBusy" />
         </label>
-        <button :disabled="busy || unlockReason.trim().length < 10" @click="unlock">Xác nhận mở khóa và hủy hóa đơn chưa thu</button>
+        <button :disabled="busy || discountBusy || unlockReason.trim().length < 10" @click="unlock">Xác nhận mở khóa và hủy hóa đơn chưa thu</button>
       </section>
       <template v-if="canComplete">
         <RouterLink :to="`/clinical/visits/${visitId}/services`">Kiểm tra dịch vụ đã chỉ định</RouterLink>
@@ -37,12 +37,16 @@
           <p>{{ item.quantity }} × {{ money(item.unitPrice) }} = {{ money(item.totalAmount) }}</p>
         </li>
       </ul>
-      <strong>Tổng tiền: {{ money(invoice.totalAmount) }}</strong>
+      <p>Tổng giá niêm yết: {{ money(invoice.totalAmount) }}</p>
+      <p>Giảm giá: {{ money(invoice.discountAmount) }}<span v-if="invoice.discountReason"> · {{ invoice.discountReason }}</span></p>
+      <strong>Phải thu sau giảm: {{ money(invoice.finalAmount) }}</strong>
       <p>Đã thu: {{ money(invoice.paidAmount) }} · Còn lại: {{ money(invoice.remainingAmount) }}</p>
       <p>Dòng dịch vụ giữ nguyên giá đã ghi nhận khi chỉ định.</p>
-      <InvoiceCashPayment v-if="auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST'"
+      <InvoiceDiscountPanel v-if="auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST'"
+        :invoice="invoice" :role="auth.role" @applied="load" @refresh="load" @busy="discountBusy = $event" />
+      <InvoiceCashPayment v-if="!discountBusy && (auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST')"
         :invoice-id="invoice.id" :remaining-amount="invoice.remainingAmount" :status="invoice.status" @paid="onPaymentReceived" />
-      <InvoiceBankTransfer v-if="(auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST') && [1, 2].includes(invoice.status) && invoice.remainingAmount > 0"
+      <InvoiceBankTransfer v-if="!discountBusy && (auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST') && [1, 2].includes(invoice.status) && invoice.remainingAmount > 0"
         :invoice-id="invoice.id" @paid="onBankReceived" />
     </section>
     <section v-if="auth.role === 'ADMIN' && unlockHistory.length" aria-label="Lịch sử mở khóa">
@@ -66,6 +70,7 @@ import { invoiceDraftApi } from '@/services/invoiceDraft';
 import type { VisitUnlockHistory } from '@/services/invoiceDraft';
 import InvoiceCashPayment from '@/components/InvoiceCashPayment.vue';
 import InvoiceBankTransfer from '@/components/InvoiceBankTransfer.vue';
+import InvoiceDiscountPanel from '@/components/InvoiceDiscountPanel.vue';
 import type { BankTransferResponse } from '@/services/bankTransfers';
 import type { CashPaymentResponse } from '@/services/cashPayments';
 import { useInvoiceDraftStore } from '@/stores/invoiceDraft';
@@ -79,6 +84,7 @@ const { invoice } = storeToRefs(store);
 const visitId = computed(() => Number(route.params.visitId));
 const visit = ref<VisitDetails | null>(null);
 const busy = ref(false);
+const discountBusy = ref(false);
 const error = ref('');
 const success = ref('');
 const confirmed = ref(false);
@@ -129,7 +135,7 @@ async function onBankReceived(payment: BankTransferResponse | null) {
 }
 async function unlock() {
   const reason = unlockReason.value.trim();
-  if (!canUnlock.value || busy.value || reason.length < 10 || reason.length > 500) return;
+  if (!canUnlock.value || busy.value || discountBusy.value || reason.length < 10 || reason.length > 500) return;
   const ticket = version; const oldCode = invoice.value?.invoiceCode;
   busy.value = true; error.value = ''; success.value = '';
   try {

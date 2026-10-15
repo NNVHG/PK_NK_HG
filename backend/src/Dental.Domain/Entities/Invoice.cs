@@ -10,6 +10,12 @@ public sealed class Invoice
     public InvoiceStatus Status { get; set; }
     public decimal TotalAmount { get; set; }
     public decimal PaidAmount { get; set; }
+    public decimal DiscountAmount { get; set; }
+    public string? DiscountType { get; set; }
+    public decimal? DiscountValue { get; set; }
+    public int? DiscountPresetId { get; set; }
+    public string? DiscountReason { get; set; }
+    public decimal FinalAmount => TotalAmount - DiscountAmount;
     public int CreatedByUserId { get; set; }
     public DateTime CreatedAt { get; set; }
     public Visit Visit { get; set; } = null!;
