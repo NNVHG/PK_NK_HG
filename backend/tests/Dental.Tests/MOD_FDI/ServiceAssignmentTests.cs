@@ -27,6 +27,27 @@ public sealed class ServiceAssignmentTests
             .Returns(call => call.ArgAt<Func<CancellationToken, Task<Result<IReadOnlyList<AssignedServiceResponse>>>>>(0)(call.ArgAt<CancellationToken>(1)));
     }
 
+    [Theory]
+    [InlineData("CARIES", "SERVICE_FILL_COMPOSITE")]
+    [InlineData("PULPITIS", "SERVICE_ROOT_CANAL")]
+    [InlineData("CALCULUS", "SERVICE_SCALING")]
+    [InlineData("GINGIVITIS", "SERVICE_SCALING")]
+    [InlineData("PERIODONTITIS", "SERVICE_PERIODONTAL")]
+    [InlineData("IMPACTED", "SERVICE_EXTRACT_SURGICAL")]
+    public void ConditionSuggestion_UsesApprovedStaticServiceCode(string conditionCode, string serviceCode)
+    {
+        Assert.Contains(conditionCode, FdiCodes.Conditions);
+        Assert.True(DentalConditionServiceMappings.TryGet(conditionCode, out var suggestions));
+        Assert.Equal(serviceCode, Assert.Single(suggestions).ServiceCode);
+    }
+
+    [Fact]
+    public void ConditionSuggestion_ValidUnmappedConditionReturnsEmptyList()
+    {
+        Assert.False(DentalConditionServiceMappings.TryGet("NORMAL", out var suggestions));
+        Assert.Empty(suggestions);
+    }
+
     private void Ready(bool active = true)
     {
         visits.GetForUpdateAsync(1, Arg.Any<CancellationToken>()).Returns(new Visit { VisitId = 1, Status = "InProgress", DentistId = 2 });

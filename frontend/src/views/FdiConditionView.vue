@@ -11,13 +11,13 @@
       <p>Trạng thái lần khám: {{ visit.status }}</p>
       <p v-if="!canEdit">Chỉ Admin hoặc nha sĩ phụ trách được ghi tình trạng khi lần khám đang diễn ra và chưa khóa.</p>
       <p>Chọn răng trên sơ đồ để tra cứu lịch sử qua các lần khám.</p>
-      <FdiDentalChart v-model="selection" v-model:dentition-type="dentition" :multiple="false" :readonly="busy" @select="openHistory" />
+      <FdiDentalChart v-model="selection" v-model:dentition-type="dentition" :multiple="false" :readonly="busy" @select="openHistory" @update:model-value="clearSuggestion" />
       <ToothHistoryDrawer ref="history" :patient-id="visit.patientId" />
       <form v-if="canEdit" @submit.prevent="save">
         <p v-if="selection[0]">Răng {{ selection[0].toothNumber }} · {{ selection[0].surface ? SURFACE_METADATA[selection[0].surface].nameVi : 'Toàn răng' }}</p>
         <p v-else>Chọn một răng hoặc mặt răng trên sơ đồ.</p>
         <label>Tình trạng
-          <select v-model="code" :disabled="busy" required>
+          <select v-model="code" :disabled="busy" required @change="clearSuggestion">
             <option v-for="(label, value) in FDI_CONDITIONS" :key="value" :value="value">{{ label }}</option>
           </select>
         </label>
@@ -28,6 +28,16 @@
         <button type="submit" :disabled="busy || !selection.length">{{ editingId ? 'Lưu chỉnh sửa tình trạng' : 'Ghi nhận tình trạng sau điều trị' }}</button>
         <button v-if="editingId" type="button" :disabled="busy" @click="cancelEditing">Hủy chỉnh sửa</button>
       </form>
+      <section v-if="canEdit" aria-labelledby="suggested-service-title">
+        <h2 id="suggested-service-title">Gợi ý dịch vụ theo tình trạng răng</h2>
+        <button type="button" :disabled="busy || !selection.length" @click="loadSuggestion">Tải gợi ý dịch vụ</button>
+        <p v-if="suggestionMessage" role="status">{{ suggestionMessage }}</p>
+        <button v-if="suggestedService" type="button" :disabled="busy || !selection.length" @click="assignSuggestion">
+          Chỉ định {{ suggestedService.label }} cho răng {{ selection[0]?.toothNumber }}
+          <template v-if="selection[0]?.surface"> · {{ SURFACE_METADATA[selection[0].surface].nameVi }}</template>
+        </button>
+        <small>Chỉ định dịch vụ không xác nhận thủ thuật đã thực hiện.</small>
+      </section>
       <h2>Tình trạng đã ghi trong lần khám</h2>
       <p v-if="!rows.length">Chưa ghi nhận tình trạng răng.</p>
       <ul>
@@ -66,6 +76,7 @@ import { visitsService } from '@/services/visits';
 import type { VisitDetails } from '@/services/patients';
 import { SURFACE_METADATA, ALL_SURFACES, type SelectedToothSurface, type DentitionType } from '@/types/fdi';
 import { useAuthStore } from '@/stores/auth';
+import { visitServicesApi, type CatalogOption } from '@/services/visitServices';
 
 const route = useRoute();
 const auth = useAuthStore();
@@ -83,7 +94,10 @@ const busy = ref(false);
 const error = ref('');
 const success = ref('');
 const history = ref<InstanceType<typeof ToothHistoryDrawer> | null>(null);
+const suggestedService = ref<(CatalogOption & { label: string }) | null>(null);
+const suggestionMessage = ref('');
 function openHistory(selected: { toothNumber: number }) { if (!busy.value) void history.value?.open(selected.toothNumber); }
+function clearSuggestion() { suggestedService.value = null; suggestionMessage.value = ''; }
 const canEdit = computed(() => visit.value?.status === 'InProgress' && !visit.value?.isLocked &&
   (auth.role === 'ADMIN' || (auth.role === 'DENTIST' && visit.value.dentistId === auth.user?.userId)));
 
@@ -110,6 +124,37 @@ function cancelEditing() {
   selection.value = [];
   note.value = '';
   code.value = 'CARIES';
+}
+async function loadSuggestion() {
+  if (!canEdit.value || busy.value || !selection.value[0]) return;
+  busy.value = true; error.value = ''; suggestedService.value = null; suggestionMessage.value = '';
+  try {
+    const suggestions = await fdiService.serviceSuggestions(code.value);
+    if (!suggestions.length) { suggestionMessage.value = 'Tình trạng này chưa có dịch vụ gợi ý.'; return; }
+    const candidate = suggestions[0];
+    const service = await visitServicesApi.findActiveByCode(candidate.serviceCode);
+    if (!service) {
+      suggestionMessage.value = `Danh mục chưa có dịch vụ đang hoạt động có mã ${candidate.serviceCode}.`;
+      return;
+    }
+    suggestedService.value = { ...service, label: candidate.label };
+  } catch (cause) { error.value = message(cause); }
+  finally { busy.value = false; }
+}
+async function assignSuggestion() {
+  const selected = selection.value[0];
+  const service = suggestedService.value;
+  if (!canEdit.value || busy.value || !selected || !service) return;
+  busy.value = true; error.value = ''; success.value = '';
+  try {
+    await visitServicesApi.assign(visitId.value, {
+      serviceId: service.dentalServiceId, toothNumbers: [selected.toothNumber],
+      surface: selected.surface ? SURFACE_METADATA[selected.surface].code : null, quantity: 1
+    });
+    success.value = `Đã chỉ định ${service.name} cho răng ${selected.toothNumber}. Đây là chỉ định, không xác nhận thủ thuật đã thực hiện.`;
+    suggestionMessage.value = '';
+  } catch (cause) { error.value = message(cause); }
+  finally { busy.value = false; }
 }
 let loadVersion = 0;
 async function load() {
