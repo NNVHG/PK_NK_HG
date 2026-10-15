@@ -389,7 +389,7 @@ Lễ tân/Admin mở Đặt lịch tại quầy ở /appointments/counter, tìm 
 ## Hàng đợi nội bộ hôm nay (F_CHK_02)
 Nhân viên mở Hàng đợi hôm nay tại /queue/today. Mặc định Đang chờ; chọn trạng thái hoặc Tất cả, dùng Trang trước/Trang sau và Tải lại. Danh sách chỉ ngày đang xét theo giờ Việt Nam của server,20dòng/trang; API nội bộ cũng hỗ trợ Date cho tra cứu hiện hành, UI này không chọn ngày lịch sử.
 Khách hẹn đúng giờ xếp trước theo giờ hẹn; khách thường/trễ hẹn theo thời điểm check-in. UI dùng thứ tự backend. STT A-001 cho thường/có hẹn, ưu tiên lịch hẹn không phải cấp cứuU. Patient không có quyền truy cập.
-Đây là danh sách nội bộ: chưa TVâmthanh/gọi số/cấp cứu/phân ghế, chưa sửa dọn lượt qua ngày DL-051. Chờ Gia nghiệm thu UI có đăng nhập.
+Đây là danh sách nội bộ. TV phòng chờ và gọi tiếp theo đã có source sau tích hợp main; hướng dẫn gọi tiếp theo bên dưới. Cấp cứu/phân ghế và dọn lượt qua ngày DL-051 chưa được nghiệm thu. Chờ Gia nghiệm thu UI có đăng nhập.
 ## Tra cứu và hủy lịch tại quầy (F_APP_03)
 
 Lễ tân/Admin mở Lịch hẹn tại quầy tại /appointments/desk, chọn ngày/trạng thái, tìm lịch và bấm Hủy lịch này. Đối chiếu tên/mã hồ sơ/ngày/giờ với khách, nhập lý do tùy chọn rồi xác nhận; Quay lại giữ nguyên lịch. Danh sách20dòng/trang; chỉ Scheduled được hủy.
@@ -474,3 +474,52 @@ Kiểm chứng 744 backend unit / 147 frontend Node / 380 PostgreSQL/HTTP đạt
 - Giữ cả chức năng của hai chuỗi, không thêm package hoặc sửa/xóa migration cũ. Backup: backup/main-20261013-1946. Báo cáo local: docs/testing/MAIN_INTEGRATION_20261013_REPORT.md. Không push trong lượt này.
 
 Chưa nghiệm thu mọi thao tác UI/TV/âm thanh trình duyệt; nhắc hẹn là mô phỏng SMS và worker theo nguồn hiện có, không gửi SMS thật. Luồng cấp cứu, bank live, máy K80 và các chức năng PARTIAL khác vẫn theo hiện trạng. Worker được kiểm bằng timer điều khiển và PostgreSQL thật, không tuyên bố đã chờ 30 phút thực tế.
+
+## Gọi tiếp theo an toàn (F_CHK_03)
+
+Admin/Nha sĩ mở /queue/today. Admin tải danh sách nha sĩ hoạt động, chọn nha sĩ rồi bấm Gọi tiếp theo; Nha sĩ gọi cho chính mình theo tài khoản đăng nhập. Lễ tân/Phụ tá chỉ xem hàng đợi, không có nút gọi. Ca được chọn theo thứ tự backend, không phụ thuộc bộ lọc hoặc trang đang xem.
+
+Gọi ca cập nhật QueueEntry, Visit và lịch sử trong giao dịch Serializable. Hai lượt gọi đồng thời chỉ có một lượt nhận được ca; bên xung đột nhận CHK_010/409. Nếu lỗi hoặc chưa tải lại được sau thành công, đối chiếu hàng đợi/nha sĩ rồi tải lại thành công trước khi gọi tiếp; UI không tự gửi lại POST. Nếu nha sĩ có Visit InProgress khác thì trả 409. Ca trở về Waiting sau chụp ảnh có thể tiếp tục chính Visit đó, giữ StartedAt cũ.
+
+Kiểm chứng riêng trên CSDL tạm, không dùng dữ liệu bệnh nhân thật (chạy từ backend):
+dotnet run --project tests/CashPayment.Postgres -p:UseAppHost=false --no-restore -- --isolated-config src/Dental.Api/appsettings.Development.json --queue-call-next-only
+
+Kết quả: 788/788 backend unit, 169/169 frontend Node, 58/58 PostgreSQL/HTTP cho hàng đợi/gọi khám; build backend 0 warning/error và frontend 201 modules; EF không pending model changes. Bộ PostgreSQL/HTTP đầy đủ dừng tại fixture nhắc hẹn: SlotTime cộng 20 phút qua nửa đêm nhưng AppointmentDate không đổi (AppointmentReminderHttpSmoke.cs), chưa sửa vì ngoài phạm vi F_CHK_03. Không coi kết quả 433/113 của lần tích hợp trước là kết quả lượt này.
+
+Giới hạn: chưa browser UAT/âm thanh TV trên thiết bị thật; race với PUT status hoặc các luồng ghi Visit khác chưa được kiểm chứng trong lượt này. AuditLogger dùng cơ chế best-effort hiện hữu. DL-214 mô tả Calling/InExam/Skipped/ghế và Phụ tá gọi khác với 5 trạng thái source theo DL-047 và quyền gọi DL-120; giữ DL nguyên văn, ghi nhận chênh lệch. F_CHK_03 tổng thể vẫn PARTIAL, chờ Gia nghiệm thu Phase 1.
+
+## Hủy lượt chờ chưa khám (F_CHK_07)
+
+Admin/Lễ tân mở /queue/today, chọn Hủy lượt chưa khám trên dòng Đang chờ. Đối chiếu số thứ tự, tên/mã bệnh nhân và ngày tiếp đón, nhập lý do tùy chọn (tối đa 500 ký tự), tích xác nhận rồi bấm Xác nhận hủy lượt. Quay lại hoặc tải lại trước khi gửi sẽ đóng form; không hủy lượt.
+
+Backend POST /api/queue/{id}/cancel-waiting yêu cầu confirmed=true, chỉ Admin/Receptionist. Chỉ lượt hôm nay ở Waiting với Visit Created, chưa StartedAt và không khóa được hủy. Hủy QueueEntry/Visit và thêm lịch sử trong giao dịch Serializable; giữ Appointment CheckedIn vì khách đã đến, không xóa hồ sơ/lịch hẹn hoặc đổi thành no-show. Visit đóng nên bệnh nhân có thể check-in mới.
+
+Nếu ca vừa được gọi, đã hủy, thuộc ngày khác hoặc đã bắt đầu khám/trở về từ chụp ảnh, trả CHK_011/409. Khi hai thao tác tranh cùng lượt, cancellation nhận CHK_012/409; call-next vẫn dùng CHK_010/409. UI không tự gửi lại POST, giữ lý do khi lỗi, bỏ xác nhận và yêu cầu tải lại thành công rồi đối chiếu lại. Lý do lưu trong lịch sử nội bộ, không đưa vào audit Detail.
+
+Kiểm chứng 2026-10-14: 809/809 backend unit, 180/180 frontend Node và 484/484 PostgreSQL/HTTP full harness PASS; build backend 0 warning/error, frontend 201 modules, EF không pending model changes. Có barrier race hủy-vs-hủy/hủy-vs-call-next, kiểm queue/Visit/history/audit chỉ theo một kết quả đã commit, rollback sau write và check-in lại sau hủy.
+
+F_CHK_07 tổng thể PARTIAL: lượt này chỉ UI/endpoint hủy trước khám; các nút chuyển trạng thái khác và browser UAT còn chờ. PUT /queue/{id}/status cũ vẫn có luồng riêng, chưa chứng minh race với endpoint mới; DL-057 hủy InImaging khác source state machine hiện tại và DL-214 còn lệch tên trạng thái/ghế, đã ghi nhận, không sửa DL trong lượt này. Fixture nhắc hẹn có lỗi biên gần nửa đêm đã ghi từ lượt trước, hôm nay PASS tại giờ thực chạy nhưng fixture đó chưa được sửa. Phase 2 chưa mở.
+
+## Bắt đầu khám từ lượt đã chọn (F_CHK_04)
+
+Nha sĩ/Admin mở /clinical/diagnosis và chọn lượt Đang chờ hôm nay. Nha sĩ bắt đầu cho chính mình; Admin chọn nha sĩ hoạt động từ danh sách đã tải. Nếu lượt/Visit đã được gán nha sĩ, phải giữ nha sĩ đó; chuyển người phụ trách không thuộc thao tác bắt đầu này.
+
+Bấm Bắt đầu khám chuyển QueueEntry sang InConsultation và Visit sang InProgress trong giao dịch Serializable, lưu lịch sử và audit actor/ID/status. Nha sĩ đã có Visit InProgress khác bị 409; không được giả mạo DentistId khác. Lượt trở lại sau chụp ảnh tiếp tục chính Visit/nha sĩ, giữ StartedAt. Ca đã hủy/khóa/xong hoặc ngày khác bị từ chối.
+
+Thành công đọc lại cả QueueEntry và Visit rồi mở form ghi chẩn đoán hiện hữu. Khi lỗi hoặc refresh thất bại, màn hình khóa thao tác ghi, yêu cầu tải lại hồ sơ và đối chiếu; không tự gửi lại PUT. Chưa lưu chẩn đoán thì không đổi bệnh nhân; unmount xóa dữ liệu và bỏ response muộn.
+
+API giữ PUT /api/queue/{id}/status với newStatus=2, không thêm endpoint/package/schema. Các trạng thái khác giữ luồng cũ. Kiểm chứng: 830/830 backend unit,190/190 frontend Node,505/505 PostgreSQL/HTTP full harness, backend build0warning/error và frontend201modules; EF không pending model. Có barrier race hai lượt khác nhau cùng nha sĩ, start-vs-call-next/start-vs-cancel và rollback.
+
+Implementation trên codex/phase1-start-consultation, worktree riêng kế thừa15ffad2/ce5ecb9; main55a0a00 chưa chứa ba commit này. F_CHK_04 tổng thể PARTIAL/chờ Gia UAT, ghế/Calling/InExam theoDL214 chưa có. DL057 quyền hủy InImaging còn lệchsource ngoài scope; không sửaDL. AuditLoggerbest-effort và lỗi fixture reminder gần nửa đêm đã ghi trước chưa đổi; bộ505 PASS tại giờ chạy không chứng minh hết biên thời gian này.
+
+## Tìm dịch vụ để chỉ định theo răng (F_FDI_04)
+
+Admin/nha sĩ phụ trách mở /clinical/visits/{visitId}/services khi Visit đang khám và chưa khóa. Chọn răng người lớn/trẻ em hoặc dịch vụ toàn hàm, nhập tên/mã dịch vụ rồi bấm Tìm dịch vụ. Từ khóa tối đa100ký tự, được trim; tìm chuỗi không phân biệt hoa/thường, vẫn phân biệt dấu tiếng Việt. Phân trang giữ từ khóa đã áp dụng; đang nhập từ khóa mới chưa bấm Tìm thì kết quả cũ vẫn dùng bộ lọc đã hiển thị. Xóa tìm kiếm trở về trang1.
+
+Đổi tìm kiếm/trang xóa lựa chọn dịch vụ cũ nhưng giữ răng/mặt/số lượng để chọn tiếp. Kết quả rỗng được hiển thị rõ; lỗi tải xóa options và chặn chỉ định từ ID cũ. Giá chưa hiệu lực hiển thị rõ và không chọn được. Route change/unmount xóa từ khóa và bỏ response muộn; tìm kiếm chỉ đọc, không tự chỉ định.
+
+GET /api/services hiện hữu dùng keyword/isActive=true/page/pageSize20, phân trang backend tối đa1000000/pageSize100, keyword100; response no-store. Quyền catalog hiện hữu Admin/Dentist/Assistant giữ nguyên, UI chỉ định chỉAdmin/nha sĩ phụ trách. Khi lưu chỉ định, API kiểm lại dịch vụ active và chốt giá hiệu lực trong CSDL, không dùng giá tra cứu cũ.
+
+Kiểm chứng 2026-10-14:842/842unit,202/202Node,536/536PostgreSQL/HTTP fullPASS; backend/harnessbuild0warning/error và frontend201modules; EFkhôngpendingmodel. Đã kiểm tìm tên/mã/chữhoa-tiếngViệt/ký tự%literal, inactive/futureprice, phân trang lọc, search→chỉ định cho răng11/51 mặtB và giá thay đổi sau tra cứu.
+
+Nhánh codex/phase1-fdi-service-search kế thừae2f197d trongworktree riêng, chưa tích hợp main55a0a00. F_FDI_04 vẫnPARTIAL/chờGiaUAT/gợi ýdịchvụ và nhiều mặt; không xử lý mâu thuẫn độ dài Surfaces10(DL168)/20(DL201), không sửaDL/mởPhase2. Không thay logic lưu/snapshot/chuyển trạng thái, không thêm schema/package.

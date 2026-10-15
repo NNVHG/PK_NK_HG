@@ -27,7 +27,7 @@ using Microsoft.IdentityModel.Tokens;
 
 internal static class CashPaymentHttpSmoke
 {
-    public static async Task RunAsync(DbContextOptions<DentalDbContext> options, int cashierId, int patientId, Action<bool, string> check)
+    public static async Task RunAsync(DbContextOptions<DentalDbContext> options, int cashierId, int patientId, Action<bool, string> check, bool queueCallNextOnly = false)
     {
         // Dedicated test host validates ephemeral JWTs only. Never read clinic JWT keys/demo credentials.
         var signingKey = new SymmetricSecurityKey(RandomNumberGenerator.GetBytes(64));
@@ -53,6 +53,17 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddScoped<Dental.Application.Features.MOD_FDI.Services.ToothHistoryService>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_FDI.Validators.ToothHistoryRequestValidator>();
         builder.Services.AddScoped<IVisitRepository, VisitRepository>();
+        builder.Services.AddScoped<IServiceCatalogRepository, ServiceCatalogRepository>();
+        builder.Services.AddScoped<Dental.Application.Features.ServiceCatalog.Services.ServiceCatalogService>();
+        builder.Services.AddScoped<Dental.Application.Features.ServiceCatalog.Validators.ServiceCatalogQueryRequestValidator>();
+        builder.Services.AddScoped<Dental.Application.Features.ServiceCatalog.Validators.CreateDentalServiceRequestValidator>();
+        builder.Services.AddScoped<Dental.Application.Features.ServiceCatalog.Validators.UpdateDentalServiceRequestValidator>();
+        builder.Services.AddScoped<Dental.Application.Features.ServiceCatalog.Validators.CreateServicePriceRequestValidator>();
+        builder.Services.AddScoped<Dental.Application.Features.ServiceCatalog.Validators.ServiceIdRequestValidator>();
+        builder.Services.AddScoped<IVisitServiceRepository, VisitServiceRepository>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_FDI.Services.FdiServiceAssignmentService>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_FDI.Validators.AssignServicesRequestValidator>();
+
         builder.Services.AddScoped<IToothConditionRepository, ToothConditionRepository>();
         builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
         builder.Services.AddScoped<IAuditLogger, AuditLogger>();
@@ -67,6 +78,7 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.QueueQueryRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.UpdateQueueStatusRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.CallNextRequestValidator>();
+        builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.CancelWaitingRequestValidator>();
         builder.Services.AddScoped<IAppointmentReminderRepository, AppointmentReminderRepository>();
         builder.Services.AddSingleton<AppointmentReminderWorkerStatus>();
         builder.Services.AddSingleton<IAppointmentReminderWorkerStatus>(sp => sp.GetRequiredService<AppointmentReminderWorkerStatus>());
@@ -119,6 +131,15 @@ internal static class CashPaymentHttpSmoke
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", new JwtSecurityTokenHandler().WriteToken(token));
             }
             void Authenticate(string role) => AuthenticateActor(role, cashierId);
+            if (queueCallNextOnly)
+            {
+                await DailyQueueHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
+                await QueueCallNextHttpSmoke.RunAsync(client, options, cashierId, Authenticate, AuthenticateActor, check);
+                await QueueWaitingCancellationHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
+            await QueueSelectedStartHttpSmoke.RunAsync(client, options, cashierId, Authenticate, AuthenticateActor, check);
+            await FdiServiceSearchHttpSmoke.RunAsync(client, options, cashierId, patientId, Authenticate, check);
+                return;
+            }
             using (var response = await client.GetAsync(path)) check(response.StatusCode == HttpStatusCode.Unauthorized, "HTTP anonymous 401");
             foreach (var role in new[] { RoleCodes.Patient, RoleCodes.Dentist, RoleCodes.Assistant })
             {
@@ -165,6 +186,9 @@ internal static class CashPaymentHttpSmoke
             await CounterBookingHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await DailyQueueHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await QueueCallNextHttpSmoke.RunAsync(client, options, cashierId, Authenticate, AuthenticateActor, check);
+            await QueueWaitingCancellationHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
+            await QueueSelectedStartHttpSmoke.RunAsync(client, options, cashierId, Authenticate, AuthenticateActor, check);
+            await FdiServiceSearchHttpSmoke.RunAsync(client, options, cashierId, patientId, Authenticate, check);
             await AppointmentCancelHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await PatientAppointmentReadHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await PatientSelfCancellationHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);

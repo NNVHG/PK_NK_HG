@@ -42,6 +42,7 @@ public sealed class ServiceCatalogController : ControllerBase
     }
 
     [HttpGet]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
     [Authorize(Policy = AppPolicies.ServiceCatalogView)]
     [ProducesResponseType(typeof(PagedResult<ServiceCatalogListItemResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

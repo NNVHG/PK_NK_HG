@@ -53,6 +53,11 @@ export const queueService = {
     return response.data;
   },
 
+  async getEntry(queueEntryId: number): Promise<QueueEntryResponse> {
+    const response = await apiClient.get<{ entry: QueueEntryResponse }>('/queue/' + queueEntryId);
+    return response.data.entry;
+  },
+
   async startConsultation(queueEntryId: number, dentistId: number): Promise<QueueEntryResponse> {
     const response = await apiClient.put<QueueEntryResponse>(`/queue/${queueEntryId}/status`, {
       newStatus: 2, dentistId
@@ -62,6 +67,13 @@ export const queueService = {
 
   async callNext(payload?: CallNextPayload): Promise<QueueEntryResponse> {
     const response = await apiClient.post<QueueEntryResponse>('/queue/call-next', payload ?? {});
+    return response.data;
+  },
+
+  async cancelWaiting(queueEntryId: number, reason: string | null): Promise<QueueEntryResponse> {
+    const response = await apiClient.post<QueueEntryResponse>(`/queue/${queueEntryId}/cancel-waiting`, {
+      confirmed: true, reason
+    });
     return response.data;
   },
 

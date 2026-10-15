@@ -42,6 +42,9 @@ internal static class QueueCallNextHttpSmoke
         }
 
         // 2. Kiểm tra phân quyền gọi tiếp theo POST /api/queue/call-next
+        authenticate(RoleCodes.Admin);
+        using (var response = await client.PostAsJsonAsync("/api/queue/call-next", new { }))
+            check(response.StatusCode == HttpStatusCode.BadRequest, "Queue call-next Admin requires selected dentist400");
         client.DefaultRequestHeaders.Authorization = null;
         using (var response = await client.PostAsJsonAsync("/api/queue/call-next", new { }))
         {
@@ -115,6 +118,8 @@ internal static class QueueCallNextHttpSmoke
         }
         check(await db.QueueStatusHistories.AnyAsync(h => h.QueueEntryId == calledEntryId &&
             h.ToStatus == QueueStatus.InConsultation && h.ChangedByUserId == dentist.UserId), "Queue call-next history records actual JWT dentist");
+        using (var response = await client.PostAsJsonAsync("/api/queue/call-next", new { }))
+            check(response.StatusCode == HttpStatusCode.Conflict, "Queue call-next active dentist cannot call second Visit409");
 
         // 5. Kiểm tra lại /api/queue/display thấy ca đang khám có tên được che
         client.DefaultRequestHeaders.Authorization = null;
@@ -137,5 +142,27 @@ internal static class QueueCallNextHttpSmoke
                     !matched.TryGetProperty("notes", out _), "Display excludes patient identity/contact/clinical fields");
             }
         }
+
+        // Real HTTP recall of the same Visit after the existing imaging-return transition.
+        db.ChangeTracker.Clear();
+        var returning = await db.QueueEntries.Include(q => q.Visit).SingleAsync(q => q.QueueEntryId == calledEntryId);
+        var startedAt = returning.Visit!.StartedAt;
+        returning.Status = QueueStatus.Waiting;
+        await db.SaveChangesAsync(); db.ChangeTracker.Clear();
+        authenticate(RoleCodes.Admin);
+        using (var response = await client.PostAsJsonAsync("/api/queue/call-next", new { dentistId = dentist.UserId }))
+        {
+            check(response.StatusCode == HttpStatusCode.OK, "Queue call-next Admin selected dentist resumes imaging return200");
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            check(json.RootElement.GetProperty("queueEntryId").GetInt32() == calledEntryId &&
+                json.RootElement.GetProperty("dentistId").GetInt32() == dentist.UserId, "Queue recall keeps same queue entry and dentist");
+        }
+        check((await db.Visits.AsNoTracking().SingleAsync(v => v.VisitId == returning.VisitId)).StartedAt == startedAt,
+            "Queue HTTP recall preserves original StartedAt");
+        dentist = await db.Users.SingleAsync(u => u.UserId == dentist.UserId); dentist.IsActive = false;
+        await db.SaveChangesAsync(); db.ChangeTracker.Clear();
+        authenticateActor(RoleCodes.Dentist, dentist.UserId);
+        using (var response = await client.PostAsJsonAsync("/api/queue/call-next", new { }))
+            check(response.StatusCode == HttpStatusCode.Forbidden, "Queue call-next inactive JWT dentist403");
     }
 }

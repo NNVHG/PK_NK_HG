@@ -21,6 +21,7 @@ public sealed class QueueController : ControllerBase
     private readonly QueueQueryRequestValidator _queryValidator;
     private readonly UpdateQueueStatusRequestValidator _statusValidator;
     private readonly CallNextRequestValidator _callNextValidator;
+    private readonly CancelWaitingRequestValidator _cancelWaitingValidator;
 
     public QueueController(
         QueueService queueService,
@@ -28,7 +29,8 @@ public sealed class QueueController : ControllerBase
         CheckInRequestValidator checkInValidator,
         QueueQueryRequestValidator queryValidator,
         UpdateQueueStatusRequestValidator statusValidator,
-        CallNextRequestValidator callNextValidator)
+        CallNextRequestValidator callNextValidator,
+        CancelWaitingRequestValidator cancelWaitingValidator)
     {
         _queueService = queueService;
         _currentUser = currentUser;
@@ -36,6 +38,7 @@ public sealed class QueueController : ControllerBase
         _queryValidator = queryValidator;
         _statusValidator = statusValidator;
         _callNextValidator = callNextValidator;
+        _cancelWaitingValidator = cancelWaitingValidator;
     }
 
     [HttpPost("check-in")]
@@ -88,6 +91,21 @@ public sealed class QueueController : ControllerBase
     public async Task<IActionResult> GetQueueDetail(int id, CancellationToken ct)
     {
         var result = await _queueService.GetQueueEntryDetailAsync(id, ct);
+        return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
+    }
+
+    [HttpPost("{id:int}/cancel-waiting")]
+    [Authorize(Policy = AppPolicies.QueueCheckIn)]
+    [ProducesResponseType(typeof(QueueEntryResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> CancelWaiting(int id, [FromBody] CancelWaitingRequest request, CancellationToken ct)
+    {
+        if (id <= 0) return Failure(Error.Validation);
+        var validation = await _cancelWaitingValidator.ValidateAsync(request, ct);
+        if (!validation.IsValid) return ToValidationProblem(validation);
+        if (_currentUser.UserId is not int actorUserId) return Unauthorized();
+        var result = await _queueService.CancelWaitingAsync(id, actorUserId, _currentUser.RoleCode ?? string.Empty,
+            request, HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
         return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
     }
 
@@ -173,7 +191,7 @@ public sealed class QueueController : ControllerBase
         {
             "GEN_001" or "CHK_001" or "CHK_008" or "APP_001" => StatusCodes.Status404NotFound,
             "CHK_004" => StatusCodes.Status403Forbidden,
-            "CHK_002" or "CHK_009" or "PAT_090" or "PAT_091" or "APP_008" => StatusCodes.Status409Conflict,
+            "CHK_002" or "CHK_009" or "CHK_010" or "CHK_011" or "CHK_012" or "PAT_090" or "PAT_091" or "APP_008" => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status400BadRequest,
         };
 

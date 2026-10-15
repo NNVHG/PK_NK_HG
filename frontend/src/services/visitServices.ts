@@ -22,7 +22,7 @@ export const visitServicesApi = {
   async assign(visitId: number, payload: AssignServicesPayload): Promise<AssignedService[]> {
     return (await apiClient.post<AssignedService[]>(`/visits/${visitId}/services`, payload)).data;
   },
-  async catalog(page: number): Promise<CatalogPage> {
-    return (await apiClient.get<CatalogPage>('/services', { params: { isActive: true, page, pageSize: 20 } })).data;
+  async catalog(page: number, keyword = ''): Promise<CatalogPage> {
+    return (await apiClient.get<CatalogPage>('/services', { params: { isActive: true, page, pageSize: 20, ...(keyword.trim() ? { keyword: keyword.trim() } : {}) } })).data;
   }
 };

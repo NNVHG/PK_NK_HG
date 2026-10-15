@@ -27,6 +27,9 @@ public sealed class QueueCallNextTests
     {
         var timeProvider = new FixedTimeProvider(new DateTimeOffset(2026, 10, 10, 2, 0, 0, TimeSpan.Zero));
         _vietnamClock = new VietnamClock(timeProvider);
+        _unitOfWork.ExecuteSerializableTransactionAsync(Arg.Any<Func<CancellationToken, Task<Result<QueueEntryResponse>>>>(), Arg.Any<CancellationToken>())
+            .Returns(call => call.Arg<Func<CancellationToken, Task<Result<QueueEntryResponse>>>>()(CancellationToken.None));
+        _userRepository.FindByIdAsync(5, Arg.Any<CancellationToken>()).Returns(new User { UserId = 5, IsActive = true, Role = new Role { RoleCode = RoleCodes.Dentist } });
     }
 
     private QueueService CreateService()
@@ -40,6 +43,60 @@ public sealed class QueueCallNextTests
             _auditLogger,
             _vietnamClock,
             _invoiceDraft);
+
+    [Fact]
+    public async Task SerializableConflictReturnsBusinessErrorWithoutRetry()
+    {
+        _unitOfWork.ExecuteSerializableTransactionAsync(Arg.Any<Func<CancellationToken, Task<Result<QueueEntryResponse>>>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<Result<QueueEntryResponse>>(new ConcurrentOperationException()));
+        var result = await CreateService().CallNextAsync(5, RoleCodes.Dentist, new(null), null);
+        Assert.Equal(Error.QueueConcurrent, result.Error); Assert.Single(_unitOfWork.ReceivedCalls());
+    }
+
+    [Theory] [InlineData(false, RoleCodes.Dentist)] [InlineData(true, RoleCodes.Receptionist)]
+    public async Task InactiveOrInvalidJWTActorCannotCall(bool active, string role)
+    {
+        _userRepository.FindByIdAsync(5, Arg.Any<CancellationToken>()).Returns(new User { IsActive = active, Role = new Role { RoleCode = role } });
+        Assert.Equal(Error.QueueTransitionForbidden, (await CreateService().CallNextAsync(5, RoleCodes.Dentist, new(null), null)).Error);
+        Assert.Empty(_queueRepository.ReceivedCalls()); Assert.Empty(_auditLogger.ReceivedCalls());
+    }
+
+    [Fact]
+    public async Task ReturnFromImagingExcludesSameVisitAndPreservesStartedAt()
+    {
+        var started = DateTime.UtcNow.AddMinutes(-30);
+        var row = new QueueEntry { QueueEntryId = 7, VisitId = 8, DentistId = 5, QueueDate = _vietnamClock.Today, Status = QueueStatus.Waiting,
+            Visit = new Visit { VisitId = 8, DentistId = 5, Status = VisitStatuses.InProgress, StartedAt = started } };
+        _queueRepository.GetNextWaitingEntryAsync(_vietnamClock.Today, 5, Arg.Any<CancellationToken>()).Returns(row);
+        _visitRepository.HasActiveVisitForDentistAsync(5, Arg.Any<CancellationToken>(), 8).Returns(false);
+        var result = await CreateService().CallNextAsync(5, RoleCodes.Dentist, new(999), null);
+        Assert.True(result.IsSuccess); Assert.Equal(5, row.DentistId); Assert.Equal(started, row.Visit.StartedAt);
+        await _visitRepository.Received().HasActiveVisitForDentistAsync(5, Arg.Any<CancellationToken>(), 8);
+    }
+
+    [Fact]
+    public async Task DifferentActiveVisitStillBlocksReturningPatient()
+    {
+        var row = new QueueEntry { VisitId = 8, QueueDate = _vietnamClock.Today, Status = QueueStatus.Waiting, Visit = new Visit { VisitId = 8 } };
+        _queueRepository.GetNextWaitingEntryAsync(_vietnamClock.Today, 5, Arg.Any<CancellationToken>()).Returns(row);
+        _visitRepository.HasActiveVisitForDentistAsync(5, Arg.Any<CancellationToken>(), 8).Returns(true);
+        Assert.Equal(Error.DentistHasActiveVisit, (await CreateService().CallNextAsync(5, RoleCodes.Dentist, new(null), null)).Error);
+        Assert.Empty(_auditLogger.ReceivedCalls());
+    }
+
+    [Theory] [InlineData("MISSING")] [InlineData("LOCKED")] [InlineData("COMPLETED")] [InlineData("FOREIGN_DENTIST")] [InlineData("OLD_DAY")]
+    public async Task InvalidWaitingVisitCannotBeMutated(string state)
+    {
+        var row = new QueueEntry { QueueEntryId = 7, QueueDate = _vietnamClock.Today, Status = QueueStatus.Waiting, Visit = new Visit { VisitId = 8, Status = VisitStatuses.Created } };
+        if (state == "MISSING") row.Visit = null;
+        else if (state == "LOCKED") row.Visit!.IsLocked = true;
+        else if (state == "COMPLETED") row.Visit!.Status = VisitStatuses.Completed;
+        else if (state == "FOREIGN_DENTIST") row.Visit!.DentistId = 6;
+        else row.QueueDate = _vietnamClock.Today.AddDays(-1);
+        _queueRepository.GetNextWaitingEntryAsync(_vietnamClock.Today, 5, Arg.Any<CancellationToken>()).Returns(row);
+        Assert.Equal(Error.QueueInvalidStateTransition, (await CreateService().CallNextAsync(5, RoleCodes.Dentist, new(null), null)).Error);
+        Assert.Equal(QueueStatus.Waiting, row.Status); Assert.Empty(_auditLogger.ReceivedCalls());
+    }
 
     [Theory]
     [InlineData(RoleCodes.Receptionist)]
