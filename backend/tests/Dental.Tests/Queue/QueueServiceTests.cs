@@ -400,10 +400,13 @@ public sealed class QueueServiceTests
             PatientId = 1,
             DentistId = 5,
             IsPriority = false,
+            QueueDate = _vietnamClock.Today,
+            Visit = new Visit { DentistId = 5, Status = VisitStatuses.InProgress },
             Status = QueueStatus.InImaging
         };
 
         _queueRepository.GetByIdAsync(20, Arg.Any<CancellationToken>()).Returns(entry);
+        _userRepository.FindByIdAsync(5, Arg.Any<CancellationToken>()).Returns(new User { IsActive = true, Role = new Role { RoleCode = RoleCodes.Dentist } });
 
         // Act
         var result = await CreateService().UpdateQueueStatusAsync(
