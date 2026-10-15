@@ -47,7 +47,7 @@ internal static class DailyQueueHttpSmoke
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             check(response.StatusCode == HttpStatusCode.OK && json.RootElement.GetProperty("items").GetArrayLength() == 1 && json.RootElement.GetProperty("hasNextPage").GetBoolean(), "Queue bounded pagination");
         }
-        foreach (var query in new[] { "status=7", "dentistId=0", "page=1000001", "pageSize=101" })
+        foreach (var query in new[] { "status=8", "dentistId=0", "page=1000001", "pageSize=101" })
         { using var response = await client.GetAsync($"/api/queue?{query}"); check(response.StatusCode == HttpStatusCode.BadRequest, $"Queue invalid {query} 400"); }
         check(await db.AuditLogs.CountAsync() == audits && await db.QueueEntries.CountAsync(q => rows.Select(r => r.QueueEntryId).Contains(q.QueueEntryId)) == 6, "Queue GET never changes queue or audit");
     }

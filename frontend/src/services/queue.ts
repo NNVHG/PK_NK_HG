@@ -22,6 +22,7 @@ export interface QueueEntryResponse {
   isPriority: boolean;
   status: number;
   statusText: string;
+  canMarkAbsent: boolean;
   notes: string | null;
 }
 
@@ -77,6 +78,13 @@ export const queueService = {
 
   async routeImaging(queueEntryId: number, newStatus: 1 | 5, reason: string | null): Promise<QueueEntryResponse> {
     const response = await apiClient.put<QueueEntryResponse>(`/queue/${queueEntryId}/status`, { newStatus, reason });
+    return response.data;
+  },
+
+  async changeAbsence(queueEntryId: number, recall: boolean, reason: string | null): Promise<QueueEntryResponse> {
+    const response = await apiClient.post<QueueEntryResponse>(`/queue/${queueEntryId}/${recall ? 'recall' : 'skip'}`, {
+      confirmed: true, reason
+    });
     return response.data;
   },
 

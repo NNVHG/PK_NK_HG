@@ -40,6 +40,7 @@ public sealed class QueueRepository : IQueueRepository
             .Where(q => q.PatientId == patientId &&
                         (q.Status == QueueStatus.Waiting ||
                          q.Status == QueueStatus.Calling ||
+                         q.Status == QueueStatus.Skipped ||
                          q.Status == QueueStatus.InConsultation ||
                          q.Status == QueueStatus.InImaging))
             .ToListAsync(ct);
@@ -58,6 +59,7 @@ public sealed class QueueRepository : IQueueRepository
             .Include(q => q.Patient)
             .Include(q => q.Dentist)
             .Include(q => q.Appointment)
+            .Include(q => q.Visit)
             .Where(q => q.QueueDate == date);
 
         if (status.HasValue)
@@ -72,6 +74,8 @@ public sealed class QueueRepository : IQueueRepository
         var items = await query
             .OrderByDescending(q => q.Status == QueueStatus.Waiting && q.StatusHistories.Any(h =>
                 h.FromStatus == QueueStatus.InImaging && h.ToStatus == QueueStatus.Waiting))
+            .ThenByDescending(q => q.Status == QueueStatus.Waiting && q.StatusHistories.Any(h =>
+                h.FromStatus == QueueStatus.Skipped && h.ToStatus == QueueStatus.Waiting))
             .ThenByDescending(q => q.IsPriority)
             .ThenBy(q => q.IsPriority && q.Appointment != null ? q.Appointment.SlotTime : TimeOnly.MaxValue)
             .ThenBy(q => q.CheckInTime)
@@ -105,6 +109,8 @@ public sealed class QueueRepository : IQueueRepository
         return await query
             .OrderByDescending(q => q.StatusHistories.Any(h =>
                 h.FromStatus == QueueStatus.InImaging && h.ToStatus == QueueStatus.Waiting))
+            .ThenByDescending(q => q.Status == QueueStatus.Waiting && q.StatusHistories.Any(h =>
+                h.FromStatus == QueueStatus.Skipped && h.ToStatus == QueueStatus.Waiting))
             .ThenByDescending(q => q.IsPriority)
             .ThenBy(q => q.IsPriority && q.Appointment != null ? q.Appointment.SlotTime : TimeOnly.MaxValue)
             .ThenBy(q => q.CheckInTime)
@@ -120,7 +126,7 @@ public sealed class QueueRepository : IQueueRepository
             .Include(q => q.Patient)
             .Include(q => q.Dentist)
             .Include(q => q.Appointment)
-            .Include(q => q.StatusHistories.Where(h => h.FromStatus == QueueStatus.InImaging && h.ToStatus == QueueStatus.Waiting))
+            .Include(q => q.StatusHistories.Where(h => (h.FromStatus == QueueStatus.InImaging || h.FromStatus == QueueStatus.Skipped) && h.ToStatus == QueueStatus.Waiting))
             .Where(q => q.QueueDate == date &&
                         (q.Status == QueueStatus.InConsultation || q.Status == QueueStatus.Calling || q.Status == QueueStatus.Waiting))
             .ToListAsync(ct);

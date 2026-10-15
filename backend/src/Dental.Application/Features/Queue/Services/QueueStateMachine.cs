@@ -25,6 +25,12 @@ public static class QueueStateMachine
         // 2. Kiểm tra các bước chuyển hợp lệ theo quy trình
         return (currentStatus, targetStatus) switch
         {
+            (QueueStatus.Calling, QueueStatus.Skipped) =>
+                roleCode is RoleCodes.Admin or RoleCodes.Dentist or RoleCodes.Receptionist
+                    ? Result.Success() : Result.Failure(Error.QueueTransitionForbidden),
+            (QueueStatus.Skipped, QueueStatus.Waiting) =>
+                roleCode is RoleCodes.Admin or RoleCodes.Receptionist
+                    ? Result.Success() : Result.Failure(Error.QueueTransitionForbidden),
             (QueueStatus.Waiting, QueueStatus.Calling) =>
                 roleCode is RoleCodes.Admin or RoleCodes.Dentist or RoleCodes.Assistant
                     ? Result.Success() : Result.Failure(Error.QueueTransitionForbidden),

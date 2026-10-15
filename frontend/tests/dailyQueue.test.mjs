@@ -49,5 +49,5 @@ test('unmount clears queue and ignores late response', async () => {
   assert.deepEqual(f.c.rows.value, []); assert.equal(f.c.updatedAt.value, '');
 });
 test('invalid page or status never calls API', async () => {
-  const f = fixture(); await f.c.load(0); await f.c.load(1000001); f.c.status.value = 7; await f.c.load(); assert.equal(f.calls.length, 0);
+  const f = fixture(); await f.c.load(0); await f.c.load(1000001); f.c.status.value = 8; await f.c.load(); assert.equal(f.calls.length, 0);
 });
