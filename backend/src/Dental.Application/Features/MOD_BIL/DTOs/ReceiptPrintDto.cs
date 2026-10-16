@@ -6,4 +6,8 @@ public sealed record ReceiptPrintDto(int InvoiceId, string InvoiceCode, int Paym
     string? ClinicAddress, string? ClinicPhone, string PatientName, string PatientCode, int BirthYear,
     string CashierName, DateTime PaidAt, string PaymentMethod, string? Source, decimal Amount,
     decimal? AmountTendered, decimal? ChangeAmount, string? Note, decimal FinalAmount, decimal PaidAmount,
-    decimal RemainingAmount, int PrintCount, int PrintNumber, DateTime? PrintedAt, IReadOnlyList<ReceiptLineDto> Items);
+    decimal RemainingAmount, int PrintCount, int PrintNumber, DateTime? PrintedAt, IReadOnlyList<ReceiptLineDto> Items)
+{
+    public decimal SubTotalAmount { get; init; }
+    public decimal DiscountAmount { get; init; }
+}

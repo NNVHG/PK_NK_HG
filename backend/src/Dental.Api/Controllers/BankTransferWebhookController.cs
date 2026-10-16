@@ -56,7 +56,7 @@ public sealed class BankTransferWebhookController(BankTransferWebhookService ser
         var invoice = await repository.GetInvoiceAsync(invoiceId, ct);
         if (invoice is null) return NotFound();
         if (invoice.Status is not (InvoiceStatus.PendingPayment or InvoiceStatus.PartiallyPaid) || !invoice.Visit.IsLocked ||
-            invoice.Visit.Status != VisitStatuses.Completed || invoice.TotalAmount <= invoice.PaidAmount)
+            invoice.Visit.Status != VisitStatuses.Completed || invoice.FinalAmount <= invoice.PaidAmount)
             return Conflict(new { message = "Hóa đơn chưa sẵn sàng hoặc không còn nợ." });
         var content = $"PKNK {invoice.InvoiceCode}";
         var settings = await repository.GetBankSettingsAsync(ct);
@@ -64,7 +64,7 @@ public sealed class BankTransferWebhookController(BankTransferWebhookService ser
         settings.TryGetValue("Payment:AccountName", out var name);
         var ready = bank is not null && System.Text.RegularExpressions.Regex.IsMatch(bank, "^[0-9]{6}$") &&
             account is not null && System.Text.RegularExpressions.Regex.IsMatch(account, "^[0-9]{1,30}$") && !string.IsNullOrWhiteSpace(name);
-        var remaining = invoice.TotalAmount - invoice.PaidAmount;
+        var remaining = invoice.FinalAmount - invoice.PaidAmount;
         var url = ready ? $"https://img.vietqr.io/image/{bank}-{account}-compact2.png?amount={remaining.ToString("0", CultureInfo.InvariantCulture)}&addInfo={Uri.EscapeDataString(content)}&accountName={Uri.EscapeDataString(name!)}" : null;
         return Ok(new BankTransferInfo(invoice.Id, invoice.InvoiceCode, remaining, content, url, ready ? name : null,
             environment.IsDevelopment(), ready ? null : "Chưa cấu hình tài khoản ngân hàng phòng khám. Không thể hiển thị VietQR thực."));
@@ -77,6 +77,6 @@ public sealed class BankTransferWebhookController(BankTransferWebhookService ser
         if (invoiceId <= 0) return BadRequest();
         var invoice = await repository.GetInvoiceAsync(invoiceId, ct);
         return invoice is null ? NotFound() : Ok(new InvoicePaymentState(invoice.Id, invoice.InvoiceCode,
-            invoice.Status, invoice.PaidAmount, invoice.TotalAmount - invoice.PaidAmount));
+            invoice.Status, invoice.PaidAmount, invoice.FinalAmount - invoice.PaidAmount));
     }
 }

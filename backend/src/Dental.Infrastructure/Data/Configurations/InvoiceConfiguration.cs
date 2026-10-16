@@ -12,6 +12,13 @@ public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         b.Property(x => x.InvoiceCode).HasMaxLength(50).IsRequired();
         b.Property(x => x.TotalAmount).HasPrecision(18, 0);
         b.Property(x => x.PaidAmount).HasPrecision(18, 0);
+        b.Property(x => x.DiscountAmount).HasPrecision(18, 0).HasDefaultValue(0m);
+        b.Property(x => x.DiscountType).HasMaxLength(20);
+        b.Property(x => x.DiscountValue).HasPrecision(20, 2);
+        b.Property(x => x.DiscountReason).HasMaxLength(255);
+        b.Ignore(x => x.FinalAmount);
+        b.HasOne<DiscountPreset>().WithMany().HasForeignKey(x => x.DiscountPresetId).OnDelete(DeleteBehavior.Restrict);
+        b.ToTable(t => t.HasCheckConstraint("CK_Invoices_DiscountAmount", "\"DiscountAmount\" >= 0 AND \"DiscountAmount\" <= \"TotalAmount\""));
         b.HasIndex(x => x.InvoiceCode).IsUnique();
         b.HasIndex(x => x.VisitId).IsUnique().HasFilter("\"Status\" <> 4");
         b.HasOne(x => x.Visit).WithMany().HasForeignKey(x => x.VisitId).OnDelete(DeleteBehavior.Restrict);

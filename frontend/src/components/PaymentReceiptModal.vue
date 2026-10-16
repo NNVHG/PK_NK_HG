@@ -21,7 +21,7 @@
       <table><thead><tr><th>Khoản mục</th><th>SL</th><th>Đơn giá</th><th>Thành tiền</th></tr></thead>
         <tbody><tr v-for="(item, index) in receipt.items" :key="index"><td>{{ item.name }}</td><td>{{ item.quantity }}</td><td>{{ money(item.unitPrice) }}</td><td>{{ money(item.totalAmount) }}</td></tr></tbody>
       </table>
-      <p>Tổng viện phí: {{ money(receipt.finalAmount) }}<br />Phải thanh toán: {{ money(receipt.finalAmount) }}<br />Phương thức: {{ receipt.paymentMethod === 'Cash' ? 'Tiền mặt' : 'Chuyển khoản VietQR' }}</p>
+      <p>Tổng giá niêm yết: {{ money(receipt.subTotalAmount) }}<br />Giảm giá: {{ money(receipt.discountAmount) }}<br />Phải thanh toán: {{ money(receipt.finalAmount) }}<br />Phương thức: {{ receipt.paymentMethod === 'Cash' ? 'Tiền mặt' : 'Chuyển khoản VietQR' }}</p>
       <p><strong>Thu kỳ này: {{ money(receipt.amount) }}</strong><br />{{ receipt.paymentMethod === 'Cash' ? 'Khách đưa' : 'Ngân hàng nhận' }}: {{ money(receipt.amountTendered) }}<br />{{ receipt.paymentMethod === 'Cash' ? 'Tiền thối' : 'Chuyển dư cần đối soát' }}: {{ money(receipt.changeAmount) }}</p>
       <p>Tổng đã thu hiện tại: {{ money(receipt.paidAmount) }}<br /><strong>Còn nợ: {{ money(receipt.remainingAmount) }}</strong></p>
       <p v-if="receipt.note">{{ receipt.note }}</p>

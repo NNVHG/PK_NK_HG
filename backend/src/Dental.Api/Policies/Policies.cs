@@ -30,10 +30,12 @@ public static class Policies
     public const string FdiServiceAssign = "FdiServiceAssign";
     public const string InvoiceDraftView = "InvoiceDraftView";
     public const string CashPaymentWrite = "CashPaymentWrite";
+    public const string InvoiceDiscountWrite = "InvoiceDiscountWrite";
 
 
     public static void AddApplicationPolicies(this AuthorizationOptions opts)
     {
+        opts.AddPolicy(InvoiceDiscountWrite, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Receptionist));
         opts.AddPolicy(AppointmentReschedule, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Receptionist, RoleCodes.Patient));
         opts.AddPolicy(CashPaymentWrite, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Receptionist));
         opts.AddPolicy(FdiConditionWrite, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist));

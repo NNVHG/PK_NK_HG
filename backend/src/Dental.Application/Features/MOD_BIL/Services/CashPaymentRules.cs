@@ -17,10 +17,10 @@ public static class CashPaymentRules
             invoice.Status is not (InvoiceStatus.PendingPayment or InvoiceStatus.PartiallyPaid))
             return Result.Failure(new Error("BIL_031", "Chỉ thu tiền khi khám đã hoàn tất và hóa đơn còn nợ."));
         if (amount <= 0 || decimal.Truncate(amount) != amount || invoice.PaidAmount < 0 ||
-            invoice.TotalAmount < invoice.PaidAmount || amount > invoice.TotalAmount - invoice.PaidAmount)
+            invoice.FinalAmount < invoice.PaidAmount || amount > invoice.FinalAmount - invoice.PaidAmount)
             return Result.Failure(new Error("BIL_032", "Số tiền thanh toán không được vượt quá số tiền còn nợ của hóa đơn."));
         invoice.PaidAmount += amount;
-        invoice.Status = invoice.PaidAmount == invoice.TotalAmount ? InvoiceStatus.Paid : InvoiceStatus.PartiallyPaid;
+        invoice.Status = invoice.PaidAmount == invoice.FinalAmount ? InvoiceStatus.Paid : InvoiceStatus.PartiallyPaid;
         return Result.Success();
     }
 }

@@ -18,6 +18,7 @@ public sealed class DentalDbContext : DbContext
     public DbSet<ToothCondition> ToothConditions => Set<ToothCondition>();
     public DbSet<VisitService> VisitServices => Set<VisitService>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<DiscountPreset> DiscountPresets => Set<DiscountPreset>();
     public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
     public DbSet<SystemConfig> SystemConfigs => Set<SystemConfig>();
     public DbSet<InvoiceItem> InvoiceItems => Set<InvoiceItem>();
@@ -50,6 +51,7 @@ public sealed class DentalDbContext : DbContext
         modelBuilder.ApplyConfiguration(new ToothConditionConfiguration());
         modelBuilder.ApplyConfiguration(new VisitServiceConfiguration());
         modelBuilder.ApplyConfiguration(new InvoiceConfiguration());
+        modelBuilder.ApplyConfiguration(new DiscountPresetConfiguration());
         modelBuilder.ApplyConfiguration(new InvoiceItemConfiguration());
         modelBuilder.ApplyConfiguration(new InvoiceNumberCounterConfiguration());
         modelBuilder.ApplyConfiguration(new MedicalHistoryRecordConfiguration());

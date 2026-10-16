@@ -179,6 +179,44 @@ namespace Dental.Infrastructure.Migrations
                     b.ToTable("DentalServices");
                 });
 
+            modelBuilder.Entity("Dental.Domain.Entities.DiscountPreset", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("DiscountType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<decimal>("Value")
+                        .HasPrecision(20, 2)
+                        .HasColumnType("numeric(20,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("DiscountPresets", (string)null);
+                });
+
             modelBuilder.Entity("Dental.Domain.Entities.Invoice", b =>
                 {
                     b.Property<int>("Id")
@@ -192,6 +230,27 @@ namespace Dental.Infrastructure.Migrations
 
                     b.Property<int>("CreatedByUserId")
                         .HasColumnType("integer");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<int?>("DiscountPresetId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DiscountReason")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("DiscountType")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<decimal?>("DiscountValue")
+                        .HasPrecision(20, 2)
+                        .HasColumnType("numeric(20,2)");
 
                     b.Property<string>("InvoiceCode")
                         .IsRequired()
@@ -216,6 +275,8 @@ namespace Dental.Infrastructure.Migrations
 
                     b.HasIndex("CreatedByUserId");
 
+                    b.HasIndex("DiscountPresetId");
+
                     b.HasIndex("InvoiceCode")
                         .IsUnique();
 
@@ -223,7 +284,10 @@ namespace Dental.Infrastructure.Migrations
                         .IsUnique()
                         .HasFilter("\"Status\" <> 4");
 
-                    b.ToTable("Invoices", (string)null);
+                    b.ToTable("Invoices", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Invoices_DiscountAmount", "\"DiscountAmount\" >= 0 AND \"DiscountAmount\" <= \"TotalAmount\"");
+                        });
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.InvoiceItem", b =>
@@ -1132,6 +1196,11 @@ namespace Dental.Infrastructure.Migrations
                         .HasForeignKey("CreatedByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.DiscountPreset", null)
+                        .WithMany()
+                        .HasForeignKey("DiscountPresetId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Dental.Domain.Entities.Visit", "Visit")
                         .WithMany()
