@@ -69,6 +69,12 @@ public sealed class DentalChairTests
         Assert.Equal(DentalChairService.Occupied, (await Service().UpdateAsync(7, 99, RoleCodes.Admin, new("P", 1, null, 1, true))).Error);
         Assert.Equal(1, chair.Version); Assert.Empty(audit.ReceivedCalls());
     }
+    [Fact] public async Task AssignedWorkspaceProtectsCatalogFromIndirectRoomChange()
+    {
+        chairs.IsAssignedAsync(7,Arg.Any<CancellationToken>()).Returns(true);
+        Assert.Equal(DentalChairService.Assigned,(await Service().UpdateAsync(7,99,RoleCodes.Admin,new("Other",3,null,1,true))).Error);
+        Assert.Equal("Phòng 1",chair.RoomName); Assert.Equal(1,chair.Version); Assert.Empty(audit.ReceivedCalls());
+    }
     [Fact] public async Task UnknownChairIsNotFound()
         => Assert.Equal(Error.NotFound, (await Service().UpdateAsync(8, 99, RoleCodes.Admin, new("P", 1, null, 1, true))).Error);
     [Theory] [InlineData(0)] [InlineData(2)] [InlineData(5)]

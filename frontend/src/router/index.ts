@@ -10,6 +10,7 @@ const router = createRouter({
       component: () => import('@/views/RolePermissionsView.vue'),
       meta: { requiresAuth: true, roles: ['ADMIN'] }
     },
+    { path: '/staff/workspace', name: 'staff-workspace', component: () => import('@/views/StaffWorkspacesView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'DENTIST', 'ASSISTANT'] } },
     { path: '/admin/chairs', name: 'dental-chairs', component: () => import('@/views/DentalChairsView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
     {
       path: '/admin/services',

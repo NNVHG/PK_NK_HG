@@ -889,6 +889,45 @@ namespace Dental.Infrastructure.Migrations
                     b.ToTable("ServicePrices");
                 });
 
+            modelBuilder.Entity("Dental.Domain.Entities.StaffWorkspace", b =>
+                {
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ChairId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("DentistId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("UpdatedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.HasKey("UserId");
+
+                    b.HasIndex("ChairId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_StaffWorkspaces_ChairId");
+
+                    b.HasIndex("DentistId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_StaffWorkspaces_DentistId");
+
+                    b.HasIndex("UpdatedByUserId");
+
+                    b.ToTable("StaffWorkspaces", (string)null);
+                });
+
             modelBuilder.Entity("Dental.Domain.Entities.SystemConfig", b =>
                 {
                     b.Property<string>("Key")
@@ -1448,6 +1487,33 @@ namespace Dental.Infrastructure.Migrations
                     b.Navigation("CreatedByUser");
 
                     b.Navigation("Service");
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.StaffWorkspace", b =>
+                {
+                    b.HasOne("Dental.Domain.Entities.DentalChair", null)
+                        .WithMany()
+                        .HasForeignKey("ChairId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Dental.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("DentistId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Dental.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.User", "User")
+                        .WithOne()
+                        .HasForeignKey("Dental.Domain.Entities.StaffWorkspace", "UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.ToothCondition", b =>

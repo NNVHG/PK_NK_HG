@@ -38,5 +38,5 @@ public sealed class DentalChairsController(DentalChairService service, ICurrentU
         return result.IsSuccess ? Ok(result.Value) : Failure(result.Error);
     }
     private IActionResult Failure(Error error) => StatusCode(error.Code switch
-    { "GEN_001" => 404, "GEN_002" => 403, "MST_051" or "MST_052" or "MST_053" => 409, _ => 400 }, new { code = error.Code, message = error.Message });
+    { "GEN_001" => 404, "GEN_002" => 403, "MST_051" or "MST_052" or "MST_053" or "MST_054" => 409, _ => 400 }, new { code = error.Code, message = error.Message });
 }
