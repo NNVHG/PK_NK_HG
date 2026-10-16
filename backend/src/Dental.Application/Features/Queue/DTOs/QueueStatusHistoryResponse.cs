@@ -7,7 +7,7 @@ public sealed record QueueStatusHistoryResponse(
     string? FromStatusText,
     int ToStatus,
     string ToStatusText,
-    int ChangedByUserId,
+    int? ChangedByUserId,
     string ChangedByUserName,
     DateTime ChangedAt,
     string? Reason

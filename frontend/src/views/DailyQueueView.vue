@@ -19,9 +19,10 @@
         </select>
         <button :disabled="writing || dentistsLoading" @click="loadDentists">Tải nha sĩ</button>
       </template>
-      <button v-if="canCallNext" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || absenceRow !== null || needsReview || (needsCallingDentist && (dentistsLoading || !callDentistId))" class="btn-call-next" @click="handleCallNext">
+      <button v-if="canCallNext" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || absenceRow !== null || cleanupOpen || needsReview || (needsCallingDentist && (dentistsLoading || !callDentistId))" class="btn-call-next" @click="handleCallNext">
         {{ callingNext ? 'Đang gọi…' : 'Gọi số tiếp theo' }}
       </button>
+      <button v-if="canCancelWaiting" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || absenceRow !== null || cleanupOpen || needsReview" @click="openCleanup">Dọn lượt chưa khám quá hạn</button>
     </div>
     <p v-if="canCallNext">Gọi số chỉ mời bệnh nhân vào phòng. Nha sĩ/Admin cần bấm “Bắt đầu khám” tại hồ sơ lâm sàng.</p>
     <p v-if="authStore.role === 'ASSISTANT'">Phụ tá chỉ gọi các lượt đã có nha sĩ được chọn; lượt chưa phân nha sĩ cần Lễ tân/Admin đối chiếu trước.</p>
@@ -37,11 +38,11 @@
       <p>{{ row.patientCode }} · {{ row.statusText }} · {{ row.queueDate }}</p>
       <p>{{ row.isPriority ? 'Ưu tiên lịch hẹn đúng giờ' : 'Chờ thông thường' }} · {{ row.dentistName || 'Chưa phân nha sĩ' }}</p>
       <RouterLink v-if="row.status === 6 && ['ADMIN', 'DENTIST'].includes(authStore.role)" to="/clinical/diagnosis">Mở hồ sơ để bắt đầu khám</RouterLink>
-      <button v-if="canCancelWaiting && row.status === 1" :disabled="loading || writing || imagingRow !== null || absenceRow !== null || needsReview" @click="openCancellation(row)">Hủy lượt chưa khám</button>
-      <button v-if="canRouteImaging(row)" :disabled="loading || writing || cancelRow !== null || absenceRow !== null || needsReview" @click="openImaging(row)">
+      <button v-if="canCancelWaiting && row.status === 1" :disabled="loading || writing || imagingRow !== null || absenceRow !== null || cleanupOpen || needsReview" @click="openCancellation(row)">Hủy lượt chưa khám</button>
+      <button v-if="canRouteImaging(row)" :disabled="loading || writing || cancelRow !== null || absenceRow !== null || cleanupOpen || needsReview" @click="openImaging(row)">
         {{ row.status === 2 ? 'Chỉ định chụp ảnh' : 'Hoàn tất chụp → chờ nha sĩ' }}
       </button>
-      <button v-if="canChangeAbsence(row)" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || absenceRow !== null || needsReview" @click="openAbsence(row)">
+      <button v-if="canChangeAbsence(row)" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || absenceRow !== null || cleanupOpen || needsReview" @click="openAbsence(row)">
         {{ row.status === 7 ? 'Gọi lại → hàng chờ' : 'Vắng mặt' }}
       </button>
     </li></ol>
@@ -52,8 +53,8 @@
       <form @submit.prevent="handleCancellation">
         <label for="cancel-reason">Lý do (không bắt buộc, tối đa 500 ký tự)</label>
         <textarea id="cancel-reason" v-model="cancelReason" maxlength="500" :disabled="cancelling" />
-        <label><input v-model="cancelConfirmed" type="checkbox" :disabled="cancelling || needsReview" /> Tôi đã đối chiếu đúng bệnh nhân và xác nhận hủy lượt chờ chưa khám.</label>
-        <button type="submit" :disabled="cancelling || loading || needsReview || !cancelConfirmed">{{ cancelling ? 'Đang hủy…' : 'Xác nhận hủy lượt' }}</button>
+        <label><input v-model="cancelConfirmed" type="checkbox" :disabled="cancelling || cleanupOpen || needsReview" /> Tôi đã đối chiếu đúng bệnh nhân và xác nhận hủy lượt chờ chưa khám.</label>
+        <button type="submit" :disabled="cancelling || loading || cleanupOpen || needsReview || !cancelConfirmed">{{ cancelling ? 'Đang hủy…' : 'Xác nhận hủy lượt' }}</button>
         <button type="button" :disabled="cancelling" @click="closeCancellation">Quay lại</button>
       </form>
     </section>
@@ -65,10 +66,10 @@
       <form @submit.prevent="handleImaging">
         <label for="imaging-reason">{{ imagingRow.status === 2 ? 'Chỉ định/nhu cầu chụp (bắt buộc)' : 'Ghi chú hoàn tất (không bắt buộc)' }}</label>
         <textarea id="imaging-reason" v-model="imagingReason" maxlength="500" :required="imagingRow.status === 2" :disabled="routingImaging" />
-        <label><input v-model="imagingConfirmed" type="checkbox" :disabled="routingImaging || needsReview" />
+        <label><input v-model="imagingConfirmed" type="checkbox" :disabled="routingImaging || cleanupOpen || needsReview" />
           {{ imagingRow.status === 2 ? 'Tôi đã đối chiếu đúng bệnh nhân và chỉ định chụp ảnh.' : 'Tôi xác nhận bệnh nhân đã hoàn tất chụp theo quy trình phòng khám.' }}
         </label>
-        <button type="submit" :disabled="routingImaging || loading || needsReview || !imagingConfirmed">{{ routingImaging ? 'Đang chuyển…' : 'Xác nhận chuyển bước' }}</button>
+        <button type="submit" :disabled="routingImaging || loading || cleanupOpen || needsReview || !imagingConfirmed">{{ routingImaging ? 'Đang chuyển…' : 'Xác nhận chuyển bước' }}</button>
         <button type="button" :disabled="routingImaging" @click="closeImaging">Quay lại</button>
       </form>
     </section>
@@ -79,9 +80,18 @@
       <form @submit.prevent="handleAbsence">
         <label for="absence-reason">Ghi chú (không bắt buộc, tối đa 500 ký tự)</label>
         <textarea id="absence-reason" v-model="absenceReason" maxlength="500" :disabled="changingAbsence" />
-        <label><input v-model="absenceConfirmed" type="checkbox" :disabled="changingAbsence || needsReview" /> Tôi đã đối chiếu đúng bệnh nhân và xác nhận thao tác.</label>
-        <button type="submit" :disabled="writing || loading || needsReview || !absenceConfirmed">{{ changingAbsence ? 'Đang xử lý…' : 'Xác nhận' }}</button>
+        <label><input v-model="absenceConfirmed" type="checkbox" :disabled="changingAbsence || cleanupOpen || needsReview" /> Tôi đã đối chiếu đúng bệnh nhân và xác nhận thao tác.</label>
+        <button type="submit" :disabled="writing || loading || cleanupOpen || needsReview || !absenceConfirmed">{{ changingAbsence ? 'Đang xử lý…' : 'Xác nhận' }}</button>
         <button type="button" :disabled="changingAbsence" @click="closeAbsence">Quay lại</button>
+      </form>
+    </section>
+    <section v-if="cleanupOpen" class="absence-panel" aria-labelledby="cleanup-title">
+      <h2 id="cleanup-title">Dọn lượt chưa khám quá hạn</h2>
+      <p>Hệ thống đóng lượt chưa khám sau 23:30 giờ Việt Nam và bù những ngày trước. Ca đã bắt đầu khám được giữ nguyên. Lịch sử vẫn còn; không tự tạo lịch hẹn mới.</p>
+      <form @submit.prevent="handleCleanup">
+        <label><input v-model="cleanupConfirmed" type="checkbox" :disabled="cleaningUp || needsReview" /> Tôi xác nhận dọn các lượt chưa khám đã quá hạn theo giờ máy chủ.</label>
+        <button type="submit" :disabled="writing || loading || needsReview || !cleanupConfirmed">{{ cleaningUp ? 'Đang dọn…' : 'Xác nhận dọn lượt' }}</button>
+        <button type="button" :disabled="cleaningUp" @click="closeCleanup">Quay lại</button>
       </form>
     </section>
     <nav aria-label="Phân trang hàng đợi">
@@ -102,7 +112,8 @@ const canCancelWaiting = computed(() => ['ADMIN', 'RECEPTIONIST'].includes(authS
 const cancelRow = ref<QueueEntryResponse | null>(null), cancelReason = ref(''), cancelConfirmed = ref(false), cancelling = ref(false);
 const imagingRow = ref<QueueEntryResponse | null>(null), imagingReason = ref(''), imagingConfirmed = ref(false), routingImaging = ref(false);
 const absenceRow = ref<QueueEntryResponse | null>(null), absenceReason = ref(''), absenceConfirmed = ref(false), changingAbsence = ref(false);
-const writing = computed(() => callingNext.value || cancelling.value || routingImaging.value || changingAbsence.value);
+const cleanupOpen = ref(false), cleanupConfirmed = ref(false), cleaningUp = ref(false);
+const writing = computed(() => callingNext.value || cancelling.value || routingImaging.value || changingAbsence.value || cleaningUp.value);
 const dentists = ref<CallingDentist[]>([]), callDentistId = ref(0), dentistsLoading = ref(false), dentistError = ref(''), needsReview = ref(false);
 let version = 0, life = 0, dentistVersion = 0;
 async function loadDentists() {
@@ -113,11 +124,12 @@ async function loadDentists() {
   finally { if (ticket === dentistVersion) dentistsLoading.value = false; }
 }
 async function load(targetPage = 1) {
-  if (routingImaging.value || changingAbsence.value) return;
+  if (routingImaging.value || changingAbsence.value || cleaningUp.value) return;
   if (!Number.isInteger(targetPage) || targetPage < 1 || targetPage > 1_000_000 || ![0, 1, 2, 3, 4, 5, 6, 7].includes(status.value)) return;
   closeCancellation();
   closeImaging();
   closeAbsence();
+  closeCleanup();
   const ticket = ++version; loading.value = true; rows.value = []; error.value = ''; updatedAt.value = ''; total.value = 0; hasNext.value = false;
   try {
     const result = await queueService.getToday(targetPage, status.value === 0 ? undefined : status.value);
@@ -129,7 +141,7 @@ async function load(targetPage = 1) {
   finally { if (ticket === version) loading.value = false; }
 }
 async function handleCallNext() {
-  if (!canCallNext.value || writing.value || cancelRow.value !== null || imagingRow.value !== null || absenceRow.value !== null || loading.value || needsReview.value) return;
+  if (!canCallNext.value || writing.value || cancelRow.value !== null || imagingRow.value !== null || absenceRow.value !== null || loading.value || cleanupOpen.value || needsReview.value) return;
   if (needsCallingDentist.value && (dentistsLoading.value || !Number.isInteger(callDentistId.value) || !dentists.value.some(d => d.dentistId === callDentistId.value))) { dentistError.value = 'Chọn nha sĩ hoạt động đã tải để gọi ca.'; return; }
   const ticket = life;
   callingNext.value = true; error.value = ''; actionMsg.value = '';
@@ -152,13 +164,13 @@ async function handleCallNext() {
 function clearCancellation() { cancelRow.value = null; cancelReason.value = ''; cancelConfirmed.value = false; }
 function closeCancellation() { if (!cancelling.value) clearCancellation(); }
 function openCancellation(row: QueueEntryResponse) {
-  if (!canCancelWaiting.value || writing.value || imagingRow.value !== null || absenceRow.value !== null || loading.value || needsReview.value || row.status !== 1 ||
+  if (!canCancelWaiting.value || writing.value || imagingRow.value !== null || absenceRow.value !== null || loading.value || cleanupOpen.value || needsReview.value || row.status !== 1 ||
       !Number.isInteger(row.queueEntryId) || row.queueEntryId <= 0 || !rows.value.some(r => r.queueEntryId === row.queueEntryId)) return;
   clearCancellation(); cancelRow.value = { ...row }; error.value = ''; actionMsg.value = '';
 }
 async function handleCancellation() {
   const selected = cancelRow.value;
-  if (!canCancelWaiting.value || !selected || selected.status !== 1 || writing.value || loading.value || needsReview.value || !cancelConfirmed.value) return;
+  if (!canCancelWaiting.value || !selected || selected.status !== 1 || writing.value || loading.value || cleanupOpen.value || needsReview.value || !cancelConfirmed.value) return;
   if (cancelReason.value.length > 500) { error.value = 'Lý do không được vượt quá 500 ký tự.'; return; }
   const ticket = life; cancelling.value = true; error.value = ''; actionMsg.value = '';
   try {
@@ -181,13 +193,13 @@ function canRouteImaging(row: QueueEntryResponse) {
 function clearImaging() { imagingRow.value = null; imagingReason.value = ''; imagingConfirmed.value = false; }
 function closeImaging() { if (!routingImaging.value) clearImaging(); }
 function openImaging(row: QueueEntryResponse) {
-  if (!canRouteImaging(row) || writing.value || loading.value || cancelRow.value !== null || absenceRow.value !== null || needsReview.value ||
+  if (!canRouteImaging(row) || writing.value || loading.value || cancelRow.value !== null || absenceRow.value !== null || cleanupOpen.value || needsReview.value ||
       !Number.isInteger(row.queueEntryId) || row.queueEntryId <= 0 || !rows.value.some(r => r.queueEntryId === row.queueEntryId && r.status === row.status)) return;
   clearImaging(); imagingRow.value = { ...row }; error.value = ''; actionMsg.value = '';
 }
 async function handleImaging() {
   const selected = imagingRow.value;
-  if (!selected || !canRouteImaging(selected) || writing.value || loading.value || cancelRow.value !== null || absenceRow.value !== null || needsReview.value || !imagingConfirmed.value) return;
+  if (!selected || !canRouteImaging(selected) || writing.value || loading.value || cancelRow.value !== null || absenceRow.value !== null || cleanupOpen.value || needsReview.value || !imagingConfirmed.value) return;
   if (imagingReason.value.length > 500 || (selected.status === 2 && !imagingReason.value.trim())) { error.value = 'Ghi chỉ định chụp ảnh, tối đa 500 ký tự.'; return; }
   const ticket = life; routingImaging.value = true; error.value = ''; actionMsg.value = '';
   try {
@@ -212,13 +224,13 @@ function canChangeAbsence(row: QueueEntryResponse) {
 function clearAbsence() { absenceRow.value = null; absenceReason.value = ''; absenceConfirmed.value = false; }
 function closeAbsence() { if (!changingAbsence.value) clearAbsence(); }
 function openAbsence(row: QueueEntryResponse) {
-  if (!canChangeAbsence(row) || writing.value || loading.value || needsReview.value || cancelRow.value !== null || imagingRow.value !== null ||
+  if (!canChangeAbsence(row) || writing.value || loading.value || cleanupOpen.value || needsReview.value || cancelRow.value !== null || imagingRow.value !== null ||
       !Number.isInteger(row.queueEntryId) || row.queueEntryId <= 0 || !rows.value.some(r => r.queueEntryId === row.queueEntryId && r.status === row.status && (row.status === 7 || r.canMarkAbsent))) return;
   clearAbsence(); absenceRow.value = { ...row }; error.value = ''; actionMsg.value = '';
 }
 async function handleAbsence() {
   const selected = absenceRow.value;
-  if (!selected || !canChangeAbsence(selected) || writing.value || loading.value || needsReview.value || !absenceConfirmed.value || cancelRow.value !== null || imagingRow.value !== null) return;
+  if (!selected || !canChangeAbsence(selected) || writing.value || loading.value || cleanupOpen.value || needsReview.value || !absenceConfirmed.value || cancelRow.value !== null || imagingRow.value !== null) return;
   if (absenceReason.value.length > 500) { error.value = 'Ghi chú tối đa 500 ký tự.'; return; }
   const ticket = life, recall = selected.status === 7; changingAbsence.value = true; error.value = ''; actionMsg.value = '';
   try {
@@ -234,9 +246,30 @@ async function handleAbsence() {
     absenceConfirmed.value = false; needsReview.value = true;
   } finally { if (ticket === life) changingAbsence.value = false; }
 }
+function closeCleanup() { if (!cleaningUp.value) { cleanupOpen.value = false; cleanupConfirmed.value = false; } }
+function openCleanup() {
+  if (!canCancelWaiting.value || writing.value || loading.value || needsReview.value || cancelRow.value || imagingRow.value || absenceRow.value) return;
+  cleanupOpen.value = true; cleanupConfirmed.value = false; error.value = ''; actionMsg.value = '';
+}
+async function handleCleanup() {
+  if (!canCancelWaiting.value || !cleanupOpen.value || !cleanupConfirmed.value || writing.value || loading.value || needsReview.value || cancelRow.value || imagingRow.value || absenceRow.value) return;
+  const ticket = life; cleaningUp.value = true; error.value = ''; actionMsg.value = '';
+  try {
+    const result = await queueService.cleanupExpired();
+    if (ticket !== life) return;
+    if (!Number.isInteger(result.cancelledCount) || result.cancelledCount < 0 || !/^\d{4}-\d{2}-\d{2}$/.test(result.lastExpiredDate)) throw new Error('Invalid cleanup result');
+    actionMsg.value = `Đã đóng ${result.cancelledCount} lượt chưa khám quá hạn đến ngày ${result.lastExpiredDate}. Lịch sử được giữ nguyên.`;
+    cleanupOpen.value = false; cleanupConfirmed.value = false; needsReview.value = true; cleaningUp.value = false; await load(page.value);
+  } catch (err: unknown) {
+    if (ticket !== life) return;
+    const response = err as { response?: { data?: { message?: string } } };
+    error.value = response?.response?.data?.message || 'Chưa xác minh được kết quả dọn lượt. Tải lại để đối chiếu.';
+    cleanupConfirmed.value = false; needsReview.value = true;
+  } finally { if (ticket === life) cleaningUp.value = false; }
+}
 function numberLabel(value: number) { return `A-${String(value).padStart(3, '0')}`; }
 onMounted(() => Promise.all([load(), loadDentists()]));
-onUnmounted(() => { life++; version++; dentistVersion++; clearCancellation(); clearImaging(); clearAbsence(); rows.value = []; dentists.value = []; callDentistId.value = 0; dentistError.value = ''; actionMsg.value = ''; error.value = ''; needsReview.value = false; updatedAt.value = ''; total.value = 0; });
+onUnmounted(() => { life++; version++; dentistVersion++; clearCancellation(); clearImaging(); clearAbsence(); cleanupOpen.value = false; cleanupConfirmed.value = false; rows.value = []; dentists.value = []; callDentistId.value = 0; dentistError.value = ''; actionMsg.value = ''; error.value = ''; needsReview.value = false; updatedAt.value = ''; total.value = 0; });
 </script>
 <style scoped>
 .page { max-width: 900px; margin: auto; padding: 1.5rem; }

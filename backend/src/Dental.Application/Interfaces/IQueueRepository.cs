@@ -5,6 +5,7 @@ namespace Dental.Application.Interfaces;
 
 public interface IQueueRepository
 {
+    Task<IReadOnlyList<QueueEntry>> GetExpiredUnstartedAsync(DateOnly lastExpiredDate, CancellationToken ct = default);
     Task AddAsync(QueueEntry entry, CancellationToken ct = default);
     Task<QueueEntry?> GetByIdAsync(int queueEntryId, CancellationToken ct = default);
     Task<int> GetNextQueueNumberAsync(DateOnly date, CancellationToken ct = default);

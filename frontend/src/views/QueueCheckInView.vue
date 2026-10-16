@@ -2,7 +2,7 @@
   <main class="page">
     <header>
       <h1>Tiếp đón và check-in</h1>
-      <p>Tìm hồ sơ bệnh nhân, xác nhận khách đã đến và cấp số thứ tự.</p>
+      <p>Tìm hồ sơ bệnh nhân, xác nhận khách đã đến và cấp số thứ tự. Lượt chưa khám được đóng sau 23:30 giờ Việt Nam; khi quay lại sẽ nhận lượt mới.</p>
     </header>
 
     <section class="card">

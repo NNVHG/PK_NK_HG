@@ -28,7 +28,7 @@ using Microsoft.IdentityModel.Tokens;
 internal static class CashPaymentHttpSmoke
 {
     public static async Task RunAsync(DbContextOptions<DentalDbContext> options, int cashierId, int patientId, Action<bool, string> check,
-        bool queueCallNextOnly = false, bool invoiceDiscountsOnly = false, bool serviceCatalogOnly = false, bool queueImagingOnly = false, bool queueCallingOnly = false, bool queueAbsenceOnly = false)
+        bool queueCallNextOnly = false, bool invoiceDiscountsOnly = false, bool serviceCatalogOnly = false, bool queueImagingOnly = false, bool queueCallingOnly = false, bool queueAbsenceOnly = false, bool queueCleanupOnly = false)
     {
         // Dedicated test host validates ephemeral JWTs only. Never read clinic JWT keys/demo credentials.
         var signingKey = new SymmetricSecurityKey(RandomNumberGenerator.GetBytes(64));
@@ -85,6 +85,8 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.CallNextRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.CancelWaitingRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.QueueAbsenceRequestValidator>();
+        builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.QueueCleanupRequestValidator>();
+        builder.Services.AddScoped<Dental.Application.Features.Queue.Services.QueueCleanupService>();
         builder.Services.AddScoped<IAppointmentReminderRepository, AppointmentReminderRepository>();
         builder.Services.AddSingleton<AppointmentReminderWorkerStatus>();
         builder.Services.AddSingleton<IAppointmentReminderWorkerStatus>(sp => sp.GetRequiredService<AppointmentReminderWorkerStatus>());
@@ -137,6 +139,11 @@ internal static class CashPaymentHttpSmoke
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", new JwtSecurityTokenHandler().WriteToken(token));
             }
             void Authenticate(string role) => AuthenticateActor(role, cashierId);
+            if (queueCleanupOnly)
+            {
+                await QueueCleanupHttpSmoke.RunAsync(client, options, cashierId, Authenticate, AuthenticateActor, check);
+                return;
+            }
             if (queueAbsenceOnly)
             {
                 await QueueAbsenceHttpSmoke.RunAsync(client, options, cashierId, Authenticate, AuthenticateActor, check);

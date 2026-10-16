@@ -12,6 +12,13 @@ public sealed class QueueRepository : IQueueRepository
 
     public QueueRepository(DentalDbContext db) => _db = db;
 
+    public async Task<IReadOnlyList<QueueEntry>> GetExpiredUnstartedAsync(DateOnly lastExpiredDate, CancellationToken ct = default)
+        => await _db.QueueEntries.Include(q => q.Visit)
+            .Where(q => q.QueueDate <= lastExpiredDate &&
+                (q.Status == QueueStatus.Waiting || q.Status == QueueStatus.Calling || q.Status == QueueStatus.Skipped) &&
+                q.Visit != null && q.Visit.Status == Dental.Domain.Constants.VisitStatuses.Created && q.Visit.StartedAt == null && !q.Visit.IsLocked)
+            .OrderBy(q => q.QueueDate).ThenBy(q => q.QueueEntryId).ToListAsync(ct);
+
     public async Task AddAsync(QueueEntry entry, CancellationToken ct = default)
         => await _db.QueueEntries.AddAsync(entry, ct);
 

@@ -31,7 +31,7 @@ public sealed class RolePermissionMatrixProvider(IAuthorizationPolicyProvider po
             [Policies.AppointmentView] = ("Xem lịch hẹn", "MOD_APP", "Bệnh nhân chỉ xem lịch hẹn thuộc tài khoản của mình."),
             [Policies.AppointmentManage] = ("Quản lý lịch hẹn tại quầy", "MOD_APP", "Còn kiểm tra trạng thái và thời gian của lịch hẹn."),
             [Policies.AppointmentReschedule] = ("Đổi lịch hẹn", "MOD_APP", "Còn kiểm tra hồ sơ sở hữu, trạng thái và thời gian được đổi lịch."),
-            [Policies.QueueCheckIn] = ("Tiếp đón và check-in", "MOD_CHK", "Chỉ thao tác nội bộ; kiểm tra lịch hẹn/lần khám trong ngày."),
+            [Policies.QueueCheckIn] = ("Tiếp đón, check-in và dọn lượt quá hạn", "MOD_CHK", "Lễ tân/Admin; dọn lượt chỉ Visit chưa bắt đầu, quá mốc 23:30 Việt Nam, có xác nhận (DL-260)."),
             [Policies.QueueView] = ("Xem hàng đợi nội bộ", "MOD_CHK", "Màn TV công khai là luồng đọc riêng với tên bệnh nhân đã che."),
             [Policies.QueueSkip] = ("Đánh dấu vắng mặt", "MOD_CHK", "Chỉ lượt Calling chưa khám; Nha sĩ chỉ thao tác lượt của mình. Gọi lại dành cho Lễ tân/Admin (DL-259)."),
             [Policies.QueueCall] = ("Gọi số mời vào phòng", "MOD_CHK", "Phụ tá gọi lượt đã có nha sĩ; gọi số không bắt đầu hoặc ghi ca khám. Bắt đầu khám chỉ Nha sĩ/Admin (DL-258)."),

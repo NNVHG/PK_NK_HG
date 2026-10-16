@@ -10,12 +10,13 @@ using Npgsql;
 
 // Explicit opt-in; synthetic data and a unique disposable database, never the clinic database.
 if (args.Length is not (2 or 3) || args[0] != "--isolated-config" ||
-    args.Length == 3 && args[2] is not ("--queue-call-next-only" or "--invoice-discounts-only" or "--service-catalog-only" or "--queue-imaging-only" or "--queue-calling-only" or "--queue-absence-only"))
-    throw new ArgumentException("Use --isolated-config <config.json> [--queue-call-next-only|--invoice-discounts-only|--service-catalog-only|--queue-imaging-only|--queue-calling-only|--queue-absence-only]");
+    args.Length == 3 && args[2] is not ("--queue-call-next-only" or "--invoice-discounts-only" or "--service-catalog-only" or "--queue-imaging-only" or "--queue-calling-only" or "--queue-absence-only" or "--queue-cleanup-only"))
+    throw new ArgumentException("Use --isolated-config <config.json> [--queue-call-next-only|--invoice-discounts-only|--service-catalog-only|--queue-imaging-only|--queue-calling-only|--queue-absence-only|--queue-cleanup-only]");
 var queueCallNextOnly = args.Length == 3 && args[2] == "--queue-call-next-only";
 var invoiceDiscountsOnly = args.Length == 3 && args[2] == "--invoice-discounts-only";
 var serviceCatalogOnly = args.Length == 3 && args[2] == "--service-catalog-only";
 var queueImagingOnly = args.Length == 3 && args[2] == "--queue-imaging-only";
+var queueCleanupOnly = args.Length == 3 && args[2] == "--queue-cleanup-only";
 var queueAbsenceOnly = args.Length == 3 && args[2] == "--queue-absence-only";
 var queueCallingOnly = args.Length == 3 && args[2] == "--queue-calling-only";
 using var config = JsonDocument.Parse(File.ReadAllText(args[1]));
@@ -36,6 +37,12 @@ try
     var visit = new Visit { Patient = patient, CreatedByUser = cashier, Status = VisitStatuses.Completed, IsLocked = true };
     var invoice = new Invoice { Visit = visit, CreatedByUser = cashier, InvoiceCode = "TEST-CASH-1", TotalAmount = 100000, Status = InvoiceStatus.PendingPayment, CreatedAt = DateTime.UtcNow };
     setup.Invoices.Add(invoice); await setup.SaveChangesAsync(); setup.ChangeTracker.Clear();
+    if (queueCleanupOnly)
+    {
+        await CashPaymentHttpSmoke.RunAsync(options, cashier.UserId, patient.PatientId, Check, queueCleanupOnly: true);
+        Console.WriteLine($"PostgreSQL overnight cleanup checks: {checks}/{checks} PASS");
+        return;
+    }
     if (queueAbsenceOnly)
     {
         await CashPaymentHttpSmoke.RunAsync(options, cashier.UserId, patient.PatientId, Check, queueAbsenceOnly: true);

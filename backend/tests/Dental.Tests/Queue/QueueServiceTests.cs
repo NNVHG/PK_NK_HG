@@ -311,42 +311,70 @@ public sealed class QueueServiceTests
         Assert.Equal(QueueStatus.Cancelled, staleEntry.Status);
         Assert.Equal(VisitStatuses.Cancelled, staleVisit.Status);
         await _queueRepository.Received(1).AddStatusHistoryAsync(
-            Arg.Is<QueueStatusHistory>(h => h.QueueEntryId == 50 && h.ToStatus == QueueStatus.Cancelled),
+            Arg.Is<QueueStatusHistory>(h => h.QueueEntryId == 50 && h.FromStatus == QueueStatus.Waiting && h.ToStatus == QueueStatus.Cancelled),
             Arg.Any<CancellationToken>());
     }
 
-    [Fact]
-    public async Task CheckInAsync_ConcurrentCheckIn_RetriesOnConflictAndAllocatesNextNumber()
+    [Theory] [InlineData(QueueStatus.Calling)] [InlineData(QueueStatus.Skipped)]
+    public async Task CheckIn_ExpiresOnlyOldUnstartedQueuesAndExcludesTheirVisitFromOpenCheck(QueueStatus status)
     {
-        // Arrange: Giả lập 2 lễ tân check-in đồng thời dẫn đến SaveChanges conflict ở lần 1, retry lần 2 thành công
-        var patient = MakePatient();
-        _patientRepository.GetByIdAsync(1, Arg.Any<CancellationToken>()).Returns(patient);
-        _queueRepository.GetOpenQueueEntriesForPatientAsync(1, Arg.Any<CancellationToken>()).Returns(new List<QueueEntry>());
-        _visitRepository.HasOpenVisitAsync(1, Arg.Any<CancellationToken>()).Returns(false);
+        var old = new QueueEntry { QueueEntryId = 50, QueueDate = _vietnamClock.Today.AddDays(-1), Status = status,
+            Visit = new Visit { VisitId = 99, Status = VisitStatuses.Created } };
+        _patientRepository.GetByIdAsync(1, Arg.Any<CancellationToken>()).Returns(MakePatient());
+        _queueRepository.GetOpenQueueEntriesForPatientAsync(1, Arg.Any<CancellationToken>()).Returns(new[] { old });
+        _visitRepository.HasOpenVisitAsync(1, Arg.Any<CancellationToken>()).Returns(true); // Database still sees old Created Visit.
+        _visitRepository.HasOtherOpenVisitAsync(1, Arg.Is<IReadOnlyCollection<int>>(ids => ids.SequenceEqual(new[] { 99 })), Arg.Any<CancellationToken>()).Returns(false);
+        Assert.True((await CreateService().CheckInAsync(3, new(1), null)).IsSuccess);
+        await _visitRepository.DidNotReceive().HasOpenVisitAsync(1, Arg.Any<CancellationToken>());
+        await _queueRepository.Received(1).AddStatusHistoryAsync(Arg.Is<QueueStatusHistory>(h => h.QueueEntryId == 50 && h.FromStatus == status && h.ToStatus == QueueStatus.Cancelled), Arg.Any<CancellationToken>());
+    }
+    [Fact] public async Task CheckIn_InvalidAppointmentLeavesOldQueueAndVisitUntouched()
+    {
+        var old = new QueueEntry { QueueEntryId = 50, QueueDate = _vietnamClock.Today.AddDays(-1), Status = QueueStatus.Skipped,
+            Visit = new Visit { VisitId = 99, Status = VisitStatuses.Created } };
+        _patientRepository.GetByIdAsync(1, Arg.Any<CancellationToken>()).Returns(MakePatient());
+        _queueRepository.GetOpenQueueEntriesForPatientAsync(1, Arg.Any<CancellationToken>()).Returns(new[] { old });
+        Assert.True((await CreateService().CheckInAsync(3, new(1, AppointmentId: 999), null)).IsFailure);
+        Assert.Equal(QueueStatus.Skipped, old.Status); Assert.Equal(VisitStatuses.Created, old.Visit!.Status);
+        await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>()); Assert.Empty(_auditLogger.ReceivedCalls());
+    }
+    [Fact] public async Task CheckIn_OtherOpenVisitPreventsAnyCleanup()
+    {
+        var old = new QueueEntry { QueueDate = _vietnamClock.Today.AddDays(-1), Status = QueueStatus.Waiting,
+            Visit = new Visit { VisitId = 99, Status = VisitStatuses.Created } };
+        _patientRepository.GetByIdAsync(1, Arg.Any<CancellationToken>()).Returns(MakePatient());
+        _queueRepository.GetOpenQueueEntriesForPatientAsync(1, Arg.Any<CancellationToken>()).Returns(new[] { old });
+        _visitRepository.HasOtherOpenVisitAsync(1, Arg.Any<IReadOnlyCollection<int>>(), Arg.Any<CancellationToken>()).Returns(true);
+        Assert.Equal(Error.VisitAlreadyOpen, (await CreateService().CheckInAsync(3, new(1), null)).Error);
+        Assert.Equal(QueueStatus.Waiting, old.Status); await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+    [Theory] [InlineData(true)] [InlineData(false)]
+    public async Task CheckIn_NeverCancelsOldStartedOrLockedVisits(bool started)
+    {
+        var old = new QueueEntry { QueueDate = _vietnamClock.Today.AddDays(-1), Status = QueueStatus.Calling,
+            Visit = new Visit { Status = started ? VisitStatuses.InProgress : VisitStatuses.Created, IsLocked = !started } };
+        _patientRepository.GetByIdAsync(1, Arg.Any<CancellationToken>()).Returns(MakePatient());
+        _queueRepository.GetOpenQueueEntriesForPatientAsync(1, Arg.Any<CancellationToken>()).Returns(new[] { old });
+        Assert.Equal(Error.QueueEntryAlreadyOpen, (await CreateService().CheckInAsync(3, new(1), null)).Error);
+        Assert.Equal(QueueStatus.Calling, old.Status); Assert.Empty(_auditLogger.ReceivedCalls());
+    }
+    [Fact] public async Task CheckIn_At2330DoesNotCreateImmediatelyExpiredTicket()
+    {
+        var lateClock = new VietnamClock(new FixedTimeProvider(new DateTimeOffset(2026, 10, 10, 16, 30, 0, TimeSpan.Zero)));
+        var service = new QueueService(_queueRepository, _appointmentRepository, _patientRepository, _visitRepository,
+            _userRepository, _unitOfWork, _auditLogger, lateClock, _invoiceDraft);
+        Assert.Equal(Error.Validation.Code, (await service.CheckInAsync(3, new(1), null)).Error.Code);
+        Assert.Empty(_queueRepository.ReceivedCalls());
+    }
 
-        // Lần 1 lấy số 1, lần 2 retry lấy số 2
-        _queueRepository.GetNextQueueNumberAsync(_vietnamClock.Today, Arg.Any<CancellationToken>())
-            .Returns(1, 2);
-
-        var saveCallCount = 0;
-        _unitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(call =>
-        {
-            saveCallCount++;
-            // Lần 1 lưu visit OK, lần 2 lưu QueueEntry gặp xung đột concurrency, lần 3 lưu QueueEntry retry OK
-            if (saveCallCount == 2)
-                throw new InvalidOperationException("Unique constraint violation");
-            return Task.FromResult(1);
-        });
-
-        // Act
-        var result = await CreateService().CheckInAsync(
-            actorUserId: 3,
-            new CheckInRequest(PatientId: 1),
-            ipAddress: "127.0.0.1");
-
-        // Assert: Thử lại thành công và cấp số 2
-        Assert.True(result.IsSuccess);
-        Assert.Equal(2, result.Value!.QueueNumber);
+    [Fact]
+    public async Task CheckInAsync_ConcurrentCheckIn_ReturnsReloadConflictWithoutRetryingPartialTransaction()
+    {
+        _unitOfWork.ExecuteSerializableTransactionAsync(Arg.Any<Func<CancellationToken, Task<Result<QueueEntryResponse>>>>(), Arg.Any<CancellationToken>())
+            .Returns<Result<QueueEntryResponse>>(_ => throw new ConcurrentOperationException());
+        var result = await CreateService().CheckInAsync(3, new CheckInRequest(1), null);
+        Assert.Equal(Error.QueueConcurrent, result.Error);
+        await _queueRepository.DidNotReceive().AddAsync(Arg.Any<QueueEntry>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
