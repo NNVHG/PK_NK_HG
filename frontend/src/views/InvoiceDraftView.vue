@@ -8,20 +8,32 @@
     <p v-if="success" role="status">{{ success }}</p>
     <p v-if="invoice?.status === 0">Hóa đơn nháp tự cập nhật dịch vụ khi mở hoặc tải lại hồ sơ. Có thể tiếp tục chỉ định trước khi kết thúc khám.</p>
     <template v-if="visit">
-      <p>Trạng thái khám: {{ visit.status }}</p>
-      <section v-if="canUnlock" aria-label="Mở lại khám để điều chỉnh">
-        <h2>Mở lại khám để điều chỉnh</h2>
-        <p>Hóa đơn chưa thu tiền hiện tại sẽ được hủy và giữ trong lịch sử. Sau điều chỉnh, hệ thống sinh hóa đơn với mã mới.</p>
+      <p>Trạng thái hồ sơ: {{ isCorrection ? 'Đang đính chính' : visit.status }}</p>
+      <section v-if="canUnlock" aria-label="Mở đính chính hồ sơ">
+        <h2>Mở đính chính hồ sơ</h2>
+        <p>Hóa đơn chưa thu tiền hiện tại sẽ được hủy và giữ trong lịch sử. Đính chính không chiếm ghế, không hiện TV và không chặn ca đang khám. Hóa đơn mới dùng mã mới.</p>
         <label>Lý do mở khóa (bắt buộc, 10–500 ký tự)
           <textarea v-model="unlockReason" minlength="10" maxlength="500" :disabled="busy || discountBusy" />
         </label>
         <button :disabled="busy || discountBusy || unlockReason.trim().length < 10" @click="unlock">Xác nhận mở khóa và hủy hóa đơn chưa thu</button>
       </section>
+      <section v-if="isCorrection" aria-label="Đính chính hồ sơ ngoài ca khám">
+        <h2>Đính chính hồ sơ</h2>
+        <p>Chế độ sửa hồ sơ riêng: không chiếm ghế, không gọi bệnh nhân trên TV và không chặn ca khám khác.</p>
+        <form v-if="canCorrect" @submit.prevent="saveCorrection">
+          <label>Chẩn đoán <textarea v-model="correctionDiagnosis" required maxlength="1000" :disabled="busy || discountBusy" /></label>
+          <label>Ghi chú lâm sàng <textarea v-model="correctionNotes" maxlength="2000" :disabled="busy || discountBusy" /></label>
+          <p v-if="correctionDirty">Có thay đổi chưa lưu. Lưu hoặc tải lại trước khi hoàn tất và chuyển màn hình.</p>
+          <button :disabled="busy || discountBusy || !correctionDirty">Lưu đính chính chẩn đoán</button>
+        </form>
+        <p v-if="correctionNeedsReview" role="alert">Tải lại hồ sơ và đối chiếu trước khi tiếp tục đính chính.</p>
+        <RouterLink v-if="canCorrect && !busy && !correctionDirty" :to="`/clinical/visits/${visitId}/fdi`">Đính chính tình trạng răng</RouterLink>
+      </section>
       <template v-if="canComplete">
-        <RouterLink :to="`/clinical/visits/${visitId}/services`">Kiểm tra dịch vụ đã chỉ định</RouterLink>
-        <p>Kết thúc khám sẽ khóa hồ sơ và chốt hóa đơn nháp từ các dịch vụ đã ghi nhận.</p>
-        <label><input v-model="confirmed" type="checkbox" :disabled="busy" /> Tôi đã kiểm tra chỉ định và xác nhận hoàn tất khám</label>
-        <button :disabled="busy || !confirmed" @click="complete">Kết thúc khám và tạo hóa đơn nháp</button>
+        <RouterLink v-if="!busy && !discountBusy" :to="`/clinical/visits/${visitId}/services`">Kiểm tra dịch vụ đã chỉ định</RouterLink>
+        <p>{{ isCorrection ? 'Hoàn tất đính chính sẽ khóa lại hồ sơ và chốt hóa đơn mới.' : 'Kết thúc khám sẽ khóa hồ sơ và chốt hóa đơn nháp từ các dịch vụ đã ghi nhận.' }}</p>
+        <label><input v-model="confirmed" type="checkbox" :disabled="busy || discountBusy" /> {{ isCorrection ? 'Tôi đã kiểm tra nội dung và xác nhận hoàn tất đính chính' : 'Tôi đã kiểm tra chỉ định và xác nhận hoàn tất khám' }}</label>
+        <button :disabled="busy || discountBusy || !confirmed" @click="complete">{{ isCorrection ? 'Hoàn tất đính chính và khóa hồ sơ' : 'Kết thúc khám và tạo hóa đơn nháp' }}</button>
       </template>
       <p v-else-if="!invoice">Lần khám chưa có hóa đơn nháp. Nha sĩ phụ trách cần hoàn tất khám.</p>
     </template>
@@ -89,12 +101,17 @@ const error = ref('');
 const success = ref('');
 const confirmed = ref(false);
 const unlockReason = ref('');
+const correctionDiagnosis = ref(''), correctionNotes = ref(''), correctionNeedsReview = ref(false);
+const isCorrection = computed(() => visit.value?.status === 'Correcting');
+const correctionDirty = computed(() => isCorrection.value && (correctionDiagnosis.value !== (visit.value?.diagnosis ?? '') || correctionNotes.value !== (visit.value?.clinicalNotes ?? '')));
+const canCorrect = computed(() => isCorrection.value && !visit.value?.isLocked && !correctionNeedsReview.value &&
+  (auth.role === 'ADMIN' || auth.role === 'DENTIST' && visit.value?.dentistId === auth.user?.userId));
 const unlockHistory = ref<VisitUnlockHistory[]>([]);
 const canUnlock = computed(() => auth.role === 'ADMIN' && visit.value?.status === 'Completed' && visit.value.isLocked &&
   (!invoice.value || invoice.value.paidAmount === 0 && [0, 1].includes(invoice.value.status)));
 const statuses: Record<number, string> = { 0: 'Nháp', 1: 'Chờ thanh toán', 2: 'Thanh toán một phần', 3: 'Đã thanh toán', 4: 'Đã hủy' };
-const canComplete = computed(() => visit.value?.status === 'InProgress' && !visit.value.isLocked &&
-  (auth.role === 'ADMIN' || auth.role === 'DENTIST' && visit.value.dentistId === auth.user?.userId));
+const canComplete = computed(() => ['InProgress', 'Correcting'].includes(visit.value?.status ?? '') && !visit.value?.isLocked && !correctionDirty.value && !correctionNeedsReview.value &&
+  (auth.role === 'ADMIN' || auth.role === 'DENTIST' && visit.value?.dentistId === auth.user?.userId));
 const money = (value: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
 let version = 0;
 function message(cause: unknown) {
@@ -102,12 +119,12 @@ function message(cause: unknown) {
 }
 async function load() {
   const ticket = ++version;
-  busy.value = true; error.value = ''; success.value = ''; visit.value = null; store.replace(null); confirmed.value = false; unlockReason.value = ''; unlockHistory.value = [];
+  busy.value = true; error.value = ''; success.value = ''; visit.value = null; store.replace(null); confirmed.value = false; unlockReason.value = ''; unlockHistory.value = []; correctionDiagnosis.value = ''; correctionNotes.value = ''; correctionNeedsReview.value = false;
   if (!Number.isInteger(visitId.value) || visitId.value <= 0) { error.value = 'Mã lần khám không hợp lệ.'; busy.value = false; return; }
   try {
     const details = await visitsService.getById(visitId.value);
     if (ticket !== version) return;
-    visit.value = details;
+    visit.value = details; correctionDiagnosis.value = details.diagnosis ?? ''; correctionNotes.value = details.clinicalNotes ?? '';
     try {
       const data = await invoiceDraftApi.get(visitId.value);
       if (ticket === version) store.replace(data);
@@ -142,23 +159,40 @@ async function unlock() {
     await invoiceDraftApi.unlock(visitId.value, reason);
     if (ticket !== version) return;
     const refreshVersion = version + 1; await load();
-    if (refreshVersion === version && visit.value?.status === 'InProgress')
-      success.value = oldCode ? `Đã mở lại khám và hủy hóa đơn ${oldCode}. Hóa đơn mới dùng mã mới.` : 'Đã mở lại khám để điều chỉnh.';
+    if (refreshVersion === version && visit.value?.status === 'Correcting')
+      success.value = oldCode ? `Đã mở đính chính và hủy hóa đơn ${oldCode}. Hóa đơn mới dùng mã mới.` : 'Đã mở đính chính hồ sơ.';
   } catch (cause) {
     if (ticket !== version) return;
     const failureMessage = message(cause); const refreshVersion = version + 1;
     await load(); if (refreshVersion === version) error.value = failureMessage;
   } finally { if (ticket === version) busy.value = false; }
 }
+async function saveCorrection() {
+  if (!canCorrect.value || !correctionDirty.value || busy.value || discountBusy.value) return;
+  if (!correctionDiagnosis.value.trim() || correctionDiagnosis.value.length > 1000 || correctionNotes.value.length > 2000) {
+    error.value = 'Nhập chẩn đoán tối đa 1000 ký tự và ghi chú tối đa 2000 ký tự.'; return;
+  }
+  const ticket = version, expectedId = visitId.value;
+  busy.value = true; confirmed.value = false; error.value = ''; success.value = '';
+  try {
+    const result = await visitsService.updateDiagnosis(expectedId, { diagnosis: correctionDiagnosis.value.trim(), clinicalNotes: correctionNotes.value.trim() || null });
+    if (ticket !== version) return;
+    if (result.visitId !== expectedId || result.status !== 'Correcting' || result.isLocked) throw new Error('Correction changed');
+    visit.value = result; correctionDiagnosis.value = result.diagnosis ?? ''; correctionNotes.value = result.clinicalNotes ?? '';
+    success.value = 'Đã lưu đính chính chẩn đoán. Kiểm tra dịch vụ trước khi hoàn tất.';
+  } catch (cause) {
+    if (ticket === version) { error.value = message(cause); correctionNeedsReview.value = true; }
+  } finally { if (ticket === version) busy.value = false; }
+}
 async function complete() {
-  if (!confirmed.value || !canComplete.value || busy.value) return;
-  const ticket = version; busy.value = true; error.value = ''; success.value = '';
+  if (!confirmed.value || !canComplete.value || busy.value || discountBusy.value) return;
+  const ticket = version, completingCorrection = isCorrection.value; busy.value = true; error.value = ''; success.value = '';
   try {
     await invoiceDraftApi.complete(visitId.value);
     if (ticket !== version) return;
     const refreshVersion = version + 1;
     await load();
-    if (refreshVersion === version && invoice.value) success.value = 'Đã kết thúc khám và tạo hóa đơn chờ thanh toán. Hồ sơ đã được khóa.';
+    if (refreshVersion === version && invoice.value && visit.value?.status === 'Completed' && visit.value.isLocked) success.value = completingCorrection ? 'Đã hoàn tất đính chính, khóa hồ sơ và chốt hóa đơn chờ thanh toán.' : 'Đã kết thúc khám và tạo hóa đơn chờ thanh toán. Hồ sơ đã được khóa.';
   } catch (cause) {
     if (ticket !== version) return;
     const failureMessage = message(cause);
@@ -167,7 +201,7 @@ async function complete() {
   } finally { if (ticket === version) busy.value = false; }
 }
 watch(visitId, load, { immediate: true });
-onUnmounted(() => { version++; store.replace(null); });
+onUnmounted(() => { version++; store.replace(null); visit.value = null; correctionDiagnosis.value = ''; correctionNotes.value = ''; unlockReason.value = ''; unlockHistory.value = []; error.value = ''; success.value = ''; });
 </script>
 
 <style scoped>

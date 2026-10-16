@@ -19,6 +19,12 @@ public sealed class VisitServiceTests
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly IAuditLogger _auditLogger = Substitute.For<IAuditLogger>();
 
+    public VisitServiceTests()
+    {
+        _unitOfWork.ExecuteSerializableTransactionAsync(Arg.Any<Func<CancellationToken, Task<Result<Dental.Application.Features.Visits.DTOs.VisitResponse>>>>(), Arg.Any<CancellationToken>())
+            .Returns(c => c.Arg<Func<CancellationToken, Task<Result<Dental.Application.Features.Visits.DTOs.VisitResponse>>>>()(CancellationToken.None));
+    }
+
     private VisitService CreateService() => new(_patientRepository, _visitRepository, _unitOfWork, _auditLogger);
 
     [Fact]
@@ -160,7 +166,7 @@ public sealed class VisitServiceTests
         Assert.Equal("Đã đặt thuốc diệt tủy", visit.ClinicalNotes);
         Assert.NotNull(visit.UpdatedAt);
         await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
-        await _auditLogger.Received(1).LogAsync(
+        await _auditLogger.Received(1).LogRequiredAsync(
             action: AuditActions.VisitDiagnosisUpdated,
             entityType: "Visit",
             entityId: 20,

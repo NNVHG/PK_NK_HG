@@ -142,7 +142,7 @@ public sealed class VisitsController : ControllerBase
         {
             "GEN_001" => StatusCodes.Status404NotFound,
             "GEN_002" or "PAT_112" => StatusCodes.Status403Forbidden,
-            "PAT_090" or "PAT_091" or "PAT_111" => StatusCodes.Status409Conflict,
+            "PAT_090" or "PAT_091" or "PAT_111" or "PAT_113" => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status400BadRequest,
         };
 

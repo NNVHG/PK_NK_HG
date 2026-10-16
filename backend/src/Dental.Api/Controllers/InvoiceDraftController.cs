@@ -14,7 +14,7 @@ namespace Dental.Api.Controllers;
 [Authorize]
 public sealed class InvoiceDraftController(InvoiceDraftService service, IInvoiceRepository invoices,
     QueueService queue, ICurrentUser user, InvoiceVisitRequestValidator validator, VisitReopenService reopen,
-    IVisitReopenRepository reopenRepository) : ControllerBase
+    IVisitReopenRepository reopenRepository, IVisitRepository visits) : ControllerBase
 {
     [HttpGet("api/visits/{visitId:int}/invoice-draft")]
     [HttpGet("api/invoices/by-visit/{visitId:int}")]
@@ -35,6 +35,13 @@ public sealed class InvoiceDraftController(InvoiceDraftService service, IInvoice
     {
         if (user.UserId is not int userId) return Unauthorized();
         if (!(await validator.ValidateAsync(new InvoiceVisitRequest(visitId), ct)).IsValid) return BadRequest(new { message = "Mã lần khám không hợp lệ." });
+        var visit = await visits.GetByIdAsync(visitId, ct);
+        if (visit?.Status == Dental.Domain.Constants.VisitStatuses.Correcting)
+        {
+            var correction = await service.CompleteCorrectionAsync(visitId, userId, user.RoleCode,
+                HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
+            return correction.IsFailure ? Failure(correction.Error) : NoContent();
+        }
         var queueId = await invoices.GetQueueIdAsync(visitId, ct);
         if (queueId is null) return NotFound(new { message = "Không tìm thấy lượt khám trong hàng đợi." });
         var result = await queue.UpdateQueueStatusAsync(queueId.Value, userId, user.RoleCode!,

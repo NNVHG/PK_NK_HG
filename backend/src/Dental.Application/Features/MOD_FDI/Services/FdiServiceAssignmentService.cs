@@ -37,40 +37,43 @@ public sealed class FdiServiceAssignmentService(IVisitRepository visits, IPatien
         if (!(await validator.ValidateAsync(request, ct)).IsValid)
             return Result<IReadOnlyList<AssignedServiceResponse>>.Failure(Error.Validation);
 
-        var result = await unitOfWork.ExecuteInTransactionAsync(async transactionCt =>
+        try
         {
-            var visit = await visits.GetForUpdateAsync(visitId, transactionCt);
-            if (visit is null) return Result<IReadOnlyList<AssignedServiceResponse>>.Failure(Error.NotFound);
-            if (role == RoleCodes.Dentist && visit.DentistId != userId)
-                return Result<IReadOnlyList<AssignedServiceResponse>>.Failure(Error.Forbidden);
-            if (visit.Status != VisitStatuses.InProgress || visit.IsLocked)
-                return Result<IReadOnlyList<AssignedServiceResponse>>.Failure(Closed);
-            var service = await catalog.GetByIdAsync(request.ServiceId, true, transactionCt);
-            var now = DateTime.UtcNow;
-            var price = service?.Prices.Where(x => x.EffectiveFrom <= now)
-                .OrderByDescending(x => x.EffectiveFrom).ThenByDescending(x => x.ServicePriceId).FirstOrDefault();
-            if (service is null || !service.IsActive || price is null)
-                return Result<IReadOnlyList<AssignedServiceResponse>>.Failure(PriceUnavailable);
-            const decimal maxMoney = 999999999999999999m;
-            if (price.Amount < 0 || price.Amount > maxMoney / request.Quantity)
-                return Result<IReadOnlyList<AssignedServiceResponse>>.Failure(AmountTooLarge);
-            var teeth = request.ToothNumbers is { Length: > 0 }
-                ? request.ToothNumbers.Select(x => (int?)x) : new int?[] { null };
-            var rows = teeth.Select(tooth => new Assignment
+            return await unitOfWork.ExecuteSerializableTransactionAsync(async transactionCt =>
             {
-                VisitId = visitId, ServiceId = service.DentalServiceId, ServicePriceId = price.ServicePriceId,
-                ServiceCode = service.Code, ServiceName = service.Name, UnitPrice = price.Amount,
-                ToothNumber = tooth, Surface = request.Surface, Quantity = request.Quantity,
-                CreatedByUserId = userId, CreatedAt = now
-            }).ToArray();
-            await assignments.AddRangeAsync(rows, transactionCt);
-            await unitOfWork.SaveChangesAsync(transactionCt);
-            return Result<IReadOnlyList<AssignedServiceResponse>>.Success(rows.Select(Map).ToArray());
-        }, ct);
-        if (result.IsSuccess)
-            await audit.LogAsync("MOD_FDI_SERVICE_ASSIGNED", "Visit", visitId, userId,
-                JsonSerializer.Serialize(new { action = "assign_services", count = result.Value!.Count }), ip, ct);
-        return result;
+                var visit = await visits.GetForUpdateAsync(visitId, transactionCt);
+                if (visit is null) return Result<IReadOnlyList<AssignedServiceResponse>>.Failure(Error.NotFound);
+                if (role == RoleCodes.Dentist && visit.DentistId != userId)
+                    return Result<IReadOnlyList<AssignedServiceResponse>>.Failure(Error.Forbidden);
+                if (!VisitStatuses.IsEditable(visit.Status) || visit.IsLocked)
+                    return Result<IReadOnlyList<AssignedServiceResponse>>.Failure(Closed);
+                var service = await catalog.GetByIdAsync(request.ServiceId, true, transactionCt);
+                var now = DateTime.UtcNow;
+                var price = service?.Prices.Where(x => x.EffectiveFrom <= now)
+                    .OrderByDescending(x => x.EffectiveFrom).ThenByDescending(x => x.ServicePriceId).FirstOrDefault();
+                if (service is null || !service.IsActive || price is null)
+                    return Result<IReadOnlyList<AssignedServiceResponse>>.Failure(PriceUnavailable);
+                const decimal maxMoney = 999999999999999999m;
+                if (price.Amount < 0 || price.Amount > maxMoney / request.Quantity)
+                    return Result<IReadOnlyList<AssignedServiceResponse>>.Failure(AmountTooLarge);
+                var teeth = request.ToothNumbers is { Length: > 0 }
+                    ? request.ToothNumbers.Select(x => (int?)x) : new int?[] { null };
+                var rows = teeth.Select(tooth => new Assignment
+                {
+                    VisitId = visitId, ServiceId = service.DentalServiceId, ServicePriceId = price.ServicePriceId,
+                    ServiceCode = service.Code, ServiceName = service.Name, UnitPrice = price.Amount,
+                    ToothNumber = tooth, Surface = request.Surface, Quantity = request.Quantity,
+                    CreatedByUserId = userId, CreatedAt = now
+                }).ToArray();
+                await assignments.AddRangeAsync(rows, transactionCt);
+                visit.UpdatedAt = DateTime.UtcNow;
+                await unitOfWork.SaveChangesAsync(transactionCt);
+                await audit.LogRequiredAsync("MOD_FDI_SERVICE_ASSIGNED", "Visit", visitId, userId,
+                    JsonSerializer.Serialize(new { action = "assign_services", count = rows.Length }), ip, transactionCt);
+                return Result<IReadOnlyList<AssignedServiceResponse>>.Success(rows.Select(Map).ToArray());
+            }, ct);
+        }
+        catch (ConcurrentOperationException) { return Result<IReadOnlyList<AssignedServiceResponse>>.Failure("FDI_045", "Hồ sơ vừa thay đổi; tải lại trước khi sửa."); }
     }
 
     private static AssignedServiceResponse Map(Assignment row) => new(row.Id, row.VisitId, row.ServiceId,

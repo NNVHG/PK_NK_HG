@@ -43,7 +43,22 @@ public sealed class ToothConditionService(IVisitRepository visits, IPatientRepos
             await conditions.GetLatestForPatientAsync(patientId, ct));
     }
 
-    public async Task<Result<ToothConditionResponse>> AddAsync(int visitId, ToothConditionRequest request,
+    private async Task<Result<T>> WriteAsync<T>(Func<CancellationToken, Task<Result<T>>> operation, CancellationToken ct)
+    {
+        try { return await unitOfWork.ExecuteSerializableTransactionAsync(operation, ct); }
+        catch (ConcurrentOperationException) { return Result<T>.Failure("FDI_006", "Hồ sơ vừa thay đổi; tải lại trước khi sửa."); }
+    }
+
+    public Task<Result<ToothConditionResponse>> AddAsync(int visitId, ToothConditionRequest request, int userId,
+        string? role, string? ip, CancellationToken ct = default)
+        => WriteAsync(transactionCt => AddCoreAsync(visitId, request, userId, role, ip, transactionCt), ct);
+    public Task<Result<ToothConditionResponse>> UpdateAsync(int visitId, int conditionId, ToothConditionRequest request,
+        int userId, string? role, string? ip, CancellationToken ct = default)
+        => WriteAsync(transactionCt => UpdateCoreAsync(visitId, conditionId, request, userId, role, ip, transactionCt), ct);
+    public Task<Result<bool>> DeleteAsync(int visitId, int conditionId, int userId, string? role, string? ip, CancellationToken ct = default)
+        => WriteAsync(transactionCt => DeleteCoreAsync(visitId, conditionId, userId, role, ip, transactionCt), ct);
+
+    private async Task<Result<ToothConditionResponse>> AddCoreAsync(int visitId, ToothConditionRequest request,
         int userId, string? role, string? ip, CancellationToken ct = default)
     {
         if (role is not (RoleCodes.Admin or RoleCodes.Dentist))
@@ -54,7 +69,7 @@ public sealed class ToothConditionService(IVisitRepository visits, IPatientRepos
         if (visit is null) return Result<ToothConditionResponse>.Failure(Error.NotFound);
         if (role == RoleCodes.Dentist && visit.DentistId != userId)
             return Result<ToothConditionResponse>.Failure(Error.Forbidden);
-        if (visit.Status != VisitStatuses.InProgress || visit.IsLocked)
+        if (!VisitStatuses.IsEditable(visit.Status) || visit.IsLocked)
             return Result<ToothConditionResponse>.Failure(VisitClosed);
         var row = new ToothCondition
         {
@@ -64,13 +79,14 @@ public sealed class ToothConditionService(IVisitRepository visits, IPatientRepos
             CreatedAt = DateTime.UtcNow
         };
         await conditions.AddAsync(row, ct);
+        visit.UpdatedAt = DateTime.UtcNow;
         await unitOfWork.SaveChangesAsync(ct);
-        await audit.LogAsync("MOD_FDI_CONDITION_CREATED", "ToothCondition", row.Id, userId,
+        await audit.LogRequiredAsync("MOD_FDI_CONDITION_CREATED", "ToothCondition", row.Id, userId,
             "{\"action\":\"condition_created\"}", ip, ct);
         return Result<ToothConditionResponse>.Success(Map(row));
     }
 
-    public async Task<Result<ToothConditionResponse>> UpdateAsync(int visitId, int conditionId,
+    private async Task<Result<ToothConditionResponse>> UpdateCoreAsync(int visitId, int conditionId,
         ToothConditionRequest request, int userId, string? role, string? ip, CancellationToken ct = default)
     {
         if (role is not (RoleCodes.Admin or RoleCodes.Dentist))
@@ -81,7 +97,7 @@ public sealed class ToothConditionService(IVisitRepository visits, IPatientRepos
         if (visit is null) return Result<ToothConditionResponse>.Failure(Error.NotFound);
         if (role == RoleCodes.Dentist && visit.DentistId != userId)
             return Result<ToothConditionResponse>.Failure(Error.Forbidden);
-        if (visit.Status != VisitStatuses.InProgress || visit.IsLocked)
+        if (!VisitStatuses.IsEditable(visit.Status) || visit.IsLocked)
             return Result<ToothConditionResponse>.Failure(VisitClosed);
         var row = await conditions.GetForUpdateAsync(visitId, conditionId, ct);
         if (row is null) return Result<ToothConditionResponse>.Failure(Error.NotFound);
@@ -89,13 +105,14 @@ public sealed class ToothConditionService(IVisitRepository visits, IPatientRepos
         row.Surface = FdiCodes.NormalizeSurface(request.Surface);
         row.ConditionCode = request.ConditionCode;
         row.Note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim();
+        visit.UpdatedAt = DateTime.UtcNow;
         await unitOfWork.SaveChangesAsync(ct);
-        await audit.LogAsync("MOD_FDI_CONDITION_UPDATED", "ToothCondition", row.Id, userId,
+        await audit.LogRequiredAsync("MOD_FDI_CONDITION_UPDATED", "ToothCondition", row.Id, userId,
             "{\"action\":\"condition_updated\"}", ip, ct);
         return Result<ToothConditionResponse>.Success(Map(row));
     }
 
-    public async Task<Result<bool>> DeleteAsync(int visitId, int conditionId, int userId,
+    private async Task<Result<bool>> DeleteCoreAsync(int visitId, int conditionId, int userId,
         string? role, string? ip, CancellationToken ct = default)
     {
         if (role is not (RoleCodes.Admin or RoleCodes.Dentist))
@@ -104,13 +121,14 @@ public sealed class ToothConditionService(IVisitRepository visits, IPatientRepos
         if (visit is null) return Result<bool>.Failure(Error.NotFound);
         if (role == RoleCodes.Dentist && visit.DentistId != userId)
             return Result<bool>.Failure(Error.Forbidden);
-        if (visit.Status != VisitStatuses.InProgress || visit.IsLocked)
+        if (!VisitStatuses.IsEditable(visit.Status) || visit.IsLocked)
             return Result<bool>.Failure(VisitClosed);
         var row = await conditions.GetForUpdateAsync(visitId, conditionId, ct);
         if (row is null) return Result<bool>.Failure(Error.NotFound);
         conditions.Remove(row);
+        visit.UpdatedAt = DateTime.UtcNow;
         await unitOfWork.SaveChangesAsync(ct);
-        await audit.LogAsync("MOD_FDI_CONDITION_DELETED", "ToothCondition", row.Id, userId,
+        await audit.LogRequiredAsync("MOD_FDI_CONDITION_DELETED", "ToothCondition", row.Id, userId,
             "{\"action\":\"condition_deleted\"}", ip, ct);
         return Result<bool>.Success(true);
     }

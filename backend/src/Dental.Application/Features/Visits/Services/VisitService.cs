@@ -109,7 +109,19 @@ public sealed class VisitService
         return Result<VisitResponse>.Success(ToResponse(visit));
     }
 
-    public async Task<Result<VisitResponse>> UpdateDiagnosisAsync(
+    public async Task<Result<VisitResponse>> UpdateDiagnosisAsync(int visitId, UpdateVisitDiagnosisRequest request,
+        int currentUserId, string? currentRoleCode, string? ipAddress, CancellationToken ct = default)
+    {
+        if (currentRoleCode is not (RoleCodes.Admin or RoleCodes.Dentist)) return Result<VisitResponse>.Failure(Error.Forbidden);
+        try
+        {
+            return await _unitOfWork.ExecuteSerializableTransactionAsync(
+                transactionCt => UpdateDiagnosisCoreAsync(visitId, request, currentUserId, currentRoleCode, ipAddress, transactionCt), ct);
+        }
+        catch (ConcurrentOperationException) { return Result<VisitResponse>.Failure("PAT_113", "Hồ sơ vừa thay đổi; tải lại trước khi sửa."); }
+    }
+
+    private async Task<Result<VisitResponse>> UpdateDiagnosisCoreAsync(
         int visitId,
         UpdateVisitDiagnosisRequest request,
         int currentUserId,
@@ -128,8 +140,8 @@ public sealed class VisitService
         if (currentRoleCode == RoleCodes.Dentist && visit.DentistId != currentUserId)
             return Result<VisitResponse>.Failure(Error.DiagnosisDentistMismatch);
 
-        // DL-085: Chỉ khi InProgress
-        if (visit.Status != VisitStatuses.InProgress)
+        // DL263: InProgress or the separate Correcting mode, always unlocked.
+        if (!VisitStatuses.IsEditable(visit.Status) || visit.IsLocked)
             return Result<VisitResponse>.Failure(Error.DiagnosisVisitNotInProgress);
 
         visit.Diagnosis = request.Diagnosis.Trim();
@@ -138,7 +150,7 @@ public sealed class VisitService
 
         await _unitOfWork.SaveChangesAsync(ct);
 
-        await _auditLogger.LogAsync(
+        await _auditLogger.LogRequiredAsync(
             action: AuditActions.VisitDiagnosisUpdated,
             entityType: "Visit",
             entityId: visit.VisitId,

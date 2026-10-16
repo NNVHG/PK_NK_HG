@@ -65,6 +65,6 @@ public sealed class ToothConditionsController(ToothConditionService service, ICu
 
     private IActionResult Failure(Error error) => StatusCode(error.Code switch
     {
-        "GEN_001" => 404, "GEN_002" => 403, "FDI_003" => 409, _ => 400
+        "GEN_001" => 404, "GEN_002" => 403, "FDI_003" or "FDI_006" => 409, _ => 400
     }, new { code = error.Code, message = error.Message });
 }

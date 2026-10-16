@@ -40,7 +40,7 @@ public sealed class MedicalHistoryService
         if (visit is null)
             return Result<MedicalHistoryRecordResponse>.Failure(Error.NotFound);
 
-        if (visit.Status is VisitStatuses.Completed or VisitStatuses.Cancelled)
+        if (visit.Status is VisitStatuses.Completed or VisitStatuses.Cancelled or VisitStatuses.Correcting)
             return Result<MedicalHistoryRecordResponse>.Failure(Error.MedicalHistoryVisitClosed);
 
         var record = new MedicalHistoryRecord

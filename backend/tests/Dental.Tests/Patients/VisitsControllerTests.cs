@@ -1,4 +1,5 @@
 using Dental.Api.Controllers;
+using Dental.Application.Common;
 using Dental.Application.Features.Visits.DTOs;
 using Dental.Application.Features.Visits.Services;
 using Dental.Application.Features.Visits.Validators;
@@ -15,6 +16,14 @@ namespace Dental.Tests.Patients;
 
 public sealed class VisitsControllerTests
 {
+    private static IUnitOfWork CreateUnitOfWork()
+    {
+        var uow = Substitute.For<IUnitOfWork>();
+        uow.ExecuteSerializableTransactionAsync(Arg.Any<Func<CancellationToken, Task<Result<VisitResponse>>>>(), Arg.Any<CancellationToken>())
+            .Returns(c => c.Arg<Func<CancellationToken, Task<Result<VisitResponse>>>>()(CancellationToken.None));
+        return uow;
+    }
+
     [Fact]
     public async Task CreateVisit_InactivePatientReturnsConflict()
     {
@@ -25,7 +34,7 @@ public sealed class VisitsControllerTests
         var service = new VisitService(
             patientRepository,
             visitRepository,
-            Substitute.For<IUnitOfWork>(),
+            CreateUnitOfWork(),
             Substitute.For<IAuditLogger>());
         var currentUser = Substitute.For<ICurrentUser>();
         currentUser.UserId.Returns(8);
@@ -58,7 +67,7 @@ public sealed class VisitsControllerTests
         };
         visitRepository.GetForUpdateAsync(15, Arg.Any<CancellationToken>()).Returns(visit);
 
-        var unitOfWork = Substitute.For<IUnitOfWork>();
+        var unitOfWork = CreateUnitOfWork();
         var auditLogger = Substitute.For<IAuditLogger>();
         var service = new VisitService(
             Substitute.For<IPatientRepository>(),
@@ -97,7 +106,7 @@ public sealed class VisitsControllerTests
         var service = new VisitService(
             Substitute.For<IPatientRepository>(),
             Substitute.For<IVisitRepository>(),
-            Substitute.For<IUnitOfWork>(),
+            CreateUnitOfWork(),
             Substitute.For<IAuditLogger>());
         var currentUser = Substitute.For<ICurrentUser>();
         currentUser.UserId.Returns(10);
@@ -136,7 +145,7 @@ public sealed class VisitsControllerTests
         var service = new VisitService(
             Substitute.For<IPatientRepository>(),
             visitRepository,
-            Substitute.For<IUnitOfWork>(),
+            CreateUnitOfWork(),
             Substitute.For<IAuditLogger>());
 
         var currentUser = Substitute.For<ICurrentUser>();
