@@ -9,6 +9,15 @@ namespace Dental.Application.Features.MOD_BIL.Services;
 public sealed class InvoiceDraftService(IInvoiceRepository invoices, IVisitRepository visits,
     IPatientRepository patients, IAuditLogger audit, VietnamClock clock) : IInvoiceDraftGenerator
 {
+    public Task<Result> StageVisitCancellationAsync(Visit visit, int userId, string role, string? ip, CancellationToken ct = default)
+    {
+        if (role is not (RoleCodes.Admin or RoleCodes.Dentist) || role == RoleCodes.Dentist && visit.DentistId != userId)
+            return Task.FromResult(Result.Failure(Error.Forbidden));
+        if (visit.Status != VisitStatuses.InProgress || visit.IsLocked)
+            return Task.FromResult(Result.Failure(new Error("BIL_012", "Ca khám đã thay đổi; tải lại trước khi hủy.")));
+        return invoices.StageVisitCancellationAsync(visit.VisitId, userId, role, ip, ct);
+    }
+
     public async Task<Result> GenerateAsync(Visit completedVisit, int userId, string role, string? ip, CancellationToken ct = default)
     {
         if (role is not (RoleCodes.Admin or RoleCodes.Dentist) ||

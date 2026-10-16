@@ -25,6 +25,7 @@ export interface QueueEntryResponse {
   status: number;
   statusText: string;
   canMarkAbsent: boolean;
+  canCancelConsultation: boolean;
   notes: string | null;
 }
 
@@ -95,6 +96,10 @@ export const queueService = {
       confirmed: true, reason
     });
     return response.data;
+  },
+
+  async cancelConsultation(queueEntryId: number, reason: string): Promise<QueueEntryResponse> {
+    return (await apiClient.put<QueueEntryResponse>(`/queue/${queueEntryId}/status`, { newStatus: 4, reason })).data;
   },
 
   async cancelWaiting(queueEntryId: number, reason: string | null): Promise<QueueEntryResponse> {

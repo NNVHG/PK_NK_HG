@@ -20,5 +20,6 @@ public sealed record QueueEntryResponse(
     DateTime CreatedAt,
     bool CanMarkAbsent = false,
     string? ChairNumber = null,
-    string? RoomName = null
+    string? RoomName = null,
+    bool CanCancelConsultation = false
 );

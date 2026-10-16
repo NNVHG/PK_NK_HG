@@ -8,6 +8,7 @@ using Dental.Domain.Entities;
 using Dental.Domain.Enums;
 using Dental.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 
 namespace Dental.Infrastructure.Repositories;
@@ -16,6 +17,35 @@ public sealed class InvoiceRepository(DentalDbContext db) : IInvoiceRepository
 {
     public Task<Invoice?> GetForVisitAsync(int visitId, CancellationToken ct = default)
         => db.Invoices.AsNoTracking().Include(x => x.Items).FirstOrDefaultAsync(x => x.VisitId == visitId && x.Status != InvoiceStatus.Cancelled, ct);
+    public async Task<Result> StageVisitCancellationAsync(int visitId, int userId, string role, string? ip, CancellationToken ct = default)
+    {
+        if (db.Database.CurrentTransaction?.GetDbTransaction().IsolationLevel != IsolationLevel.Serializable)
+            throw new InvalidOperationException("Visit invoice cancellation requires the caller's Serializable transaction.");
+        var stored = await db.Visits.AsNoTracking().SingleOrDefaultAsync(v => v.VisitId == visitId, ct);
+        if (stored is null) return Result.Failure(Error.NotFound);
+        if (role is not (RoleCodes.Admin or RoleCodes.Dentist) || role == RoleCodes.Dentist && stored.DentistId != userId ||
+            !await db.Users.AnyAsync(u => u.UserId == userId && u.IsActive && u.Role.RoleCode == role, ct))
+            return Result.Failure(Error.Forbidden);
+        if (stored.Status != VisitStatuses.InProgress || stored.IsLocked)
+            return Result.Failure(new Error("BIL_012", "Ca khám đã thay đổi; tải lại trước khi hủy."));
+        // Any historical receipt blocks this derived operation, even if PaidAmount was reset elsewhere.
+        if (await db.Invoices.AnyAsync(i => i.VisitId == visitId && i.PaidAmount != 0, ct) ||
+            await db.PaymentTransactions.AnyAsync(p => p.Invoice.VisitId == visitId, ct))
+            return Result.Failure(new Error("BIL_013", "Ca khám đã phát sinh thanh toán; không thể tự hủy hóa đơn."));
+        var active = await db.Invoices.Where(i => i.VisitId == visitId && i.Status != InvoiceStatus.Cancelled).ToListAsync(ct);
+        if (active.Any(i => i.Status != InvoiceStatus.Draft))
+            return Result.Failure(new Error("BIL_013", "Chỉ tự hủy hóa đơn Draft chưa thu cùng ca khám; tải lại để đối chiếu."));
+        foreach (var invoice in active)
+        {
+            invoice.Status = InvoiceStatus.Cancelled;
+            db.AuditLogs.Add(new AuditLog { UserId = userId, Action = "MOD_BIL_DRAFT_CANCELLED_WITH_VISIT",
+                EntityType = "Invoice", EntityId = invoice.Id, IpAddress = ip, CreatedAt = DateTime.UtcNow,
+                Detail = JsonSerializer.Serialize(new { visitId, trigger = "visit_cancelled" }) });
+        }
+        // Keep code, amounts and item snapshots. Queue history in this transaction retains the cancellation reason.
+        return Result.Success();
+    }
+
     public Task<int?> GetQueueIdAsync(int visitId, CancellationToken ct = default)
         => db.QueueEntries.Where(x => x.VisitId == visitId).Select(x => (int?)x.QueueEntryId).FirstOrDefaultAsync(ct);
 

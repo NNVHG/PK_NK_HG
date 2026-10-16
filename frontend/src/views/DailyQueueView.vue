@@ -38,7 +38,8 @@
       <p>{{ row.patientCode }} · {{ row.statusText }} · {{ row.queueDate }}</p>
       <p>{{ row.isPriority ? 'Ưu tiên lịch hẹn đúng giờ' : 'Chờ thông thường' }} · {{ row.dentistName || 'Chưa phân nha sĩ' }} · {{ locationLabel(row) }}</p>
       <RouterLink v-if="row.status === 6 && ['ADMIN', 'DENTIST'].includes(authStore.role)" to="/clinical/diagnosis">Mở hồ sơ để bắt đầu khám</RouterLink>
-      <button v-if="canCancelWaiting && row.status === 1" :disabled="loading || writing || imagingRow !== null || absenceRow !== null || cleanupOpen || needsReview" @click="openCancellation(row)">Hủy lượt chưa khám</button>
+      <button v-if="canCancelWaiting && row.status === 1 && row.canCancelConsultation !== true" :disabled="loading || writing || imagingRow !== null || absenceRow !== null || cleanupOpen || needsReview" @click="openCancellation(row)">Hủy lượt chưa khám</button>
+      <button v-if="canCancelClinical(row)" :disabled="loading || writing || imagingRow !== null || absenceRow !== null || cleanupOpen || needsReview" @click="openCancellation(row, true)">Hủy ca đã bắt đầu khám</button>
       <button v-if="canRouteImaging(row)" :disabled="loading || writing || cancelRow !== null || absenceRow !== null || cleanupOpen || needsReview" @click="openImaging(row)">
         {{ row.status === 2 ? 'Chỉ định chụp ảnh' : 'Hoàn tất chụp → chờ nha sĩ' }}
       </button>
@@ -47,13 +48,14 @@
       </button>
     </li></ol>
     <section v-if="cancelRow" aria-labelledby="cancel-title" class="cancel-panel">
-      <h2 id="cancel-title">Hủy lượt chờ chưa khám</h2>
+      <h2 id="cancel-title">{{ cancelClinical ? 'Hủy ca đã bắt đầu khám' : 'Hủy lượt chờ chưa khám' }}</h2>
       <p>{{ numberLabel(cancelRow.queueNumber) }} · {{ cancelRow.patientName }} · {{ cancelRow.patientCode }} · {{ cancelRow.queueDate }}</p>
-      <p>Chỉ hủy lượt đang chờ trước lần khám. Lượt đã bắt đầu khám hoặc trở về sau chụp ảnh cần xử lý theo quy trình chuyên môn.</p>
+      <p v-if="cancelClinical">Hủy ca sẽ giải phóng ghế và tự hủy hóa đơn Draft chưa thu trong cùng thao tác. Giữ lịch sử, lý do và các dòng hóa đơn. Ca đã phát sinh thanh toán không thể hủy qua thao tác này.</p>
+      <p v-else>Chỉ hủy lượt đang chờ trước lần khám. Lượt đã bắt đầu khám hoặc trở về sau chụp ảnh cần xử lý theo quy trình chuyên môn.</p>
       <form @submit.prevent="handleCancellation">
-        <label for="cancel-reason">Lý do (không bắt buộc, tối đa 500 ký tự)</label>
-        <textarea id="cancel-reason" v-model="cancelReason" maxlength="500" :disabled="cancelling" />
-        <label><input v-model="cancelConfirmed" type="checkbox" :disabled="cancelling || cleanupOpen || needsReview" /> Tôi đã đối chiếu đúng bệnh nhân và xác nhận hủy lượt chờ chưa khám.</label>
+        <label for="cancel-reason">Lý do ({{ cancelClinical ? 'bắt buộc' : 'không bắt buộc' }}, tối đa 500 ký tự)</label>
+        <textarea id="cancel-reason" v-model="cancelReason" :required="cancelClinical" maxlength="500" :disabled="cancelling" />
+        <label><input v-model="cancelConfirmed" type="checkbox" :disabled="cancelling || cleanupOpen || needsReview" /> Tôi đã đối chiếu đúng bệnh nhân và xác nhận {{ cancelClinical ? 'hủy ca cùng Draft chưa thu' : 'hủy lượt chờ chưa khám' }}.</label>
         <button type="submit" :disabled="cancelling || loading || cleanupOpen || needsReview || !cancelConfirmed">{{ cancelling ? 'Đang hủy…' : 'Xác nhận hủy lượt' }}</button>
         <button type="button" :disabled="cancelling" @click="closeCancellation">Quay lại</button>
       </form>
@@ -112,6 +114,7 @@ const loading = ref(false), callingNext = ref(false), error = ref(''), actionMsg
 const authStore = useAuthStore(), canCallNext = computed(() => ['ADMIN', 'DENTIST', 'ASSISTANT'].includes(authStore.role));
 const needsCallingDentist = computed(() => ['ADMIN', 'ASSISTANT'].includes(authStore.role));
 const canCancelWaiting = computed(() => ['ADMIN', 'RECEPTIONIST'].includes(authStore.role));
+const cancelClinical = ref(false);
 const cancelRow = ref<QueueEntryResponse | null>(null), cancelReason = ref(''), cancelConfirmed = ref(false), cancelling = ref(false);
 const imagingRow = ref<QueueEntryResponse | null>(null), imagingReason = ref(''), imagingConfirmed = ref(false), routingImaging = ref(false);
 const absenceRow = ref<QueueEntryResponse | null>(null), absenceReason = ref(''), absenceConfirmed = ref(false), changingAbsence = ref(false);
@@ -127,7 +130,7 @@ async function loadDentists() {
   finally { if (ticket === dentistVersion) dentistsLoading.value = false; }
 }
 async function load(targetPage = 1) {
-  if (routingImaging.value || changingAbsence.value || cleaningUp.value) return;
+  if (cancelling.value || routingImaging.value || changingAbsence.value || cleaningUp.value) return;
   if (!Number.isInteger(targetPage) || targetPage < 1 || targetPage > 1_000_000 || ![0, 1, 2, 3, 4, 5, 6, 7].includes(status.value)) return;
   closeCancellation();
   closeImaging();
@@ -164,23 +167,31 @@ async function handleCallNext() {
     if (ticket === life) callingNext.value = false;
   }
 }
-function clearCancellation() { cancelRow.value = null; cancelReason.value = ''; cancelConfirmed.value = false; }
+function canCancelClinical(row: QueueEntryResponse) {
+  return row.canCancelConsultation === true && [1, 2, 5, 6].includes(row.status) &&
+    (authStore.role === 'ADMIN' || (authStore.role === 'DENTIST' && row.dentistId === authStore.user?.userId));
+}
+function clearCancellation() { cancelRow.value = null; cancelReason.value = ''; cancelConfirmed.value = false; cancelClinical.value = false; }
 function closeCancellation() { if (!cancelling.value) clearCancellation(); }
-function openCancellation(row: QueueEntryResponse) {
-  if (!canCancelWaiting.value || writing.value || imagingRow.value !== null || absenceRow.value !== null || loading.value || cleanupOpen.value || needsReview.value || row.status !== 1 ||
-      !Number.isInteger(row.queueEntryId) || row.queueEntryId <= 0 || !rows.value.some(r => r.queueEntryId === row.queueEntryId)) return;
-  clearCancellation(); cancelRow.value = { ...row }; error.value = ''; actionMsg.value = '';
+function openCancellation(row: QueueEntryResponse, clinical = false) {
+  if (!(clinical ? canCancelClinical(row) : canCancelWaiting.value && row.status === 1 && row.canCancelConsultation !== true) || writing.value || imagingRow.value !== null || absenceRow.value !== null || loading.value || cleanupOpen.value || needsReview.value ||
+      !Number.isInteger(row.queueEntryId) || row.queueEntryId <= 0 || !rows.value.some(r => r.queueEntryId === row.queueEntryId && r.status === row.status && (!clinical || r.canCancelConsultation === true && r.dentistId === row.dentistId))) return;
+  clearCancellation(); cancelClinical.value = clinical; cancelRow.value = { ...row }; error.value = ''; actionMsg.value = '';
 }
 async function handleCancellation() {
   const selected = cancelRow.value;
-  if (!canCancelWaiting.value || !selected || selected.status !== 1 || writing.value || loading.value || cleanupOpen.value || needsReview.value || !cancelConfirmed.value) return;
-  if (cancelReason.value.length > 500) { error.value = 'Lý do không được vượt quá 500 ký tự.'; return; }
+  if (!selected || !(cancelClinical.value ? canCancelClinical(selected) : canCancelWaiting.value && selected.status === 1 && selected.canCancelConsultation !== true) || writing.value || loading.value || cleanupOpen.value || needsReview.value || !cancelConfirmed.value) return;
+  if (cancelReason.value.length > 500 || (cancelClinical.value && !cancelReason.value.trim())) { error.value = 'Ghi lý do hủy ca, tối đa 500 ký tự.'; return; }
   const ticket = life; cancelling.value = true; error.value = ''; actionMsg.value = '';
   try {
-    const result = await queueService.cancelWaiting(selected.queueEntryId, cancelReason.value.trim() || null);
+    const clinical = cancelClinical.value;
+    const result = clinical
+      ? await queueService.cancelConsultation(selected.queueEntryId, cancelReason.value.trim())
+      : await queueService.cancelWaiting(selected.queueEntryId, cancelReason.value.trim() || null);
     if (ticket !== life) return;
-    actionMsg.value = `Đã hủy lượt ${numberLabel(result.queueNumber)} - ${result.patientName}.`;
-    clearCancellation(); needsReview.value = true; await load(page.value);
+    if (clinical && (result.queueEntryId !== selected.queueEntryId || result.status !== 4 || result.dentistId !== selected.dentistId)) throw new Error('Invalid cancellation result');
+    actionMsg.value = clinical ? `Đã hủy ca ${numberLabel(result.queueNumber)}; Draft chưa thu đã được hủy, lịch sử được giữ.` : `Đã hủy lượt ${numberLabel(result.queueNumber)} - ${result.patientName}.`;
+    clearCancellation(); needsReview.value = true; cancelling.value = false; await load(page.value);
   } catch (err: unknown) {
     if (ticket !== life) return;
     const response = err as { response?: { data?: { message?: string } } };

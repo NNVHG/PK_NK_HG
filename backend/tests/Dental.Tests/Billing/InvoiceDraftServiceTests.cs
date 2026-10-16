@@ -22,6 +22,52 @@ public sealed class InvoiceDraftServiceTests
     private static Visit Completed() => new() { VisitId = 8, PatientId = 6, DentistId = 5,
         Status = VisitStatuses.Completed, IsLocked = true };
 
+    [Theory]
+    [InlineData(RoleCodes.Patient, 5)]
+    [InlineData(RoleCodes.Receptionist, 5)]
+    [InlineData(RoleCodes.Assistant, 5)]
+    [InlineData(RoleCodes.Dentist, 9)]
+    public async Task StageCancellation_RejectsUnauthorizedActorWithoutRepository(string role, int actor)
+    {
+        var visit = new Visit { VisitId = 8, DentistId = 5, Status = VisitStatuses.InProgress };
+        Assert.Equal(Error.Forbidden, (await Service().StageVisitCancellationAsync(visit, actor, role, null)).Error);
+        Assert.Empty(invoices.ReceivedCalls());
+    }
+
+    [Theory]
+    [InlineData(VisitStatuses.Created, false)]
+    [InlineData(VisitStatuses.Correcting, false)]
+    [InlineData(VisitStatuses.Completed, true)]
+    [InlineData(VisitStatuses.Cancelled, false)]
+    [InlineData(VisitStatuses.InProgress, true)]
+    public async Task StageCancellation_RequiresActiveUnlockedVisit(string status, bool locked)
+    {
+        var visit = new Visit { VisitId = 8, DentistId = 5, Status = status, IsLocked = locked };
+        Assert.Equal("BIL_012", (await Service().StageVisitCancellationAsync(visit, 5, RoleCodes.Dentist, null)).Error.Code);
+        Assert.Empty(invoices.ReceivedCalls());
+    }
+
+    [Theory]
+    [InlineData(RoleCodes.Admin, 99)]
+    [InlineData(RoleCodes.Dentist, 5)]
+    public async Task StageCancellation_DelegatesWithoutIndependentSaveOrBestEffortAudit(string role, int actor)
+    {
+        var visit = new Visit { VisitId = 8, DentistId = 5, Status = VisitStatuses.InProgress };
+        invoices.StageVisitCancellationAsync(8, actor, role, null, Arg.Any<CancellationToken>()).Returns(Result.Success());
+        Assert.True((await Service().StageVisitCancellationAsync(visit, actor, role, null)).IsSuccess);
+        await invoices.Received(1).StageVisitCancellationAsync(8, actor, role, null, Arg.Any<CancellationToken>());
+        Assert.Empty(audit.ReceivedCalls()); Assert.Equal(VisitStatuses.InProgress, visit.Status);
+    }
+
+    [Fact]
+    public async Task StageCancellation_PropagatesFinancialConflict()
+    {
+        var visit = new Visit { VisitId = 8, DentistId = 5, Status = VisitStatuses.InProgress };
+        invoices.StageVisitCancellationAsync(8, 5, RoleCodes.Dentist, null, Arg.Any<CancellationToken>()).Returns(Result.Failure(new Error("BIL_013", "Conflict")));
+        Assert.Equal("BIL_013", (await Service().StageVisitCancellationAsync(visit, 5, RoleCodes.Dentist, null)).Error.Code);
+        Assert.Empty(audit.ReceivedCalls());
+    }
+
     [Fact]
     public async Task Get_DiscountedInvoice_ExposesGrossDiscountFinalAndOutstandingSeparately()
     {

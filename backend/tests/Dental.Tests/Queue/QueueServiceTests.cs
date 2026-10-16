@@ -82,6 +82,40 @@ public sealed class QueueServiceTests
         Assert.Empty(_auditLogger.ReceivedCalls());
     }
 
+    [Theory]
+    [InlineData(QueueStatus.InConsultation)]
+    [InlineData(QueueStatus.InImaging)]
+    [InlineData(QueueStatus.Waiting)]
+    [InlineData(QueueStatus.Calling)]
+    public async Task CancelClinical_StagesDraftBeforeMutatingVisitAndSaving(QueueStatus status)
+    {
+        var visit = new Visit { VisitId = 10, DentistId = 5, Status = VisitStatuses.InProgress };
+        var entry = new QueueEntry { QueueEntryId = 8, VisitId = 10, Visit = visit, Status = status };
+        _queueRepository.GetByIdAsync(8, Arg.Any<CancellationToken>()).Returns(entry);
+        _invoiceDraft.StageVisitCancellationAsync(visit, 5, RoleCodes.Dentist, null, Arg.Any<CancellationToken>()).Returns(_ => {
+            Assert.Equal(VisitStatuses.InProgress, visit.Status); Assert.Equal(status, entry.Status); return Result.Success();
+        });
+        var result = await CreateService().UpdateQueueStatusAsync(8, 5, RoleCodes.Dentist, new(4, Reason: "Synthetic cancellation reason"), null);
+        Assert.True(result.IsSuccess); Assert.Equal(VisitStatuses.Cancelled, visit.Status);
+        await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _invoiceDraft.Received(1).StageVisitCancellationAsync(visit, 5, RoleCodes.Dentist, null, Arg.Any<CancellationToken>());
+        await _invoiceDraft.DidNotReceive().GenerateAsync(Arg.Any<Visit>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CancelClinical_FinancialConflictDoesNotChangeOrSaveQueueVisitHistory()
+    {
+        var visit = new Visit { VisitId = 10, DentistId = 5, Status = VisitStatuses.InProgress };
+        var entry = new QueueEntry { QueueEntryId = 8, VisitId = 10, Visit = visit, Status = QueueStatus.InConsultation };
+        _queueRepository.GetByIdAsync(8, Arg.Any<CancellationToken>()).Returns(entry);
+        _invoiceDraft.StageVisitCancellationAsync(visit, 5, RoleCodes.Dentist, null, Arg.Any<CancellationToken>()).Returns(Result.Failure(new Error("BIL_013", "Paid")));
+        Assert.Equal("BIL_013", (await CreateService().UpdateQueueStatusAsync(8, 5, RoleCodes.Dentist, new(4, Reason: "Synthetic cancellation reason"), null)).Error.Code);
+        Assert.Equal(VisitStatuses.InProgress, visit.Status); Assert.Equal(QueueStatus.InConsultation, entry.Status);
+        await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _queueRepository.DidNotReceive().AddStatusHistoryAsync(Arg.Any<QueueStatusHistory>(), Arg.Any<CancellationToken>());
+        Assert.Empty(_auditLogger.ReceivedCalls());
+    }
+
     private QueueService CreateService()
         => new(_queueRepository, _appointmentRepository, _patientRepository, _visitRepository, _userRepository, _unitOfWork, _auditLogger, _vietnamClock, _invoiceDraft, Dental.Tests.Common.TestVisitChairs.Create());
 
