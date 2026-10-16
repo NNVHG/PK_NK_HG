@@ -74,6 +74,8 @@ builder.Services.AddDbContext<DentalDbContext>(opts =>
     opts.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
 
 // ===== 2. Repositories & UnitOfWork =====
+builder.Services.AddScoped<IDiagnosisCatalogRepository, DiagnosisCatalogRepository>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_MST.Services.DiagnosisCatalogService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 builder.Services.AddScoped<IPatientRepository, PatientRepository>();

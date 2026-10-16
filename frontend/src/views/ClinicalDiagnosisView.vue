@@ -63,7 +63,7 @@
             <p v-if="visit.status === 'Created'" class="hint">Nha sĩ chọn ghế/phòng sẵn sàng tại vị trí làm việc trước khi bắt đầu khám. Bắt đầu khám sẽ chiếm ghế; hoàn tất hoặc hủy ca sẽ giải phóng ghế.</p>
             <form v-if="canEdit" @submit.prevent="saveDiagnosis">
               <label for="diagnosis">Chẩn đoán <span>(bắt buộc)</span></label>
-              <textarea id="diagnosis" v-model="diagnosis" :disabled="busy" required maxlength="1000" rows="4" />
+              <DiagnosisAutocomplete :key="visit.visitId" v-model="diagnosis" :disabled="busy" />
               <small>{{ diagnosis.length }}/1000 ký tự</small>
               <label for="clinical-notes">Ghi chú lâm sàng</label>
               <textarea id="clinical-notes" v-model="clinicalNotes" :disabled="busy" maxlength="2000" rows="6" />
@@ -88,6 +88,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import axios from 'axios';
+import DiagnosisAutocomplete from '@/components/DiagnosisAutocomplete.vue';
 import { useAuthStore } from '@/stores/auth';
 import { queueService, type QueueEntryResponse } from '@/services/queue';
 import { visitsService } from '@/services/visits';

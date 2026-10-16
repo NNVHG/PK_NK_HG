@@ -9,6 +9,7 @@ namespace Dental.Api.Policies;
 /// </summary>
 public static class Policies
 {
+    public const string DiagnosisCatalogView = "DiagnosisCatalogView";
     public const string AdminOnly  = "AdminOnly";
     public const string StaffAny   = "StaffAny";    // Admin, Lễ tân, Nha sĩ, Phụ tá
     public const string PatientManage = "PatientManage";
@@ -40,6 +41,7 @@ public static class Policies
     public static void AddApplicationPolicies(this AuthorizationOptions opts)
     {
         opts.AddPolicy(WorkspaceManage, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant));
+        opts.AddPolicy(DiagnosisCatalogView, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist));
         opts.AddPolicy(DentalChairView, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant));
         opts.AddPolicy(QueueSkip, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Receptionist));
         opts.AddPolicy(QueueCall, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant));
