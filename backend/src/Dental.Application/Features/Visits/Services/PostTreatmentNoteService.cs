@@ -60,6 +60,8 @@ public sealed class PostTreatmentNoteService
         if (role is not (RoleCodes.Admin or RoleCodes.Dentist))
             return Result<PostTreatmentNoteResponse>.Failure(Error.Forbidden);
 
+        if (visitId <= 0 || userId <= 0 || string.IsNullOrWhiteSpace(request.Note) || request.Note.Length > 1000 || request.RequestId == Guid.Empty)
+            return Result<PostTreatmentNoteResponse>.Failure(Error.Validation);
         try
         {
             return await _unitOfWork.ExecuteSerializableTransactionAsync(
@@ -77,13 +79,6 @@ public sealed class PostTreatmentNoteService
         if (role is not (RoleCodes.Admin or RoleCodes.Dentist))
             return Result<PostTreatmentNoteResponse>.Failure(Error.Forbidden);
 
-        if (request.RequestId.HasValue)
-        {
-            var existing = await _notes.GetByRequestIdAsync(request.RequestId.Value, ct);
-            if (existing is not null)
-                return Result<PostTreatmentNoteResponse>.Success(ToResponse(existing));
-        }
-
         var visit = await _visits.GetForUpdateAsync(visitId, ct);
         if (visit is null)
             return Result<PostTreatmentNoteResponse>.Failure(Error.NotFound);
@@ -99,6 +94,20 @@ public sealed class PostTreatmentNoteService
         if (invoice is null || invoice.Status != InvoiceStatus.Paid)
             return Result<PostTreatmentNoteResponse>.Failure(
                 new Error("PAT_082", "Chỉ được bổ sung ghi chú hậu điều trị khi hóa đơn viện phí đã thanh toán hoàn tất."));
+
+        if (request.RequestId.HasValue)
+        {
+            var existing = await _notes.GetByRequestIdAsync(request.RequestId.Value, ct);
+            if (existing is not null)
+            {
+                // A replay must never disclose another visit/author's clinical text, even to an Admin caller.
+                if (existing.VisitId != visitId || existing.CreatedByUserId != userId)
+                    return Result<PostTreatmentNoteResponse>.Failure(Error.NotFound);
+                if (existing.Note != request.Note.Trim())
+                    return Result<PostTreatmentNoteResponse>.Failure("PAT_083", "Mã yêu cầu đã dùng cho nội dung khác; tải lại ghi chú để đối chiếu.");
+                return Result<PostTreatmentNoteResponse>.Success(ToResponse(existing));
+            }
+        }
 
         var note = new PostTreatmentNote
         {

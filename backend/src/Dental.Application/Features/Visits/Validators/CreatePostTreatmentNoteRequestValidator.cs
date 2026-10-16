@@ -7,6 +7,7 @@ public sealed class CreatePostTreatmentNoteRequestValidator : AbstractValidator<
 {
     public CreatePostTreatmentNoteRequestValidator()
     {
+        RuleFor(x => x.RequestId).Must(id => id != Guid.Empty).WithMessage("Mã yêu cầu không hợp lệ.");
         RuleFor(x => x.Note)
             .Cascade(CascadeMode.Stop)
             .NotEmpty()
