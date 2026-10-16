@@ -24,6 +24,7 @@ public static class Policies
     public const string AppointmentReschedule = "AppointmentReschedule";
     public const string QueueCheckIn = "QueueCheckIn";
     public const string QueueView = "QueueView";
+    public const string WorkspaceManage = "WorkspaceManage";
     public const string DentalChairView = "DentalChairView";
     public const string QueueSkip = "QueueSkip";
     public const string QueueCall = "QueueCall";
@@ -38,6 +39,7 @@ public static class Policies
 
     public static void AddApplicationPolicies(this AuthorizationOptions opts)
     {
+        opts.AddPolicy(WorkspaceManage, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant));
         opts.AddPolicy(DentalChairView, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant));
         opts.AddPolicy(QueueSkip, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Receptionist));
         opts.AddPolicy(QueueCall, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant));

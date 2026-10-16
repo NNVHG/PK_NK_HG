@@ -28,7 +28,7 @@ using Microsoft.IdentityModel.Tokens;
 internal static class CashPaymentHttpSmoke
 {
     public static async Task RunAsync(DbContextOptions<DentalDbContext> options, int cashierId, int patientId, Action<bool, string> check,
-        bool queueCallNextOnly = false, bool invoiceDiscountsOnly = false, bool serviceCatalogOnly = false, bool queueImagingOnly = false, bool queueCallingOnly = false, bool queueAbsenceOnly = false, bool queueCleanupOnly = false, bool chairCatalogOnly = false)
+        bool queueCallNextOnly = false, bool invoiceDiscountsOnly = false, bool serviceCatalogOnly = false, bool queueImagingOnly = false, bool queueCallingOnly = false, bool queueAbsenceOnly = false, bool queueCleanupOnly = false, bool chairCatalogOnly = false, bool staffWorkspacesOnly = false)
     {
         // Dedicated test host validates ephemeral JWTs only. Never read clinic JWT keys/demo credentials.
         var signingKey = new SymmetricSecurityKey(RandomNumberGenerator.GetBytes(64));
@@ -88,6 +88,8 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.QueueCleanupRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Queue.Services.QueueCleanupService>();
         builder.Services.AddScoped<IDentalChairRepository, DentalChairRepository>();
+        builder.Services.AddScoped<IStaffWorkspaceRepository, StaffWorkspaceRepository>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_MST.Services.StaffWorkspaceService>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_MST.Services.DentalChairService>();
         builder.Services.AddScoped<IAppointmentReminderRepository, AppointmentReminderRepository>();
         builder.Services.AddSingleton<AppointmentReminderWorkerStatus>();
@@ -141,6 +143,11 @@ internal static class CashPaymentHttpSmoke
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", new JwtSecurityTokenHandler().WriteToken(token));
             }
             void Authenticate(string role) => AuthenticateActor(role, cashierId);
+            if (staffWorkspacesOnly)
+            {
+                await StaffWorkspaceHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);
+                return;
+            }
             if (chairCatalogOnly)
             {
                 await DentalChairHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);

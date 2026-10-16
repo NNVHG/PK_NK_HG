@@ -26,6 +26,7 @@ public sealed class RolePermissionMatrixProvider(IAuthorizationPolicyProvider po
             [Policies.MedicalHistoryWrite] = ("Ghi tiền sử bệnh lý", "MOD_PAT", "Còn kiểm tra lần khám và trạng thái hồ sơ."),
             [Policies.VitalSignsWrite] = ("Ghi sinh hiệu", "MOD_PAT", "Còn kiểm tra lần khám và trạng thái hồ sơ."),
             [Policies.PatientSafetyAlertsView] = ("Xem cảnh báo an toàn", "MOD_PAT", "Dữ liệu nội bộ trong phạm vi công việc của nhân viên."),
+            [Policies.WorkspaceManage] = ("Vị trí nha sĩ và phụ tá", "MOD_MST", "Nha sĩ tự chọn ghế; phụ tá chọn nha sĩ rồi theo phòng; Admin can thiệp. Chặn đổi khi đang khám/gọi chưa xử lý (DL-261)."),
             [Policies.DentalChairView] = ("Xem danh mục phòng và ghế", "MOD_MST", "Admin/Nha sĩ/Phụ tá xem; chỉ Admin khai báo/sửa danh mục. Ghế bảo trì/ngừng dùng không phục vụ."),
             [Policies.ServiceCatalogView] = ("Xem danh mục dịch vụ", "MOD_MST", "Nha sĩ/Phụ tá được xem; tạo/sửa danh mục và bảng giá chỉ Admin."),
             [Policies.AppointmentCreate] = ("Đặt lịch khám", "MOD_APP", "Bệnh nhân chỉ đặt cho hồ sơ thuộc tài khoản của mình."),

@@ -13,6 +13,7 @@ public sealed class DentalChairService(IDentalChairRepository chairs, IUnitOfWor
 {
     public static readonly Error DuplicateNumber = new("MST_051", "Mã ghế đã tồn tại.");
     public static readonly Error Changed = new("MST_052", "Dữ liệu ghế đã thay đổi hoặc có thao tác đồng thời. Tải lại trước khi xác nhận.");
+    public static readonly Error Assigned = new("MST_054", "Ghế đã được chọn làm vị trí nha sĩ. Bỏ chọn vị trí trước khi sửa danh mục.");
     public static readonly Error Occupied = new("MST_053", "Ghế đang phục vụ ca khám, chưa thể sửa danh mục hoặc giải phóng thủ công.");
     public async Task<Result<PagedResult<DentalChairResponse>>> GetPageAsync(string? role, DentalChairQuery request, CancellationToken ct = default)
     {
@@ -53,6 +54,7 @@ public sealed class DentalChairService(IDentalChairRepository chairs, IUnitOfWor
                 if (chair is null) return Result<DentalChairResponse>.Failure(Error.NotFound);
                 if (chair.Version != request.ExpectedVersion) return Result<DentalChairResponse>.Failure(Changed);
                 if (chair.Status == DentalChairStatus.Occupied) return Result<DentalChairResponse>.Failure(Occupied);
+                if (await chairs.IsAssignedAsync(id, transactionCt)) return Result<DentalChairResponse>.Failure(Assigned);
                 var previous = (int)chair.Status;
                 chair.RoomName = request.RoomName.Trim(); chair.Description = Normalize(request.Description);
                 chair.Status = (DentalChairStatus)request.Status; chair.IsActive = request.Status != 4;
