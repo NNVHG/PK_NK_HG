@@ -62,6 +62,49 @@
               <RouterLink :to="`/clinical/visits/${visit.visitId}/fdi`">Xem tình trạng răng của lần khám</RouterLink>
               <RouterLink v-if="['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(authStore.role)" :to="`/clinical/visits/${visit.visitId}/invoice-draft`">Xem hóa đơn nháp</RouterLink>
               <div class="visit-flags"><span>{{ visit.hasMedicalHistory ? 'Có tiền sử' : 'Chưa ghi tiền sử' }}</span><span>{{ visit.hasVitalSigns ? 'Có sinh hiệu' : 'Chưa ghi sinh hiệu' }}</span></div>
+              <div class="post-treatment-section">
+                <button class="button button-quiet post-treatment-toggle" type="button" @click="togglePostTreatmentNotes(visit.visitId)">
+                  {{ postTreatmentExpandedMap[visit.visitId] ? '▲ Đóng ghi chú hậu điều trị' : '▼ Ghi chú hậu điều trị' + (postTreatmentNotesMap[visit.visitId] ? ` (${postTreatmentNotesMap[visit.visitId].length})` : '') }}
+                </button>
+                <div v-if="postTreatmentExpandedMap[visit.visitId]" class="post-treatment-panel">
+                  <p v-if="postTreatmentLoadingMap[visit.visitId]" class="empty-state">Đang tải ghi chú hậu điều trị...</p>
+                  <p v-else-if="postTreatmentErrorMap[visit.visitId]" class="notice error" role="alert">{{ postTreatmentErrorMap[visit.visitId] }}</p>
+                  <template v-else>
+                    <p v-if="!postTreatmentNotesMap[visit.visitId]?.length" class="empty-state">Chưa có ghi chú hậu điều trị nào.</p>
+                    <ul v-else class="post-treatment-list">
+                      <li v-for="note in postTreatmentNotesMap[visit.visitId]" :key="note.id" class="post-treatment-item">
+                        <strong class="note-author">[{{ formatDateTime(note.createdAt) }} - {{ note.createdByFullName || 'Nhân viên' }} ({{ note.createdByRoleName || 'Nha sĩ' }})]:</strong>
+                        <span class="note-content">{{ note.note }}</span>
+                      </li>
+                    </ul>
+
+                    <form v-if="canAddPostTreatmentNote(visit)" class="addendum-form" @submit.prevent="submitAddendum(visit.visitId)">
+                      <label :for="`addendum-note-${visit.visitId}`">Bổ sung ghi chú lâm sàng hậu điều trị (DL-227 / DL-265):</label>
+                      <textarea
+                        :id="`addendum-note-${visit.visitId}`"
+                        v-model="addendumDraftMap[visit.visitId]"
+                        rows="3"
+                        maxlength="1000"
+                        placeholder="Nhập ghi chú theo dõi diễn tiến lâm sàng, phản ứng hậu phẫu..."
+                        :disabled="savingAddendumMap[visit.visitId]"
+                        required
+                      />
+                      <div class="addendum-actions">
+                        <small>{{ (addendumDraftMap[visit.visitId] || '').length }}/1000 ký tự</small>
+                        <button
+                          class="button button-primary"
+                          type="submit"
+                          :disabled="savingAddendumMap[visit.visitId] || !(addendumDraftMap[visit.visitId] || '').trim()"
+                        >
+                          {{ savingAddendumMap[visit.visitId] ? 'Đang lưu...' : '+ Thêm ghi chú bổ sung' }}
+                        </button>
+                      </div>
+                      <p v-if="addendumErrorMap[visit.visitId]" class="notice error" role="alert">{{ addendumErrorMap[visit.visitId] }}</p>
+                      <p v-if="addendumSuccessMap[visit.visitId]" class="notice success" role="status">{{ addendumSuccessMap[visit.visitId] }}</p>
+                    </form>
+                  </template>
+                </div>
+              </div>
             </div>
           </li>
         </ol>
@@ -205,6 +248,7 @@ import {
   type VisitDetails
 } from '@/services/patients';
 import { useAuthStore } from '@/stores/auth';
+import { visitsService, type PostTreatmentNote } from '@/services/visits';
 
 type TabId = 'info' | 'timeline' | 'history' | 'vitals';
 interface EditForm { fullName: string; dateOfBirth: string; gender: string; phone: string; email: string; address: string }
@@ -266,6 +310,77 @@ const duplicateError = ref('');
 const duplicates = ref<PatientDuplicateInfo[]>([]);
 const pendingPayload = ref<PatientPayload | null>(null);
 let nextMedicalHistoryRowId = 0;
+
+const postTreatmentNotesMap = ref<Record<number, PostTreatmentNote[]>>({});
+const postTreatmentLoadingMap = ref<Record<number, boolean>>({});
+const postTreatmentErrorMap = ref<Record<number, string>>({});
+const postTreatmentExpandedMap = ref<Record<number, boolean>>({});
+const addendumDraftMap = ref<Record<number, string>>({});
+const savingAddendumMap = ref<Record<number, boolean>>({});
+const addendumErrorMap = ref<Record<number, string>>({});
+const addendumSuccessMap = ref<Record<number, string>>({});
+
+function canAddPostTreatmentNote(visit: PatientTimelineItem): boolean {
+  if (visit.status !== 'Completed') return false;
+  if (authStore.role === 'ADMIN') return true;
+  if (authStore.role === 'DENTIST') {
+    return visit.dentistId == null || visit.dentistId === authStore.user?.userId;
+  }
+  return false;
+}
+
+async function togglePostTreatmentNotes(visitId: number) {
+  const isExpanded = !postTreatmentExpandedMap.value[visitId];
+  postTreatmentExpandedMap.value[visitId] = isExpanded;
+  if (isExpanded && !postTreatmentNotesMap.value[visitId]) {
+    await loadPostTreatmentNotes(visitId);
+  }
+}
+
+async function loadPostTreatmentNotes(visitId: number) {
+  postTreatmentLoadingMap.value[visitId] = true;
+  postTreatmentErrorMap.value[visitId] = '';
+  try {
+    postTreatmentNotesMap.value[visitId] = await visitsService.getPostTreatmentNotes(visitId);
+  } catch (error: unknown) {
+    postTreatmentErrorMap.value[visitId] = apiError(error, 'Không tải được ghi chú hậu điều trị.');
+  } finally {
+    postTreatmentLoadingMap.value[visitId] = false;
+  }
+}
+
+async function submitAddendum(visitId: number) {
+  if (savingAddendumMap.value[visitId]) return;
+  const noteText = (addendumDraftMap.value[visitId] || '').trim();
+  if (!noteText) {
+    addendumErrorMap.value[visitId] = 'Nội dung ghi chú không được để trống.';
+    return;
+  }
+  if (noteText.length > 1000) {
+    addendumErrorMap.value[visitId] = 'Nội dung ghi chú không được vượt quá 1000 ký tự.';
+    return;
+  }
+  savingAddendumMap.value[visitId] = true;
+  addendumErrorMap.value[visitId] = '';
+  addendumSuccessMap.value[visitId] = '';
+  try {
+    const requestId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : null;
+    const created = await visitsService.addPostTreatmentNote(visitId, {
+      note: noteText,
+      requestId
+    });
+    if (!postTreatmentNotesMap.value[visitId]) {
+      postTreatmentNotesMap.value[visitId] = [];
+    }
+    postTreatmentNotesMap.value[visitId].push(created);
+    addendumDraftMap.value[visitId] = '';
+    addendumSuccessMap.value[visitId] = 'Đã thêm ghi chú hậu điều trị thành công.';
+  } catch (error: unknown) {
+    addendumErrorMap.value[visitId] = apiError(error, 'Không thêm được ghi chú hậu điều trị. Vui lòng thử lại.');
+  } finally {
+    savingAddendumMap.value[visitId] = false;
+  }
+}
 
 onMounted(() => void loadPatient());
 
@@ -719,6 +834,17 @@ dd { margin: 0.2rem 0 0; color: #263e50; font-weight: 650; white-space: pre-wrap
 .modal-actions { display: flex; justify-content: flex-end; gap: 0.6rem; padding-top: 0.5rem; }
 .duplicate-list li { display: grid; gap: 0.3rem; }
 .duplicate-list span { color: #6e808a; font-size: 0.84rem; }
+.post-treatment-section { margin-top: 0.75rem; border-top: 1px dashed #dbe6ec; padding-top: 0.6rem; }
+.post-treatment-toggle { font-size: 0.82rem; padding: 0.3rem 0.6rem; }
+.post-treatment-panel { margin-top: 0.5rem; padding: 0.7rem; border-radius: 8px; background: #fbfdfe; border: 1px solid #e5edf1; display: grid; gap: 0.6rem; }
+.post-treatment-list { display: grid; gap: 0.45rem; margin: 0; padding: 0; list-style: none; }
+.post-treatment-item { padding: 0.5rem 0.7rem; border-radius: 6px; background: #fff; border: 1px solid #e2eaee; font-size: 0.88rem; }
+.note-author { color: #1c5d80; font-size: 0.82rem; display: block; margin-bottom: 0.2rem; }
+.note-content { color: #2c4253; white-space: pre-wrap; word-break: break-word; }
+.addendum-form { display: grid; gap: 0.45rem; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #eef3f6; }
+.addendum-form label { font-size: 0.82rem; font-weight: 650; color: #41596b; }
+.addendum-form textarea { width: 100%; border: 1px solid #cbdbe4; border-radius: 7px; padding: 0.5rem; font: inherit; font-size: 0.88rem; box-sizing: border-box; }
+.addendum-actions { display: flex; justify-content: space-between; align-items: center; }
 @media (max-width: 760px) { .editable-record-row { grid-template-columns: 1fr 1fr; } .editable-record-row label:nth-child(3) { grid-column: 1 / -1; } }
 @media (max-width: 640px) { .profile-header { align-items: flex-start; flex-direction: column; } .profile-grid, .vital-grid, .edit-form, .vital-form { grid-template-columns: 1fr; } .edit-form label:nth-of-type(6), .edit-form .notice, .modal-actions, .vital-form .form-context, .vital-form .field-label, .vital-form .notice { grid-column: auto; } .editable-record-row { grid-template-columns: 1fr; } .editable-record-row label:nth-child(3) { grid-column: auto; } .tabs { overflow-x: auto; flex-wrap: nowrap; } .tabs button { white-space: nowrap; } }
 </style>

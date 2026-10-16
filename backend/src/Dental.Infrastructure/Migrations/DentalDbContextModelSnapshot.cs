@@ -703,6 +703,46 @@ namespace Dental.Infrastructure.Migrations
                     b.ToTable("PaymentTransactions", (string)null);
                 });
 
+            modelBuilder.Entity("Dental.Domain.Entities.PostTreatmentNote", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid?>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("VisitId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("RequestId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_PostTreatmentNotes_RequestId")
+                        .HasFilter("\"RequestId\" IS NOT NULL");
+
+                    b.HasIndex("VisitId", "CreatedAt")
+                        .HasDatabaseName("IX_PostTreatmentNotes_VisitId_CreatedAt");
+
+                    b.ToTable("PostTreatmentNotes", (string)null);
+                });
+
             modelBuilder.Entity("Dental.Domain.Entities.QueueEntry", b =>
                 {
                     b.Property<int>("QueueEntryId")
@@ -1426,6 +1466,25 @@ namespace Dental.Infrastructure.Migrations
                     b.Navigation("Cashier");
 
                     b.Navigation("Invoice");
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.PostTreatmentNote", b =>
+                {
+                    b.HasOne("Dental.Domain.Entities.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.Visit", "Visit")
+                        .WithMany()
+                        .HasForeignKey("VisitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Visit");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.QueueEntry", b =>

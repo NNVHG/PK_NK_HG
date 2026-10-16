@@ -77,6 +77,8 @@ export interface PatientTimelineItem {
   dentistName: string | null;
   hasMedicalHistory: boolean;
   hasVitalSigns: boolean;
+  diagnosis?: string | null;
+  dentistId?: number | null;
 }
 
 export interface MedicalHistoryItem {
