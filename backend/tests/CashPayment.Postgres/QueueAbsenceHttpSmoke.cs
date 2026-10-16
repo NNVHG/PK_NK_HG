@@ -29,7 +29,7 @@ internal static class QueueAbsenceHttpSmoke
             if (role is null) { role = new Role { RoleCode = code, RoleName = "Synthetic " + code }; db.Roles.Add(role); await db.SaveChangesAsync(); }
             var user = new User { RoleId = role.RoleId, FullName = "Synthetic calling staff", IsActive = true,
                 Phone = "CALL" + Guid.NewGuid().ToString("N")[..14], PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()) };
-            db.Users.Add(user); await db.SaveChangesAsync(); return user;
+            db.Users.Add(user); await db.SaveChangesAsync(); if (code == RoleCodes.Dentist) await TestChairFixtures.EnsureAsync(db, user.UserId, actorId); return user;
         }
         async Task<QueueEntry> Waiting(int? dentistId, bool priority = false)
         {
@@ -111,7 +111,7 @@ internal static class QueueAbsenceHttpSmoke
             var visits = new VisitRepository(context); var patients = new PatientRepository(context);
             var audit = new AuditLogger(context, NullLogger<AuditLogger>.Instance); var clock = new VietnamClock(SmokeTestTimeProvider.Instance);
             return new(new QueueRepository(context), new AppointmentRepository(context), patients, visits, new UserRepository(context),
-                new UnitOfWork(context), audit, clock, new InvoiceDraftService(new InvoiceRepository(context), visits, patients, audit, clock));
+                new UnitOfWork(context), audit, clock, new InvoiceDraftService(new InvoiceRepository(context), visits, patients, audit, clock), TestChairFixtures.Service(context, clock));
         }
         foreach (var recalling in new[] { false, true })
         {

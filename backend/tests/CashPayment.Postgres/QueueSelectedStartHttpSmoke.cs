@@ -18,7 +18,7 @@ internal static class QueueSelectedStartHttpSmoke
         var role = await db.Roles.SingleAsync(r => r.RoleCode == RoleCodes.Dentist);
         var dentist = new User { RoleId = role.RoleId, IsActive = true, FullName = "Synthetic selected dentist",
             Phone = "START" + Guid.NewGuid().ToString("N")[..14], PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()) };
-        db.Users.Add(dentist); await db.SaveChangesAsync();
+        db.Users.Add(dentist); await db.SaveChangesAsync(); await TestChairFixtures.EnsureAsync(db, dentist.UserId, actorId);
         async Task<QueueEntry> Waiting()
         {
             var patient = new Patient { FullName = "Synthetic selected patient", Phone = "0999999931", DateOfBirth = new(1990, 1, 1) };

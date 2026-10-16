@@ -29,7 +29,7 @@ internal static class QueueImagingHttpSmoke
         var role = await db.Roles.SingleOrDefaultAsync(r => r.RoleCode == RoleCodes.Dentist) ?? new Role { RoleCode = RoleCodes.Dentist, RoleName = "Test dentist" };
         var dentist = new User { Role = role, FullName = "Synthetic imaging dentist", IsActive = true,
             Phone = "IMG" + Guid.NewGuid().ToString("N")[..14], PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()) };
-        db.Users.Add(dentist); await db.SaveChangesAsync();
+        db.Users.Add(dentist); await db.SaveChangesAsync(); await TestChairFixtures.EnsureAsync(db, dentist.UserId, actorId);
         var today = new VietnamClock(SmokeTestTimeProvider.Instance).Today;
         async Task<QueueEntry> Entry(QueueStatus status = QueueStatus.InConsultation, bool booked = false)
         {
@@ -109,7 +109,7 @@ internal static class QueueImagingHttpSmoke
             var visits = new VisitRepository(faultDb); var patients = new PatientRepository(faultDb);
             var audit = new AuditLogger(faultDb, NullLogger<AuditLogger>.Instance); var clock = new VietnamClock(SmokeTestTimeProvider.Instance);
             var service = new QueueService(new QueueRepository(faultDb), new AppointmentRepository(faultDb), patients, visits, new UserRepository(faultDb),
-                new UnitOfWork(faultDb), audit, clock, new InvoiceDraftService(new InvoiceRepository(faultDb), visits, patients, audit, clock));
+                new UnitOfWork(faultDb), audit, clock, new InvoiceDraftService(new InvoiceRepository(faultDb), visits, patients, audit, clock), TestChairFixtures.Service(faultDb, clock));
             var threw = false;
             try { await service.UpdateQueueStatusAsync(failed.QueueEntryId, dentist.UserId, RoleCodes.Dentist, new(5, Reason: "Synthetic rollback indication"), null); }
             catch (InvalidOperationException e) when (e.Message == "Synthetic audit failure") { threw = true; }

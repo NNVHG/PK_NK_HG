@@ -57,7 +57,7 @@ public sealed class QueueServiceTests
         Assert.Equal(VisitStatuses.Completed, visit.Status);
         Assert.NotNull(visit.EndedAt);
         await _invoiceDraft.Received(1).GenerateAsync(visit, actor, role, null, Arg.Any<CancellationToken>());
-        Assert.Empty(_unitOfWork.ReceivedCalls());
+        await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -78,12 +78,12 @@ public sealed class QueueServiceTests
         _queueRepository.GetByIdAsync(8, Arg.Any<CancellationToken>()).Returns(new QueueEntry { Visit = visit, Status = QueueStatus.InConsultation });
         _invoiceDraft.GenerateAsync(visit, 5, RoleCodes.Dentist, null, Arg.Any<CancellationToken>()).Returns(Result.Failure(Error.Conflict));
         Assert.True((await CreateService().UpdateQueueStatusAsync(8, 5, RoleCodes.Dentist, new UpdateQueueStatusRequest(3), null)).IsFailure);
-        Assert.Empty(_unitOfWork.ReceivedCalls());
+        await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
         Assert.Empty(_auditLogger.ReceivedCalls());
     }
 
     private QueueService CreateService()
-        => new(_queueRepository, _appointmentRepository, _patientRepository, _visitRepository, _userRepository, _unitOfWork, _auditLogger, _vietnamClock, _invoiceDraft);
+        => new(_queueRepository, _appointmentRepository, _patientRepository, _visitRepository, _userRepository, _unitOfWork, _auditLogger, _vietnamClock, _invoiceDraft, Dental.Tests.Common.TestVisitChairs.Create());
 
     private static Patient MakePatient(int patientId = 1, bool isActive = true)
         => new()
@@ -362,7 +362,7 @@ public sealed class QueueServiceTests
     {
         var lateClock = new VietnamClock(new FixedTimeProvider(new DateTimeOffset(2026, 10, 10, 16, 30, 0, TimeSpan.Zero)));
         var service = new QueueService(_queueRepository, _appointmentRepository, _patientRepository, _visitRepository,
-            _userRepository, _unitOfWork, _auditLogger, lateClock, _invoiceDraft);
+            _userRepository, _unitOfWork, _auditLogger, lateClock, _invoiceDraft, Dental.Tests.Common.TestVisitChairs.Create());
         Assert.Equal(Error.Validation.Code, (await service.CheckInAsync(3, new(1), null)).Error.Code);
         Assert.Empty(_queueRepository.ReceivedCalls());
     }

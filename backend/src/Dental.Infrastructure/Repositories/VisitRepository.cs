@@ -37,6 +37,9 @@ public sealed class VisitRepository : IVisitRepository
     public async Task AddAsync(Visit visit, CancellationToken ct = default)
         => await _db.Visits.AddAsync(visit, ct);
 
+    public Task<bool> HasActiveVisitForChairAsync(int chairId, int excludedVisitId, CancellationToken ct = default)
+        => _db.Visits.AnyAsync(v => v.ChairId == chairId && v.Status == VisitStatuses.InProgress && v.VisitId != excludedVisitId, ct);
+
     public async Task<PagedResult<Visit>> GetPatientVisitsAsync(
         int patientId,
         int page,

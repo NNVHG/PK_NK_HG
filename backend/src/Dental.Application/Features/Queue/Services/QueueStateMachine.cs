@@ -73,9 +73,9 @@ public static class QueueStateMachine
                     ? Result.Success()
                     : Result.Failure(Error.QueueTransitionForbidden.Code, "Chỉ Phụ tá hoặc Quản trị viên mới có quyền hoàn tất chụp ảnh và chuyển về chờ khám."),
 
-            // Đang chụp ảnh (5) -> Đã hủy (4): Lễ tân, Phụ tá, Admin
+            // DL057: hủy ca đang chụp chỉ Nha sĩ phụ trách hoặc Admin.
             (QueueStatus.InImaging, QueueStatus.Cancelled) =>
-                roleCode is RoleCodes.Receptionist or RoleCodes.Assistant or RoleCodes.Admin
+                roleCode is RoleCodes.Dentist or RoleCodes.Admin
                     ? Result.Success()
                     : Result.Failure(Error.QueueTransitionForbidden.Code, "Bạn không có quyền hủy lượt chụp ảnh này."),
 

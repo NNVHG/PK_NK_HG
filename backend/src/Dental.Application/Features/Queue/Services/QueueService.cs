@@ -19,6 +19,7 @@ public sealed class QueueService
     private readonly IAuditLogger _auditLogger;
     private readonly VietnamClock _vietnamClock;
     private readonly IInvoiceDraftGenerator _invoiceDraft;
+    private readonly IVisitChairCoordinator _visitChairs;
 
     public QueueService(
         IQueueRepository queueRepository,
@@ -29,7 +30,7 @@ public sealed class QueueService
         IUnitOfWork unitOfWork,
         IAuditLogger auditLogger,
         VietnamClock vietnamClock,
-        IInvoiceDraftGenerator invoiceDraft)
+        IInvoiceDraftGenerator invoiceDraft, IVisitChairCoordinator visitChairs)
     {
         _queueRepository = queueRepository;
         _appointmentRepository = appointmentRepository;
@@ -39,7 +40,7 @@ public sealed class QueueService
         _unitOfWork = unitOfWork;
         _auditLogger = auditLogger;
         _vietnamClock = vietnamClock;
-        _invoiceDraft = invoiceDraft;
+        _invoiceDraft = invoiceDraft; _visitChairs = visitChairs;
     }
 
     public async Task<Result<QueueEntryResponse>> CheckInAsync(
@@ -310,6 +311,8 @@ public sealed class QueueService
                 var now = DateTime.UtcNow;
                 if (await _queueRepository.HasCallingForDentistAsync(_vietnamClock.Today, dentistId.Value, transactionCt, entry.QueueEntryId))
                     return Result<QueueEntryResponse>.Failure(Error.QueueDentistAlreadyCalling);
+                var allocation = await _visitChairs.AcquireAsync(entry.Visit, dentistId.Value, actorUserId, transactionCt);
+                if (allocation.IsFailure) return Result<QueueEntryResponse>.Failure(allocation.Error);
                 var previousStatus = entry.Status;
                 entry.Status = QueueStatus.InConsultation; entry.DentistId = dentistId; entry.UpdatedAt = now;
                 entry.Visit.Status = VisitStatuses.InProgress; entry.Visit.DentistId = dentistId;
@@ -322,7 +325,7 @@ public sealed class QueueService
                 }, transactionCt);
                 await _unitOfWork.SaveChangesAsync(transactionCt);
                 await _auditLogger.LogRequiredAsync(AuditActions.QueueStatusChanged, "QueueEntry", entry.QueueEntryId, actorUserId,
-                    JsonSerializer.Serialize(new { action = "StartSelected", dentistId, visitId = entry.VisitId,
+                    JsonSerializer.Serialize(new { action = "StartSelected", dentistId, visitId = entry.VisitId, chairId = entry.Visit.ChairId,
                         fromStatus = (int)previousStatus, toStatus = (int)QueueStatus.InConsultation }), ipAddress, transactionCt);
                 var refreshed = await _queueRepository.GetByIdAsync(entry.QueueEntryId, transactionCt);
                 return Result<QueueEntryResponse>.Success(await ToResponseAsync(refreshed ?? entry, transactionCt));
@@ -391,30 +394,54 @@ public sealed class QueueService
             return await StartSelectedAsync(queueEntryId, actorUserId, actorRole, request, ipAddress, ct);
         if (request.NewStatus is (int)QueueStatus.InImaging or (int)QueueStatus.Waiting)
             return await RouteImagingAsync(queueEntryId, actorUserId, actorRole, request, ipAddress, ct);
+        try
+        {
+            return await _unitOfWork.ExecuteSerializableTransactionAsync(
+                transactionCt => FinishCoreAsync(queueEntryId, actorUserId, actorRole, request, ipAddress, transactionCt), ct);
+        }
+        catch (ConcurrentOperationException) { return Result<QueueEntryResponse>.Failure(Error.QueueConcurrent); }
+    }
+    private async Task<Result<QueueEntryResponse>> FinishCoreAsync(int queueEntryId, int actorUserId, string actorRole,
+        UpdateQueueStatusRequest request, string? ipAddress, CancellationToken ct)
+    {
+        if (queueEntryId <= 0 || actorUserId <= 0 || request.Reason?.Length > 500) return Result<QueueEntryResponse>.Failure(Error.Validation);
         var entry = await _queueRepository.GetByIdAsync(queueEntryId, ct);
         if (entry is null)
             return Result<QueueEntryResponse>.Failure(Error.QueueEntryNotFound);
 
         var targetStatus = (QueueStatus)request.NewStatus;
-        var transitionValidation = QueueStateMachine.ValidateTransition(entry.Status, targetStatus, actorRole);
-        if (transitionValidation.IsFailure)
-            return Result<QueueEntryResponse>.Failure(transitionValidation.Error);
+        var clinicalCancellation = targetStatus == QueueStatus.Cancelled && entry.Visit?.Status == VisitStatuses.InProgress &&
+            entry.Status is (QueueStatus.Waiting or QueueStatus.Calling or QueueStatus.InConsultation or QueueStatus.InImaging);
+        if (clinicalCancellation)
+        {
+            if (entry.Visit!.IsLocked) return Result<QueueEntryResponse>.Failure(Error.QueueInvalidStateTransition);
+            if (actorRole is not (RoleCodes.Admin or RoleCodes.Dentist)) return Result<QueueEntryResponse>.Failure(Error.QueueTransitionForbidden);
+            if (actorRole == RoleCodes.Dentist && entry.Visit!.DentistId != actorUserId) return Result<QueueEntryResponse>.Failure(Error.Forbidden);
+            if (string.IsNullOrWhiteSpace(request.Reason)) return Result<QueueEntryResponse>.Failure(Error.Validation.Code, "Vui lòng ghi lý do hủy ca đã bắt đầu khám.");
+        }
+        else
+        {
+            var transitionValidation = QueueStateMachine.ValidateTransition(entry.Status, targetStatus, actorRole);
+            if (transitionValidation.IsFailure) return Result<QueueEntryResponse>.Failure(transitionValidation.Error);
+        }
+        if (targetStatus == QueueStatus.Completed && (entry.Visit is null || entry.Visit.Status != VisitStatuses.InProgress || entry.Visit.IsLocked))
+            return Result<QueueEntryResponse>.Failure(Error.Validation);
+        if (targetStatus == QueueStatus.Completed && actorRole == RoleCodes.Dentist && entry.Visit!.DentistId != actorUserId)
+            return Result<QueueEntryResponse>.Failure(Error.Forbidden);
+        if (entry.Visit is not null)
+        {
+            var release = await _visitChairs.ReleaseAsync(entry.Visit, actorUserId, ct);
+            if (release.IsFailure) return Result<QueueEntryResponse>.Failure(release.Error);
+        }
 
         if (targetStatus == QueueStatus.Completed)
         {
-            if (entry.Visit is null || entry.Visit.Status != VisitStatuses.InProgress || entry.Visit.IsLocked)
-                return Result<QueueEntryResponse>.Failure(Error.Validation);
-            if (actorRole == RoleCodes.Dentist && entry.Visit.DentistId != actorUserId)
-                return Result<QueueEntryResponse>.Failure(Error.Forbidden);
-            if (entry.Visit is not null)
-            {
-                entry.Visit.IsLocked = true;
-                entry.Visit.LockedAt = DateTime.UtcNow;
-                entry.Visit.LockedBy = actorUserId;
-                entry.Visit.Status = VisitStatuses.Completed;
-                entry.Visit.EndedAt = DateTime.UtcNow;
-                entry.Visit.UpdatedAt = DateTime.UtcNow;
-            }
+            entry.Visit!.IsLocked = true;
+            entry.Visit.LockedAt = DateTime.UtcNow;
+            entry.Visit.LockedBy = actorUserId;
+            entry.Visit.Status = VisitStatuses.Completed;
+            entry.Visit.EndedAt = DateTime.UtcNow;
+            entry.Visit.UpdatedAt = DateTime.UtcNow;
         }
         else if (targetStatus == QueueStatus.Cancelled)
         {
@@ -447,13 +474,14 @@ public sealed class QueueService
         }
         else await _unitOfWork.SaveChangesAsync(ct);
 
-        await _auditLogger.LogAsync(
+        await _auditLogger.LogRequiredAsync(
             action: AuditActions.QueueStatusChanged,
             entityType: "QueueEntry",
             entityId: entry.QueueEntryId,
             userId: actorUserId,
             detail: JsonSerializer.Serialize(new
             {
+                visitId = entry.VisitId, chairId = entry.Visit?.ChairId, fromStatus = (int?)history.FromStatus, toStatus = (int)targetStatus,
                 changedFields = new[]
                 {
                     nameof(QueueEntry.Status),
@@ -587,6 +615,8 @@ public sealed class QueueService
         if (actorRole == RoleCodes.Assistant && nextEntry.DentistId != targetDentistId)
             return Result<QueueEntryResponse>.Failure(Error.QueueTransitionForbidden);
 
+        var chairReady = await _visitChairs.CheckReadyAsync(nextEntry.Visit!, targetDentistId, ct);
+        if (chairReady.IsFailure) return Result<QueueEntryResponse>.Failure(chairReady.Error);
         nextEntry.Status = QueueStatus.Calling;
         nextEntry.DentistId = targetDentistId;
         nextEntry.UpdatedAt = DateTime.UtcNow;
