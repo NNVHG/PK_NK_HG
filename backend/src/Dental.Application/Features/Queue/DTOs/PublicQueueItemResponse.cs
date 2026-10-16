@@ -8,5 +8,7 @@ public sealed record PublicQueueItemResponse(
     string? DentistName,
     int Status,
     string StatusText,
-    bool IsPriority
+    bool IsPriority,
+    string? ChairNumber = null,
+    string? RoomName = null
 );

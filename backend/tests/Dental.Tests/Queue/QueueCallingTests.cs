@@ -116,7 +116,9 @@ public sealed class QueueCallingTests
     {
         var result = await Service().GetCallingDentistsAsync(role); Assert.True(result.IsSuccess);
         var dentist = Assert.Single(result.Value!); Assert.Equal(5, dentist.DentistId); Assert.Equal("Synthetic dentist", dentist.DentistName);
-        Assert.Equal(2, dentist.GetType().GetProperties().Length);
+        Assert.Equal(new[] { "ChairNumber", "DentistId", "DentistName", "RoomName" },
+            dentist.GetType().GetProperties().Select(p => p.Name).OrderBy(n => n).ToArray());
+        Assert.Null(dentist.ChairNumber); Assert.Null(dentist.RoomName);
     }
     [Theory] [InlineData(RoleCodes.Patient)] [InlineData(RoleCodes.Receptionist)] [InlineData(null)]
     public async Task CallingDirectoryRejectsOtherRolesBeforeReading(string? role)

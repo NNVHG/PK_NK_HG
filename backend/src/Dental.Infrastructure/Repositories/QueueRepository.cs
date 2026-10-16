@@ -12,6 +12,20 @@ public sealed class QueueRepository : IQueueRepository
 
     public QueueRepository(DentalDbContext db) => _db = db;
 
+    public async Task<IReadOnlyList<Dental.Application.Features.Queue.DTOs.QueueDentistLocation>> GetDentistLocationsAsync(
+        IReadOnlyCollection<int> dentistIds, CancellationToken ct = default)
+    {
+        if (dentistIds.Count == 0) return [];
+        return await (from workspace in _db.StaffWorkspaces.AsNoTracking()
+                      join dentist in _db.Users on workspace.UserId equals dentist.UserId
+                      join chair in _db.DentalChairs on workspace.ChairId equals (int?)chair.Id
+                      where dentistIds.Contains(workspace.UserId) && dentist.IsActive &&
+                          dentist.Role.RoleCode == Dental.Domain.Constants.RoleCodes.Dentist && chair.IsActive &&
+                          (chair.Status == DentalChairStatus.Available || chair.Status == DentalChairStatus.Occupied)
+                      select new Dental.Application.Features.Queue.DTOs.QueueDentistLocation(
+                          workspace.UserId, chair.ChairNumber, chair.RoomName)).ToListAsync(ct);
+    }
+
     public async Task<IReadOnlyList<QueueEntry>> GetExpiredUnstartedAsync(DateOnly lastExpiredDate, CancellationToken ct = default)
         => await _db.QueueEntries.Include(q => q.Visit)
             .Where(q => q.QueueDate <= lastExpiredDate &&

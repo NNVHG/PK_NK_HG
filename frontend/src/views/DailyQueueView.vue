@@ -15,7 +15,7 @@
       <template v-if="needsCallingDentist">
         <label for="call-dentist">Nha sĩ gọi khám</label>
         <select id="call-dentist" v-model.number="callDentistId" :disabled="writing || dentistsLoading">
-          <option :value="0">Chọn nha sĩ</option><option v-for="dentist in dentists" :key="dentist.dentistId" :value="dentist.dentistId">{{ dentist.dentistName }} · #{{ dentist.dentistId }}</option>
+          <option :value="0">Chọn nha sĩ</option><option v-for="dentist in dentists" :key="dentist.dentistId" :value="dentist.dentistId">{{ dentist.dentistName }} · {{ locationLabel(dentist) }} · #{{ dentist.dentistId }}</option>
         </select>
         <button :disabled="writing || dentistsLoading" @click="loadDentists">Tải nha sĩ</button>
       </template>
@@ -36,7 +36,7 @@
     <ol class="entries"><li v-for="row in rows" :key="row.queueEntryId" :class="{ priority: row.isPriority }">
       <strong>{{ numberLabel(row.queueNumber) }} · {{ row.patientName }}</strong>
       <p>{{ row.patientCode }} · {{ row.statusText }} · {{ row.queueDate }}</p>
-      <p>{{ row.isPriority ? 'Ưu tiên lịch hẹn đúng giờ' : 'Chờ thông thường' }} · {{ row.dentistName || 'Chưa phân nha sĩ' }}</p>
+      <p>{{ row.isPriority ? 'Ưu tiên lịch hẹn đúng giờ' : 'Chờ thông thường' }} · {{ row.dentistName || 'Chưa phân nha sĩ' }} · {{ locationLabel(row) }}</p>
       <RouterLink v-if="row.status === 6 && ['ADMIN', 'DENTIST'].includes(authStore.role)" to="/clinical/diagnosis">Mở hồ sơ để bắt đầu khám</RouterLink>
       <button v-if="canCancelWaiting && row.status === 1" :disabled="loading || writing || imagingRow !== null || absenceRow !== null || cleanupOpen || needsReview" @click="openCancellation(row)">Hủy lượt chưa khám</button>
       <button v-if="canRouteImaging(row)" :disabled="loading || writing || cancelRow !== null || absenceRow !== null || cleanupOpen || needsReview" @click="openImaging(row)">
@@ -105,6 +105,9 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { queueService, type QueueEntryResponse, type CallingDentist } from '@/services/queue';
 const rows = ref<QueueEntryResponse[]>([]), status = ref(1), page = ref(1), total = ref(0), hasNext = ref(false);
+function locationLabel(item: { roomName?: string | null; chairNumber?: string | null }): string {
+  return [item.roomName, item.chairNumber ? `Ghế ${item.chairNumber}` : null].filter(Boolean).join(' · ') || 'Chưa có phòng/ghế';
+}
 const loading = ref(false), callingNext = ref(false), error = ref(''), actionMsg = ref(''), updatedAt = ref('');
 const authStore = useAuthStore(), canCallNext = computed(() => ['ADMIN', 'DENTIST', 'ASSISTANT'].includes(authStore.role));
 const needsCallingDentist = computed(() => ['ADMIN', 'ASSISTANT'].includes(authStore.role));
@@ -149,7 +152,7 @@ async function handleCallNext() {
     const entry = await queueService.callNext(needsCallingDentist.value ? { dentistId: callDentistId.value } : undefined);
     if (ticket !== life) return;
     if (entry.status !== 6) throw new Error('Unexpected invitation status');
-    actionMsg.value = `Đã mời số ${numberLabel(entry.queueNumber)} - ${entry.patientName} vào phòng; cần xác nhận bắt đầu khám riêng.`;
+    actionMsg.value = `Đã mời số ${numberLabel(entry.queueNumber)} - ${entry.patientName} ${locationLabel(entry)}; cần xác nhận bắt đầu khám riêng.`;
     needsReview.value = true;
     await load(page.value);
   } catch (err: unknown) {
