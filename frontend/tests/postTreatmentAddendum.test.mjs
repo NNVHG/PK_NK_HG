@@ -13,16 +13,17 @@ const compiled = ts.transpileModule(compileScript(descriptor, { id: 'post-treatm
 function fixture(role = 'DENTIST', userId = 5) {
   const calls = [];
   const notes = [{ id: 1, visitId: 10, createdByUserId: 5, createdByFullName: 'Bs A', createdByRoleName: 'Nha sĩ', note: 'Vết thương ổn', createdAt: '2026-10-15T10:00:00Z' }];
-  let failAdd = false, addDeferred = null;
+  let failAdd = false, addDeferred = null, readDeferred = null, forcedReply = null, cleanup;
+  const auth = { role, user: { userId } };
 
   const imports = {
     vue: {
       defineComponent: x => x, ref: value => ({ value }), reactive: obj => obj,
-      computed: fn => ({ get value() { return fn(); } }), onMounted() {}, onUnmounted() {},
+      computed: fn => ({ get value() { return fn(); } }), onMounted() {}, onUnmounted(cb) { cleanup = cb; },
     },
     'vue-router': { useRoute: () => ({ params: { id: '1' } }) },
     axios: { default: { isAxiosError: () => false }, isAxiosError: () => false },
-    '@/stores/auth': { useAuthStore: () => ({ role, user: { userId } }) },
+    '@/stores/auth': { useAuthStore: () => auth },
     '@/components/SafetyAlertBanner.vue': {},
     '@/services/patients': {
       patientsService: {
@@ -36,12 +37,12 @@ function fixture(role = 'DENTIST', userId = 5) {
     },
     '@/services/visits': {
       visitsService: {
-        getPostTreatmentNotes: async (visitId) => { calls.push(['getNotes', visitId]); return [...notes]; },
+        getPostTreatmentNotes: async (visitId) => { calls.push(['getNotes', visitId]); if (readDeferred) await readDeferred.promise; return [...notes]; },
         addPostTreatmentNote: async (visitId, payload) => {
           calls.push(['addNote', visitId, payload]);
           if (addDeferred) await addDeferred.promise;
           if (failAdd) throw new Error('API failure');
-          return { id: 2, visitId, createdByUserId: userId, createdByFullName: 'Bs A', createdByRoleName: 'Nha sĩ', note: payload.note, createdAt: '2026-10-16T12:00:00Z', requestId: payload.requestId };
+          return forcedReply ?? { id: 2, visitId, createdByUserId: userId, createdByFullName: 'Bs A', createdByRoleName: 'Nha sĩ', note: payload.note, createdAt: '2026-10-16T12:00:00Z', requestId: payload.requestId };
         },
       },
     },
@@ -54,8 +55,12 @@ function fixture(role = 'DENTIST', userId = 5) {
   }, module, module.exports);
 
   const c = module.exports.default.setup({}, { expose() {} });
+  c.timeline.value = [{ visitId: 10, status: 'Completed', dentistId: 5 }];
   return {
-    c, calls, notes,
+    c, calls, notes, auth, cleanup: () => cleanup(),
+    recover: () => { failAdd = false; forcedReply = null; },
+    reply: value => { forcedReply = value; },
+    deferRead: () => { let resolve; const promise = new Promise(r => { resolve = r; }); readDeferred = { promise, resolve }; return resolve; },
     setFailAdd: () => { failAdd = true; },
     deferAdd: () => {
       let resolve;
@@ -151,3 +156,43 @@ test('submitAddendum blocks double submit while saving', async () => {
   assert.equal(f.calls.length, 1);
 });
 
+
+test('unknown dentist assignment, stale visit, or changed role never submits', async () => {
+  const f = fixture(); assert.equal(f.c.canAddPostTreatmentNote({ status: 'Completed', dentistId: null }), false);
+  f.c.addendumDraftMap.value[99] = 'Synthetic note'; await f.c.submitAddendum(99); assert.equal(f.calls.length, 0);
+  f.c.addendumDraftMap.value[10] = 'Synthetic note'; f.auth.role = 'RECEPTIONIST'; await f.c.submitAddendum(10); assert.equal(f.calls.length, 0);
+});
+test('uncertain retry uses the same key and content', async () => {
+  const f = fixture(); f.setFailAdd(); f.c.addendumDraftMap.value[10] = 'Synthetic note'; await f.c.submitAddendum(10);
+  const first = f.calls[0][2]; f.c.addendumDraftMap.value[10] = 'Changed'; await f.c.submitAddendum(10); assert.equal(f.calls.length, 1);
+  f.c.addendumDraftMap.value[10] = 'Synthetic note'; f.recover(); await f.c.submitAddendum(10);
+  assert.deepEqual(f.calls[1][2], first); assert.equal(f.c.postTreatmentNotesMap.value[10].length, 1);
+});
+test('unmount clears clinical drafts and ignores late write response', async () => {
+  const f = fixture(); const resolve = f.deferAdd(); f.c.addendumDraftMap.value[10] = 'Synthetic note'; const pending = f.c.submitAddendum(10);
+  f.cleanup(); resolve(); await pending; assert.deepEqual(f.c.addendumDraftMap.value, {}); assert.deepEqual(f.c.postTreatmentNotesMap.value, {});
+  assert.deepEqual(f.c.addendumSuccessMap.value, {});
+});
+test('manual reload reconciles an already committed request after lost response', async () => {
+  const f = fixture(); f.setFailAdd(); f.c.addendumDraftMap.value[10] = 'Synthetic note'; await f.c.submitAddendum(10);
+  f.notes.push({ id: 2, visitId: 10, createdByUserId: 5, note: 'Synthetic note', requestId: f.calls[0][2].requestId });
+  await f.c.loadPostTreatmentNotes(10); assert.equal(f.c.addendumDraftMap.value[10], '');
+  f.recover(); f.c.addendumDraftMap.value[10] = 'New note'; await f.c.submitAddendum(10);
+  assert.notEqual(f.calls[2][2].requestId, f.calls[0][2].requestId);
+});
+
+test('read in progress prevents append and unmount ignores late clinical history', async () => {
+  const f = fixture(); const resolve = f.deferRead(); const pending = f.c.loadPostTreatmentNotes(10);
+  f.c.addendumDraftMap.value[10] = 'Synthetic note'; await f.c.submitAddendum(10); assert.equal(f.calls.length, 1);
+  f.cleanup(); resolve(); await pending; assert.deepEqual(f.c.postTreatmentNotesMap.value, {});
+});
+test('mismatched response is not acknowledged and retry retains original key', async () => {
+  const f = fixture(); f.reply({ id: 99, visitId: 88, createdByUserId: 5, note: 'Wrong', requestId: 'wrong' });
+  f.c.addendumDraftMap.value[10] = 'Synthetic note'; await f.c.submitAddendum(10);
+  assert.equal(f.c.addendumDraftMap.value[10], 'Synthetic note'); assert.equal(f.c.addendumSuccessMap.value[10], '');
+  const first = f.calls[0][2]; f.recover(); await f.c.submitAddendum(10); assert.deepEqual(f.calls[1][2], first);
+});
+test('role changed during history read cannot expose the late response', async () => {
+  const f = fixture(); const resolve = f.deferRead(); const pending = f.c.loadPostTreatmentNotes(10);
+  f.auth.role = 'PATIENT'; resolve(); await pending; assert.deepEqual(f.c.postTreatmentNotesMap.value, {});
+});

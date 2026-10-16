@@ -160,11 +160,14 @@ public sealed class PostTreatmentNoteTests
         };
         noteRepo.GetByRequestIdAsync(requestId, Arg.Any<CancellationToken>()).Returns(existing);
 
-        var service = new PostTreatmentNoteService(
-            Substitute.For<IVisitRepository>(), Substitute.For<IPatientRepository>(), Substitute.For<IInvoiceRepository>(),
+        var visits = Substitute.For<IVisitRepository>();
+        visits.GetForUpdateAsync(10, Arg.Any<CancellationToken>()).Returns(new Visit { VisitId = 10, DentistId = 15, Status = VisitStatuses.Completed, IsLocked = true });
+        var invoices = Substitute.For<IInvoiceRepository>();
+        invoices.GetForVisitAsync(10, Arg.Any<CancellationToken>()).Returns(new Invoice { Status = InvoiceStatus.Paid });
+        var service = new PostTreatmentNoteService(visits, Substitute.For<IPatientRepository>(), invoices,
             noteRepo, CreateUnitOfWork(), Substitute.For<IAuditLogger>());
 
-        var result = await service.AddAsync(10, new CreatePostTreatmentNoteRequest("Khác", requestId), 15, RoleCodes.Dentist, "127.0.0.1");
+        var result = await service.AddAsync(10, new CreatePostTreatmentNoteRequest("Đã tồn tại", requestId), 15, RoleCodes.Dentist, "127.0.0.1");
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.Value);
         Assert.Equal(42, result.Value.Id);
@@ -243,5 +246,37 @@ public sealed class PostTreatmentNoteTests
         Assert.True(result.IsFailure);
         Assert.Equal(Error.NotFound.Code, result.Error.Code);
     }
+
+    [Theory]
+    [InlineData(11, 15, "Same", "GEN_001")]
+    [InlineData(10, 99, "Same", "GEN_001")]
+    [InlineData(10, 15, "Changed", "PAT_083")]
+    public async Task Replay_MustMatchVisitAuthorAndContent(int savedVisit, int savedAuthor, string content, string error)
+    {
+        var visits = Substitute.For<IVisitRepository>();
+        visits.GetForUpdateAsync(10, Arg.Any<CancellationToken>()).Returns(new Visit { VisitId = 10, DentistId = 15, Status = VisitStatuses.Completed, IsLocked = true });
+        var invoices = Substitute.For<IInvoiceRepository>();
+        invoices.GetForVisitAsync(10, Arg.Any<CancellationToken>()).Returns(new Invoice { Status = InvoiceStatus.Paid });
+        var notes = Substitute.For<IPostTreatmentNoteRepository>(); var audit = Substitute.For<IAuditLogger>(); var key = Guid.NewGuid();
+        notes.GetByRequestIdAsync(key, Arg.Any<CancellationToken>()).Returns(new PostTreatmentNote { VisitId = savedVisit, CreatedByUserId = savedAuthor, Note = "Same" });
+        var service = new PostTreatmentNoteService(visits, Substitute.For<IPatientRepository>(), invoices, notes, CreateUnitOfWork(), audit);
+        Assert.Equal(error, (await service.AddAsync(10, new(content, key), 15, RoleCodes.Dentist, null)).Error.Code);
+        await notes.DidNotReceive().AddAsync(Arg.Any<PostTreatmentNote>(), Arg.Any<CancellationToken>()); Assert.Empty(audit.ReceivedCalls());
+    }
+
+    [Fact]
+    public async Task Replay_NeverBypassesVisitOwnership()
+    {
+        var visits = Substitute.For<IVisitRepository>();
+        visits.GetForUpdateAsync(10, Arg.Any<CancellationToken>()).Returns(new Visit { VisitId = 10, DentistId = 99, Status = VisitStatuses.Completed, IsLocked = true });
+        var notes = Substitute.For<IPostTreatmentNoteRepository>();
+        var service = new PostTreatmentNoteService(visits, Substitute.For<IPatientRepository>(), Substitute.For<IInvoiceRepository>(), notes, CreateUnitOfWork(), Substitute.For<IAuditLogger>());
+        Assert.Equal(Error.DiagnosisDentistMismatch, (await service.AddAsync(10, new("Synthetic note", Guid.NewGuid()), 15, RoleCodes.Dentist, null)).Error);
+        Assert.Empty(notes.ReceivedCalls());
+    }
+
+    [Fact]
+    public void Validator_RejectsEmptyRequestId()
+        => Assert.False(new CreatePostTreatmentNoteRequestValidator().Validate(new CreatePostTreatmentNoteRequest("Synthetic note", Guid.Empty)).IsValid);
 
 }

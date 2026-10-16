@@ -63,6 +63,7 @@
               <RouterLink v-if="['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(authStore.role)" :to="`/clinical/visits/${visit.visitId}/invoice-draft`">Xem hóa đơn nháp</RouterLink>
               <div class="visit-flags"><span>{{ visit.hasMedicalHistory ? 'Có tiền sử' : 'Chưa ghi tiền sử' }}</span><span>{{ visit.hasVitalSigns ? 'Có sinh hiệu' : 'Chưa ghi sinh hiệu' }}</span></div>
               <div class="post-treatment-section">
+                <button class="button button-quiet" v-if="postTreatmentExpandedMap[visit.visitId]" :disabled="savingAddendumMap[visit.visitId] || postTreatmentLoadingMap[visit.visitId]" @click="loadPostTreatmentNotes(visit.visitId)">Tải lại ghi chú</button>
                 <button class="button button-quiet post-treatment-toggle" type="button" @click="togglePostTreatmentNotes(visit.visitId)">
                   {{ postTreatmentExpandedMap[visit.visitId] ? '▲ Đóng ghi chú hậu điều trị' : '▼ Ghi chú hậu điều trị' + (postTreatmentNotesMap[visit.visitId] ? ` (${postTreatmentNotesMap[visit.visitId].length})` : '') }}
                 </button>
@@ -79,7 +80,7 @@
                     </ul>
 
                     <form v-if="canAddPostTreatmentNote(visit)" class="addendum-form" @submit.prevent="submitAddendum(visit.visitId)">
-                      <label :for="`addendum-note-${visit.visitId}`">Bổ sung ghi chú lâm sàng hậu điều trị (DL-227 / DL-265):</label>
+                      <label :for="`addendum-note-${visit.visitId}`">Bổ sung ghi chú lâm sàng hậu điều trị:</label>
                       <textarea
                         :id="`addendum-note-${visit.visitId}`"
                         v-model="addendumDraftMap[visit.visitId]"
@@ -231,7 +232,7 @@
 
 <script setup lang="ts">
 import axios from 'axios';
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import SafetyAlertBanner from '@/components/SafetyAlertBanner.vue';
 import {
@@ -319,12 +320,19 @@ const addendumDraftMap = ref<Record<number, string>>({});
 const savingAddendumMap = ref<Record<number, boolean>>({});
 const addendumErrorMap = ref<Record<number, string>>({});
 const addendumSuccessMap = ref<Record<number, string>>({});
+const addendumRequests = new Map<number, { requestId: string; note: string }>();
+let addendumLife = 0;
+onUnmounted(() => {
+  addendumLife++; addendumRequests.clear();
+  postTreatmentNotesMap.value = {}; addendumDraftMap.value = {}; addendumErrorMap.value = {};
+  addendumSuccessMap.value = {}; postTreatmentExpandedMap.value = {};
+});
 
 function canAddPostTreatmentNote(visit: PatientTimelineItem): boolean {
   if (visit.status !== 'Completed') return false;
   if (authStore.role === 'ADMIN') return true;
   if (authStore.role === 'DENTIST') {
-    return visit.dentistId == null || visit.dentistId === authStore.user?.userId;
+    return visit.dentistId != null && visit.dentistId === authStore.user?.userId;
   }
   return false;
 }
@@ -338,19 +346,29 @@ async function togglePostTreatmentNotes(visitId: number) {
 }
 
 async function loadPostTreatmentNotes(visitId: number) {
+  if (savingAddendumMap.value[visitId] || postTreatmentLoadingMap.value[visitId]) return;
+  const ticket = addendumLife, actor = authStore.user?.userId, role = authStore.role;
   postTreatmentLoadingMap.value[visitId] = true;
   postTreatmentErrorMap.value[visitId] = '';
   try {
-    postTreatmentNotesMap.value[visitId] = await visitsService.getPostTreatmentNotes(visitId);
+    const notes = await visitsService.getPostTreatmentNotes(visitId);
+    if (ticket !== addendumLife || actor !== authStore.user?.userId || role !== authStore.role) return;
+    postTreatmentNotesMap.value[visitId] = notes;
+    const pending = addendumRequests.get(visitId);
+    if (pending && notes.some(n => n.requestId === pending.requestId && n.createdByUserId === authStore.user?.userId && n.note === pending.note)) {
+      addendumRequests.delete(visitId);
+      if (addendumDraftMap.value[visitId]?.trim() === pending.note) addendumDraftMap.value[visitId] = '';
+    }
   } catch (error: unknown) {
-    postTreatmentErrorMap.value[visitId] = apiError(error, 'Không tải được ghi chú hậu điều trị.');
+    if (ticket === addendumLife) postTreatmentErrorMap.value[visitId] = apiError(error, 'Không tải được ghi chú hậu điều trị.');
   } finally {
-    postTreatmentLoadingMap.value[visitId] = false;
+    if (ticket === addendumLife) postTreatmentLoadingMap.value[visitId] = false;
   }
 }
 
 async function submitAddendum(visitId: number) {
-  if (savingAddendumMap.value[visitId]) return;
+  const visit = timeline.value.find(v => v.visitId === visitId);
+  if (!visit || !canAddPostTreatmentNote(visit) || savingAddendumMap.value[visitId] || postTreatmentLoadingMap.value[visitId]) return;
   const noteText = (addendumDraftMap.value[visitId] || '').trim();
   if (!noteText) {
     addendumErrorMap.value[visitId] = 'Nội dung ghi chú không được để trống.';
@@ -360,25 +378,39 @@ async function submitAddendum(visitId: number) {
     addendumErrorMap.value[visitId] = 'Nội dung ghi chú không được vượt quá 1000 ký tự.';
     return;
   }
+  let pending = addendumRequests.get(visitId);
+  if (pending && pending.note !== noteText) {
+    addendumErrorMap.value[visitId] = 'Kết quả lần gửi trước chưa rõ. Tải lại ghi chú hoặc gửi lại nguyên nội dung trước để đối chiếu.';
+    return;
+  }
+  if (!pending) {
+    if (typeof crypto === 'undefined' || !crypto.randomUUID) { addendumErrorMap.value[visitId] = 'Trình duyệt chưa hỗ trợ mã yêu cầu an toàn. Mở bằng localhost hoặc HTTPS.'; return; }
+    pending = { requestId: crypto.randomUUID(), note: noteText }; addendumRequests.set(visitId, pending);
+  }
+  const ticket = addendumLife, actor = authStore.user?.userId, role = authStore.role;
   savingAddendumMap.value[visitId] = true;
   addendumErrorMap.value[visitId] = '';
   addendumSuccessMap.value[visitId] = '';
   try {
-    const requestId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : null;
+    const requestId = pending.requestId;
     const created = await visitsService.addPostTreatmentNote(visitId, {
       note: noteText,
       requestId
     });
+    if (ticket !== addendumLife || actor !== authStore.user?.userId || role !== authStore.role) return;
+    if (created.visitId !== visitId || created.createdByUserId !== actor || created.requestId !== requestId || created.note !== noteText || !Number.isInteger(created.id) || created.id <= 0)
+      throw new Error('Invalid addendum response');
     if (!postTreatmentNotesMap.value[visitId]) {
       postTreatmentNotesMap.value[visitId] = [];
     }
-    postTreatmentNotesMap.value[visitId].push(created);
+    if (!postTreatmentNotesMap.value[visitId].some(n => n.id === created.id)) postTreatmentNotesMap.value[visitId].push(created);
+    addendumRequests.delete(visitId);
     addendumDraftMap.value[visitId] = '';
     addendumSuccessMap.value[visitId] = 'Đã thêm ghi chú hậu điều trị thành công.';
   } catch (error: unknown) {
-    addendumErrorMap.value[visitId] = apiError(error, 'Không thêm được ghi chú hậu điều trị. Vui lòng thử lại.');
+    if (ticket === addendumLife) addendumErrorMap.value[visitId] = apiError(error, 'Chưa xác minh kết quả ghi chú. Gửi lại nguyên nội dung để đối chiếu, hoặc tải lại ghi chú.');
   } finally {
-    savingAddendumMap.value[visitId] = false;
+    if (ticket === addendumLife) savingAddendumMap.value[visitId] = false;
   }
 }
 
