@@ -165,3 +165,49 @@ test('late Calling response after unmount cannot restore the monitor or announce
   done({ ...mockData, inConsultation: [{ ...mockData.inConsultation[0], status: 6 }] }); await loading;
   assert.equal(f.c.inConsultation.value.length, 0); assert.equal(f.c.seenCallIds.size, 0); assert.equal(f.c.soundEnabled.value, false);
 });
+
+
+test('location label renders real room and chair with an explicit missing fallback', () => {
+  const f = fixture();
+  try {
+    assert.equal(f.c.locationLabel({ roomName: 'Phòng 3', chairNumber: 'G03' }), 'Phòng 3 · Ghế G03');
+    assert.match(f.c.locationLabel({ roomName: null, chairNumber: null }), /Chưa có phòng/);
+    assert.equal(f.c.locationLabel({ chairNumber: 'G04' }), 'Ghế G04');
+  } finally { f.cleanup(); }
+});
+
+test('announcement destination is actual room and chair, never the dentist name', () => {
+  const f = fixture();
+  try {
+    f.c.enqueueCallAudio({ ...mockData.inConsultation[0], roomName: 'Phòng 3', chairNumber: 'G03' });
+    assert.equal(f.c.audioQueue[0].destination, 'Phòng 3, ghế G03');
+    assert.equal(f.c.audioQueue[0].patientName, 'Nguyễn V*** An');
+    assert.ok(!f.c.audioQueue[0].destination.includes('BS.'));
+  } finally { f.cleanup(); }
+});
+
+test('missing location announcement directs patient to reception without inventing a room', () => {
+  const f = fixture();
+  try {
+    f.c.enqueueCallAudio(mockData.inConsultation[0]);
+    assert.equal(f.c.audioQueue[0].destination, 'khu vực tiếp đón để được hướng dẫn');
+  } finally { f.cleanup(); }
+});
+
+test('location refresh keeps Calling identity and does not repeat the announcement', async () => {
+  const call = { ...mockData.inConsultation[0], status: 6, roomName: 'Phòng 3', chairNumber: 'G03' };
+  const f = fixture([{ inConsultation: [call], waiting: [] }, { inConsultation: [{ ...call, roomName: 'Phòng 4' }], waiting: [] }]);
+  try {
+    await f.c.loadQueueData(); f.c.soundEnabled.value = true;
+    await f.c.loadQueueData();
+    assert.equal(f.c.inConsultation.value[0].roomName, 'Phòng 4');
+    assert.equal(f.c.audioQueue.length, 0);
+  } finally { f.cleanup(); }
+});
+
+test('TV template renders dedicated location and TTS uses destination text', async () => {
+  const source = await readFile(new URL('../src/views/QueueDisplayView.vue', import.meta.url), 'utf8');
+  assert.match(source, /class="location-info">{{ locationLabel\(item\) }}/);
+  assert.ok(source.includes('${item.destination}'));
+  assert.ok(!source.includes('phòng khám ${item.roomName}'));
+});

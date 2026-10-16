@@ -16,6 +16,8 @@ export interface QueueEntryResponse {
   appointmentId: number | null;
   dentistId: number | null;
   dentistName: string | null;
+  chairNumber: string | null;
+  roomName: string | null;
   visitId: number | null;
   queueDate: string;
   queueNumber: number;
@@ -32,6 +34,8 @@ export interface PublicQueueItemResponse {
   queueNumberDisplay: string;
   maskedPatientName: string;
   dentistName: string | null;
+  chairNumber: string | null;
+  roomName: string | null;
   status: number;
   statusText: string;
   isPriority: boolean;
@@ -46,7 +50,7 @@ export interface CallNextPayload {
   dentistId?: number | null;
 }
 
-export interface CallingDentist { dentistId: number; dentistName: string; }
+export interface CallingDentist { dentistId: number; dentistName: string; chairNumber: string | null; roomName: string | null; }
 
 export interface QueueCleanupResponse { cancelledCount: number; lastExpiredDate: string; }
 

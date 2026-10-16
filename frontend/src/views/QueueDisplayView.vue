@@ -38,8 +38,9 @@
             <div class="patient-name">{{ item.maskedPatientName }}</div>
             <div class="dentist-info">
               <span class="label">Bác sĩ phụ trách:</span>
-              <strong class="value">{{ item.dentistName || 'Phòng khám tổng quát' }}</strong>
+              <strong class="value">{{ item.dentistName || 'Chưa phân nha sĩ' }}</strong>
             </div>
+            <div class="location-info">{{ locationLabel(item) }}</div>
             <div class="status-badge" :class="{ pulse: item.status === 6 }">{{ item.statusText }}</div>
           </article>
         </div>
@@ -84,9 +85,12 @@ const soundEnabled = ref(false);
 interface AudioQueueItem {
   queueNumber: string;
   patientName: string;
-  roomName: string;
+  destination: string;
 }
 
+function locationLabel(item: { roomName?: string | null; chairNumber?: string | null }): string {
+  return [item.roomName, item.chairNumber ? `Ghế ${item.chairNumber}` : null].filter(Boolean).join(' · ') || 'Chưa có phòng/ghế — vui lòng hỏi tiếp đón';
+}
 const audioQueue: AudioQueueItem[] = [];
 let isPlayingAudio = false;
 const seenCallIds = new Set<number>();
@@ -143,7 +147,7 @@ function processAudioQueue() {
   playDingDong();
 
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-    const text = `Mời bệnh nhân số ${item.queueNumber}, ${item.patientName}, vào phòng khám ${item.roomName}`;
+    const text = `Mời bệnh nhân số ${item.queueNumber}, ${item.patientName}, vui lòng đến ${item.destination}`;
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'vi-VN';
     utterance.rate = 0.9;
@@ -180,7 +184,7 @@ function enqueueCallAudio(item: PublicQueueItemResponse) {
   audioQueue.push({
     queueNumber: item.queueNumberDisplay,
     patientName: item.maskedPatientName,
-    roomName: item.dentistName || 'bác sĩ'
+    destination: item.roomName ? `${item.roomName}${item.chairNumber ? `, ghế ${item.chairNumber}` : ''}` : 'khu vực tiếp đón để được hướng dẫn'
   });
   processAudioQueue();
 }
@@ -390,6 +394,8 @@ onUnmounted(() => {
 .dentist-info .value {
   color: #f1f5f9;
 }
+
+.location-info { font-size: 1.5rem; font-weight: 700; color: #fbbf24; margin-bottom: 1rem; overflow-wrap: anywhere; }
 
 .status-badge {
   display: inline-block;

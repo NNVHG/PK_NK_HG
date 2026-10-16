@@ -188,7 +188,7 @@ public sealed class QueueService
             ct: ct);
 
         var createdEntry = await _queueRepository.GetByIdAsync(entry.QueueEntryId, ct);
-        return Result<QueueEntryResponse>.Success(ToResponse(createdEntry ?? entry));
+        return Result<QueueEntryResponse>.Success(await ToResponseAsync(createdEntry ?? entry, ct));
     }
 
     public async Task<Result<QueueEntryResponse>> CancelWaitingAsync(
@@ -223,7 +223,7 @@ public sealed class QueueService
                 await _auditLogger.LogAsync(AuditActions.QueueStatusChanged, "QueueEntry", entry.QueueEntryId, actorUserId,
                     JsonSerializer.Serialize(new { action = "CancelWaiting", fromStatus = (int)QueueStatus.Waiting,
                         toStatus = (int)QueueStatus.Cancelled, visitId = entry.VisitId }), ipAddress, transactionCt);
-                return Result<QueueEntryResponse>.Success(ToResponse(entry));
+                return Result<QueueEntryResponse>.Success(await ToResponseAsync(entry, transactionCt));
             }, ct);
         }
         catch (ConcurrentOperationException)
@@ -270,7 +270,7 @@ public sealed class QueueService
                 await _auditLogger.LogRequiredAsync(AuditActions.QueueStatusChanged, "QueueEntry", entry.QueueEntryId,
                     actorUserId, JsonSerializer.Serialize(new { action = recall ? "Recall" : "MarkAbsent",
                         fromStatus = (int)from, toStatus = (int)target, visitId = entry.VisitId }), ipAddress, transactionCt);
-                return Result<QueueEntryResponse>.Success(ToResponse(entry));
+                return Result<QueueEntryResponse>.Success(await ToResponseAsync(entry, transactionCt));
             }, ct);
         }
         catch (ConcurrentOperationException) { return Result<QueueEntryResponse>.Failure(Error.QueueConcurrent); }
@@ -325,7 +325,7 @@ public sealed class QueueService
                     JsonSerializer.Serialize(new { action = "StartSelected", dentistId, visitId = entry.VisitId,
                         fromStatus = (int)previousStatus, toStatus = (int)QueueStatus.InConsultation }), ipAddress, transactionCt);
                 var refreshed = await _queueRepository.GetByIdAsync(entry.QueueEntryId, transactionCt);
-                return Result<QueueEntryResponse>.Success(ToResponse(refreshed ?? entry));
+                return Result<QueueEntryResponse>.Success(await ToResponseAsync(refreshed ?? entry, transactionCt));
             }, ct);
         }
         catch (ConcurrentOperationException) { return Result<QueueEntryResponse>.Failure(Error.QueueConcurrent); }
@@ -370,7 +370,7 @@ public sealed class QueueService
                 await _auditLogger.LogRequiredAsync(AuditActions.QueueStatusChanged, "QueueEntry", entry.QueueEntryId, actorUserId,
                     JsonSerializer.Serialize(new { action = "ImagingRouting", visitId = entry.VisitId,
                         dentistId = entry.DentistId, fromStatus = (int)source, toStatus = (int)target }), ipAddress, transactionCt);
-                return Result<QueueEntryResponse>.Success(ToResponse(entry));
+                return Result<QueueEntryResponse>.Success(await ToResponseAsync(entry, transactionCt));
             }, ct);
         }
         catch (ConcurrentOperationException) { return Result<QueueEntryResponse>.Failure(Error.QueueConcurrent); }
@@ -465,7 +465,7 @@ public sealed class QueueService
             ipAddress: ipAddress,
             ct: ct);
 
-        return Result<QueueEntryResponse>.Success(ToResponse(entry));
+        return Result<QueueEntryResponse>.Success(await ToResponseAsync(entry, ct));
     }
 
     public async Task<Result<PagedResult<QueueEntryResponse>>> GetTodayQueueAsync(
@@ -483,8 +483,9 @@ public sealed class QueueService
             request.PageSize,
             ct);
 
+        var locations = await LocationsAsync(items.Select(q => q.DentistId), ct);
         var page = PagedResult<QueueEntryResponse>.Create(
-            items.Select(ToResponse).ToList(),
+            items.Select(q => ToResponse(q, LocationFor(q, locations))).ToList(),
             totalCount,
             request.Page,
             request.PageSize);
@@ -502,7 +503,7 @@ public sealed class QueueService
 
         var histories = await _queueRepository.GetStatusHistoriesAsync(queueEntryId, ct);
         var detail = new QueueEntryDetailResponse(
-            ToResponse(entry),
+            await ToResponseAsync(entry, ct),
             histories.Select(ToHistoryResponse).ToList());
 
         return Result<QueueEntryDetailResponse>.Success(detail);
@@ -513,7 +514,12 @@ public sealed class QueueService
         if (actorRole is not (RoleCodes.Admin or RoleCodes.Dentist or RoleCodes.Assistant))
             return Result<IReadOnlyList<CallingDentistResponse>>.Failure(Error.Forbidden);
         var dentists = await _userRepository.GetActiveDentistsAsync(ct);
-        return Result<IReadOnlyList<CallingDentistResponse>>.Success(dentists.Select(d => new CallingDentistResponse(d.UserId, d.FullName)).ToArray());
+        var locations = await LocationsAsync(dentists.Select(d => (int?)d.UserId), ct);
+        return Result<IReadOnlyList<CallingDentistResponse>>.Success(dentists.Select(d =>
+        {
+            locations.TryGetValue(d.UserId, out var location);
+            return new CallingDentistResponse(d.UserId, d.FullName, location?.ChairNumber, location?.RoomName);
+        }).ToArray());
     }
 
     public async Task<Result<QueueEntryResponse>> CallNextAsync(
@@ -616,10 +622,24 @@ public sealed class QueueService
             ct: ct);
 
         var refreshed = await _queueRepository.GetByIdAsync(nextEntry.QueueEntryId, ct);
-        return Result<QueueEntryResponse>.Success(ToResponse(refreshed ?? nextEntry));
+        return Result<QueueEntryResponse>.Success(await ToResponseAsync(refreshed ?? nextEntry, ct));
     }
 
-    private static QueueEntryResponse ToResponse(QueueEntry q)
+    private async Task<Dictionary<int, QueueDentistLocation>> LocationsAsync(IEnumerable<int?> dentistIds, CancellationToken ct)
+    {
+        var ids = dentistIds.Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToArray();
+        if (ids.Length == 0) return [];
+        var locations = await _queueRepository.GetDentistLocationsAsync(ids, ct);
+        return locations.ToDictionary(location => location.DentistId);
+    }
+
+    private static QueueDentistLocation? LocationFor(QueueEntry entry, IReadOnlyDictionary<int, QueueDentistLocation> locations)
+        => entry.DentistId is int id && locations.TryGetValue(id, out var location) ? location : null;
+
+    private async Task<QueueEntryResponse> ToResponseAsync(QueueEntry entry, CancellationToken ct)
+        => ToResponse(entry, LocationFor(entry, await LocationsAsync([entry.DentistId], ct)));
+
+    private static QueueEntryResponse ToResponse(QueueEntry q, QueueDentistLocation? location)
         => new(
             q.QueueEntryId,
             q.PatientId,
@@ -638,7 +658,9 @@ public sealed class QueueService
             QueueStatusDescriptions.GetDescription(q.Status),
             q.Notes,
             q.CreatedAt,
-            q.Status == QueueStatus.Calling && q.Visit is { Status: VisitStatuses.Created, IsLocked: false, StartedAt: null }
+            q.Status == QueueStatus.Calling && q.Visit is { Status: VisitStatuses.Created, IsLocked: false, StartedAt: null },
+            location?.ChairNumber,
+            location?.RoomName
         );
 
     private static QueueStatusHistoryResponse ToHistoryResponse(QueueStatusHistory h)
@@ -660,12 +682,13 @@ public sealed class QueueService
         var today = _vietnamClock.Today;
         var entries = await _queueRepository.GetPublicDisplayQueueAsync(today, ct);
 
+        var locations = await LocationsAsync(entries.Select(q => q.DentistId), ct);
         var inConsultation = entries
             .Where(q => q.Status is QueueStatus.InConsultation or QueueStatus.Calling)
             .OrderByDescending(q => q.Status == QueueStatus.Calling)
             .ThenByDescending(q => q.UpdatedAt ?? q.CreatedAt)
             .Take(5)
-            .Select(ToPublicResponse)
+            .Select(q => ToPublicResponse(q, LocationFor(q, locations)))
             .ToList();
 
         var waiting = entries
@@ -677,7 +700,7 @@ public sealed class QueueService
             .ThenBy(q => q.CheckInTime)
             .ThenBy(q => q.QueueNumber)
             .Take(15)
-            .Select(ToPublicResponse)
+            .Select(q => ToPublicResponse(q, LocationFor(q, locations)))
             .ToList();
 
         return Result<PublicQueueMonitorResponse>.Success(new PublicQueueMonitorResponse(inConsultation, waiting));
@@ -712,7 +735,7 @@ public sealed class QueueService
         return $"{prefix}-{queueNumber:D3}";
     }
 
-    private static PublicQueueItemResponse ToPublicResponse(QueueEntry q)
+    private static PublicQueueItemResponse ToPublicResponse(QueueEntry q, QueueDentistLocation? location)
         => new(
             q.QueueEntryId,
             q.QueueNumber,
@@ -721,7 +744,9 @@ public sealed class QueueService
             q.Dentist?.FullName,
             (int)q.Status,
             QueueStatusDescriptions.GetDescription(q.Status),
-            q.IsPriority
+            q.IsPriority,
+            location?.ChairNumber,
+            location?.RoomName
         );
 
 }

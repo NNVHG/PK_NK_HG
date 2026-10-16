@@ -74,3 +74,11 @@ test('unexpected started response does not claim a separate invitation succeeded
   const f = fixture({ result: { queueNumber: 1, patientName: 'Synthetic', status: 2 } }); await f.mount();
   f.c.callDentistId.value = 5; await f.c.handleCallNext(); assert.equal(f.c.actionMsg.value, ''); assert.equal(f.c.needsReview.value, true);
 });
+
+
+test('queue rows and dentist selector display destination room without a workspace write', async () => {
+  const source = await readFile(new URL('../src/views/DailyQueueView.vue', import.meta.url), 'utf8');
+  assert.ok(source.includes('{{ locationLabel(dentist) }}'));
+  assert.ok(source.includes('{{ locationLabel(row) }}'));
+  assert.ok(!source.includes('workspaces.change'));
+});

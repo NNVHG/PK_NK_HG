@@ -18,5 +18,7 @@ public sealed record QueueEntryResponse(
     string StatusText,
     string? Notes,
     DateTime CreatedAt,
-    bool CanMarkAbsent = false
+    bool CanMarkAbsent = false,
+    string? ChairNumber = null,
+    string? RoomName = null
 );
