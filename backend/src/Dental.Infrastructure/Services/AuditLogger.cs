@@ -31,24 +31,20 @@ public sealed class AuditLogger : IAuditLogger
     {
         try
         {
-            var log = new AuditLog
-            {
-                Action = action,
-                EntityType = entityType,
-                EntityId = entityId,
-                UserId = userId,
-                Detail = detail,
-                IpAddress = ipAddress,
-                CreatedAt = DateTime.UtcNow,
-            };
-
-            _db.AuditLogs.Add(log);
-            await _db.SaveChangesAsync(ct);
+            await LogRequiredAsync(action, entityType, entityId, userId, detail, ipAddress, ct);
         }
         catch (Exception ex)
         {
             // Lỗi ghi AuditLog không được ném ra ngoài — chỉ log warning
             _logger.LogWarning(ex, "Ghi AuditLog thất bại. Action={Action} EntityType={EntityType}", action, entityType);
         }
+    }
+
+    public async Task LogRequiredAsync(string action, string entityType, int? entityId = null, int? userId = null,
+        string? detail = null, string? ipAddress = null, CancellationToken ct = default)
+    {
+        _db.AuditLogs.Add(new AuditLog { Action = action, EntityType = entityType, EntityId = entityId,
+            UserId = userId, Detail = detail, IpAddress = ipAddress, CreatedAt = DateTime.UtcNow });
+        await _db.SaveChangesAsync(ct);
     }
 }

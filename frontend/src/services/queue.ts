@@ -70,6 +70,11 @@ export const queueService = {
     return response.data;
   },
 
+  async routeImaging(queueEntryId: number, newStatus: 1 | 5, reason: string | null): Promise<QueueEntryResponse> {
+    const response = await apiClient.put<QueueEntryResponse>(`/queue/${queueEntryId}/status`, { newStatus, reason });
+    return response.data;
+  },
+
   async cancelWaiting(queueEntryId: number, reason: string | null): Promise<QueueEntryResponse> {
     const response = await apiClient.post<QueueEntryResponse>(`/queue/${queueEntryId}/cancel-waiting`, {
       confirmed: true, reason
