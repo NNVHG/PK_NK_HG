@@ -139,7 +139,7 @@ public sealed class ServiceCatalogService
             return Result<ServicePriceResponse>.Failure(Error.NotFound);
 
         var latestEffectiveFrom = await _repository.GetLatestPriceEffectiveFromAsync(serviceId, ct);
-        // [CẦN XÁC NHẬN] Tạm không cho lùi ngày áp dụng trước giá mới nhất; tài liệu chưa quy định giới hạn lùi ngày.
+        // DL-060: append a new price without backdating earlier than the latest scheduled price.
         if (latestEffectiveFrom is DateTime latest && request.EffectiveFrom.UtcDateTime < latest)
             return Result<ServicePriceResponse>.Failure(Error.ServicePriceEffectiveDateInvalid);
 

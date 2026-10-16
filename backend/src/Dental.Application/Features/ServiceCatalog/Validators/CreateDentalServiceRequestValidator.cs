@@ -1,13 +1,15 @@
 using Dental.Application.Features.ServiceCatalog.DTOs;
+using Dental.Application.Common;
 using FluentValidation;
 
 namespace Dental.Application.Features.ServiceCatalog.Validators;
 
 public sealed class CreateDentalServiceRequestValidator : AbstractValidator<CreateDentalServiceRequest>
 {
-    public CreateDentalServiceRequestValidator()
+    public CreateDentalServiceRequestValidator(TimeProvider? timeProvider = null)
     {
-        // [CẦN XÁC NHẬN] Độ dài Code/Name/Description đang theo giới hạn cấu hình DB tạm thời.
+        // DL-019: limits match the confirmed catalog schema.
+        var clock = new VietnamClock(timeProvider ?? TimeProvider.System);
         RuleFor(request => request.Code)
             .Cascade(CascadeMode.Stop)
             .Must(value => !string.IsNullOrWhiteSpace(value)).WithMessage("Mã dịch vụ không được để trống.")
@@ -21,6 +23,10 @@ public sealed class CreateDentalServiceRequestValidator : AbstractValidator<Crea
         RuleFor(request => request.DurationMinutes)
             .GreaterThan(0).WithMessage("Thời lượng dịch vụ phải lớn hơn 0.");
         RuleFor(request => request.InitialPrice)
-            .GreaterThanOrEqualTo(0).WithMessage("Giá dịch vụ không được âm.");
+            .InclusiveBetween(0, 999999999999999999m).WithMessage("Giá dịch vụ vượt giới hạn lưu trữ.")
+            .Must(value => decimal.Truncate(value) == value).WithMessage("Giá dịch vụ phải là số nguyên VND.");
+        RuleFor(request => request.EffectiveFrom)
+            .Must(value => value.UtcDateTime >= clock.Today.ToDateTime(TimeOnly.MinValue).AddHours(-7))
+            .WithMessage("Ngày hiệu lực không được trước ngày hiện tại tại Việt Nam.");
     }
 }
