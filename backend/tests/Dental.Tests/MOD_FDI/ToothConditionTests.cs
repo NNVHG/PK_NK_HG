@@ -45,6 +45,41 @@ public sealed class ToothConditionTests
         Assert.Equal("Synthetic note", Assert.Single((await Service.GetAsync(1, 2, RoleCodes.Admin)).Value!).Note);
     }
 
+    [Theory]
+    [InlineData(RoleCodes.Admin)] [InlineData(RoleCodes.Dentist)] [InlineData(RoleCodes.Receptionist)]
+    [InlineData(RoleCodes.Assistant)]
+    public async Task GetLatestForPatient_AllowsStaffAndReturnsOnlyStatusProjection(string role)
+    {
+        patients.GetByIdAsync(5, Arg.Any<CancellationToken>()).Returns(new Patient { PatientId = 5 });
+        conditions.GetLatestForPatientAsync(5, Arg.Any<CancellationToken>()).Returns(new[]
+        {
+            new LatestToothConditionResponse(7, 11, "O", "CARIES", DateTime.UtcNow)
+        });
+
+        var response = await Service.GetLatestForPatientAsync(5, 2, role);
+
+        Assert.True(response.IsSuccess);
+        var row = Assert.Single(response.Value!);
+        Assert.Equal("CARIES", row.ConditionCode);
+        await conditions.Received(1).GetLatestForPatientAsync(5, Arg.Any<CancellationToken>());
+    }
+
+    [Fact] public async Task GetLatestForPatientEnforcesPatientOwnershipAndMissingProfiles()
+    {
+        patients.GetByIdAsync(5, Arg.Any<CancellationToken>()).Returns(new Patient { PatientId = 5, UserId = 12 });
+        Assert.Equal(Error.NotFound, (await Service.GetLatestForPatientAsync(5, 13, RoleCodes.Patient)).Error);
+        patients.GetByIdAsync(6, Arg.Any<CancellationToken>()).Returns((Patient?)null);
+        Assert.Equal(Error.NotFound, (await Service.GetLatestForPatientAsync(6, 12, RoleCodes.Patient)).Error);
+        await conditions.DidNotReceiveWithAnyArgs().GetLatestForPatientAsync(default, default);
+    }
+
+    [Fact] public async Task GetLatestForPatientRejectsInvalidIdsAndUnknownRoles()
+    {
+        Assert.Equal(Error.Validation, (await Service.GetLatestForPatientAsync(0, 2, RoleCodes.Admin)).Error);
+        Assert.Equal(Error.Forbidden, (await Service.GetLatestForPatientAsync(5, 2, "UNKNOWN")).Error);
+        await conditions.DidNotReceiveWithAnyArgs().GetLatestForPatientAsync(default, default);
+    }
+
     [Fact]
     public void Validator_AcceptsExactly52FdiTeeth()
     {

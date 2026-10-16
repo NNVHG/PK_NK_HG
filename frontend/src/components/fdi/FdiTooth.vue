@@ -41,6 +41,8 @@
           pos,
           {
             'is-selected': isSurfaceSelected(surfacesByPos[pos]),
+            'has-condition': toothConditionColor(conditionCodeFor(surfacesByPos[pos])) !== undefined,
+            [`condition-${toothConditionColor(conditionCodeFor(surfacesByPos[pos]))}`]: toothConditionColor(conditionCodeFor(surfacesByPos[pos])) !== undefined,
             'is-readonly': readonly
           }
         ]"
@@ -54,6 +56,11 @@
       >
         <title>{{ getSurfaceTooltip(surfacesByPos[pos]) }}</title>
       </polygon>
+
+      <g v-if="missingTooth" class="missing-tooth-mark" aria-hidden="true">
+        <line x1="7" y1="7" x2="41" y2="41" />
+        <line x1="41" y1="7" x2="7" y2="41" />
+      </g>
 
       <text
         v-for="pos in surfacePositions"
@@ -92,7 +99,8 @@ import {
   SURFACE_METADATA,
   getToothInfo,
   getSurfaceAtPosition,
-  isUpperArch
+  isUpperArch,
+  toothConditionColor
 } from '@/types/fdi';
 
 type PositionKey = 'top' | 'bottom' | 'left' | 'right' | 'center';
@@ -102,6 +110,8 @@ const surfacePositions: PositionKey[] = ['top', 'bottom', 'left', 'right', 'cent
 interface Props {
   toothNumber: number;
   selectedSurfaces?: ToothSurface[];
+  conditionBySurface?: Partial<Record<ToothSurface, string>>;
+  missingTooth?: boolean;
   isWholeToothSelected?: boolean;
   readonly?: boolean;
   size?: number;
@@ -111,6 +121,8 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   selectedSurfaces: () => [],
+  conditionBySurface: () => ({}),
+  missingTooth: false,
   isWholeToothSelected: false,
   readonly: false,
   size: 44,
@@ -124,6 +136,8 @@ const emit = defineEmits<{
 }>();
 
 const toothInfo = computed(() => getToothInfo(props.toothNumber));
+
+function conditionCodeFor(surface: ToothSurface) { return props.conditionBySurface[surface]; }
 
 const effectiveNumberPosition = computed(() => {
   if (props.numberPosition !== 'auto') return props.numberPosition;
@@ -265,19 +279,30 @@ function onToothNumberClick() {
   transition: fill 0.15s ease, stroke 0.15s ease;
 }
 
+.tooth-surface.condition-healthy { --condition-fill: #ffffff; fill: var(--condition-fill); stroke: #e0e0e0; }
+.tooth-surface.condition-caries { --condition-fill: #f44336; fill: var(--condition-fill); }
+.tooth-surface.condition-restored { --condition-fill: #2196f3; fill: var(--condition-fill); }
+.tooth-surface.condition-missing { --condition-fill: #9e9e9e; fill: var(--condition-fill); }
+.tooth-surface.condition-treatment { --condition-fill: #ff9800; fill: var(--condition-fill); }
+.tooth-surface.condition-prosthetic { --condition-fill: #9c27b0; fill: var(--condition-fill); }
+
 .tooth-surface:hover:not(.is-readonly) {
   fill: #bae6fd;
   stroke: #0284c7;
 }
 
-.tooth-surface.is-selected {
+.tooth-surface.is-selected:not(.has-condition) {
   fill: #0284c7;
   stroke: #0369a1;
 }
 
-.tooth-surface.is-selected:hover:not(.is-readonly) {
+.tooth-surface.is-selected:hover:not(.is-readonly):not(.has-condition) {
   fill: #0369a1;
 }
+
+.tooth-surface.has-condition.is-selected { stroke: #0369a1; stroke-width: 2.5; }
+.tooth-surface.has-condition.is-selected:hover:not(.is-readonly) { fill: var(--condition-fill); }
+.missing-tooth-mark { stroke: #424242; stroke-width: 3; stroke-linecap: round; pointer-events: none; }
 
 .tooth-surface.is-readonly {
   cursor: default;

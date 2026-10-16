@@ -11,7 +11,7 @@
       <p>Trạng thái lần khám: {{ visit.status }}</p>
       <p v-if="!canEdit">Chỉ Admin hoặc nha sĩ phụ trách được ghi tình trạng khi lần khám đang diễn ra và chưa khóa.</p>
       <p>Chọn răng trên sơ đồ để tra cứu lịch sử qua các lần khám.</p>
-      <FdiDentalChart v-model="selection" v-model:dentition-type="dentition" :multiple="false" :readonly="busy" @select="openHistory" @update:model-value="clearSuggestion" />
+      <FdiDentalChart v-model="selection" v-model:dentition-type="dentition" :latest-conditions="latestConditions" :multiple="false" :readonly="busy" @select="openHistory" @update:model-value="clearSuggestion" />
       <ToothHistoryDrawer ref="history" :patient-id="visit.patientId" />
       <form v-if="canEdit" @submit.prevent="save">
         <p v-if="selection[0]">Răng {{ selection[0].toothNumber }} · {{ selection[0].surface ? SURFACE_METADATA[selection[0].surface].nameVi : 'Toàn răng' }}</p>
@@ -85,6 +85,7 @@ const visit = ref<VisitDetails | null>(null);
 const fdiStore = useFdiStore();
 const { rows } = storeToRefs(fdiStore);
 const selection = ref<SelectedToothSurface[]>([]);
+const latestConditions = ref<Awaited<ReturnType<typeof fdiService.latestForPatient>>>([]);
 const dentition = ref<DentitionType>('adult');
 const code = ref<ConditionCode>('CARIES');
 const note = ref('');
@@ -157,10 +158,20 @@ async function assignSuggestion() {
   finally { busy.value = false; }
 }
 let loadVersion = 0;
+async function refreshLatestConditions(patientId: number, version: number, visitKey: number) {
+  try {
+    const latest = await fdiService.latestForPatient(patientId);
+    if (version === loadVersion && visitKey === visitId.value) latestConditions.value = latest;
+    return true;
+  } catch {
+    if (version === loadVersion && visitKey === visitId.value) latestConditions.value = [];
+    return false;
+  }
+}
 async function load() {
   const version = ++loadVersion;
   busy.value = true; error.value = ''; success.value = ''; visit.value = null; fdiStore.reset(); selection.value = [];
-  note.value = ''; editingId.value = null; pendingDeleteId.value = null;
+  note.value = ''; editingId.value = null; pendingDeleteId.value = null; latestConditions.value = [];
   if (!Number.isInteger(visitId.value) || visitId.value <= 0) {
     error.value = 'Mã lần khám không hợp lệ.'; busy.value = false; return;
   }
@@ -168,6 +179,8 @@ async function load() {
     const [details, conditions] = await Promise.all([visitsService.getById(visitId.value), fdiService.get(visitId.value)]);
     if (version !== loadVersion) return;
     visit.value = details; fdiStore.replace(conditions);
+    if (!(await refreshLatestConditions(details.patientId, version, visitId.value)) && version === loadVersion)
+      error.value = 'Không tải được trạng thái răng mới nhất để tô màu sơ đồ.';
   } catch (cause) { if (version === loadVersion) error.value = message(cause); }
   finally { if (version === loadVersion) busy.value = false; }
 }
@@ -196,7 +209,12 @@ async function save() {
     else fdiStore.prepend(saved);
     editingId.value = null; selection.value = [];
     note.value = '';
-    success.value = 'Đã lưu tình trạng răng. Có thể tải lại để xem dữ liệu đã lưu.';
+    const patientId = visit.value?.patientId;
+    const latestLoaded = patientId ? await refreshLatestConditions(patientId, version, id) : false;
+    if (id !== visitId.value || version !== loadVersion) return;
+    success.value = latestLoaded
+      ? 'Đã lưu tình trạng răng và cập nhật màu trạng thái mới nhất trên sơ đồ.'
+      : 'Đã lưu tình trạng răng nhưng không tải lại được màu mới nhất; hãy tải lại hồ sơ.';
   } catch (cause) { if (id === visitId.value && version === loadVersion) error.value = message(cause); }
   finally { if (id === visitId.value && version === loadVersion) busy.value = false; }
 }
@@ -211,12 +229,16 @@ async function remove(row: ToothCondition) {
     fdiStore.replace(rows.value.filter(item => item.id !== row.id));
     pendingDeleteId.value = null;
     if (editingId.value === row.id) cancelEditing();
-    success.value = 'Đã xóa bản ghi tình trạng trong lần khám đang mở.';
+    const latestLoaded = visit.value ? await refreshLatestConditions(visit.value.patientId, version, id) : false;
+    if (id !== visitId.value || version !== loadVersion) return;
+    success.value = latestLoaded
+      ? 'Đã xóa bản ghi và cập nhật màu trạng thái mới nhất trên sơ đồ.'
+      : 'Đã xóa bản ghi nhưng không tải lại được màu mới nhất; hãy tải lại hồ sơ.';
   } catch (cause) { if (id === visitId.value && version === loadVersion) error.value = message(cause); }
   finally { if (id === visitId.value && version === loadVersion) busy.value = false; }
 }
 watch(visitId, load, { immediate: true });
-onUnmounted(() => { loadVersion++; fdiStore.reset(); });
+onUnmounted(() => { loadVersion++; fdiStore.reset(); latestConditions.value = []; });
 </script>
 
 <style scoped>

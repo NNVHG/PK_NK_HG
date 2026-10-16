@@ -1,4 +1,5 @@
 import { apiClient } from '@/services/api';
+import type { LatestToothCondition } from '@/types/fdi';
 
 export const FDI_CONDITIONS = {
   CARIES: 'Sâu răng', RESTORED: 'Đã trám', MISSING: 'Mất răng', CROWN: 'Mão răng',
@@ -14,6 +15,9 @@ export interface ConditionServiceSuggestion { serviceCode: string; label: string
 export const fdiService = {
   async get(visitId: number): Promise<ToothCondition[]> {
     return (await apiClient.get<ToothCondition[]>(`/visits/${visitId}/tooth-conditions`)).data;
+  },
+  async latestForPatient(patientId: number): Promise<LatestToothCondition[]> {
+    return (await apiClient.get<LatestToothCondition[]>(`/patients/${patientId}/teeth/latest-conditions`)).data;
   },
   async add(visitId: number, toothNumber: number, surface: string | null, conditionCode: ConditionCode, note: string | null = null): Promise<ToothCondition> {
     return (await apiClient.post<ToothCondition>(`/visits/${visitId}/tooth-conditions`, { toothNumber, surface, conditionCode, note })).data;
