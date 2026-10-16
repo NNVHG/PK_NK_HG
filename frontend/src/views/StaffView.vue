@@ -1,5 +1,10 @@
 <template>
   <section class="staff-page">
+    <nav aria-label="Quản lý tài khoản và quyền">
+      <RouterLink to="/admin/staff" aria-current="page">Tài khoản nhân viên</RouterLink>
+      <span aria-hidden="true"> · </span>
+      <RouterLink to="/admin/role-permissions">Ma trận quyền (chỉ đọc)</RouterLink>
+    </nav>
     <header class="page-heading">
       <div>
         <p class="eyebrow">MOD_MST · F_MST_07</p>

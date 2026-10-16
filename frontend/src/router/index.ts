@@ -5,6 +5,12 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
+      path: '/admin/role-permissions',
+      name: 'role-permissions',
+      component: () => import('@/views/RolePermissionsView.vue'),
+      meta: { requiresAuth: true, roles: ['ADMIN'] }
+    },
+    {
       path: '/admin/services',
       name: 'service-catalog',
       component: () => import('@/views/ServiceCatalogView.vue'),
