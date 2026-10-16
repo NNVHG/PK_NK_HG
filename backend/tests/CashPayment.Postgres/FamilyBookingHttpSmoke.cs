@@ -31,7 +31,7 @@ internal static class FamilyBookingHttpSmoke
             check(profiles!.All(p => p.PatientId != inactive.PatientId && p.PatientId != unownedId), "Family mine excludes inactive and unrelated profiles");
             check(response.Headers.CacheControl?.NoStore == true, "Family mine no-store");
         }
-        var date = new VietnamClock(TimeProvider.System).Today.AddDays(2);
+        var date = new VietnamClock(SmokeTestTimeProvider.Instance).Today.AddDays(2);
         foreach (var id in new[] { original.PatientId, second.PatientId })
         {
             using var response = await client.PostAsJsonAsync("/api/appointments", new CreateAppointmentRequest(id, date, new(8, 0)));

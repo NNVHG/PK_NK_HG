@@ -19,7 +19,7 @@ internal static class DeskReschedulingHttpSmoke
     public static async Task RunAsync(HttpClient client, DbContextOptions<DentalDbContext> options, int actorId, Action<string> authenticate, Action<bool, string> check)
     {
         await using var setup = new DentalDbContext(options);
-        var clock = new VietnamClock(TimeProvider.System); var oldDay = clock.Today.AddDays(20); var newDay = oldDay.AddDays(1);
+        var clock = new VietnamClock(SmokeTestTimeProvider.Instance); var oldDay = clock.Today.AddDays(20); var newDay = oldDay.AddDays(1);
         Appointment Make(string name, int? dentist = null)
         {
             var row = new Appointment { Patient = new Patient { FullName = name, DateOfBirth = new(1990, 1, 1), Phone = "0999999910" },

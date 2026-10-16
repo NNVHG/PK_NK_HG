@@ -33,7 +33,7 @@ internal static class AutomaticReminderHttpSmoke
             check(response.Headers.CacheControl?.NoStore == true, "Automatic reminder status no-store");
         }
         await using var setup = new DentalDbContext(options);
-        var day = new VietnamClock(TimeProvider.System).Today.AddDays(80);
+        var day = new VietnamClock(SmokeTestTimeProvider.Instance).Today.AddDays(80);
         var time = new SteppedTime(new DateTimeOffset(day.Year, day.Month, day.Day, 2, 0, 0, TimeSpan.Zero));
         Appointment Make(string name, int hour) => new() { Patient = new Patient { FullName = name, Phone = "0999999971", DateOfBirth = new(1990, 1, 1) },
             AppointmentDate = day.AddDays(1), SlotTime = new(hour, 0), Status = AppointmentStatuses.Scheduled, CreatedByUserId = actorId, CreatedAt = time.GetUtcNow().UtcDateTime.AddDays(-2) };

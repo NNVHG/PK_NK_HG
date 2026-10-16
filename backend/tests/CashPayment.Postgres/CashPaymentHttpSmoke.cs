@@ -105,7 +105,7 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddScoped<Dental.Application.Features.Patients.Validators.PatientDuplicateCheckRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Patients.Validators.PatientQueryRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Patients.Validators.UpdatePatientRequestValidator>();
-        builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddSingleton(SmokeTestTimeProvider.Instance);
         builder.Services.AddSingleton<Dental.Application.Common.VietnamClock>();
         builder.Services.AddScoped<IBankTransferRepository, BankTransferRepository>();
         builder.Services.AddScoped<BankTransferWebhookService>();

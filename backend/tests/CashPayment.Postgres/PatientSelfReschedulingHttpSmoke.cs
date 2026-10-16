@@ -22,7 +22,7 @@ internal static class PatientSelfReschedulingHttpSmoke
         var family = new Patient { FullName = "Synthetic reschedule family", DateOfBirth = new(2020, 1, 1), Phone = "0999999941", UserId = actorId };
         var foreign = new Patient { FullName = "Synthetic reschedule foreign", DateOfBirth = new(1990, 1, 1), Phone = "0999999942" };
         db.Patients.AddRange(family, foreign); await db.SaveChangesAsync();
-        var clock = new VietnamClock(TimeProvider.System); var oldDay = clock.Today.AddDays(80); var targetDay = oldDay.AddDays(1);
+        var clock = new VietnamClock(SmokeTestTimeProvider.Instance); var oldDay = clock.Today.AddDays(80); var targetDay = oldDay.AddDays(1);
         Appointment Make(int patientId, string state = AppointmentStatuses.Scheduled, int count = 0) => new()
         { PatientId = patientId, AppointmentDate = oldDay, SlotTime = new(9, 0), Status = state, CreatedByUserId = actorId, Notes = "Original note", RescheduleCount = count };
         var row = Make(family.PatientId); var other = Make(foreign.PatientId); var near = Make(owner.PatientId);

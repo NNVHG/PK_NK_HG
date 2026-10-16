@@ -14,7 +14,7 @@ internal static class PatientAppointmentReadHttpSmoke
         var profiles = await db.Patients.Where(p => p.UserId == actorId && p.IsActive).OrderBy(p => p.PatientId).Take(2).ToArrayAsync();
         var other = new Patient { FullName = "Synthetic other owner", DateOfBirth = new(1990, 1, 1), Phone = "0999999931" };
         db.Patients.Add(other); await db.SaveChangesAsync();
-        var date = new VietnamClock(TimeProvider.System).Today.AddDays(10);
+        var date = new VietnamClock(SmokeTestTimeProvider.Instance).Today.AddDays(10);
         var owned = profiles.Select((p, i) => new Appointment { PatientId = p.PatientId, AppointmentDate = date, SlotTime = new(8 + i, 0), CreatedByUserId = actorId, Status = i == 0 ? AppointmentStatuses.Scheduled : AppointmentStatuses.Cancelled }).ToArray();
         var unowned = new Appointment { PatientId = other.PatientId, AppointmentDate = date, SlotTime = new(8, 0), CreatedByUserId = actorId, Status = AppointmentStatuses.Scheduled };
         db.Appointments.AddRange(owned.Append(unowned)); await db.SaveChangesAsync();

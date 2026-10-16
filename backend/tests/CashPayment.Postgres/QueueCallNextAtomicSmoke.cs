@@ -21,7 +21,7 @@ internal static class QueueCallNextAtomicSmoke
         if (!setup.Database.GetDbConnection().Database.StartsWith("dental_cash_test_", StringComparison.Ordinal))
             throw new InvalidOperationException("Call-next fixtures require the owned isolated database.");
         var role = await setup.Roles.SingleAsync(r => r.RoleCode == RoleCodes.Dentist);
-        var day = new VietnamClock(TimeProvider.System).Today.AddDays(91);
+        var day = new VietnamClock(SmokeTestTimeProvider.Instance).Today.AddDays(91);
         async Task<User> Dentist()
         {
             var user = new User { RoleId = role.RoleId, FullName = "Synthetic atomic dentist", IsActive = true,

@@ -23,7 +23,7 @@ internal static class QueueCallNextHttpSmoke
         await using var db = new DentalDbContext(options);
         if (!db.Database.GetDbConnection().Database.StartsWith("dental_cash_test_", StringComparison.Ordinal))
             throw new InvalidOperationException("Fixture gọi số chỉ được chạy trên CSDL kiểm thử do bộ chạy sở hữu.");
-        var today = new VietnamClock(TimeProvider.System).Today;
+        var today = new VietnamClock(SmokeTestTimeProvider.Instance).Today;
 
         // 1. Kiểm tra màn hình TV công khai: AllowAnonymous, no-store, bảo vệ PII
         client.DefaultRequestHeaders.Authorization = null;

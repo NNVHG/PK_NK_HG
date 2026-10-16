@@ -30,7 +30,7 @@ internal static class QueueImagingHttpSmoke
         var dentist = new User { Role = role, FullName = "Synthetic imaging dentist", IsActive = true,
             Phone = "IMG" + Guid.NewGuid().ToString("N")[..14], PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()) };
         db.Users.Add(dentist); await db.SaveChangesAsync();
-        var today = new VietnamClock(TimeProvider.System).Today;
+        var today = new VietnamClock(SmokeTestTimeProvider.Instance).Today;
         async Task<QueueEntry> Entry(QueueStatus status = QueueStatus.InConsultation, bool booked = false)
         {
             var patient = new Patient { FullName = "Synthetic imaging patient", Phone = "0999999941", DateOfBirth = new(1990, 1, 1) };
@@ -107,7 +107,7 @@ internal static class QueueImagingHttpSmoke
         await using (var faultDb = new DentalDbContext(faultOptions))
         {
             var visits = new VisitRepository(faultDb); var patients = new PatientRepository(faultDb);
-            var audit = new AuditLogger(faultDb, NullLogger<AuditLogger>.Instance); var clock = new VietnamClock(TimeProvider.System);
+            var audit = new AuditLogger(faultDb, NullLogger<AuditLogger>.Instance); var clock = new VietnamClock(SmokeTestTimeProvider.Instance);
             var service = new QueueService(new QueueRepository(faultDb), new AppointmentRepository(faultDb), patients, visits, new UserRepository(faultDb),
                 new UnitOfWork(faultDb), audit, clock, new InvoiceDraftService(new InvoiceRepository(faultDb), visits, patients, audit, clock));
             var threw = false;

@@ -12,7 +12,7 @@ internal static class DailyQueueHttpSmoke
     public static async Task RunAsync(HttpClient client, DbContextOptions<DentalDbContext> options, int actorId, Action<string> authenticate, Action<bool, string> check)
     {
         await using var db = new DentalDbContext(options);
-        var today = new VietnamClock(TimeProvider.System).Today;
+        var today = new VietnamClock(SmokeTestTimeProvider.Instance).Today;
         var start = await db.QueueEntries.MaxAsync(q => (int?)q.QueueNumber) ?? 0;
         var rows = new List<QueueEntry>();
         for (var i = 0; i < 6; i++)

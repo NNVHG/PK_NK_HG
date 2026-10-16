@@ -12,7 +12,7 @@ internal static class CounterBookingHttpSmoke
     public static async Task RunAsync(HttpClient client, DbContextOptions<DentalDbContext> options, int actorId, Action<string> authenticate, Action<bool, string> check)
     {
         await using var db = new DentalDbContext(options);
-        var date = new VietnamClock(TimeProvider.System).Today.AddDays(5);
+        var date = new VietnamClock(SmokeTestTimeProvider.Instance).Today.AddDays(5);
         foreach (var role in new[] { RoleCodes.Receptionist, RoleCodes.Admin })
         {
             var patient = new Patient { FullName = $"Synthetic counter {role}", DateOfBirth = new(1990, 1, 1), Phone = role == RoleCodes.Admin ? "0999999971" : "0999999972" };

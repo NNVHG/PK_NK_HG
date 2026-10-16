@@ -13,7 +13,7 @@ internal static class AppointmentCancelHttpSmoke
     public static async Task RunAsync(HttpClient client, DbContextOptions<DentalDbContext> options, int actorId, Action<string> authenticate, Action<bool, string> check)
     {
         await using var db = new DentalDbContext(options);
-        var clock = new VietnamClock(TimeProvider.System);
+        var clock = new VietnamClock(SmokeTestTimeProvider.Instance);
         var date = clock.Today.AddDays(8);
         var patient = new Patient { FullName = "Synthetic cancellation", DateOfBirth = new(1990, 1, 1), Phone = "0999999941" };
         db.Patients.Add(patient); await db.SaveChangesAsync();

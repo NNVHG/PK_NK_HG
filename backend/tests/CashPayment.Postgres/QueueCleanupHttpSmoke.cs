@@ -22,7 +22,7 @@ internal static class QueueCleanupHttpSmoke
     {
         await using var db = new DentalDbContext(options);
         if (!db.Database.GetDbConnection().Database.StartsWith("dental_cash_test_", StringComparison.Ordinal)) throw new InvalidOperationException("Owned test database required");
-        var today = new VietnamClock(TimeProvider.System).Today;
+        var today = new VietnamClock(SmokeTestTimeProvider.Instance).Today;
         async Task<QueueEntry> Entry(DateOnly date, QueueStatus status = QueueStatus.Waiting, string clinical = VisitStatuses.Created, bool locked = false)
         {
             var patient = new Patient { FullName = "Synthetic calling patient", DateOfBirth = new(1990, 1, 1), Phone = "0999999943" };
@@ -64,12 +64,12 @@ internal static class QueueCleanupHttpSmoke
         QueueService Service(DentalDbContext context)
         {
             var visits = new VisitRepository(context); var patients = new PatientRepository(context);
-            var audit = new AuditLogger(context, NullLogger<AuditLogger>.Instance); var clock = new VietnamClock(TimeProvider.System);
+            var audit = new AuditLogger(context, NullLogger<AuditLogger>.Instance); var clock = new VietnamClock(SmokeTestTimeProvider.Instance);
             return new(new QueueRepository(context), new AppointmentRepository(context), patients, visits, new UserRepository(context),
                 new UnitOfWork(context), audit, clock, new InvoiceDraftService(new InvoiceRepository(context), visits, patients, audit, clock));
         }
         QueueCleanupService Cleanup(DentalDbContext context, VietnamClock? clock = null)
-            => new(new QueueRepository(context), new UnitOfWork(context), new AuditLogger(context, NullLogger<AuditLogger>.Instance), clock ?? new VietnamClock(TimeProvider.System));
+            => new(new QueueRepository(context), new UnitOfWork(context), new AuditLogger(context, NullLogger<AuditLogger>.Instance), clock ?? new VietnamClock(SmokeTestTimeProvider.Instance));
         var automatic = await Entry(today.AddDays(-3), QueueStatus.Skipped);
         await using (var context = new DentalDbContext(options)) check((await Cleanup(context).RunAutomaticallyAsync()).Value!.CancelledCount == 1, "Worker service catches up multiple missed days");
         check(await db.QueueStatusHistories.AnyAsync(h => h.QueueEntryId == automatic.QueueEntryId && h.ChangedByUserId == null) &&

@@ -23,7 +23,7 @@ internal static class QueueSelectedStartHttpSmoke
         {
             var patient = new Patient { FullName = "Synthetic selected patient", Phone = "0999999931", DateOfBirth = new(1990, 1, 1) };
             var row = new QueueEntry { Patient = patient, Visit = new Visit { Patient = patient, CreatedByUserId = actorId, Status = VisitStatuses.Created },
-                QueueDate = new VietnamClock(TimeProvider.System).Today, QueueNumber = (await db.QueueEntries.MaxAsync(q => (int?)q.QueueNumber) ?? 0) + 1,
+                QueueDate = new VietnamClock(SmokeTestTimeProvider.Instance).Today, QueueNumber = (await db.QueueEntries.MaxAsync(q => (int?)q.QueueNumber) ?? 0) + 1,
                 CheckInTime = DateTime.UtcNow, Status = QueueStatus.Waiting };
             db.QueueEntries.Add(row); await db.SaveChangesAsync(); db.ChangeTracker.Clear(); return row;
         }

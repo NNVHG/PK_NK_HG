@@ -20,13 +20,13 @@ internal static class AppointmentReminderHttpSmoke
     public static async Task RunAsync(HttpClient client, DbContextOptions<DentalDbContext> options, int actorId, Action<string> authenticate, Action<bool, string> check)
     {
         await using var db = new DentalDbContext(options);
-        var now = new VietnamClock(TimeProvider.System).Now;
+        var now = new VietnamClock(SmokeTestTimeProvider.Instance).Now;
         var target = now.AddDays(1); target = new DateTime(target.Year, target.Month, target.Day, target.Hour, target.Minute, 0);
         Appointment Make(string name, string state = AppointmentStatuses.Scheduled, bool urgent = false, double offset = 0) => new()
         {
             Patient = new Patient { FullName = name, Phone = "0999999961", DateOfBirth = new(1990, 1, 1) },
             AppointmentDate = DateOnly.FromDateTime(target.AddHours(offset)), SlotTime = TimeOnly.FromDateTime(target.AddHours(offset)),
-            Status = state, CreatedByUserId = actorId, CreatedAt = DateTime.UtcNow.AddHours(urgent ? 1 : -48)
+            Status = state, CreatedByUserId = actorId, CreatedAt = SmokeTestTimeProvider.Instance.GetUtcNow().UtcDateTime.AddHours(urgent ? 1 : -48)
         };
         var eligible = Make("Synthetic reminder eligible"); var urgent = Make("Synthetic reminder urgent", urgent: true);
         var cancelled = Make("Synthetic reminder cancelled", AppointmentStatuses.Cancelled);
@@ -79,7 +79,7 @@ internal static class AppointmentReminderHttpSmoke
         // Both scans read the same unlogged occurrence before either writes.
         var raceRow = Make("Synthetic reminder race"); db.Appointments.Add(raceRow); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
         var raceOptions = new DbContextOptionsBuilder<DentalDbContext>(options).AddInterceptors(new Rendezvous()).Options;
-        AppointmentReminderService Service(DentalDbContext context, IAuditLogger? logger = null) => new(new AppointmentReminderRepository(context), new UnitOfWork(context), logger ?? new AuditLogger(context, NullLogger<AuditLogger>.Instance), new VietnamClock(TimeProvider.System), TimeProvider.System);
+        AppointmentReminderService Service(DentalDbContext context, IAuditLogger? logger = null) => new(new AppointmentReminderRepository(context), new UnitOfWork(context), logger ?? new AuditLogger(context, NullLogger<AuditLogger>.Instance), new VietnamClock(SmokeTestTimeProvider.Instance), SmokeTestTimeProvider.Instance);
         async Task<Result<SimulateAppointmentRemindersResponse>> Race()
         { await using var context = new DentalDbContext(raceOptions); return await Service(context).SimulateAsync(actorId, RoleCodes.Receptionist, true, null); }
         var races = await Task.WhenAll(Race(), Race());

@@ -28,7 +28,7 @@ internal static class DentistBookingHttpSmoke
         db.Users.AddRange(dentist, secondDentist, inactive);
         var patients = Enumerable.Range(0, 12).Select(n => new Patient { FullName = $"Synthetic booking patient {n}", Phone = "0999999954", DateOfBirth = new(1990, 1, 1), UserId = actorId }).ToArray();
         db.Patients.AddRange(patients); await db.SaveChangesAsync();
-        var clock = new VietnamClock(TimeProvider.System); var target = clock.Today.AddDays(120); var time = new TimeOnly(9, 0);
+        var clock = new VietnamClock(SmokeTestTimeProvider.Instance); var target = clock.Today.AddDays(120); var time = new TimeOnly(9, 0);
         var checkedIn = new Appointment { PatientId = patients[5].PatientId, DentistId = dentist.UserId, AppointmentDate = target.AddDays(4), SlotTime = time, Status = AppointmentStatuses.CheckedIn, CreatedByUserId = actorId };
         var toMove = new Appointment { PatientId = patients[8].PatientId, DentistId = dentist.UserId, AppointmentDate = target.AddDays(5), SlotTime = time, Status = AppointmentStatuses.Scheduled, CreatedByUserId = actorId };
         var toRollback = new Appointment { PatientId = patients[11].PatientId, DentistId = secondDentist.UserId, AppointmentDate = target.AddDays(6), SlotTime = time, Status = AppointmentStatuses.Scheduled, CreatedByUserId = actorId };

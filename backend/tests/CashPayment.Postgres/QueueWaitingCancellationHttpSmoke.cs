@@ -31,7 +31,7 @@ internal static class QueueWaitingCancellationHttpSmoke
         foreach (var role in new[] { RoleCodes.Admin, RoleCodes.Receptionist })
         {
             var patient = new Patient { FullName = "Synthetic waiting cancellation", DateOfBirth = new(1990, 1, 1), Phone = "0999999941" };
-            var appointment = new Appointment { Patient = patient, AppointmentDate = new VietnamClock(TimeProvider.System).Today,
+            var appointment = new Appointment { Patient = patient, AppointmentDate = new VietnamClock(SmokeTestTimeProvider.Instance).Today,
                 SlotTime = new(10, 0), Status = AppointmentStatuses.CheckedIn, CreatedByUserId = actorId };
             var entry = new QueueEntry { Patient = patient, Appointment = appointment, Visit = new Visit { Patient = patient, Status = VisitStatuses.Created, CreatedByUserId = actorId },
                 QueueDate = appointment.AppointmentDate, Status = QueueStatus.Waiting, CheckInTime = DateTime.UtcNow,
@@ -65,7 +65,7 @@ internal static class QueueWaitingCancellationHttpSmoke
         {
             var patient = new Patient { FullName = "Synthetic active patient", Phone = "0999999939", DateOfBirth = new(1990, 1, 1) };
             var before = status == QueueStatus.Calling ? VisitStatuses.Created : VisitStatuses.InProgress;
-            var active = new QueueEntry { Patient = patient, DentistId = doctor.UserId, QueueDate = new VietnamClock(TimeProvider.System).Today,
+            var active = new QueueEntry { Patient = patient, DentistId = doctor.UserId, QueueDate = new VietnamClock(SmokeTestTimeProvider.Instance).Today,
                 QueueNumber = (await db.QueueEntries.MaxAsync(q => (int?)q.QueueNumber) ?? 0) + 1, CheckInTime = DateTime.UtcNow, Status = status,
                 Visit = new Visit { Patient = patient, CreatedByUserId = actorId, Status = before,
                     DentistId = status == QueueStatus.InConsultation ? doctor.UserId : null, StartedAt = status == QueueStatus.InConsultation ? DateTime.UtcNow : null } };

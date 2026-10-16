@@ -15,7 +15,7 @@ internal static class PatientSelfCancellationHttpSmoke
         var owner = await db.Patients.FirstAsync(p => p.UserId == actorId && p.IsActive);
         var other = new Patient { FullName = "Synthetic self-cancellation other", DateOfBirth = new(1990, 1, 1), Phone = "0999999921" };
         db.Patients.Add(other); await db.SaveChangesAsync();
-        var clock = new VietnamClock(TimeProvider.System);
+        var clock = new VietnamClock(SmokeTestTimeProvider.Instance);
         Appointment Make(int id, string state = AppointmentStatuses.Scheduled, string? notes = null) => new()
         { PatientId = id, CreatedByUserId = actorId, AppointmentDate = clock.Today.AddDays(14), SlotTime = new(9, 0), Status = state, Notes = notes };
         var far = Make(owner.PatientId); var foreign = Make(other.PatientId); var checkedIn = Make(owner.PatientId, AppointmentStatuses.CheckedIn);

@@ -22,7 +22,7 @@ internal static class QueueAbsenceHttpSmoke
     {
         await using var db = new DentalDbContext(options);
         if (!db.Database.GetDbConnection().Database.StartsWith("dental_cash_test_", StringComparison.Ordinal)) throw new InvalidOperationException("Owned test database required");
-        var today = new VietnamClock(TimeProvider.System).Today;
+        var today = new VietnamClock(SmokeTestTimeProvider.Instance).Today;
         async Task<User> Staff(string code)
         {
             var role = await db.Roles.SingleOrDefaultAsync(r => r.RoleCode == code);
@@ -109,7 +109,7 @@ internal static class QueueAbsenceHttpSmoke
         QueueService Service(DentalDbContext context)
         {
             var visits = new VisitRepository(context); var patients = new PatientRepository(context);
-            var audit = new AuditLogger(context, NullLogger<AuditLogger>.Instance); var clock = new VietnamClock(TimeProvider.System);
+            var audit = new AuditLogger(context, NullLogger<AuditLogger>.Instance); var clock = new VietnamClock(SmokeTestTimeProvider.Instance);
             return new(new QueueRepository(context), new AppointmentRepository(context), patients, visits, new UserRepository(context),
                 new UnitOfWork(context), audit, clock, new InvoiceDraftService(new InvoiceRepository(context), visits, patients, audit, clock));
         }
