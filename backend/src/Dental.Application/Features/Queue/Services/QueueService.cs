@@ -428,6 +428,11 @@ public sealed class QueueService
             return Result<QueueEntryResponse>.Failure(Error.Validation);
         if (targetStatus == QueueStatus.Completed && actorRole == RoleCodes.Dentist && entry.Visit!.DentistId != actorUserId)
             return Result<QueueEntryResponse>.Failure(Error.Forbidden);
+        if (clinicalCancellation)
+        {
+            var cancellation = await _invoiceDraft.StageVisitCancellationAsync(entry.Visit!, actorUserId, actorRole, ipAddress, ct);
+            if (cancellation.IsFailure) return Result<QueueEntryResponse>.Failure(cancellation.Error);
+        }
         if (entry.Visit is not null)
         {
             var release = await _visitChairs.ReleaseAsync(entry.Visit, actorUserId, ct);
@@ -690,7 +695,9 @@ public sealed class QueueService
             q.CreatedAt,
             q.Status == QueueStatus.Calling && q.Visit is { Status: VisitStatuses.Created, IsLocked: false, StartedAt: null },
             location?.ChairNumber,
-            location?.RoomName
+            location?.RoomName,
+            q.Visit is { Status: VisitStatuses.InProgress, IsLocked: false } &&
+                q.Status is (QueueStatus.Waiting or QueueStatus.Calling or QueueStatus.InConsultation or QueueStatus.InImaging)
         );
 
     private static QueueStatusHistoryResponse ToHistoryResponse(QueueStatusHistory h)

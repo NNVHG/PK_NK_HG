@@ -236,7 +236,7 @@ public sealed class QueueController : ControllerBase
         {
             "GEN_001" or "CHK_001" or "CHK_008" or "APP_001" => StatusCodes.Status404NotFound,
             "GEN_002" or "CHK_004" => StatusCodes.Status403Forbidden,
-            "MST065" or "MST066" or "CHK_002" or "CHK_009" or "CHK_010" or "CHK_011" or "CHK_012" or "CHK_013" or "CHK_014" or "PAT_090" or "PAT_091" or "APP_008" => StatusCodes.Status409Conflict,
+            "BIL_012" or "BIL_013" or "MST065" or "MST066" or "CHK_002" or "CHK_009" or "CHK_010" or "CHK_011" or "CHK_012" or "CHK_013" or "CHK_014" or "PAT_090" or "PAT_091" or "APP_008" => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status400BadRequest,
         };
 
