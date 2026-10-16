@@ -114,6 +114,8 @@ builder.Services.AddScoped<MedicalHistoryService>();
 builder.Services.AddScoped<VitalSignService>();
 builder.Services.AddScoped<ServiceCatalogService>();
 builder.Services.AddScoped<AppointmentService>();
+builder.Services.AddScoped<IDentalChairRepository, DentalChairRepository>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_MST.Services.DentalChairService>();
 builder.Services.AddScoped<QueueService>();
 builder.Services.AddScoped<QueueCleanupService>();
 builder.Services.AddScoped<QueueCleanupRequestValidator>();
