@@ -85,3 +85,12 @@ test('Assistant cannot start an invited Calling entry', async () => {
   const f = fixture({ role: 'ASSISTANT' }); f.state.row.status = 6; f.state.row.dentistId = 5;
   await f.mount(); await f.c.selectEntry(f.state.row); await f.c.startConsultation(); assert.equal(f.writes.length, 0); assert.equal(f.c.canEdit.value, false);
 });
+
+
+test('clinical screen shows actual destination and links to ready workspace before physical start', async () => {
+  const source = await readFile(new URL('../src/views/ClinicalDiagnosisView.vue', import.meta.url), 'utf8');
+  assert.ok(source.includes("selected.roomName || 'Chưa có phòng'"));
+  assert.ok(source.includes("selected.chairNumber || 'Chưa có ghế'"));
+  assert.ok(source.includes('to="/staff/workspace"'));
+  assert.ok(source.includes('Bắt đầu khám sẽ chiếm ghế'));
+});

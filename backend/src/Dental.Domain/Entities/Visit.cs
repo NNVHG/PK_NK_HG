@@ -11,6 +11,7 @@ public sealed class Visit : BaseEntity
     public DateTime? StartedAt { get; set; }
     public DateTime? EndedAt { get; set; }
     public int? DentistId { get; set; }
+    public int? ChairId { get; set; }
     public int CreatedByUserId { get; set; }
     public string? Diagnosis { get; set; }
     public string? ClinicalNotes { get; set; }

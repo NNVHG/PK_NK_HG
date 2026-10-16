@@ -35,7 +35,8 @@ public sealed class InvoiceRepository(DentalDbContext db) : IInvoiceRepository
     private async Task<Result<InvoiceDraftSynchronization>> SaveAsync(int visitId, int userId, DateOnly date, Visit? completingVisit,
         CancellationToken ct, string? correctionRole = null, string? ip = null)
     {
-        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        var ownsTransaction = db.Database.CurrentTransaction is null;
+        await using var transaction = ownsTransaction ? await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct) : null;
         var committed = false;
         try
         {
@@ -102,13 +103,14 @@ public sealed class InvoiceRepository(DentalDbContext db) : IInvoiceRepository
                     Detail = JsonSerializer.Serialize(new { invoiceId = invoice.Id, mode = VisitStatuses.Correcting }) });
                 await db.SaveChangesAsync(ct);
             }
-            await transaction.CommitAsync(ct);
+            if (transaction is not null) await transaction.CommitAsync(ct);
             committed = true;
             return Result<InvoiceDraftSynchronization>.Success(new(invoice, created || synced.Value));
         }
         catch (Exception error) when (IsConflict(error))
         {
-            try { await transaction.RollbackAsync(CancellationToken.None); }
+            if (!ownsTransaction) throw;
+            try { if (transaction is not null) await transaction.RollbackAsync(CancellationToken.None); }
             catch (InvalidOperationException) { /* PostgreSQL can already have aborted a failed Serializable commit. */ }
             return Fail(new Error("BIL_006", "Có thao tác đồng thời; tải lại hồ sơ trước khi thử lại."));
         }

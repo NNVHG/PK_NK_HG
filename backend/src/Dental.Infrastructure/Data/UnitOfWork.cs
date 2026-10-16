@@ -29,8 +29,8 @@ public sealed class UnitOfWork : IUnitOfWork
         {
             var concurrent = false;
             for (Exception? current = error; current is not null; current = current.InnerException)
-                if (current is PostgresException { SqlState: "40001" or "40P01" } or
-                    PostgresException { SqlState: "23505", ConstraintName: "IX_NotificationLogs_ReminderOccurrence" or "IX_QueueEntries_QueueDate_QueueNumber" or "IX_DentalChairs_ChairNumber" or "IX_StaffWorkspaces_ChairId" or "IX_StaffWorkspaces_DentistId" or "PK_StaffWorkspaces" }) { concurrent = true; break; }
+                if (current is DbUpdateConcurrencyException or PostgresException { SqlState: "40001" or "40P01" } or
+                    PostgresException { SqlState: "23505", ConstraintName: "IX_NotificationLogs_ReminderOccurrence" or "IX_QueueEntries_QueueDate_QueueNumber" or "IX_DentalChairs_ChairNumber" or "IX_StaffWorkspaces_ChairId" or "IX_StaffWorkspaces_DentistId" or "PK_StaffWorkspaces" or "IX_Visits_ActiveChair" }) { concurrent = true; break; }
             try { await transaction.RollbackAsync(CancellationToken.None); }
             catch (InvalidOperationException) when (concurrent)
             {

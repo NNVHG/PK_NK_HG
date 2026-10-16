@@ -29,7 +29,7 @@ internal static class QueueCallingHttpSmoke
             if (role is null) { role = new Role { RoleCode = code, RoleName = "Synthetic " + code }; db.Roles.Add(role); await db.SaveChangesAsync(); }
             var user = new User { RoleId = role.RoleId, FullName = "Synthetic calling staff", IsActive = true,
                 Phone = "CALL" + Guid.NewGuid().ToString("N")[..14], PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()) };
-            db.Users.Add(user); await db.SaveChangesAsync(); return user;
+            db.Users.Add(user); await db.SaveChangesAsync(); if (code == RoleCodes.Dentist) await TestChairFixtures.EnsureAsync(db, user.UserId, actorId); return user;
         }
         async Task<QueueEntry> Waiting(int? dentistId, bool priority = false)
         {
@@ -55,8 +55,8 @@ internal static class QueueCallingHttpSmoke
         {
             authenticate(role); using var r = await client.GetAsync(directory); var items = await r.Content.ReadFromJsonAsync<JsonElement>();
             check(r.StatusCode == HttpStatusCode.OK && r.Headers.CacheControl?.NoStore == true, $"Calling directory {role}200/no-store");
-            check(items.EnumerateArray().All(x => x.EnumerateObject().Select(p => p.Name).Order().SequenceEqual(new[] { "dentistId", "dentistName" })),
-                $"Calling directory {role} contains only dentist id/name");
+            check(items.EnumerateArray().All(x => x.EnumerateObject().Select(p => p.Name).Order().SequenceEqual(new[] { "chairNumber", "dentistId", "dentistName", "roomName" })),
+                $"Calling directory {role} contains only dentist id/name/room/chair");
         }
         authenticateActor(RoleCodes.Assistant, assistant.UserId);
         using (var r = await client.PostAsJsonAsync(call, new { })) check(r.StatusCode == HttpStatusCode.BadRequest, "Assistant must select dentist400");
@@ -116,7 +116,7 @@ internal static class QueueCallingHttpSmoke
             var visits = new VisitRepository(context); var patients = new PatientRepository(context);
             var audit = new AuditLogger(context, NullLogger<AuditLogger>.Instance); var clock = new VietnamClock(TimeProvider.System);
             return new(new QueueRepository(context), new AppointmentRepository(context), patients, visits, new UserRepository(context),
-                new UnitOfWork(context), audit, clock, new InvoiceDraftService(new InvoiceRepository(context), visits, patients, audit, clock));
+                new UnitOfWork(context), audit, clock, new InvoiceDraftService(new InvoiceRepository(context), visits, patients, audit, clock), TestChairFixtures.Service(context, clock));
         }
         await using (var faultDb = new DentalDbContext(faultOptions))
         {

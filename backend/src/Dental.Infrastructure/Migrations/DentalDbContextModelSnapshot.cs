@@ -1043,6 +1043,9 @@ namespace Dental.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("VisitId"));
 
+                    b.Property<int?>("ChairId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("ClinicalNotes")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
@@ -1087,6 +1090,11 @@ namespace Dental.Infrastructure.Migrations
                         .HasColumnType("timestamptz");
 
                     b.HasKey("VisitId");
+
+                    b.HasIndex("ChairId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Visits_ActiveChair")
+                        .HasFilter("\"Status\" = 'InProgress' AND \"ChairId\" IS NOT NULL");
 
                     b.HasIndex("CreatedByUserId")
                         .HasDatabaseName("IX_Visits_CreatedByUserId");
@@ -1540,6 +1548,11 @@ namespace Dental.Infrastructure.Migrations
 
             modelBuilder.Entity("Dental.Domain.Entities.Visit", b =>
                 {
+                    b.HasOne("Dental.Domain.Entities.DentalChair", null)
+                        .WithMany()
+                        .HasForeignKey("ChairId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Dental.Domain.Entities.User", "CreatedByUser")
                         .WithMany()
                         .HasForeignKey("CreatedByUserId")

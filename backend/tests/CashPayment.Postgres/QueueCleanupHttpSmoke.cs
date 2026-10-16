@@ -66,7 +66,7 @@ internal static class QueueCleanupHttpSmoke
             var visits = new VisitRepository(context); var patients = new PatientRepository(context);
             var audit = new AuditLogger(context, NullLogger<AuditLogger>.Instance); var clock = new VietnamClock(TimeProvider.System);
             return new(new QueueRepository(context), new AppointmentRepository(context), patients, visits, new UserRepository(context),
-                new UnitOfWork(context), audit, clock, new InvoiceDraftService(new InvoiceRepository(context), visits, patients, audit, clock));
+                new UnitOfWork(context), audit, clock, new InvoiceDraftService(new InvoiceRepository(context), visits, patients, audit, clock), TestChairFixtures.Service(context, clock));
         }
         QueueCleanupService Cleanup(DentalDbContext context, VietnamClock? clock = null)
             => new(new QueueRepository(context), new UnitOfWork(context), new AuditLogger(context, NullLogger<AuditLogger>.Instance), clock ?? new VietnamClock(TimeProvider.System));

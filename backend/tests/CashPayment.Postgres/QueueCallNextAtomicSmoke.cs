@@ -26,7 +26,7 @@ internal static class QueueCallNextAtomicSmoke
         {
             var user = new User { RoleId = role.RoleId, FullName = "Synthetic atomic dentist", IsActive = true,
                 Phone = "ATOMIC" + Guid.NewGuid().ToString("N")[..14], PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()) };
-            setup.Users.Add(user); await setup.SaveChangesAsync(); return user;
+            setup.Users.Add(user); await setup.SaveChangesAsync(); await TestChairFixtures.EnsureAsync(setup, user.UserId, actorId); return user;
         }
         async Task<QueueEntry> Waiting(DateOnly date, int number, int? dentistId = null)
         {
@@ -42,7 +42,7 @@ internal static class QueueCallNextAtomicSmoke
             var visits = new VisitRepository(db); var patients = new PatientRepository(db);
             var audit = new AuditLogger(db, NullLogger<AuditLogger>.Instance);
             return new(new QueueRepository(db), new AppointmentRepository(db), patients, visits, new UserRepository(db),
-                new UnitOfWork(db), audit, clock, new InvoiceDraftService(new InvoiceRepository(db), visits, patients, audit, clock));
+                new UnitOfWork(db), audit, clock, new InvoiceDraftService(new InvoiceRepository(db), visits, patients, audit, clock), TestChairFixtures.Service(db, clock));
         }
         async Task<Result<QueueEntryResponse>> Call(DbContextOptions<DentalDbContext> dbOptions, DateOnly date, int dentistId)
         {

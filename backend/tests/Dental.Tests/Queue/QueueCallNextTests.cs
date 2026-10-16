@@ -42,7 +42,7 @@ public sealed class QueueCallNextTests
             _unitOfWork,
             _auditLogger,
             _vietnamClock,
-            _invoiceDraft);
+            _invoiceDraft, Dental.Tests.Common.TestVisitChairs.Create());
 
     [Fact]
     public async Task SerializableConflictReturnsBusinessErrorWithoutRetry()

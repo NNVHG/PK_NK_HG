@@ -80,6 +80,8 @@ internal static class QueueCallNextHttpSmoke
             IsActive = true
         };
         db.Users.Add(dentist);
+        await db.SaveChangesAsync();
+        await TestChairFixtures.EnsureAsync(db, dentist.UserId, actorId);
 
         var startNum = await db.QueueEntries.MaxAsync(q => (int?)q.QueueNumber) ?? 0;
         var patient = new Patient { FullName = "Bùi Văn Kiểm Thử", DateOfBirth = new(1995, 5, 5), Phone = "0911223344" };

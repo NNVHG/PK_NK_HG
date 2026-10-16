@@ -37,6 +37,7 @@
         <template v-else>
           <h2>{{ selected.patientName }} · {{ selected.patientCode }}</h2>
           <p>Ngày tiếp đón: {{ selected.queueDate }} · Lần khám #{{ selected.visitId }}</p>
+          <p v-if="visit?.status !== 'Correcting'">Vị trí khám: {{ selected.roomName || 'Chưa có phòng' }} · {{ selected.chairNumber || 'Chưa có ghế' }}. <RouterLink to="/staff/workspace">Kiểm tra vị trí làm việc</RouterLink></p>
           <p v-if="loadingVisit" role="status">Đang tải hồ sơ khám…</p>
           <p v-if="visitError" class="error" role="alert">{{ visitError }}</p>
           <button type="button" :disabled="busy" @click="reloadVisit">
@@ -59,7 +60,7 @@
             <button v-if="canStart" type="button" :disabled="busy" @click="startConsultation">
               {{ starting ? 'Đang bắt đầu…' : 'Bắt đầu khám' }}
             </button>
-            <p v-if="visit.status === 'Created'" class="hint">Nha sĩ cần bắt đầu khám trước khi ghi chẩn đoán.</p>
+            <p v-if="visit.status === 'Created'" class="hint">Nha sĩ chọn ghế/phòng sẵn sàng tại vị trí làm việc trước khi bắt đầu khám. Bắt đầu khám sẽ chiếm ghế; hoàn tất hoặc hủy ca sẽ giải phóng ghế.</p>
             <form v-if="canEdit" @submit.prevent="saveDiagnosis">
               <label for="diagnosis">Chẩn đoán <span>(bắt buộc)</span></label>
               <textarea id="diagnosis" v-model="diagnosis" :disabled="busy" required maxlength="1000" rows="4" />

@@ -22,7 +22,7 @@ public sealed class QueueAbsenceTests
     private readonly VietnamClock clock = new(new FixedTimeProvider(new DateTimeOffset(2026, 10, 16, 2, 0, 0, TimeSpan.Zero)));
     private readonly QueueEntry row;
     private QueueService Service() => new(queues, Substitute.For<IAppointmentRepository>(), Substitute.For<IPatientRepository>(),
-        visits, users, uow, audit, clock, Substitute.For<IInvoiceDraftGenerator>());
+        visits, users, uow, audit, clock, Substitute.For<IInvoiceDraftGenerator>(), Dental.Tests.Common.TestVisitChairs.Create());
     public QueueAbsenceTests()
     {
         row = new() { QueueEntryId = 7, VisitId = 8, DentistId = 5, QueueDate = clock.Today, Status = QueueStatus.Calling,
