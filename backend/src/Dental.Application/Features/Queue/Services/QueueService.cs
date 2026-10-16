@@ -256,6 +256,52 @@ public sealed class QueueService
         { return Result<QueueEntryResponse>.Failure(Error.QueueWaitingCancellationConcurrent); }
     }
 
+    // MOD_CHK / DL-126, DL-259: absence never pauses or closes a clinical Visit.
+    public async Task<Result<QueueEntryResponse>> ChangeAbsenceAsync(
+        int queueEntryId, int actorUserId, string actorRole, bool recall, QueueAbsenceRequest request,
+        string? ipAddress, CancellationToken ct = default)
+    {
+        if (actorRole is not (RoleCodes.Admin or RoleCodes.Receptionist) && (recall || actorRole != RoleCodes.Dentist))
+            return Result<QueueEntryResponse>.Failure(Error.QueueTransitionForbidden);
+        if (queueEntryId <= 0 || actorUserId <= 0 || !request.Confirmed || request.Reason?.Length > 500)
+            return Result<QueueEntryResponse>.Failure(Error.Validation);
+        try
+        {
+            return await _unitOfWork.ExecuteSerializableTransactionAsync(async transactionCt =>
+            {
+                var entry = await _queueRepository.GetByIdAsync(queueEntryId, transactionCt);
+                if (entry is null) return Result<QueueEntryResponse>.Failure(Error.QueueEntryNotFound);
+                if (actorRole == RoleCodes.Dentist)
+                {
+                    var actor = await _userRepository.FindByIdAsync(actorUserId, transactionCt);
+                    if (entry.DentistId != actorUserId || actor is null || !actor.IsActive || actor.Role?.RoleCode != RoleCodes.Dentist)
+                        return Result<QueueEntryResponse>.Failure(Error.QueueTransitionForbidden);
+                }
+                var from = recall ? QueueStatus.Skipped : QueueStatus.Calling;
+                var target = recall ? QueueStatus.Waiting : QueueStatus.Skipped;
+                if (entry.QueueDate != _vietnamClock.Today || entry.Status != from || entry.Visit is null ||
+                    entry.Visit.Status != VisitStatuses.Created || entry.Visit.IsLocked || entry.Visit.StartedAt.HasValue ||
+                    (entry.Visit.DentistId.HasValue && entry.Visit.DentistId != entry.DentistId))
+                    return Result<QueueEntryResponse>.Failure(Error.QueueAbsenceBlocked);
+                var now = DateTime.UtcNow;
+                entry.Status = target; entry.UpdatedAt = now;
+                // Keep patient, appointment, queue number, assigned dentist and the same open Created Visit.
+                await _queueRepository.AddStatusHistoryAsync(new QueueStatusHistory
+                {
+                    QueueEntryId = entry.QueueEntryId, FromStatus = from, ToStatus = target,
+                    ChangedByUserId = actorUserId, ChangedAt = now,
+                    Reason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim()
+                }, transactionCt);
+                await _unitOfWork.SaveChangesAsync(transactionCt);
+                await _auditLogger.LogRequiredAsync(AuditActions.QueueStatusChanged, "QueueEntry", entry.QueueEntryId,
+                    actorUserId, JsonSerializer.Serialize(new { action = recall ? "Recall" : "MarkAbsent",
+                        fromStatus = (int)from, toStatus = (int)target, visitId = entry.VisitId }), ipAddress, transactionCt);
+                return Result<QueueEntryResponse>.Success(ToResponse(entry));
+            }, ct);
+        }
+        catch (ConcurrentOperationException) { return Result<QueueEntryResponse>.Failure(Error.QueueConcurrent); }
+    }
+
     private async Task<Result<QueueEntryResponse>> StartSelectedAsync(
         int queueEntryId, int actorUserId, string actorRole, UpdateQueueStatusRequest request,
         string? ipAddress, CancellationToken ct)
@@ -365,7 +411,7 @@ public sealed class QueueService
         CancellationToken ct = default)
     {
         // Calling must go through the dedicated call-next operation, never the generic status update.
-        if (request.NewStatus == (int)QueueStatus.Calling)
+        if (request.NewStatus is (int)QueueStatus.Calling or (int)QueueStatus.Skipped)
             return Result<QueueEntryResponse>.Failure(Error.Validation);
         if (request.NewStatus == (int)QueueStatus.InConsultation)
             return await StartSelectedAsync(queueEntryId, actorUserId, actorRole, request, ipAddress, ct);
@@ -617,7 +663,8 @@ public sealed class QueueService
             (int)q.Status,
             QueueStatusDescriptions.GetDescription(q.Status),
             q.Notes,
-            q.CreatedAt
+            q.CreatedAt,
+            q.Status == QueueStatus.Calling && q.Visit is { Status: VisitStatuses.Created, IsLocked: false, StartedAt: null }
         );
 
     private static QueueStatusHistoryResponse ToHistoryResponse(QueueStatusHistory h)
@@ -650,6 +697,7 @@ public sealed class QueueService
         var waiting = entries
             .Where(q => q.Status == QueueStatus.Waiting)
             .OrderByDescending(q => q.StatusHistories.Any(h => h.FromStatus == QueueStatus.InImaging && h.ToStatus == QueueStatus.Waiting))
+            .ThenByDescending(q => q.StatusHistories.Any(h => h.FromStatus == QueueStatus.Skipped && h.ToStatus == QueueStatus.Waiting))
             .ThenByDescending(q => q.IsPriority)
             .ThenBy(q => q.IsPriority && q.Appointment != null ? q.Appointment.SlotTime : TimeOnly.MaxValue)
             .ThenBy(q => q.CheckInTime)

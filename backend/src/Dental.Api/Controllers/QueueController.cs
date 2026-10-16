@@ -137,6 +137,30 @@ public sealed class QueueController : ControllerBase
         return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
     }
 
+    [HttpPost("{id:int}/skip")]
+    [Authorize(Policy = AppPolicies.QueueSkip)]
+    public Task<IActionResult> MarkAbsent(int id, [FromBody] QueueAbsenceRequest request,
+        [FromServices] QueueAbsenceRequestValidator validator, CancellationToken ct)
+        => ChangeAbsence(id, request, validator, false, ct);
+
+    [HttpPost("{id:int}/recall")]
+    [Authorize(Policy = AppPolicies.QueueCheckIn)]
+    public Task<IActionResult> Recall(int id, [FromBody] QueueAbsenceRequest request,
+        [FromServices] QueueAbsenceRequestValidator validator, CancellationToken ct)
+        => ChangeAbsence(id, request, validator, true, ct);
+
+    private async Task<IActionResult> ChangeAbsence(int id, QueueAbsenceRequest request,
+        QueueAbsenceRequestValidator validator, bool recall, CancellationToken ct)
+    {
+        if (id <= 0) return Failure(Error.Validation);
+        var validation = await validator.ValidateAsync(request, ct);
+        if (!validation.IsValid) return ToValidationProblem(validation);
+        if (_currentUser.UserId is not int actorId) return Unauthorized();
+        var result = await _queueService.ChangeAbsenceAsync(id, actorId, _currentUser.RoleCode ?? string.Empty,
+            recall, request, HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
+        return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
+    }
+
     [HttpPost("call-next")]
     [Authorize(Policy = AppPolicies.QueueCall)]
     [ProducesResponseType(typeof(QueueEntryResponse), StatusCodes.Status200OK)]
@@ -200,7 +224,7 @@ public sealed class QueueController : ControllerBase
         {
             "GEN_001" or "CHK_001" or "CHK_008" or "APP_001" => StatusCodes.Status404NotFound,
             "CHK_004" => StatusCodes.Status403Forbidden,
-            "CHK_002" or "CHK_009" or "CHK_010" or "CHK_011" or "CHK_012" or "CHK_013" or "PAT_090" or "PAT_091" or "APP_008" => StatusCodes.Status409Conflict,
+            "CHK_002" or "CHK_009" or "CHK_010" or "CHK_011" or "CHK_012" or "CHK_013" or "CHK_014" or "PAT_090" or "PAT_091" or "APP_008" => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status400BadRequest,
         };
 
