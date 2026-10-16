@@ -45,6 +45,7 @@
           <template v-if="visit">
             <RouterLink v-if="!dirty && !busy" :to="`/clinical/visits/${visit.visitId}/fdi`">Mở sơ đồ và ghi tình trạng răng</RouterLink>
             <p>Trạng thái: {{ visitStatusLabel }}</p>
+            <p v-if="visit.status === 'Correcting'">Đang đính chính ngoài ca khám. <RouterLink :to="`/clinical/visits/${visit.visitId}/invoice-draft`">Hoàn tất và khóa đính chính</RouterLink></p>
             <template v-if="auth.role === 'ADMIN' && [1, 6].includes(selected.status) && !visit.isLocked">
               <label for="start-dentist">Nha sĩ phụ trách</label>
               <select id="start-dentist" v-model.number="startDentistId" :disabled="busy || dentistsLoading">
@@ -112,8 +113,8 @@ const needsReview = ref(false), dentists = ref<BookingDentist[]>([]), startDenti
 let life = 0, queueVersion = 0, visitVersion = 0, dentistVersion = 0;
 const targetDentistId = computed(() => auth.role === 'DENTIST' ? auth.user?.userId : startDentistId.value);
 const busy = computed(() => loadingQueue.value || loadingVisit.value || starting.value || saving.value);
-const canEdit = computed(() => !needsReview.value && !visit.value?.isLocked && visit.value?.status === 'InProgress'
-  && (auth.role === 'ADMIN' || (auth.role === 'DENTIST' && visit.value.dentistId === auth.user?.userId)));
+const canEdit = computed(() => !needsReview.value && !visit.value?.isLocked && ['InProgress', 'Correcting'].includes(visit.value?.status ?? '')
+  && (auth.role === 'ADMIN' || (auth.role === 'DENTIST' && visit.value?.dentistId === auth.user?.userId)));
 const canStart = computed(() => !needsReview.value && !visit.value?.isLocked && ['Created', 'InProgress'].includes(visit.value?.status ?? '')
   && selected.value !== null && [1, 6].includes(selected.value.status) && ['ADMIN', 'DENTIST'].includes(auth.role)
   && Number.isInteger(targetDentistId.value) && Number(targetDentistId.value) > 0
@@ -122,7 +123,7 @@ const canStart = computed(() => !needsReview.value && !visit.value?.isLocked && 
   && (auth.role !== 'ADMIN' || (!dentistsLoading.value && dentists.value.some(d => d.dentistId === targetDentistId.value))));
 const dirty = computed(() => canEdit.value && Boolean(visit.value)
   && (diagnosis.value !== (visit.value?.diagnosis ?? '') || clinicalNotes.value !== (visit.value?.clinicalNotes ?? '')));
-const visitStatusLabel = computed(() => ({ Created: 'Chưa bắt đầu', InProgress: 'Đang khám', Completed: 'Đã kết thúc', Cancelled: 'Đã hủy' }[visit.value?.status ?? ''] ?? visit.value?.status));
+const visitStatusLabel = computed(() => ({ Created: 'Chưa bắt đầu', InProgress: 'Đang khám', Completed: 'Đã kết thúc', Cancelled: 'Đã hủy', Correcting: 'Đang đính chính' }[visit.value?.status ?? ''] ?? visit.value?.status));
 
 function errorMessage(error: unknown, fallback: string): string {
   if (axios.isAxiosError(error)) {

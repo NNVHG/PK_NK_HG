@@ -1,6 +1,7 @@
 <template>
   <main class="assignment-page">
     <RouterLink :to="`/clinical/visits/${visitId}/fdi`">← Sơ đồ và tình trạng răng</RouterLink>
+    <p v-if="visit?.status === 'Correcting'">Đang đính chính hồ sơ ngoài ca khám. <RouterLink :to="`/clinical/visits/${visitId}/invoice-draft`">Trở lại để hoàn tất và khóa đính chính</RouterLink></p>
     <h1>Chỉ định dịch vụ · Lần khám #{{ visitId }}</h1>
     <RouterLink v-if="!busy && ['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(auth.role)" :to="`/clinical/visits/${visitId}/invoice-draft`">Hoàn tất khám / Xem hóa đơn nháp</RouterLink>
     <button type="button" :disabled="busy" @click="load">Tải lại hồ sơ</button>
@@ -133,8 +134,8 @@ const catalogPages = ref(1);
 const catalogError = ref('');
 const keyword = ref(''), appliedKeyword = ref(''), searchError = ref('');
 const selectedTeeth = computed(() => [...new Set(selection.value.map(x => x.toothNumber))].sort((a, b) => a - b));
-const canEdit = computed(() => visit.value?.status === 'InProgress' && !visit.value.isLocked &&
-  (auth.role === 'ADMIN' || auth.role === 'DENTIST' && visit.value.dentistId === auth.user?.userId));
+const canEdit = computed(() => ['InProgress', 'Correcting'].includes(visit.value?.status ?? '') && !visit.value?.isLocked &&
+  (auth.role === 'ADMIN' || auth.role === 'DENTIST' && visit.value?.dentistId === auth.user?.userId));
 const money = (value: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
 function message(cause: unknown) {
   return axios.isAxiosError(cause) ? cause.response?.data?.message || 'Không thể tải hoặc lưu dịch vụ. Vui lòng thử lại.' : 'Không thể xử lý yêu cầu.';

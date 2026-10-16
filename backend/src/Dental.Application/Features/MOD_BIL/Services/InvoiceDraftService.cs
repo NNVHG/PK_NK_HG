@@ -32,7 +32,7 @@ public sealed class InvoiceDraftService(IInvoiceRepository invoices, IVisitRepos
         if (role == RoleCodes.Patient && (await patients.GetByIdAsync(visit.PatientId, ct))?.UserId != userId)
             return Result<InvoiceResponse>.Failure(Error.NotFound);
         Invoice? invoice;
-        if (visit.Status == VisitStatuses.InProgress && !visit.IsLocked)
+        if (VisitStatuses.IsEditable(visit.Status) && !visit.IsLocked)
         {
             var synced = await invoices.SynchronizeDraftAsync(visitId, userId, clock.Today, ct);
             if (synced.IsFailure) return Result<InvoiceResponse>.Failure(synced.Error);
@@ -49,5 +49,13 @@ public sealed class InvoiceDraftService(IInvoiceRepository invoices, IVisitRepos
                 x.Code, x.Name, x.ToothNumber, x.Surface, x.Quantity, x.UnitPrice, x.TotalAmount)).ToArray())
             { DiscountAmount = invoice.DiscountAmount, DiscountType = invoice.DiscountType, DiscountValue = invoice.DiscountValue,
                 DiscountPresetId = invoice.DiscountPresetId, DiscountReason = invoice.DiscountReason });
+    }
+
+    public async Task<Result> CompleteCorrectionAsync(int visitId, int userId, string? role, string? ip, CancellationToken ct = default)
+    {
+        if (role is not (RoleCodes.Admin or RoleCodes.Dentist)) return Result.Failure(Error.Forbidden);
+        if (visitId <= 0 || userId <= 0) return Result.Failure(Error.Validation);
+        var result = await invoices.CompleteCorrectionAsync(visitId, userId, role, clock.Today, ip, ct);
+        return result.IsFailure ? Result.Failure(result.Error) : Result.Success();
     }
 }

@@ -17,6 +17,13 @@ public sealed class ToothConditionTests
     private readonly IToothConditionRepository conditions = Substitute.For<IToothConditionRepository>();
     private readonly IUnitOfWork unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly IAuditLogger audit = Substitute.For<IAuditLogger>();
+    public ToothConditionTests()
+    {
+        unitOfWork.ExecuteSerializableTransactionAsync(Arg.Any<Func<CancellationToken, Task<Result<ToothConditionResponse>>>>(), Arg.Any<CancellationToken>())
+            .Returns(c => c.Arg<Func<CancellationToken, Task<Result<ToothConditionResponse>>>>()(CancellationToken.None));
+        unitOfWork.ExecuteSerializableTransactionAsync(Arg.Any<Func<CancellationToken, Task<Result<bool>>>>(), Arg.Any<CancellationToken>())
+            .Returns(c => c.Arg<Func<CancellationToken, Task<Result<bool>>>>()(CancellationToken.None));
+    }
     private ToothConditionService Service => new(visits, patients, conditions, unitOfWork, audit, new());
 
     [Theory] [InlineData(null, null)] [InlineData("", null)] [InlineData("   ", null)]
@@ -27,7 +34,7 @@ public sealed class ToothConditionTests
         var result = await Service.AddAsync(1, new(11, "O", "CARIES", input), 2, RoleCodes.Dentist, null);
         Assert.True(result.IsSuccess); Assert.Equal(expected, result.Value!.Note);
         await conditions.Received(1).AddAsync(Arg.Is<ToothCondition>(x => x.Note == expected && x.VisitId == 1 && x.ToothNumber == 11 && x.Surface == "O"), Arg.Any<CancellationToken>());
-        await audit.Received(1).LogAsync("MOD_FDI_CONDITION_CREATED", "ToothCondition", Arg.Any<int?>(), 2,
+        await audit.Received(1).LogRequiredAsync("MOD_FDI_CONDITION_CREATED", "ToothCondition", Arg.Any<int?>(), 2,
             "{\"action\":\"condition_created\"}", null, Arg.Any<CancellationToken>());
     }
     [Theory] [InlineData(500, true)] [InlineData(501, false)]
@@ -123,7 +130,7 @@ public sealed class ToothConditionTests
         Assert.Equal(1, result.Value!.VisitId);
         await conditions.Received(1).AddAsync(Arg.Is<ToothCondition>(x => x.ToothNumber == 51 && x.Note == null && x.CreatedAt.Kind == DateTimeKind.Utc), Arg.Any<CancellationToken>());
         await unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
-        await audit.Received(1).LogAsync("MOD_FDI_CONDITION_CREATED", "ToothCondition", Arg.Any<int?>(), 2,
+        await audit.Received(1).LogRequiredAsync("MOD_FDI_CONDITION_CREATED", "ToothCondition", Arg.Any<int?>(), 2,
             "{\"action\":\"condition_created\"}", null, Arg.Any<CancellationToken>());
     }
 
@@ -140,7 +147,7 @@ public sealed class ToothConditionTests
         Assert.Equal((12, "BL", "RESTORED", "treatment done"),
             (row.ToothNumber, row.Surface, row.ConditionCode, row.Note));
         await unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
-        await audit.Received(1).LogAsync("MOD_FDI_CONDITION_UPDATED", "ToothCondition", 4, 2,
+        await audit.Received(1).LogRequiredAsync("MOD_FDI_CONDITION_UPDATED", "ToothCondition", 4, 2,
             "{\"action\":\"condition_updated\"}", null, Arg.Any<CancellationToken>());
     }
 
@@ -181,7 +188,7 @@ public sealed class ToothConditionTests
         Assert.True(result.IsSuccess);
         conditions.Received(1).Remove(row);
         await unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
-        await audit.Received(1).LogAsync("MOD_FDI_CONDITION_DELETED", "ToothCondition", 4, 2,
+        await audit.Received(1).LogRequiredAsync("MOD_FDI_CONDITION_DELETED", "ToothCondition", 4, 2,
             "{\"action\":\"condition_deleted\"}", null, Arg.Any<CancellationToken>());
     }
 

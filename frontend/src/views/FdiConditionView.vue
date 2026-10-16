@@ -1,6 +1,7 @@
 <template>
   <main class="fdi-page">
     <RouterLink to="/clinical/diagnosis">← Khám và chẩn đoán</RouterLink>
+    <p v-if="visit?.status === 'Correcting'">Đang đính chính hồ sơ ngoài ca khám. <RouterLink :to="`/clinical/visits/${visitId}/invoice-draft`">Trở lại để hoàn tất và khóa đính chính</RouterLink></p>
     <h1>Tình trạng răng · Lần khám #{{ visitId }}</h1>
     <RouterLink v-if="!busy" :to="`/clinical/visits/${visitId}/services`">Chỉ định dịch vụ theo răng</RouterLink>
     <button :disabled="busy" @click="load">Tải lại hồ sơ</button>
@@ -98,8 +99,8 @@ const suggestedService = ref<(CatalogOption & { label: string }) | null>(null);
 const suggestionMessage = ref('');
 function openHistory(selected: { toothNumber: number }) { if (!busy.value) void history.value?.open(selected.toothNumber); }
 function clearSuggestion() { suggestedService.value = null; suggestionMessage.value = ''; }
-const canEdit = computed(() => visit.value?.status === 'InProgress' && !visit.value?.isLocked &&
-  (auth.role === 'ADMIN' || (auth.role === 'DENTIST' && visit.value.dentistId === auth.user?.userId)));
+const canEdit = computed(() => ['InProgress', 'Correcting'].includes(visit.value?.status ?? '') && !visit.value?.isLocked &&
+  (auth.role === 'ADMIN' || (auth.role === 'DENTIST' && visit.value?.dentistId === auth.user?.userId)));
 
 function message(cause: unknown) {
   return axios.isAxiosError(cause) ? cause.response?.data?.message || 'Không thể tải hoặc lưu tình trạng răng. Vui lòng thử lại.' : 'Không thể xử lý yêu cầu.';

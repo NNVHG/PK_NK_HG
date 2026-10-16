@@ -34,6 +34,6 @@ public sealed class VisitServicesController(FdiServiceAssignmentService service,
 
     private IActionResult Failure(Error error) => StatusCode(error.Code switch
     {
-        "GEN_001" => 404, "GEN_002" => 403, "FDI_041" or "FDI_042" => 409, _ => 400
+        "GEN_001" => 404, "GEN_002" => 403, "FDI_041" or "FDI_042" or "FDI_045" => 409, _ => 400
     }, new { code = error.Code, message = error.Message });
 }

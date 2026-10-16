@@ -7,7 +7,9 @@ public static class VisitStatuses
     public const string InProgress = "InProgress";
     public const string Completed = "Completed";
     public const string Cancelled = "Cancelled";
+    public const string Correcting = "Correcting";
 
-    public static readonly string[] All = [Created, InProgress, Completed, Cancelled];
+    public static readonly string[] All = [Created, InProgress, Completed, Cancelled, Correcting];
     public static readonly string[] Open = [Created, InProgress];
+    public static bool IsEditable(string status) => status is InProgress or Correcting;
 }

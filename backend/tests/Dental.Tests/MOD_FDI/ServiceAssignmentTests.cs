@@ -23,7 +23,7 @@ public sealed class ServiceAssignmentTests
 
     public ServiceAssignmentTests()
     {
-        unit.ExecuteInTransactionAsync(Arg.Any<Func<CancellationToken, Task<Result<IReadOnlyList<AssignedServiceResponse>>>>>(), Arg.Any<CancellationToken>())
+        unit.ExecuteSerializableTransactionAsync(Arg.Any<Func<CancellationToken, Task<Result<IReadOnlyList<AssignedServiceResponse>>>>>(), Arg.Any<CancellationToken>())
             .Returns(call => call.ArgAt<Func<CancellationToken, Task<Result<IReadOnlyList<AssignedServiceResponse>>>>>(0)(call.ArgAt<CancellationToken>(1)));
     }
 
@@ -147,8 +147,8 @@ public sealed class ServiceAssignmentTests
         Assert.Equal(new int?[] { 16, 17, 51 }, result.Value.Select(x => x.ToothNumber));
         await assignments.Received(1).AddRangeAsync(Arg.Is<IReadOnlyList<Assignment>>(x => x.Count == 3 && x.All(y => y.VisitId == 1 && y.CreatedByUserId == 2)), Arg.Any<CancellationToken>());
         await unit.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
-        await unit.Received(1).ExecuteInTransactionAsync(Arg.Any<Func<CancellationToken, Task<Result<IReadOnlyList<AssignedServiceResponse>>>>>(), Arg.Any<CancellationToken>());
-        await audit.Received(1).LogAsync("MOD_FDI_SERVICE_ASSIGNED", "Visit", 1, 2,
+        await unit.Received(1).ExecuteSerializableTransactionAsync(Arg.Any<Func<CancellationToken, Task<Result<IReadOnlyList<AssignedServiceResponse>>>>>(), Arg.Any<CancellationToken>());
+        await audit.Received(1).LogRequiredAsync("MOD_FDI_SERVICE_ASSIGNED", "Visit", 1, 2,
             "{\"action\":\"assign_services\",\"count\":3}", null, Arg.Any<CancellationToken>());
     }
 
@@ -169,7 +169,7 @@ public sealed class ServiceAssignmentTests
         Ready();
         unit.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(Task.FromException<int>(new InvalidOperationException("Test failure")));
         await Assert.ThrowsAsync<InvalidOperationException>(() => Service.AssignAsync(1, new(3, [11, 12], null), 2, RoleCodes.Admin, null));
-        await audit.DidNotReceiveWithAnyArgs().LogAsync(default!, default!, default, default, default, default, default);
+        await audit.DidNotReceiveWithAnyArgs().LogRequiredAsync(default!, default!, default, default, default, default, default);
     }
 
     [Fact]

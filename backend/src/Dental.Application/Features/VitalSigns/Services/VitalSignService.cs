@@ -40,7 +40,7 @@ public sealed class VitalSignService
         if (visit is null)
             return Result<VitalSignRecordResponse>.Failure(Error.NotFound);
 
-        if (visit.Status is VisitStatuses.Completed or VisitStatuses.Cancelled)
+        if (visit.Status is VisitStatuses.Completed or VisitStatuses.Cancelled or VisitStatuses.Correcting)
             return Result<VitalSignRecordResponse>.Failure(Error.VitalSignsVisitClosed);
 
         var record = new VitalSignRecord

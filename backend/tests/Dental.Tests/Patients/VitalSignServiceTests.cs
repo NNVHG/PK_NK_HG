@@ -108,6 +108,7 @@ public sealed class VitalSignServiceTests
     [Theory]
     [InlineData(VisitStatuses.Completed)]
     [InlineData(VisitStatuses.Cancelled)]
+    [InlineData(VisitStatuses.Correcting)]
     public async Task RecordAsync_ClosedVisitIsRejected(string status)
     {
         var visit = CreateVisit();

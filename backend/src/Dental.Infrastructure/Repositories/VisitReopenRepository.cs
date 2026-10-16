@@ -25,29 +25,24 @@ public sealed class VisitReopenRepository(DentalDbContext db) : IVisitReopenRepo
             var visit = await db.Visits.FirstOrDefaultAsync(x => x.VisitId == visitId, ct);
             if (visit is null) return Fail(Error.NotFound);
             var invoice = await db.Invoices.FirstOrDefaultAsync(x => x.VisitId == visitId && x.Status != InvoiceStatus.Cancelled, ct);
-            var otherOpen = await db.Visits.AnyAsync(x => x.PatientId == visit.PatientId && x.VisitId != visitId &&
-                (x.Status == VisitStatuses.Created || x.Status == VisitStatuses.InProgress), ct);
             var hasPreviousPayment = await db.Invoices.AnyAsync(x => x.VisitId == visitId && x.PaidAmount != 0, ct)
                 || await db.PaymentTransactions.AnyAsync(x => x.Invoice.VisitId == visitId && x.Amount > 0, ct);
-            var validation = VisitReopenRules.Validate(visit, invoice, otherOpen, hasPreviousPayment);
+            var validation = VisitReopenRules.Validate(visit, invoice, hasPreviousPayment);
             if (validation.IsFailure) return Fail(validation.Error);
             var queue = await db.QueueEntries.FirstOrDefaultAsync(x => x.VisitId == visitId, ct);
             if (queue is null || queue.Status != QueueStatus.Completed)
                 return Fail(new Error("BIL_011", "Không thể mở lại lượt khám có trạng thái hàng đợi không phù hợp."));
             var now = DateTime.UtcNow;
             if (invoice is not null) invoice.Status = InvoiceStatus.Cancelled;
-            visit.IsLocked = false; visit.Status = VisitStatuses.InProgress; visit.EndedAt = null; visit.UpdatedAt = now;
-            queue.Status = QueueStatus.InConsultation; queue.UpdatedAt = now;
-            db.QueueStatusHistories.Add(new QueueStatusHistory { QueueEntryId = queue.QueueEntryId,
-                FromStatus = QueueStatus.Completed, ToStatus = QueueStatus.InConsultation, ChangedByUserId = actor,
-                ChangedAt = now, Reason = "Mở lại khám theo xác nhận Admin" });
+            // DL263: correction is not a new physical consultation. Keep queue and actual clinical timestamps.
+            visit.IsLocked = false; visit.Status = VisitStatuses.Correcting; visit.UpdatedAt = now;
             var record = new VisitUnlockRecord { VisitId = visitId, ActorUserId = actor, Reason = reason,
                 CancelledInvoiceId = invoice?.Id, CreatedAt = now };
             db.VisitUnlockRecords.Add(record);
             await db.SaveChangesAsync(ct);
             // DL-159 hòa giải DL-158 theo AGENTS §6: lý do chỉ lưu trong lịch sử bảo vệ; audit tham chiếu ID.
             // Lưu lý do ở bản ghi được bảo vệ, audit chỉ tham chiếu để tránh rò nội dung bệnh án.
-            var detail = JsonSerializer.Serialize(new { unlockRecordId = record.Id, cancelledInvoiceId = record.CancelledInvoiceId });
+            var detail = JsonSerializer.Serialize(new { unlockRecordId = record.Id, cancelledInvoiceId = record.CancelledInvoiceId, mode = VisitStatuses.Correcting });
             db.AuditLogs.Add(new AuditLog { UserId = actor, Action = "MOD_PAT_VISIT_UNLOCKED", EntityType = "Visit",
                 EntityId = visitId, Detail = detail, IpAddress = ip, CreatedAt = now });
             if (invoice is not null)

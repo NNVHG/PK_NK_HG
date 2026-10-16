@@ -22,7 +22,7 @@ public sealed class FdiServiceDeletionRepository(DentalDbContext db) : IFdiServi
             var visit = await db.Visits.SingleOrDefaultAsync(v => v.VisitId == request.VisitId, ct);
             if (visit is null) return Result.Failure(Error.NotFound);
             if (role == RoleCodes.Dentist && visit.DentistId != actorId) return Result.Failure(Error.Forbidden);
-            if (visit.Status != VisitStatuses.InProgress || visit.IsLocked)
+            if (!VisitStatuses.IsEditable(visit.Status) || visit.IsLocked)
                 return Result.Failure("FDI_043", "Chỉ được xóa dịch vụ khi lần khám đang diễn ra và chưa khóa.");
             var row = await db.VisitServices.SingleOrDefaultAsync(s => s.VisitId == request.VisitId && s.Id == request.AssignmentId, ct);
             if (row is null) return Result.Failure(Error.NotFound);
@@ -42,6 +42,7 @@ public sealed class FdiServiceDeletionRepository(DentalDbContext db) : IFdiServi
                 UserId = actorId, IpAddress = ip, CreatedAt = DateTime.UtcNow,
                 Detail = JsonSerializer.Serialize(new { row.VisitId, row.ServiceId, assignmentId = row.Id, row.ServiceName,
                     row.UnitPrice, row.Quantity, row.ToothNumber, row.Surface, reason = request.Reason }) });
+            visit.UpdatedAt = DateTime.UtcNow;
             db.VisitServices.Remove(row);
             await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct); committed = true;
             return Result.Success();

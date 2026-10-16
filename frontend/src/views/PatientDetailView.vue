@@ -632,7 +632,7 @@ function formatGender(value: string | null): string {
 }
 
 function formatVisitStatus(status: string): string {
-  const labels: Record<string, string> = { Created: 'Đã tạo', InProgress: 'Đang khám', Completed: 'Hoàn thành', Cancelled: 'Đã hủy' };
+  const labels: Record<string, string> = { Created: 'Đã tạo', InProgress: 'Đang khám', Completed: 'Hoàn thành', Cancelled: 'Đã hủy', Correcting: 'Đang đính chính' };
   return labels[status] ?? status;
 }
 </script>

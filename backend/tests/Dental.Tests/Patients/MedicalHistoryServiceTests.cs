@@ -85,6 +85,7 @@ public sealed class MedicalHistoryServiceTests
     [Theory]
     [InlineData(VisitStatuses.Completed)]
     [InlineData(VisitStatuses.Cancelled)]
+    [InlineData(VisitStatuses.Correcting)]
     public async Task RecordAsync_ClosedVisit_IsRejected(string status)
     {
         var visit = CreateVisit();
