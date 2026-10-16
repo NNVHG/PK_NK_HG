@@ -9,20 +9,22 @@
       <label for="status">Trạng thái</label>
       <select id="status" v-model.number="status" :disabled="writing" @change="load(1)">
         <option :value="0">Tất cả</option><option :value="1">Đang chờ</option><option :value="2">Đang khám</option>
-        <option :value="5">Đang chụp ảnh</option><option :value="3">Khám xong</option><option :value="4">Đã hủy</option>
+        <option :value="6">Đang mời vào phòng</option><option :value="5">Đang chụp ảnh</option><option :value="3">Khám xong</option><option :value="4">Đã hủy</option>
       </select>
       <button :disabled="loading || writing" @click="load(page)">Tải lại</button>
-      <template v-if="authStore.role === 'ADMIN'">
+      <template v-if="needsCallingDentist">
         <label for="call-dentist">Nha sĩ gọi khám</label>
         <select id="call-dentist" v-model.number="callDentistId" :disabled="writing || dentistsLoading">
           <option :value="0">Chọn nha sĩ</option><option v-for="dentist in dentists" :key="dentist.dentistId" :value="dentist.dentistId">{{ dentist.dentistName }} · #{{ dentist.dentistId }}</option>
         </select>
         <button :disabled="writing || dentistsLoading" @click="loadDentists">Tải nha sĩ</button>
       </template>
-      <button v-if="canCallNext" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || needsReview || (authStore.role === 'ADMIN' && (dentistsLoading || !callDentistId))" class="btn-call-next" @click="handleCallNext">
-        {{ callingNext ? 'Đang gọi…' : 'Gọi tiếp theo' }}
+      <button v-if="canCallNext" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || needsReview || (needsCallingDentist && (dentistsLoading || !callDentistId))" class="btn-call-next" @click="handleCallNext">
+        {{ callingNext ? 'Đang gọi…' : 'Gọi số tiếp theo' }}
       </button>
     </div>
+    <p v-if="canCallNext">Gọi số chỉ mời bệnh nhân vào phòng. Nha sĩ/Admin cần bấm “Bắt đầu khám” tại hồ sơ lâm sàng.</p>
+    <p v-if="authStore.role === 'ASSISTANT'">Phụ tá chỉ gọi các lượt đã có nha sĩ được chọn; lượt chưa phân nha sĩ cần Lễ tân/Admin đối chiếu trước.</p>
     <p v-if="loading" role="status">Đang tải hàng đợi…</p>
     <p v-if="actionMsg" class="action-msg" role="status">{{ actionMsg }}</p>
     <p v-if="error" role="alert">{{ error }}</p>
@@ -34,6 +36,7 @@
       <strong>{{ numberLabel(row.queueNumber) }} · {{ row.patientName }}</strong>
       <p>{{ row.patientCode }} · {{ row.statusText }} · {{ row.queueDate }}</p>
       <p>{{ row.isPriority ? 'Ưu tiên lịch hẹn đúng giờ' : 'Chờ thông thường' }} · {{ row.dentistName || 'Chưa phân nha sĩ' }}</p>
+      <RouterLink v-if="row.status === 6 && ['ADMIN', 'DENTIST'].includes(authStore.role)" to="/clinical/diagnosis">Mở hồ sơ để bắt đầu khám</RouterLink>
       <button v-if="canCancelWaiting && row.status === 1" :disabled="loading || writing || imagingRow !== null || needsReview" @click="openCancellation(row)">Hủy lượt chưa khám</button>
       <button v-if="canRouteImaging(row)" :disabled="loading || writing || cancelRow !== null || needsReview" @click="openImaging(row)">
         {{ row.status === 2 ? 'Chỉ định chụp ảnh' : 'Hoàn tất chụp → chờ nha sĩ' }}
@@ -75,27 +78,27 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useAuthStore } from '@/stores/auth';
-import { appointmentsService, type BookingDentist } from '@/services/appointments';
-import { queueService, type QueueEntryResponse } from '@/services/queue';
+import { queueService, type QueueEntryResponse, type CallingDentist } from '@/services/queue';
 const rows = ref<QueueEntryResponse[]>([]), status = ref(1), page = ref(1), total = ref(0), hasNext = ref(false);
 const loading = ref(false), callingNext = ref(false), error = ref(''), actionMsg = ref(''), updatedAt = ref('');
-const authStore = useAuthStore(), canCallNext = computed(() => ['ADMIN', 'DENTIST'].includes(authStore.role));
+const authStore = useAuthStore(), canCallNext = computed(() => ['ADMIN', 'DENTIST', 'ASSISTANT'].includes(authStore.role));
+const needsCallingDentist = computed(() => ['ADMIN', 'ASSISTANT'].includes(authStore.role));
 const canCancelWaiting = computed(() => ['ADMIN', 'RECEPTIONIST'].includes(authStore.role));
 const cancelRow = ref<QueueEntryResponse | null>(null), cancelReason = ref(''), cancelConfirmed = ref(false), cancelling = ref(false);
 const imagingRow = ref<QueueEntryResponse | null>(null), imagingReason = ref(''), imagingConfirmed = ref(false), routingImaging = ref(false);
 const writing = computed(() => callingNext.value || cancelling.value || routingImaging.value);
-const dentists = ref<BookingDentist[]>([]), callDentistId = ref(0), dentistsLoading = ref(false), dentistError = ref(''), needsReview = ref(false);
+const dentists = ref<CallingDentist[]>([]), callDentistId = ref(0), dentistsLoading = ref(false), dentistError = ref(''), needsReview = ref(false);
 let version = 0, life = 0, dentistVersion = 0;
 async function loadDentists() {
-  if (authStore.role !== 'ADMIN' || writing.value) return;
+  if (!needsCallingDentist.value || writing.value) return;
   const ticket = ++dentistVersion; dentistsLoading.value = true; dentistError.value = ''; dentists.value = [];
-  try { const result = await appointmentsService.getBookingDentists(); if (ticket === dentistVersion) { dentists.value = result; if (!result.some(d => d.dentistId === callDentistId.value)) callDentistId.value = 0; } }
+  try { const result = await queueService.getCallingDentists(); if (ticket === dentistVersion) { dentists.value = result; if (!result.some(d => d.dentistId === callDentistId.value)) callDentistId.value = 0; } }
   catch { if (ticket === dentistVersion) { callDentistId.value = 0; dentistError.value = 'Không thể tải nha sĩ hoạt động. Tải lại trước khi gọi ca.'; } }
   finally { if (ticket === dentistVersion) dentistsLoading.value = false; }
 }
 async function load(targetPage = 1) {
   if (routingImaging.value) return;
-  if (!Number.isInteger(targetPage) || targetPage < 1 || targetPage > 1_000_000 || ![0, 1, 2, 3, 4, 5].includes(status.value)) return;
+  if (!Number.isInteger(targetPage) || targetPage < 1 || targetPage > 1_000_000 || ![0, 1, 2, 3, 4, 5, 6].includes(status.value)) return;
   closeCancellation();
   closeImaging();
   const ticket = ++version; loading.value = true; rows.value = []; error.value = ''; updatedAt.value = ''; total.value = 0; hasNext.value = false;
@@ -110,13 +113,14 @@ async function load(targetPage = 1) {
 }
 async function handleCallNext() {
   if (!canCallNext.value || writing.value || cancelRow.value !== null || imagingRow.value !== null || loading.value || needsReview.value) return;
-  if (authStore.role === 'ADMIN' && (dentistsLoading.value || !Number.isInteger(callDentistId.value) || !dentists.value.some(d => d.dentistId === callDentistId.value))) { dentistError.value = 'Chọn nha sĩ hoạt động đã tải để gọi ca.'; return; }
+  if (needsCallingDentist.value && (dentistsLoading.value || !Number.isInteger(callDentistId.value) || !dentists.value.some(d => d.dentistId === callDentistId.value))) { dentistError.value = 'Chọn nha sĩ hoạt động đã tải để gọi ca.'; return; }
   const ticket = life;
   callingNext.value = true; error.value = ''; actionMsg.value = '';
   try {
-    const entry = await queueService.callNext(authStore.role === 'ADMIN' ? { dentistId: callDentistId.value } : undefined);
+    const entry = await queueService.callNext(needsCallingDentist.value ? { dentistId: callDentistId.value } : undefined);
     if (ticket !== life) return;
-    actionMsg.value = `Đã gọi số ${numberLabel(entry.queueNumber)} - ${entry.patientName} vào khám.`;
+    if (entry.status !== 6) throw new Error('Unexpected invitation status');
+    actionMsg.value = `Đã mời số ${numberLabel(entry.queueNumber)} - ${entry.patientName} vào phòng; cần xác nhận bắt đầu khám riêng.`;
     needsReview.value = true;
     await load(page.value);
   } catch (err: unknown) {

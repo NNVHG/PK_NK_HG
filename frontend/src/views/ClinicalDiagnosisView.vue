@@ -45,7 +45,7 @@
           <template v-if="visit">
             <RouterLink v-if="!dirty && !busy" :to="`/clinical/visits/${visit.visitId}/fdi`">Mở sơ đồ và ghi tình trạng răng</RouterLink>
             <p>Trạng thái: {{ visitStatusLabel }}</p>
-            <template v-if="auth.role === 'ADMIN' && selected.status === 1 && !visit.isLocked">
+            <template v-if="auth.role === 'ADMIN' && [1, 6].includes(selected.status) && !visit.isLocked">
               <label for="start-dentist">Nha sĩ phụ trách</label>
               <select id="start-dentist" v-model.number="startDentistId" :disabled="busy || dentistsLoading">
                 <option :value="0">Chọn nha sĩ</option>
@@ -115,7 +115,7 @@ const busy = computed(() => loadingQueue.value || loadingVisit.value || starting
 const canEdit = computed(() => !needsReview.value && !visit.value?.isLocked && visit.value?.status === 'InProgress'
   && (auth.role === 'ADMIN' || (auth.role === 'DENTIST' && visit.value.dentistId === auth.user?.userId)));
 const canStart = computed(() => !needsReview.value && !visit.value?.isLocked && ['Created', 'InProgress'].includes(visit.value?.status ?? '')
-  && selected.value?.status === 1 && ['ADMIN', 'DENTIST'].includes(auth.role)
+  && selected.value !== null && [1, 6].includes(selected.value.status) && ['ADMIN', 'DENTIST'].includes(auth.role)
   && Number.isInteger(targetDentistId.value) && Number(targetDentistId.value) > 0
   && (selected.value.dentistId === null || selected.value.dentistId === targetDentistId.value)
   && (visit.value?.dentistId === null || visit.value?.dentistId === targetDentistId.value)

@@ -98,6 +98,8 @@ internal static class QueueImagingHttpSmoke
             check(r.StatusCode == HttpStatusCode.OK && json.GetProperty("queueEntryId").GetInt32() == entry.QueueEntryId,
                 "Call Next resumes original imaging Visit");
         }
+        using (var r = await client.PutAsJsonAsync(path, new { newStatus = 2, dentistId = dentist.UserId }))
+            check(r.StatusCode == HttpStatusCode.OK, "Imaging recall requires separate clinical start200");
         persisted = await db.QueueEntries.AsNoTracking().Include(q => q.Visit).SingleAsync(q => q.QueueEntryId == entry.QueueEntryId);
         check(persisted.VisitId == entry.VisitId && persisted.Visit!.StartedAt == entry.Visit!.StartedAt, "Resume never creates a second Visit or resets start time");
         var failed = await Entry();

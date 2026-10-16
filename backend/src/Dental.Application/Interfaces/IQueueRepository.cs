@@ -16,7 +16,8 @@ public interface IQueueRepository
         int page,
         int pageSize,
         CancellationToken ct = default);
-    Task<QueueEntry?> GetNextWaitingEntryAsync(DateOnly date, int? dentistId, CancellationToken ct = default);
+    Task<QueueEntry?> GetNextWaitingEntryAsync(DateOnly date, int? dentistId, CancellationToken ct = default, bool assignedOnly = false);
+    Task<bool> HasCallingForDentistAsync(DateOnly date, int dentistId, CancellationToken ct = default, int? excludedQueueEntryId = null);
     Task<IReadOnlyList<QueueEntry>> GetPublicDisplayQueueAsync(DateOnly date, CancellationToken ct = default);
     Task AddStatusHistoryAsync(QueueStatusHistory history, CancellationToken ct = default);
     Task<IReadOnlyList<QueueStatusHistory>> GetStatusHistoriesAsync(int queueEntryId, CancellationToken ct = default);

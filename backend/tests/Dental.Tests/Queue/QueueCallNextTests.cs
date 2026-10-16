@@ -69,7 +69,7 @@ public sealed class QueueCallNextTests
             Visit = new Visit { VisitId = 8, DentistId = 5, Status = VisitStatuses.InProgress, StartedAt = started } };
         _queueRepository.GetNextWaitingEntryAsync(_vietnamClock.Today, 5, Arg.Any<CancellationToken>()).Returns(row);
         _visitRepository.HasActiveVisitForDentistAsync(5, Arg.Any<CancellationToken>(), 8).Returns(false);
-        var result = await CreateService().CallNextAsync(5, RoleCodes.Dentist, new(999), null);
+        var result = await CreateService().CallNextAsync(5, RoleCodes.Dentist, new(null), null);
         Assert.True(result.IsSuccess); Assert.Equal(5, row.DentistId); Assert.Equal(started, row.Visit.StartedAt);
         await _visitRepository.Received().HasActiveVisitForDentistAsync(5, Arg.Any<CancellationToken>(), 8);
     }
@@ -100,7 +100,6 @@ public sealed class QueueCallNextTests
 
     [Theory]
     [InlineData(RoleCodes.Receptionist)]
-    [InlineData(RoleCodes.Assistant)]
     [InlineData(RoleCodes.Patient)]
     public async Task CallNextAsync_UnauthorizedRoles_ReturnsForbidden(string role)
     {
@@ -176,17 +175,17 @@ public sealed class QueueCallNextTests
             "127.0.0.1");
 
         Assert.True(result.IsSuccess);
-        Assert.Equal(QueueStatus.InConsultation, entry.Status);
+        Assert.Equal(QueueStatus.Calling, entry.Status);
         Assert.Equal(5, entry.DentistId);
-        Assert.Equal(VisitStatuses.InProgress, visit.Status);
-        Assert.Equal(5, visit.DentistId);
-        Assert.NotNull(visit.StartedAt);
+        Assert.Equal(VisitStatuses.Created, visit.Status);
+        Assert.Null(visit.DentistId);
+        Assert.Null(visit.StartedAt);
 
         await _queueRepository.Received(1).AddStatusHistoryAsync(
             Arg.Is<QueueStatusHistory>(h =>
                 h.QueueEntryId == 1 &&
                 h.FromStatus == QueueStatus.Waiting &&
-                h.ToStatus == QueueStatus.InConsultation &&
+                h.ToStatus == QueueStatus.Calling &&
                 h.ChangedByUserId == 5),
             Arg.Any<CancellationToken>());
         await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
@@ -252,9 +251,9 @@ public sealed class QueueCallNextTests
             null);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal(QueueStatus.InConsultation, entry.Status);
+        Assert.Equal(QueueStatus.Calling, entry.Status);
         Assert.Equal(5, entry.DentistId);
-        Assert.Equal(VisitStatuses.InProgress, visit.Status);
+        Assert.Equal(VisitStatuses.Created, visit.Status);
     }
 
     [Fact]

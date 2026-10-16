@@ -57,12 +57,24 @@ internal static class QueueWaitingCancellationHttpSmoke
             using (var response = await client.PostAsJsonAsync("/api/queue/check-in", new { patientId = patient.PatientId }))
                 check(response.StatusCode == HttpStatusCode.Created, "Cancel waiting releases open Visit so patient can check in again");
         }
-        var active = await db.QueueEntries.Include(q => q.Visit).FirstAsync(q => q.Status == QueueStatus.InConsultation);
-        var before = active.Visit!.Status;
-        authenticate(RoleCodes.Admin);
-        using (var response = await client.PostAsJsonAsync(Path(active.QueueEntryId), new { confirmed = true }))
-            check(response.StatusCode == HttpStatusCode.Conflict, "Cancel waiting rejects already called Visit409");
-        check((await db.Visits.AsNoTracking().SingleAsync(v => v.VisitId == active.VisitId)).Status == before,
-            "Cancel waiting rejection never cancels clinical Visit");
+        var doctorRole = await db.Roles.SingleAsync(r => r.RoleCode == RoleCodes.Dentist);
+        var doctor = new User { RoleId = doctorRole.RoleId, IsActive = true, FullName = "Synthetic cancellation dentist",
+            Phone = "CANCEL" + Guid.NewGuid().ToString("N")[..12], PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()) };
+        db.Users.Add(doctor); await db.SaveChangesAsync();
+        foreach (var status in new[] { QueueStatus.Calling, QueueStatus.InConsultation })
+        {
+            var patient = new Patient { FullName = "Synthetic active patient", Phone = "0999999939", DateOfBirth = new(1990, 1, 1) };
+            var before = status == QueueStatus.Calling ? VisitStatuses.Created : VisitStatuses.InProgress;
+            var active = new QueueEntry { Patient = patient, DentistId = doctor.UserId, QueueDate = new VietnamClock(TimeProvider.System).Today,
+                QueueNumber = (await db.QueueEntries.MaxAsync(q => (int?)q.QueueNumber) ?? 0) + 1, CheckInTime = DateTime.UtcNow, Status = status,
+                Visit = new Visit { Patient = patient, CreatedByUserId = actorId, Status = before,
+                    DentistId = status == QueueStatus.InConsultation ? doctor.UserId : null, StartedAt = status == QueueStatus.InConsultation ? DateTime.UtcNow : null } };
+            db.QueueEntries.Add(active); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
+            authenticate(RoleCodes.Admin);
+            using (var response = await client.PostAsJsonAsync(Path(active.QueueEntryId), new { confirmed = true }))
+                check(response.StatusCode == HttpStatusCode.Conflict, $"Cancel waiting rejects {status}409");
+            check((await db.Visits.AsNoTracking().SingleAsync(v => v.VisitId == active.VisitId)).Status == before,
+                $"Cancel waiting rejection never cancels {status} Visit");
+        }
     }
 }

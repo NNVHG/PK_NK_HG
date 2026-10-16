@@ -18,6 +18,7 @@ function fixture({ role = 'DENTIST', selected = row, fail = false, result, readF
     '@/stores/auth': { useAuthStore: () => auth },
     '@/services/appointments': { appointmentsService: { getBookingDentists: async () => [{ dentistId: 5, dentistName: 'Synthetic dentist' }] } },
     '@/services/queue': { queueService: {
+      getCallingDentists: async () => [{ dentistId: 5, dentistName: 'Synthetic dentist' }],
       getToday: async () => { reads.push(true); if (reads.length > readFailureAfter) throw new Error('Read failure'); return { items: [selected], page: 1, totalCount: 1, hasNextPage: false }; },
       routeImaging: async (...args) => { writes.push(args); if (fail) throw { response: { data: { message: 'Synthetic409' } } }; return result ?? { ...selected, status: args[1] }; },
       callNext: async () => { calls.push(true); return row; },

@@ -40,7 +40,7 @@
               <span class="label">Bác sĩ phụ trách:</span>
               <strong class="value">{{ item.dentistName || 'Phòng khám tổng quát' }}</strong>
             </div>
-            <div class="status-badge pulse">{{ item.statusText }}</div>
+            <div class="status-badge" :class="{ pulse: item.status === 6 }">{{ item.statusText }}</div>
           </article>
         </div>
       </section>
@@ -134,7 +134,7 @@ function playDingDong() {
 }
 
 function processAudioQueue() {
-  if (isPlayingAudio || audioQueue.length === 0 || !soundEnabled.value) return;
+  if (!active || isPlayingAudio || audioQueue.length === 0 || !soundEnabled.value) return;
 
   const item = audioQueue.shift();
   if (!item) return;
@@ -163,7 +163,7 @@ function processAudioQueue() {
     };
 
     setTimeout(() => {
-      window.speechSynthesis.speak(utterance);
+      if (active && soundEnabled.value) window.speechSynthesis.speak(utterance);
     }, 700);
   } else {
     setTimeout(() => {
@@ -198,24 +198,30 @@ function toggleSound() {
   }
 }
 
+let active = true, requestVersion = 0;
 async function loadQueueData() {
+  if (!active) return;
+  const ticket = ++requestVersion;
   try {
     const data = await queueService.getPublicDisplay();
+    if (!active || ticket !== requestVersion) return;
     error.value = '';
 
-    for (const item of data.inConsultation) {
+    const currentCalls = data.inConsultation.filter(item => item.status === 6);
+    for (const item of currentCalls) {
       if (!seenCallIds.has(item.queueEntryId)) {
-        seenCallIds.add(item.queueEntryId);
         if (soundEnabled.value) {
           enqueueCallAudio(item);
         }
       }
     }
+    seenCallIds.clear();
+    for (const item of currentCalls) seenCallIds.add(item.queueEntryId);
 
     inConsultation.value = data.inConsultation;
     waiting.value = data.waiting;
   } catch {
-    error.value = 'Mất kết nối máy chủ. Đang tự động kết nối lại...';
+    if (active && ticket === requestVersion) error.value = 'Mất kết nối máy chủ. Đang tự động kết nối lại...';
   }
 }
 
@@ -227,6 +233,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  active = false; requestVersion++; seenCallIds.clear(); soundEnabled.value = false;
   if (clockTimer) clearInterval(clockTimer);
   if (pollTimer) clearInterval(pollTimer);
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {

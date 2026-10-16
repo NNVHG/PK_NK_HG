@@ -138,7 +138,7 @@ public sealed class QueueController : ControllerBase
     }
 
     [HttpPost("call-next")]
-    [Authorize(Policy = AppPolicies.QueueStatusUpdate)]
+    [Authorize(Policy = AppPolicies.QueueCall)]
     [ProducesResponseType(typeof(QueueEntryResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -166,6 +166,15 @@ public sealed class QueueController : ControllerBase
         return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
     }
 
+    [HttpGet("call-dentists")]
+    [Authorize(Policy = AppPolicies.QueueCall)]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
+    public async Task<IActionResult> GetCallingDentists(CancellationToken ct)
+    {
+        var result = await _queueService.GetCallingDentistsAsync(_currentUser.RoleCode, ct);
+        return result.IsSuccess ? Ok(result.Value) : Forbid();
+    }
+
     [HttpGet("display")]
     [HttpGet("public-monitor")]
     [AllowAnonymous]
@@ -191,7 +200,7 @@ public sealed class QueueController : ControllerBase
         {
             "GEN_001" or "CHK_001" or "CHK_008" or "APP_001" => StatusCodes.Status404NotFound,
             "CHK_004" => StatusCodes.Status403Forbidden,
-            "CHK_002" or "CHK_009" or "CHK_010" or "CHK_011" or "CHK_012" or "PAT_090" or "PAT_091" or "APP_008" => StatusCodes.Status409Conflict,
+            "CHK_002" or "CHK_009" or "CHK_010" or "CHK_011" or "CHK_012" or "CHK_013" or "PAT_090" or "PAT_091" or "APP_008" => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status400BadRequest,
         };
 
