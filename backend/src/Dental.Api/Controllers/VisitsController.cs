@@ -15,20 +15,26 @@ namespace Dental.Api.Controllers;
 public sealed class VisitsController : ControllerBase
 {
     private readonly VisitService _visitService;
+    private readonly PostTreatmentNoteService _postTreatmentNoteService;
     private readonly ICurrentUser _currentUser;
     private readonly VisitQueryRequestValidator _queryValidator;
     private readonly UpdateVisitDiagnosisRequestValidator _diagnosisValidator;
+    private readonly CreatePostTreatmentNoteRequestValidator _postTreatmentNoteValidator;
 
     public VisitsController(
         VisitService visitService,
+        PostTreatmentNoteService postTreatmentNoteService,
         ICurrentUser currentUser,
         VisitQueryRequestValidator queryValidator,
-        UpdateVisitDiagnosisRequestValidator diagnosisValidator)
+        UpdateVisitDiagnosisRequestValidator diagnosisValidator,
+        CreatePostTreatmentNoteRequestValidator postTreatmentNoteValidator)
     {
         _visitService = visitService;
+        _postTreatmentNoteService = postTreatmentNoteService;
         _currentUser = currentUser;
         _queryValidator = queryValidator;
         _diagnosisValidator = diagnosisValidator;
+        _postTreatmentNoteValidator = postTreatmentNoteValidator;
     }
 
     [HttpPost]
@@ -128,6 +134,58 @@ public sealed class VisitsController : ControllerBase
         return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
     }
 
+    [HttpGet("/api/visits/{id:int}/clinical-notes/addendum")]
+    [Authorize(Policy = AppPolicies.PatientView)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [ProducesResponseType(typeof(IReadOnlyList<PostTreatmentNoteResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetPostTreatmentNotes(int id, CancellationToken ct)
+    {
+        if (_currentUser.UserId is not int currentUserId)
+            return Unauthorized(new { code = Error.Unauthorized.Code, message = Error.Unauthorized.Message });
+
+        var result = await _postTreatmentNoteService.GetAsync(
+            id,
+            currentUserId,
+            _currentUser.RoleCode,
+            ct);
+
+        return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
+    }
+
+    [HttpPost("/api/visits/{id:int}/clinical-notes/addendum")]
+    [Authorize(Policy = AppPolicies.ClinicalDiagnosisUpdate)]
+    [ProducesResponseType(typeof(PostTreatmentNoteResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> AddPostTreatmentNote(
+        int id,
+        [FromBody] CreatePostTreatmentNoteRequest request,
+        CancellationToken ct)
+    {
+        if (_currentUser.UserId is not int currentUserId)
+            return Unauthorized(new { code = Error.Unauthorized.Code, message = Error.Unauthorized.Message });
+
+        var validation = await _postTreatmentNoteValidator.ValidateAsync(request, ct);
+        if (!validation.IsValid)
+            return ToValidationProblem(validation);
+
+        var result = await _postTreatmentNoteService.AddAsync(
+            id,
+            request,
+            currentUserId,
+            _currentUser.RoleCode,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            ct);
+
+        return result.IsFailure ? Failure(result.Error) : StatusCode(StatusCodes.Status201Created, result.Value);
+    }
+
     private IActionResult ToValidationProblem(ValidationResult validation)
         => BadRequest(new
         {
@@ -142,7 +200,7 @@ public sealed class VisitsController : ControllerBase
         {
             "GEN_001" => StatusCodes.Status404NotFound,
             "GEN_002" or "PAT_112" => StatusCodes.Status403Forbidden,
-            "PAT_090" or "PAT_091" or "PAT_111" or "PAT_113" => StatusCodes.Status409Conflict,
+            "PAT_081" or "PAT_082" or "PAT_083" or "PAT_090" or "PAT_091" or "PAT_111" or "PAT_113" => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status400BadRequest,
         };
 

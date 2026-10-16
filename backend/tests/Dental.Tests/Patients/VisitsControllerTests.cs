@@ -24,6 +24,31 @@ public sealed class VisitsControllerTests
         return uow;
     }
 
+    private static VisitsController CreateController(
+        VisitService service,
+        ICurrentUser currentUser,
+        PostTreatmentNoteService? noteService = null)
+    {
+        noteService ??= new PostTreatmentNoteService(
+            Substitute.For<IVisitRepository>(),
+            Substitute.For<IPatientRepository>(),
+            Substitute.For<IInvoiceRepository>(),
+            Substitute.For<IPostTreatmentNoteRepository>(),
+            Substitute.For<IUnitOfWork>(),
+            Substitute.For<IAuditLogger>());
+
+        return new VisitsController(
+            service,
+            noteService,
+            currentUser,
+            new VisitQueryRequestValidator(),
+            new UpdateVisitDiagnosisRequestValidator(),
+            new CreatePostTreatmentNoteRequestValidator())
+        {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
+        };
+    }
+
     [Fact]
     public async Task CreateVisit_InactivePatientReturnsConflict()
     {
@@ -38,14 +63,7 @@ public sealed class VisitsControllerTests
             Substitute.For<IAuditLogger>());
         var currentUser = Substitute.For<ICurrentUser>();
         currentUser.UserId.Returns(8);
-        var controller = new VisitsController(
-            service,
-            currentUser,
-            new VisitQueryRequestValidator(),
-            new UpdateVisitDiagnosisRequestValidator())
-        {
-            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
-        };
+        var controller = CreateController(service, currentUser);
 
         var result = await controller.CreateVisit(5, CancellationToken.None);
 
@@ -79,14 +97,7 @@ public sealed class VisitsControllerTests
         currentUser.UserId.Returns(10);
         currentUser.RoleCode.Returns(RoleCodes.Dentist);
 
-        var controller = new VisitsController(
-            service,
-            currentUser,
-            new VisitQueryRequestValidator(),
-            new UpdateVisitDiagnosisRequestValidator())
-        {
-            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
-        };
+        var controller = CreateController(service, currentUser);
 
         var result = await controller.UpdateDiagnosis(
             15,
@@ -111,14 +122,7 @@ public sealed class VisitsControllerTests
         var currentUser = Substitute.For<ICurrentUser>();
         currentUser.UserId.Returns(10);
 
-        var controller = new VisitsController(
-            service,
-            currentUser,
-            new VisitQueryRequestValidator(),
-            new UpdateVisitDiagnosisRequestValidator())
-        {
-            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
-        };
+        var controller = CreateController(service, currentUser);
 
         var result = await controller.UpdateDiagnosis(
             15,
@@ -152,14 +156,7 @@ public sealed class VisitsControllerTests
         currentUser.UserId.Returns(99); // different dentist
         currentUser.RoleCode.Returns(RoleCodes.Dentist);
 
-        var controller = new VisitsController(
-            service,
-            currentUser,
-            new VisitQueryRequestValidator(),
-            new UpdateVisitDiagnosisRequestValidator())
-        {
-            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
-        };
+        var controller = CreateController(service, currentUser);
 
         var result = await controller.UpdateDiagnosis(
             15,

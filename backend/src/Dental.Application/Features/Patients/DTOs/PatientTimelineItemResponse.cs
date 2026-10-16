@@ -8,4 +8,6 @@ public sealed record PatientTimelineItemResponse(
     string? DentistName,
     bool HasMedicalHistory,
     bool HasVitalSigns,
-    string? Diagnosis = null);
+    string? Diagnosis = null,
+    int? DentistId = null);
+

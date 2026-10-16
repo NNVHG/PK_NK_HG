@@ -34,9 +34,11 @@ public sealed class DentalDbContext : DbContext
     public DbSet<NotificationLog> NotificationLogs => Set<NotificationLog>();
     public DbSet<QueueEntry> QueueEntries => Set<QueueEntry>();
     public DbSet<QueueStatusHistory> QueueStatusHistories => Set<QueueStatusHistory>();
+    public DbSet<PostTreatmentNote> PostTreatmentNotes => Set<PostTreatmentNote>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.ApplyConfiguration(new PostTreatmentNoteConfiguration());
         modelBuilder.ApplyConfiguration(new PaymentTransactionConfiguration());
         modelBuilder.ApplyConfiguration(new SystemConfigConfiguration());
         modelBuilder.ApplyConfiguration(new VisitUnlockRecordConfiguration());
@@ -98,6 +100,8 @@ public sealed class DentalDbContext : DbContext
             throw new InvalidOperationException("Dữ liệu khoản thu PaymentTransaction là bất biến; chỉ được tăng PrintCount một lượt theo DL-210.");
         if (ChangeTracker.Entries<VisitUnlockRecord>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("VisitUnlockRecord là bất biến — không được phép cập nhật hoặc xóa.");
+        if (ChangeTracker.Entries<PostTreatmentNote>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("PostTreatmentNote là ghi chú hậu điều trị chỉ thêm mới — không được sửa hoặc xóa.");
         var violatingEntries = ChangeTracker.Entries<AuditLog>()
             .Where(e => e.State is EntityState.Modified or EntityState.Deleted)
             .ToList();

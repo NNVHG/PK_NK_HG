@@ -24,5 +24,5 @@ public static class AuditActions
     public const string AppointmentRescheduled = "APPOINTMENT_RESCHEDULED";
     public const string QueueCheckedIn = "QUEUE_CHECKED_IN";
     public const string QueueStatusChanged = "QUEUE_STATUS_CHANGED";
-
+    public const string PostTreatmentNoteCreated = "POST_TREATMENT_NOTE_CREATED";
 }

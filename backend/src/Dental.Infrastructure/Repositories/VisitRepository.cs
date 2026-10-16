@@ -81,7 +81,8 @@ public sealed class VisitRepository : IVisitRepository
                 visit.Dentist == null ? null : visit.Dentist.FullName,
                 _db.MedicalHistoryRecords.Any(record => record.VisitId == visit.VisitId),
                 _db.VitalSignRecords.Any(record => record.VisitId == visit.VisitId),
-                visit.Diagnosis))
+                visit.Diagnosis,
+                visit.DentistId))
             .ToListAsync(ct);
 
         return PagedResult<PatientTimelineItemResponse>.Create(items, totalCount, page, pageSize);
