@@ -35,6 +35,7 @@ public sealed class DentalDbContext : DbContext
     public DbSet<QueueEntry> QueueEntries => Set<QueueEntry>();
     public DbSet<QueueStatusHistory> QueueStatusHistories => Set<QueueStatusHistory>();
     public DbSet<Prescription> Prescriptions => Set<Prescription>();
+    public DbSet<DoctorSignature> DoctorSignatures => Set<DoctorSignature>();
     public DbSet<PrescriptionItem> PrescriptionItems => Set<PrescriptionItem>();
     public DbSet<PrescriptionNumberCounter> PrescriptionNumberCounters => Set<PrescriptionNumberCounter>();
     public DbSet<Medicine> Medicines => Set<Medicine>();
@@ -44,6 +45,7 @@ public sealed class DentalDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new PrescriptionConfiguration());
+        modelBuilder.ApplyConfiguration(new DoctorSignatureConfiguration());
         modelBuilder.ApplyConfiguration(new PrescriptionItemConfiguration());
         modelBuilder.ApplyConfiguration(new PrescriptionNumberCounterConfiguration());
         modelBuilder.ApplyConfiguration(new MedicineConfiguration());
@@ -128,6 +130,8 @@ public sealed class DentalDbContext : DbContext
 
     private void GuardAuditLogImmutability()
     {
+        if (ChangeTracker.Entries<DoctorSignature>().Any(e => e.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Phiên bản ảnh chữ ký chỉ thêm mới; không sửa hoặc xóa lịch sử.");
         if (ChangeTracker.Entries<NotificationLog>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("NotificationLog là nhật ký chỉ thêm mới — không được sửa hoặc xóa.");
         // DL-210 allows only a single increment of print metadata, never financial edits.

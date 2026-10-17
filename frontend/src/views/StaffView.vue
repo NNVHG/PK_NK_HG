@@ -75,6 +75,7 @@
                 </span>
               </td>
               <td class="row-actions">
+                <RouterLink v-if="staff.roleCode === 'DENTIST' && staff.isActive" :to="'/staff/signatures/' + staff.userId">Ảnh chữ ký</RouterLink>
                 <button class="text-button" type="button" @click="openEditForm(staff)">Sửa</button>
                 <button
                   v-if="staff.isActive"

@@ -40,6 +40,8 @@ internal static class CashPaymentHttpSmoke
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Services.AddControllers().AddApplicationPart(typeof(CashPaymentsController).Assembly);
         builder.Services.AddScoped(_ => new DentalDbContext(options));
+        builder.Services.AddScoped<IDoctorSignatureRepository, DoctorSignatureRepository>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_AUTH.DoctorSignatureService>();
         builder.Services.AddScoped<IPrescriptionRepository, PrescriptionRepository>();
         builder.Services.AddScoped<IPublicPrescriptionRepository, PublicPrescriptionRepository>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_RX.PublicPrescriptionService>();
@@ -172,7 +174,9 @@ internal static class CashPaymentHttpSmoke
             void Authenticate(string role) => AuthenticateActor(role, cashierId);
             if (prescriptionOnly)
             {
-                if (Environment.GetCommandLineArgs().Contains("--public-prescription-only"))
+                if (Environment.GetCommandLineArgs().Contains("--doctor-signature-only"))
+                    await DoctorSignatureHttpSmoke.RunAsync(client, options, AuthenticateActor, check);
+                else if (Environment.GetCommandLineArgs().Contains("--public-prescription-only"))
                     await PublicPrescriptionHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);
                 else if (Environment.GetCommandLineArgs().Contains("--patient-citizen-id-only"))
                     await PatientCitizenIdHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);

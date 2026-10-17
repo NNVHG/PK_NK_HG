@@ -86,6 +86,8 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 builder.Services.AddScoped<IPatientRepository, PatientRepository>();
 builder.Services.AddScoped<IPatientCitizenIdRepository, PatientCitizenIdRepository>();
+builder.Services.AddScoped<IDoctorSignatureRepository, DoctorSignatureRepository>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_AUTH.DoctorSignatureService>();
 builder.Services.AddScoped<IPublicPrescriptionRepository, PublicPrescriptionRepository>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_RX.PublicPrescriptionService>();
 builder.Services.AddDataProtection();
