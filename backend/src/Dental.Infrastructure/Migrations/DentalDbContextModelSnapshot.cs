@@ -953,6 +953,14 @@ namespace Dental.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<string>("ReceiverName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ReceiverPhone")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<DateOnly?>("RevisitDate")
                         .HasColumnType("date");
 
@@ -1349,6 +1357,10 @@ namespace Dental.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("UserId"));
+
+                    b.Property<string>("AcademicTitle")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamptz");

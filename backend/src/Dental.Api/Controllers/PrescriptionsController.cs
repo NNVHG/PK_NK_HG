@@ -16,6 +16,10 @@ public sealed class PrescriptionsController(PrescriptionService service, ICurren
     [Authorize(Policy = AppPolicies.PatientView)]
     public async Task<IActionResult> Get(int visitId, CancellationToken ct)
     { if (actor.UserId is not int id) return Unauthorized(); var r = await service.GetAsync(visitId, id, actor.RoleCode, ct); return r.IsSuccess ? Ok(r.Value) : Failure(r.Error); }
+    [HttpPost("{prescriptionId:int}/print")]
+    [Authorize(Policy = AppPolicies.PatientView)]
+    public async Task<IActionResult> PreparePrint(int visitId, int prescriptionId, PrescriptionPrintRequest request, CancellationToken ct)
+    { if (actor.UserId is not int id) return Unauthorized(); var r = await service.PreparePrintAsync(visitId, prescriptionId, id, actor.RoleCode, request, HttpContext.Connection.RemoteIpAddress?.ToString(), ct); return r.IsSuccess ? Ok(r.Value) : Failure(r.Error); }
     [HttpGet("history")]
     [Authorize(Policy = AppPolicies.PatientView)]
     public async Task<IActionResult> History(int visitId, [FromQuery] int page = 1, [FromQuery] int pageSize = 10, CancellationToken ct = default)
@@ -53,6 +57,6 @@ public sealed class PrescriptionsController(PrescriptionService service, ICurren
         return r.IsSuccess ? StatusCode(creating ? 201 : 200, r.Value) : Failure(r.Error);
     }
     private IActionResult Failure(Dental.Application.Common.Error error) => StatusCode(error.Code switch {
-        "GEN_001" => 404, "GEN_002" => 403, "RX_002" or "RX_003" or "RX_004" or "RX_006" or "RX_007" or "RX_008" or "BIL_006" or "BIL_007" => 409, _ => 400 },
+        "GEN_001" => 404, "GEN_002" => 403, "RX_PRINT_SETUP" or "RX_002" or "RX_003" or "RX_004" or "RX_006" or "RX_007" or "RX_008" or "BIL_006" or "BIL_007" => 409, _ => 400 },
         new { code = error.Code, message = error.Message });
 }

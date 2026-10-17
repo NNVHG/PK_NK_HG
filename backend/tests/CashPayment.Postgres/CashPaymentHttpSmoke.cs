@@ -40,6 +40,13 @@ internal static class CashPaymentHttpSmoke
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Services.AddControllers().AddApplicationPart(typeof(CashPaymentsController).Assembly);
         builder.Services.AddScoped(_ => new DentalDbContext(options));
+        builder.Services.AddScoped<Dental.Application.Features.Staff.Services.StaffService>();
+        builder.Services.AddScoped<Dental.Application.Features.Staff.Validators.StaffQueryRequestValidator>();
+        builder.Services.AddScoped<Dental.Application.Features.Staff.Validators.CreateStaffRequestValidator>();
+        builder.Services.AddScoped<Dental.Application.Features.Staff.Validators.UpdateStaffRequestValidator>();
+        builder.Services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
+        builder.Services.AddScoped<IClinicPrintSettingsRepository, ClinicPrintSettingsRepository>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_MST.Services.ClinicPrintSettingsService>();
         builder.Services.AddScoped<IDoctorSignatureRepository, DoctorSignatureRepository>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_AUTH.DoctorSignatureService>();
         builder.Services.AddScoped<IPrescriptionRepository, PrescriptionRepository>();
@@ -174,7 +181,9 @@ internal static class CashPaymentHttpSmoke
             void Authenticate(string role) => AuthenticateActor(role, cashierId);
             if (prescriptionOnly)
             {
-                if (Environment.GetCommandLineArgs().Contains("--prescription-replacement-only"))
+                if (Environment.GetCommandLineArgs().Contains("--prescription-print-only"))
+                    await PrescriptionPrintHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);
+                else if (Environment.GetCommandLineArgs().Contains("--prescription-replacement-only"))
                     await PrescriptionReplacementHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);
                 else if (Environment.GetCommandLineArgs().Contains("--doctor-signature-only"))
                     await DoctorSignatureHttpSmoke.RunAsync(client, options, AuthenticateActor, check);

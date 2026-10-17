@@ -9,4 +9,5 @@ public sealed record StaffAccountResponse(
     string? Gender,
     string RoleCode,
     string RoleName,
-    bool IsActive);
+    bool IsActive,
+    string? AcademicTitle = null);

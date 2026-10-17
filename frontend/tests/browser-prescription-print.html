@@ -1,0 +1,19 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>UI test — prescription A5</title><style>body{font:16px/1.5 Arial,sans-serif;padding:1rem}button{padding:.6rem;margin:.4rem}</style></head><body>
+<!-- Synthetic UI-only fixture. Vite /tests/browser-prescription-print.html. No clinic API calls. -->
+<h1>KIỂM THỬ UI — in đơn A5</h1><p>Dữ liệu tổng hợp, không phải chỉ định điều trị và không kết nối phòng khám.</p>
+<button id="signature-v2">Đổi ảnh chữ ký kiểm thử sang phiên bản 2</button><p id="fixture-status">Ảnh hiện tại: 1. Chưa mở hộp thoại in kiểm thử.</p><div id="app"></div>
+<script type="module">
+import { createApp } from 'vue';import { createPinia } from 'pinia';
+import PrescriptionPrint from '/src/components/PrescriptionPrint.vue';
+import { useAuthStore } from '/src/stores/auth.ts';import { apiClient } from '/src/services/api.ts';
+import { printFixture,signaturePng2 } from '/tests/prescriptionPrintFixture.mjs';
+let data=printFixture(),calls=0;
+document.querySelector('#signature-v2').addEventListener('click',()=>{data={...data,signatureVersion:2,signaturePngBase64:signaturePng2};document.querySelector('#fixture-status').textContent='Ảnh hiện tại: 2. Lần chuẩn bị tiếp theo phải lấy ảnh này.';});
+apiClient.defaults.adapter=async config=>{
+ if(config.method!=='post'||config.url!=='/visits/7/prescription/9/print')throw Error('Unexpected synthetic request');calls++;
+ return{data:structuredClone(data),status:200,statusText:'OK',headers:{},config};
+};
+// Browser dialogs are not physical printing. Production component still calls native window.print().
+window.print=()=>{document.querySelector('#fixture-status').textContent='Đã gọi in kiểm thử; lần chuẩn bị: '+calls+'; ảnh hiện tại: '+data.signatureVersion;window.dispatchEvent(new Event('afterprint'));};
+const app=createApp(PrescriptionPrint,{visitId:7,prescriptionId:9,prescriptionVersion:1,blocked:false}),pinia=createPinia();app.use(pinia);useAuthStore(pinia).user={userId:3,fullName:'Nha sĩ tổng hợp',roleCode:'DENTIST',roleName:'Nha sĩ'};app.mount('#app');
+</script></body></html>

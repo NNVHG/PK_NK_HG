@@ -8,4 +8,5 @@ public sealed record CreateStaffRequest(
     string RoleCode,
     string? Email,
     DateOnly? DateOfBirth,
-    string? Gender);
+    string? Gender,
+    string? AcademicTitle = null);

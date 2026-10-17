@@ -12,6 +12,8 @@ public sealed class Prescription
     public bool IsCancelled { get; set; }
     public DateTime? DispensedAt { get; set; }
     public int? DispensedBy { get; set; }
+    public string? ReceiverName { get; set; }
+    public string? ReceiverPhone { get; set; }
     public int? AllergyRecordId { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }

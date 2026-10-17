@@ -8,6 +8,7 @@ public sealed class UpdateStaffRequestValidator : AbstractValidator<UpdateStaffR
 {
     public UpdateStaffRequestValidator()
     {
+        RuleFor(x => x.AcademicTitle).MaximumLength(100).Must(v => v is null || !v.Any(char.IsControl));
         RuleFor(x => x.FullName)
             .Cascade(CascadeMode.Stop)
             .NotEmpty().WithMessage("Họ tên không được để trống.")
