@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><title>UI test — prescription replacement</title></head><body>
+<!-- Synthetic UI fixture only. Run Vite locally, visit /tests/browser-prescription-lifecycle.html.
+     Real HTTP/RBAC/transactions are checked separately by PrescriptionReplacementHttpSmoke on isolated PG. -->
+<p>KIỂM THỬ UI — dữ liệu tổng hợp, không kết nối phòng khám</p><div id="app"></div>
+<script type="module">
+import { createApp } from 'vue';
+import { createPinia } from 'pinia';
+import { createRouter, createMemoryHistory } from 'vue-router';
+import PrescriptionView from '/src/views/PrescriptionView.vue';
+import { useAuthStore } from '/src/stores/auth.ts';
+import { apiClient } from '/src/services/api.ts';
+const medicine={id:1,version:1,code:'TEST-MED',name:'Thuốc tổng hợp kiểm thử',activeIngredient:null,strength:null,unit:'Đơn vị',unitPrice:'500',defaultUsageInstruction:null};
+const line={id:1,medicineId:1,medicineVersion:1,medicineCode:medicine.code,medicineName:medicine.name,activeIngredient:null,strength:null,unit:medicine.unit,unitPrice:'500',quantity:2,totalPrice:'1000',usageInstructions:'Nội dung tổng hợp kiểm thử',treatmentDays:null,allergyOverrideReason:null,medicineActive:true};
+let counter=1,current={id:9,visitId:7,doctorId:3,invoiceId:8,prescriptionCode:'RX-20261017-0001',diagnosis:'Chẩn đoán tổng hợp kiểm thử',doctorAdvice:null,revisitDate:null,isCancelled:false,dispensedAt:null,createdAt:'2026-10-17T12:00:00Z',updatedAt:null,version:1,items:[line]};
+const orders=[current];
+const result=data=>({data:structuredClone(data),status:200,statusText:'OK',headers:{},config:{}});
+apiClient.defaults.adapter=async config=>{
+ const path=config.url,method=config.method,body=typeof config.data==='string'?JSON.parse(config.data):config.data;
+ if(method==='get'&&path==='/visits/7/prescription')return result({visitId:7,patientId:12,dentistId:3,visitStatus:'InProgress',visitLocked:false,visitDiagnosis:'Chẩn đoán tổng hợp kiểm thử',canEdit:true,canCancel:!!current,invoiceId:8,invoiceCode:'INV-TEST',invoiceStatus:'Draft',allergyRecordId:null,allergies:[],prescription:current});
+ if(method==='get'&&path.endsWith('/history'))return result({items:[...orders].reverse(),page:1,pageSize:10,totalPages:1,totalCount:orders.length,hasNextPage:false,hasPreviousPage:false});
+ if(method==='post'&&path.endsWith('/cancel')){
+  if(!current||!path.includes('/'+current.id+'/cancel')||body.expectedVersion!==current.version)throw Error('Synthetic conflict');
+  const old=current;old.isCancelled=true;old.version++;old.updatedAt='2026-10-17T12:01:00Z';current=null;
+  return result({prescriptionId:old.id,visitId:7,version:old.version,invoiceId:8,invoiceTotal:'10000'});
+ }
+ if(method==='get'&&path.endsWith('/medicines'))return result({items:[medicine],page:1,pageSize:20,totalCount:1,totalPages:1,hasNextPage:false});
+ if(method==='post'&&path.endsWith('/preview'))return result({token:'a'.repeat(64),allergyWarnings:[],duplicateIngredients:[],medicineTotal:String(body.items.reduce((s,l)=>s+l.quantity*500,0)),servicesTotal:'10000',discountAmount:'0',finalAmount:String(10000+body.items.reduce((s,l)=>s+l.quantity*500,0))});
+ if(method==='post'&&path==='/visits/7/prescription'){
+  if(current||body.expectedVersion!==0)throw Error('Synthetic create conflict');counter++;
+  current={...orders[0],id:8+counter,prescriptionCode:'RX-20261017-'+String(counter).padStart(4,'0'),version:1,isCancelled:false,updatedAt:null,diagnosis:body.diagnosis,doctorAdvice:body.doctorAdvice,revisitDate:body.revisitDate,items:body.items.map((l,i)=>({...line,...l,id:counter*10+i,totalPrice:String(l.quantity*500)}))};orders.push(current);return result(current);
+ }
+ throw Error('Unexpected synthetic UI request');
+};
+const app=createApp(PrescriptionView),pinia=createPinia();app.use(pinia);
+useAuthStore(pinia).user={userId:3,fullName:'Nha sĩ tổng hợp',roleCode:'DENTIST',roleName:'Nha sĩ'};
+const router=createRouter({history:createMemoryHistory(),routes:[{path:'/clinical/visits/:visitId/prescription',component:PrescriptionView}]});app.use(router);
+await router.push('/clinical/visits/7/prescription');await router.isReady();app.mount('#app');
+</script></body></html>

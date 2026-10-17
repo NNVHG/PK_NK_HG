@@ -35,7 +35,7 @@ public sealed class InvoiceRepository(DentalDbContext db) : IInvoiceRepository
         var active = await db.Invoices.Where(i => i.VisitId == visitId && i.Status != InvoiceStatus.Cancelled).ToListAsync(ct);
         if (active.Any(i => i.Status != InvoiceStatus.Draft))
             return Result.Failure(new Error("BIL_013", "Chỉ tự hủy hóa đơn Draft chưa thu cùng ca khám; tải lại để đối chiếu."));
-        var prescription = await db.Prescriptions.SingleOrDefaultAsync(p => p.VisitId == visitId, ct);
+        var prescription = await db.Prescriptions.SingleOrDefaultAsync(p => p.VisitId == visitId && !p.IsCancelled, ct);
         if (prescription?.DispensedAt is not null)
             return Result.Failure(new Error("RX_002", "Đơn thuốc đã cấp phát; không thể hủy ca thông thường."));
         if (prescription is not null && !prescription.IsCancelled)

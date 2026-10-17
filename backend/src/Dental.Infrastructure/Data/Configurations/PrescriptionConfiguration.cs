@@ -8,7 +8,10 @@ public sealed class PrescriptionConfiguration : IEntityTypeConfiguration<Prescri
     {
         b.ToTable("Prescriptions"); b.HasKey(x => x.Id);
         b.Property(x => x.PrescriptionCode).HasMaxLength(50).IsRequired(); b.HasIndex(x => x.PrescriptionCode).IsUnique();
-        b.HasIndex(x => x.VisitId).IsUnique(); b.Property(x => x.Diagnosis).HasMaxLength(500).IsRequired();
+        // DL-296: keep cancelled history; enforce one effective prescription at the database boundary.
+        b.HasIndex(x => x.VisitId).IsUnique().HasFilter("\"IsCancelled\" = false");
+        b.HasIndex(x => new { x.VisitId, x.Id });
+        b.Property(x => x.Diagnosis).HasMaxLength(500).IsRequired();
         b.Property(x => x.DoctorAdvice).HasMaxLength(1000); b.Property(x => x.Version).IsConcurrencyToken();
         b.HasOne(x => x.Visit).WithMany().HasForeignKey(x => x.VisitId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.Invoice).WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
