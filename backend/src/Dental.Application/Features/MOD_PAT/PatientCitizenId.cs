@@ -14,7 +14,7 @@ public sealed class CitizenIdRequestValidator : AbstractValidator<CitizenIdReque
 {
     public CitizenIdRequestValidator()
     {
-        RuleFor(x => x.CitizenId).NotEmpty().Matches("^[0-9]{12}$");
+        RuleFor(x => x.CitizenId).NotEmpty().Length(12).Matches("^[0-9]{12}$");
         RuleFor(x => x.ExpectedVersion).GreaterThanOrEqualTo(0);
     }
 }

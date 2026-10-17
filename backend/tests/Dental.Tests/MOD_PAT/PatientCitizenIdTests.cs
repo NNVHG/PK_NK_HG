@@ -24,7 +24,7 @@ public sealed class PatientCitizenIdTests
     }
     [Theory]
     [InlineData("")] [InlineData("123")] [InlineData("987654321098 ")] [InlineData("１２３４５６７８９０１２")]
-    [InlineData("9876543210987")] [InlineData("98765432109a")] [InlineData(null)]
+    [InlineData("9876543210987")] [InlineData("98765432109a")] [InlineData("987654321098\n")] [InlineData(null)]
     public void InvalidCitizenIdRejected(string? value) => Assert.False(new CitizenIdRequestValidator().Validate(new CitizenIdRequest(value!, 0)).IsValid);
     [Fact]
     public void TwelveDigitsWithLeadingZeroAndVersionZeroAccepted()

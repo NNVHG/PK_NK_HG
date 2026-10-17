@@ -34,7 +34,7 @@ async function load() {
 }
 async function save() {
  if (disposed || !canWrite.value || busy.value || needsReview.value || !confirmed.value || !status.value) return;
- if (!/^[0-9]{12}$/.test(citizenId.value)) { error.value = 'CCCD cần đúng 12 chữ số.'; confirmed.value = false; return; }
+ if (citizenId.value.length !== 12 || !/^[0-9]{12}$/.test(citizenId.value)) { error.value = 'CCCD cần đúng 12 chữ số.'; confirmed.value = false; return; }
  const ticket = generation, actor = identity(), nextVersion = status.value.version + 1, body = citizenId.value; busy.value = true; error.value = ''; message.value = '';
  citizenId.value = ''; confirmed.value = false;
  try { const data = await patientCitizenIdService.save(props.patientId, body, status.value.version); if (!alive(ticket, actor)) return;
