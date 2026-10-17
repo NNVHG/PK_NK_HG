@@ -679,6 +679,18 @@ namespace Dental.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<string>("CitizenIdHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("CitizenIdMasked")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("CitizenIdVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamptz");
 
@@ -722,6 +734,9 @@ namespace Dental.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("PatientId");
+
+                    b.HasIndex("CitizenIdHash")
+                        .IsUnique();
 
                     b.HasIndex("FullName")
                         .HasDatabaseName("IX_Patients_FullName");

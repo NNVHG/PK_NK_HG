@@ -45,6 +45,7 @@
           <div><dt>Email</dt><dd>{{ patient.email || 'Chưa cập nhật' }}</dd></div>
           <div class="wide"><dt>Địa chỉ</dt><dd>{{ patient.address || 'Chưa cập nhật' }}</dd></div>
         </dl>
+        <PatientCitizenId :patient-id="patient.patientId" />
       </section>
 
       <section v-else-if="activeTab === 'timeline'" class="panel content-panel">
@@ -236,6 +237,7 @@ import axios from 'axios';
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import SafetyAlertBanner from '@/components/SafetyAlertBanner.vue';
+import PatientCitizenId from '@/components/PatientCitizenId.vue';
 import {
   patientsService,
   type MedicalHistoryRecord,
