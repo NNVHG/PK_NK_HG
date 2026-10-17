@@ -8,7 +8,7 @@ public static class InvoiceServiceSnapshot
 {
     public const decimal MaximumAmount = 999999999999999999m;
 
-    public static Result<IReadOnlyList<InvoiceItem>> Create(IEnumerable<VisitService> rows)
+    public static Result<IReadOnlyList<InvoiceItem>> Create(IEnumerable<VisitService> rows, IEnumerable<PrescriptionItem>? medicines = null)
     {
         var items = new List<InvoiceItem>();
         decimal amount = 0;
@@ -22,6 +22,18 @@ public static class InvoiceServiceSnapshot
             items.Add(new InvoiceItem { SourceVisitServiceId = row.Id, Code = row.ServiceCode,
                 Name = row.ServiceName, ToothNumber = row.ToothNumber, Surface = row.Surface,
                 Quantity = row.Quantity, UnitPrice = row.UnitPrice, TotalAmount = total });
+            amount += total;
+        }
+        var medicineIds = new HashSet<int>();
+        foreach (var row in medicines ?? [])
+        {
+            if (row.Id <= 0 || !medicineIds.Add(row.Id) || row.Quantity <= 0 || row.UnitPrice < 0 || decimal.Truncate(row.UnitPrice) != row.UnitPrice ||
+                string.IsNullOrWhiteSpace(row.MedicineCode) || string.IsNullOrWhiteSpace(row.MedicineName) ||
+                row.UnitPrice > (MaximumAmount - amount) / row.Quantity)
+                return Result<IReadOnlyList<InvoiceItem>>.Failure(new Error("BIL_004", "Snapshot tiền thuốc không hợp lệ hoặc vượt giới hạn lưu trữ."));
+            var total = row.UnitPrice * row.Quantity;
+            items.Add(new InvoiceItem { SourcePrescriptionItemId = row.Id, ItemType = "Medicine", Code = row.MedicineCode,
+                Name = row.MedicineName, Quantity = row.Quantity, UnitPrice = row.UnitPrice, TotalAmount = total });
             amount += total;
         }
         return Result<IReadOnlyList<InvoiceItem>>.Success(items);

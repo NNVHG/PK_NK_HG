@@ -35,6 +35,16 @@ public sealed class InvoiceRepository(DentalDbContext db) : IInvoiceRepository
         var active = await db.Invoices.Where(i => i.VisitId == visitId && i.Status != InvoiceStatus.Cancelled).ToListAsync(ct);
         if (active.Any(i => i.Status != InvoiceStatus.Draft))
             return Result.Failure(new Error("BIL_013", "Chỉ tự hủy hóa đơn Draft chưa thu cùng ca khám; tải lại để đối chiếu."));
+        var prescription = await db.Prescriptions.SingleOrDefaultAsync(p => p.VisitId == visitId, ct);
+        if (prescription?.DispensedAt is not null)
+            return Result.Failure(new Error("RX_002", "Đơn thuốc đã cấp phát; không thể hủy ca thông thường."));
+        if (prescription is not null && !prescription.IsCancelled)
+        {
+            prescription.IsCancelled = true; prescription.Version++; prescription.UpdatedAt = DateTime.UtcNow;
+            db.AuditLogs.Add(new AuditLog { UserId = userId, Action = "MOD_RX_PRESCRIPTION_CANCELLED_WITH_VISIT",
+                EntityType = "Prescription", EntityId = prescription.Id, IpAddress = ip, CreatedAt = DateTime.UtcNow,
+                Detail = JsonSerializer.Serialize(new { visitId, prescription.Version, trigger = "visit_cancelled" }) });
+        }
         foreach (var invoice in active)
         {
             invoice.Status = InvoiceStatus.Cancelled;
@@ -104,7 +114,8 @@ public sealed class InvoiceRepository(DentalDbContext db) : IInvoiceRepository
             invoice ??= new Invoice { VisitId = visitId, CreatedByUserId = userId, CreatedAt = DateTime.UtcNow, Status = InvoiceStatus.Draft };
             var rows = await db.VisitServices.AsNoTracking().Where(x => x.VisitId == visitId).ToListAsync(ct);
             var oldItems = invoice.Items.ToList();
-            var synced = InvoiceDraftSynchronizer.Apply(invoice, rows);
+            var prescription = await db.Prescriptions.Include(p => p.Items).SingleOrDefaultAsync(p => p.VisitId == visitId && !p.IsCancelled, ct);
+            var synced = InvoiceDraftSynchronizer.Apply(invoice, rows, prescription?.Items);
             if (synced.IsFailure) return Fail(synced.Error);
             if (!created && synced.Value) db.InvoiceItems.RemoveRange(oldItems);
             if (created)
@@ -116,6 +127,7 @@ public sealed class InvoiceRepository(DentalDbContext db) : IInvoiceRepository
                 invoice.InvoiceCode = $"INV-{date:yyyyMMdd}-{counter.LastNumber:D4}";
                 db.Invoices.Add(invoice);
             }
+            if (prescription is not null) prescription.Invoice = invoice;
             // Keep the same identity/code when the initial Draft is finalized (DL-134, DL-144).
             if (completingVisit is not null || finalizingCorrection) invoice.Status = InvoiceStatus.PendingPayment;
             if (finalizingCorrection)

@@ -34,12 +34,18 @@ public sealed class DentalDbContext : DbContext
     public DbSet<NotificationLog> NotificationLogs => Set<NotificationLog>();
     public DbSet<QueueEntry> QueueEntries => Set<QueueEntry>();
     public DbSet<QueueStatusHistory> QueueStatusHistories => Set<QueueStatusHistory>();
+    public DbSet<Prescription> Prescriptions => Set<Prescription>();
+    public DbSet<PrescriptionItem> PrescriptionItems => Set<PrescriptionItem>();
+    public DbSet<PrescriptionNumberCounter> PrescriptionNumberCounters => Set<PrescriptionNumberCounter>();
     public DbSet<Medicine> Medicines => Set<Medicine>();
     public DbSet<DentalDiagnosis> DentalDiagnoses => Set<DentalDiagnosis>();
     public DbSet<PostTreatmentNote> PostTreatmentNotes => Set<PostTreatmentNote>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.ApplyConfiguration(new PrescriptionConfiguration());
+        modelBuilder.ApplyConfiguration(new PrescriptionItemConfiguration());
+        modelBuilder.ApplyConfiguration(new PrescriptionNumberCounterConfiguration());
         modelBuilder.ApplyConfiguration(new MedicineConfiguration());
         modelBuilder.ApplyConfiguration(new DentalDiagnosisConfiguration());
         modelBuilder.ApplyConfiguration(new PostTreatmentNoteConfiguration());
@@ -81,6 +87,7 @@ public sealed class DentalDbContext : DbContext
     /// </summary>
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
+        GuardPrescriptionImmutability();
         GuardAuditLogImmutability();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
@@ -89,8 +96,34 @@ public sealed class DentalDbContext : DbContext
         bool acceptAllChangesOnSuccess,
         CancellationToken cancellationToken = default)
     {
+        GuardPrescriptionImmutability();
         GuardAuditLogImmutability();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void GuardPrescriptionImmutability()
+    {
+        var parents = ChangeTracker.Entries<Prescription>().Where(e => e.State is EntityState.Modified or EntityState.Deleted).ToArray();
+        var protectedIds = new HashSet<int>();
+        foreach (var entry in parents)
+        {
+            if (entry.State == EntityState.Deleted || entry.Property(p => p.IsCancelled).OriginalValue ||
+                entry.Property(p => p.DispensedAt).OriginalValue is not null)
+                throw new InvalidOperationException("Prescription đã hủy/cấp phát là bất biến; không xóa vật lý đơn thuốc.");
+            var initialDispense = entry.Entity.DispensedAt is not null &&
+                entry.Properties.All(p => !p.IsModified || p.Metadata.Name is nameof(Prescription.DispensedAt) or nameof(Prescription.DispensedBy) or nameof(Prescription.Version) or nameof(Prescription.UpdatedAt));
+            if (!initialDispense) protectedIds.Add(entry.Entity.Id);
+        }
+        foreach (var entry in ChangeTracker.Entries<PrescriptionItem>().Where(e => e.State is EntityState.Modified or EntityState.Deleted or EntityState.Added))
+        {
+            var id = entry.State == EntityState.Added ? entry.Entity.PrescriptionId : entry.Property(p => p.PrescriptionId).OriginalValue;
+            if (id > 0) protectedIds.Add(id);
+        }
+        if (protectedIds.Count > 0 && Prescriptions.AsNoTracking().Any(p => protectedIds.Contains(p.Id) &&
+            (p.IsCancelled || p.DispensedAt != null ||
+             Invoices.Any(i => i.VisitId == p.VisitId && (i.PaidAmount != 0 || i.Status == Dental.Domain.Enums.InvoiceStatus.Paid || i.Status == Dental.Domain.Enums.InvoiceStatus.PartiallyPaid)) ||
+             PaymentTransactions.Any(t => t.Invoice.VisitId == p.VisitId))))
+            throw new InvalidOperationException("Nội dung đơn thuốc đã phát sinh thanh toán/cấp phát/hủy là bất biến.");
     }
 
     private void GuardAuditLogImmutability()

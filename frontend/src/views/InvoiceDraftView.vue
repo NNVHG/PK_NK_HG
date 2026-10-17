@@ -2,6 +2,7 @@
   <main class="invoice-page">
     <RouterLink to="/">← Trang chủ</RouterLink>
     <h1>Hóa đơn nháp · Lần khám #{{ visitId }}</h1>
+    <RouterLink v-if="!busy && !discountBusy" :to="`/clinical/visits/${visitId}/prescription`">Xem / kiểm tra đơn thuốc</RouterLink>
     <button :disabled="busy || discountBusy" @click="load">Tải lại hồ sơ</button>
     <p v-if="busy" role="status">Đang xử lý…</p>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
