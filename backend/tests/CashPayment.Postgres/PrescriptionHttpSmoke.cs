@@ -58,12 +58,15 @@ internal static class PrescriptionHttpSmoke
   }
   client.DefaultRequestHeaders.Authorization = null;
   using (var r = await client.GetAsync(path)) check(r.StatusCode == HttpStatusCode.Unauthorized, "Anonymous Rx401");
+  using (var r = await client.GetAsync(path + "/lookup-link")) check(r.StatusCode == HttpStatusCode.Unauthorized, "Anonymous cannot request clinic lookup link401");
   foreach (var actor in new[] { (RoleCodes.Admin, admin.UserId), (RoleCodes.Patient, owner.UserId), (RoleCodes.Assistant, assistant.UserId), (RoleCodes.Receptionist, cashierId) })
   { authenticate(actor.Item1, actor.Item2); using var r = await client.PostAsJsonAsync(path, request); check(r.StatusCode == HttpStatusCode.Forbidden, "Supporting role cannot sign/create Rx403"); }
   authenticate(RoleCodes.Dentist, other.UserId);
   using (var r = await client.GetAsync(path)) check(r.StatusCode == HttpStatusCode.NotFound, "Foreign dentist cannot read visit Rx404");
+  using (var r = await client.GetAsync(path + "/lookup-link")) check(r.StatusCode == HttpStatusCode.NotFound, "Foreign dentist cannot request lookup link404");
   using (var r = await client.PostAsJsonAsync(path + "/preview", request)) check(r.StatusCode == HttpStatusCode.NotFound, "Foreign dentist cannot preview404");
   authenticate(RoleCodes.Dentist, doctor.UserId);
+  using (var r = await client.GetAsync(path + "/lookup-link")) check(r.StatusCode == HttpStatusCode.NotFound, "Visit without saved prescription has no lookup link404");
   using (var r = await client.GetAsync(path + "/medicines")) { var list = (await r.Content.ReadFromJsonAsync<PagedResult<PrescriptionMedicine>>())!; check(list.TotalCount == 2 && list.Items.All(x => x.UnitPrice > 0), "Owned doctor selects only active priced medicines"); }
   using (var r = await client.GetAsync(path + "/medicines?includeInactive=true")) check(r.StatusCode == HttpStatusCode.BadRequest, "Clinical picker cannot request inactive medicines400");
   using (var r = await client.PostAsJsonAsync(path, request)) check(r.StatusCode == HttpStatusCode.BadRequest, "Save requires prior preview400");
@@ -77,6 +80,7 @@ internal static class PrescriptionHttpSmoke
   var confirmed = await Confirm(path, request); PrescriptionResponse saved;
   using (var r = await client.PostAsJsonAsync(path, confirmed)) { check(r.StatusCode == HttpStatusCode.Created, "Owned doctor creates Rx201"); saved = (await r.Content.ReadFromJsonAsync<PrescriptionResponse>())!; }
   check(saved.PrescriptionCode.StartsWith($"RX-{clock.Today:yyyyMMdd}-") && saved.Version == 1 && saved.InvoiceId > 0 && saved.Items.Single().UnitPrice == 500, "Daily code, price snapshot and shared invoice link persisted");
+  using (var r = await client.GetAsync(path + "/lookup-link")) { var link = (await r.Content.ReadFromJsonAsync<PrescriptionLookupLink>())!; check(r.StatusCode == HttpStatusCode.OK && r.Headers.CacheControl?.NoStore == true && link.PrescriptionCode == saved.PrescriptionCode && link.Version == 1 && link.RelativePath == "/portal/prescriptions/" + saved.PrescriptionCode, "Lookup link uses actual saved code/version, relative route and NoStore"); }
   var invoice = await db.Invoices.AsNoTracking().Include(i => i.Items).SingleAsync(i => i.Id == saved.InvoiceId);
   check(invoice.Status == InvoiceStatus.Draft && invoice.TotalAmount == 11000 && invoice.Items.Count == 2 && invoice.Items.Single(i => i.ItemType == "Medicine").SourcePrescriptionItemId == saved.Items.Single().Id, "Shared Draft contains treatment and linked medicine item snapshots");
   using (var r = await client.PostAsJsonAsync(path, confirmed)) check(r.StatusCode == HttpStatusCode.Conflict, "Lost create response replay cannot create second Rx409");
@@ -105,8 +109,9 @@ internal static class PrescriptionHttpSmoke
   var physicalAfter = await db.Visits.AsNoTracking().SingleAsync(v => v.VisitId == visitId); var bill = await db.Invoices.AsNoTracking().SingleAsync(i => i.Id == saved.InvoiceId);
   check(physicalAfter.Status == VisitStatuses.Completed && physicalAfter.IsLocked && physicalAfter.StartedAt == physical.StartedAt && physicalAfter.EndedAt == physical.EndedAt && bill.TotalAmount == 12000 && bill.DiscountAmount == 1000, "Pending edit changes medicine money only, not physical visit or service-only percentage discount");
   foreach (var actor in new[] { (RoleCodes.Admin, admin.UserId), (RoleCodes.Receptionist, cashierId), (RoleCodes.Assistant, assistant.UserId), (RoleCodes.Patient, owner.UserId) })
-  { authenticate(actor.Item1, actor.Item2); using var r = await client.GetAsync(path); var data = await r.Content.ReadFromJsonAsync<PrescriptionContext>(); check(r.StatusCode == HttpStatusCode.OK && !data!.CanEdit && data.Allergies.Count == 0, "Support/owner reads without prescriber controls or allergy lookup"); }
+  { authenticate(actor.Item1, actor.Item2); using var r = await client.GetAsync(path); var data = await r.Content.ReadFromJsonAsync<PrescriptionContext>(); check(r.StatusCode == HttpStatusCode.OK && !data!.CanEdit && data.Allergies.Count == 0, "Support/owner reads without prescriber controls or allergy lookup"); using var link = await client.GetAsync(path + "/lookup-link"); check(link.StatusCode == HttpStatusCode.OK, "Read-authorized staff/owner can obtain lookup link without write permission"); }
   authenticate(RoleCodes.Patient, stranger.UserId); using (var r = await client.GetAsync(path)) check(r.StatusCode == HttpStatusCode.NotFound, "Foreign patient IDOR404");
+  using (var r = await client.GetAsync(path + "/lookup-link")) check(r.StatusCode == HttpStatusCode.NotFound, "Foreign patient cannot request clinic lookup link404");
   authenticate(RoleCodes.Receptionist, cashierId); using (var r = await client.PostAsJsonAsync($"/api/invoices/{saved.InvoiceId}/payments", new CashPaymentRequest(1000, 1000, Guid.NewGuid()))) check(r.StatusCode == HttpStatusCode.OK, "Cashier receives partial payment on combined invoice200");
   authenticate(RoleCodes.Dentist, doctor.UserId); using (var r = await client.PostAsJsonAsync(path + "/preview", editAgain with { ExpectedVersion = 3 })) check(r.StatusCode == HttpStatusCode.Conflict, "Any payment blocks further Rx edits409");
   var guarded = false; await using (var guard = new DentalDbContext(options)) { var item = await guard.PrescriptionItems.SingleAsync(i => i.PrescriptionId == saved.Id); item.UsageInstructions = "Invalid direct mutation"; try { await guard.SaveChangesAsync(); } catch (InvalidOperationException) { guarded = true; } }
@@ -123,6 +128,7 @@ internal static class PrescriptionHttpSmoke
   var nextRx = await db.Prescriptions.AsNoTracking().SingleAsync(p => p.VisitId == nextId); check(await db.Invoices.AnyAsync(i => i.Id == nextRx.InvoiceId && i.TotalAmount == 13600), "Repeated order uses current price and shared new invoice");
   using (var r = await client.PutAsJsonAsync($"/api/queue/{next.QueueEntryId}/status", new { newStatus = 4, reason = "Synthetic clinical cancellation" })) check(r.StatusCode == HttpStatusCode.OK, "Clinical cancellation cancels Rx and Draft together");
   check(await db.Prescriptions.AnyAsync(p => p.Id == nextRx.Id && p.IsCancelled) && await db.Invoices.AnyAsync(i => i.Id == nextRx.InvoiceId && i.Status == InvoiceStatus.Cancelled), "Cancellation retains financial snapshots and canceled Rx");
+  using (var r = await client.GetAsync(nextPath + "/lookup-link")) check(r.StatusCode == HttpStatusCode.Conflict, "Cancelled prescription cannot issue lookup QR409");
   var third = await Started(); var thirdId = third.VisitId!.Value; var thirdPath = $"/api/visits/{thirdId}/prescription";
   var thirdRequest = request with { Items = [new(m.Id, 2, 2, "Synthetic third instructions")] };
   using (var r = await client.PostAsJsonAsync(thirdPath, await Confirm(thirdPath, thirdRequest))) check(r.StatusCode == HttpStatusCode.Created, "New independent order created for financial race");

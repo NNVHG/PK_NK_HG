@@ -32,3 +32,4 @@ public sealed record RepeatPrescriptionLine(int MedicineId, int Quantity, string
 public sealed record PrescriptionSnapshot(Visit Visit, Invoice? Invoice, Prescription? Prescription, bool HasReceiptHistory,
     int? AllergyRecordId, IReadOnlyList<MedicalHistoryItem> Allergies, IReadOnlyList<Medicine> Medicines, IReadOnlyList<VisitService> Services);
 public sealed record PrescriptionPlan(IReadOnlyList<PrescriptionItem> Items, PrescriptionPreview Preview);
+public sealed record PrescriptionLookupLink(string PrescriptionCode, int Version, string RelativePath);

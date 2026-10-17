@@ -8,6 +8,19 @@ using Dental.Domain.Constants;
 namespace Dental.Application.Features.MOD_RX.Services;
 public sealed class PrescriptionService(IPrescriptionRepository repository)
 {
+    public async Task<Result<PrescriptionLookupLink>> LookupLinkAsync(int visitId, int actorId, string? role, CancellationToken ct = default)
+    {
+        var result = await GetAsync(visitId, actorId, role, ct);
+        if (result.IsFailure) return Result<PrescriptionLookupLink>.Failure(result.Error);
+        var rx = result.Value!.Prescription;
+        if (rx is null) return Result<PrescriptionLookupLink>.Failure(Error.NotFound);
+        if (rx.IsCancelled || result.Value.VisitStatus == Dental.Domain.Constants.VisitStatuses.Cancelled)
+            return Result<PrescriptionLookupLink>.Failure(new Error("RX_002", "Đơn đã hủy, không phát hành mã tra cứu."));
+        if (!Dental.Application.Features.MOD_RX.PublicPrescriptionService.ValidCode(rx.PrescriptionCode))
+            return Result<PrescriptionLookupLink>.Failure(Error.Validation);
+        return Result<PrescriptionLookupLink>.Success(new(rx.PrescriptionCode, rx.Version,
+            "/portal/prescriptions/" + Uri.EscapeDataString(rx.PrescriptionCode)));
+    }
     public Task<Result<PrescriptionContext>> GetAsync(int visitId, int actorId, string? role, CancellationToken ct = default)
     {
         if (actorId <= 0 || role is not (RoleCodes.Admin or RoleCodes.Dentist or RoleCodes.Receptionist or RoleCodes.Assistant or RoleCodes.Patient))
