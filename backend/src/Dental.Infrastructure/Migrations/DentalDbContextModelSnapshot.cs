@@ -929,6 +929,10 @@ namespace Dental.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<string>("DispenseNote")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
                     b.Property<DateTime?>("DispensedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -952,6 +956,9 @@ namespace Dental.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
+
+                    b.Property<bool>("ReceivedByProxy")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("ReceiverName")
                         .HasMaxLength(100)
@@ -994,6 +1001,59 @@ namespace Dental.Infrastructure.Migrations
                     b.HasIndex("VisitId", "Id");
 
                     b.ToTable("Prescriptions", (string)null);
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.PrescriptionDispenseEvent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<bool>("ExpiryOverridden")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("PerformedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("PerformedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PrescriptionId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PrescriptionVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("ReceivedByProxy")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ReceiverName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ReceiverPhone")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PerformedBy");
+
+                    b.HasIndex("PrescriptionId", "PrescriptionVersion")
+                        .IsUnique();
+
+                    b.ToTable("PrescriptionDispenseEvents", (string)null);
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.PrescriptionItem", b =>
@@ -1871,6 +1931,21 @@ namespace Dental.Infrastructure.Migrations
                     b.Navigation("Invoice");
 
                     b.Navigation("Visit");
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.PrescriptionDispenseEvent", b =>
+                {
+                    b.HasOne("Dental.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("PerformedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.Prescription", null)
+                        .WithMany()
+                        .HasForeignKey("PrescriptionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.PrescriptionItem", b =>

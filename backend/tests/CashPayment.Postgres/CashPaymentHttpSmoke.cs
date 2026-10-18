@@ -50,6 +50,8 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddScoped<IDoctorSignatureRepository, DoctorSignatureRepository>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_AUTH.DoctorSignatureService>();
         builder.Services.AddScoped<IPrescriptionRepository, PrescriptionRepository>();
+        builder.Services.AddScoped<IPrescriptionHandoverRepository, PrescriptionHandoverRepository>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_RX.Services.PrescriptionHandoverService>();
         builder.Services.AddScoped<IPublicPrescriptionRepository, PublicPrescriptionRepository>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_RX.PublicPrescriptionService>();
         builder.Services.AddSingleton<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>(new Microsoft.AspNetCore.DataProtection.EphemeralDataProtectionProvider());
@@ -181,7 +183,9 @@ internal static class CashPaymentHttpSmoke
             void Authenticate(string role) => AuthenticateActor(role, cashierId);
             if (prescriptionOnly)
             {
-                if (Environment.GetCommandLineArgs().Contains("--prescription-print-only"))
+                if (Environment.GetCommandLineArgs().Contains("--prescription-handover-only"))
+                    await PrescriptionHandoverHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);
+                else if (Environment.GetCommandLineArgs().Contains("--prescription-print-only"))
                     await PrescriptionPrintHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);
                 else if (Environment.GetCommandLineArgs().Contains("--prescription-replacement-only"))
                     await PrescriptionReplacementHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);
