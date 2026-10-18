@@ -36,7 +36,7 @@ function fixture(role = 'DENTIST', initial = original, overrides = {}) {
         if (overrides.complete) return overrides.complete(id);
         current = { ...current, status: 'Completed', isLocked: true }; bill = { ...bill, status: 1 }; },
     } },
-    '@/components/InvoiceRefundPanel.vue': {}, '@/components/InvoiceCashPayment.vue': {}, '@/components/InvoiceBankTransfer.vue': {}, '@/components/InvoiceDiscountPanel.vue': {},
+    '@/components/InvoiceRefundPanel.vue': {}, '@/components/InvoiceRefundProposalPanel.vue': {}, '@/components/InvoiceCashPayment.vue': {}, '@/components/InvoiceBankTransfer.vue': {}, '@/components/InvoiceDiscountPanel.vue': {},
   };
   const module = { exports: {} };
   new Function('require', 'module', 'exports', compiled)(name => { if (!(name in imports)) throw new Error('Unexpected import ' + name); return imports[name]; }, module, module.exports);

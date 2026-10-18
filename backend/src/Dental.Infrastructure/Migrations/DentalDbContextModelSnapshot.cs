@@ -638,6 +638,108 @@ namespace Dental.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Dental.Domain.Entities.InvoiceRefundProposal", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CreatorId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DecisionNotes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("InvoiceId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ReasonCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("ReasonNotes")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("RefundId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("ReviewerId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Snapshot")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatorId");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("RequestId")
+                        .IsUnique();
+
+                    b.HasIndex("ReviewerId");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.ToTable("InvoiceRefundProposals", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_InvoiceRefundProposals_Status", "\"Status\" IN ('Pending','Approved','Rejected','Stale')");
+                        });
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.InvoiceRefundProposalItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("InvoiceItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ProposalId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvoiceItemId");
+
+                    b.HasIndex("ProposalId", "InvoiceItemId")
+                        .IsUnique();
+
+                    b.ToTable("InvoiceRefundProposalItems", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_InvoiceRefundProposalItems_Quantity", "\"Quantity\" > 0");
+                        });
+                });
+
             modelBuilder.Entity("Dental.Domain.Entities.MedicalHistoryItem", b =>
                 {
                     b.Property<int>("ItemId")
@@ -1993,6 +2095,51 @@ namespace Dental.Infrastructure.Migrations
                     b.Navigation("InvoiceRefund");
                 });
 
+            modelBuilder.Entity("Dental.Domain.Entities.InvoiceRefundProposal", b =>
+                {
+                    b.HasOne("Dental.Domain.Entities.User", "Creator")
+                        .WithMany()
+                        .HasForeignKey("CreatorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.Invoice", "Invoice")
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.User", "Reviewer")
+                        .WithMany()
+                        .HasForeignKey("ReviewerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Creator");
+
+                    b.Navigation("Invoice");
+
+                    b.Navigation("Reviewer");
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.InvoiceRefundProposalItem", b =>
+                {
+                    b.HasOne("Dental.Domain.Entities.InvoiceItem", "InvoiceItem")
+                        .WithMany()
+                        .HasForeignKey("InvoiceItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.InvoiceRefundProposal", "Proposal")
+                        .WithMany("Items")
+                        .HasForeignKey("ProposalId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("InvoiceItem");
+
+                    b.Navigation("Proposal");
+                });
+
             modelBuilder.Entity("Dental.Domain.Entities.MedicalHistoryItem", b =>
                 {
                     b.HasOne("Dental.Domain.Entities.MedicalHistoryRecord", "Record")
@@ -2415,6 +2562,11 @@ namespace Dental.Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.InvoiceRefund", b =>
+                {
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.InvoiceRefundProposal", b =>
                 {
                     b.Navigation("Items");
                 });

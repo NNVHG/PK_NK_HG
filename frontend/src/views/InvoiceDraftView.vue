@@ -62,6 +62,7 @@
       <InvoiceBankTransfer v-if="!discountBusy && (auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST') && [1, 2, 5].includes(invoice.status) && invoice.remainingAmount > 0"
         :invoice-id="invoice.id" @paid="onBankReceived" />
     </section>
+    <InvoiceRefundProposalPanel v-if="invoice && (auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST')" :invoice="invoice" @changed="load" />
     <InvoiceRefundPanel v-if="invoice && auth.role === 'ADMIN'" :invoice-id="invoice.id" :blocked="busy || discountBusy" @changed="load" />
     <section v-if="auth.role === 'ADMIN' && unlockHistory.length" aria-label="Lịch sử mở khóa">
       <h2>Lịch sử mở khóa</h2>
@@ -83,6 +84,7 @@ import { visitsService } from '@/services/visits';
 import { invoiceDraftApi } from '@/services/invoiceDraft';
 import type { VisitUnlockHistory } from '@/services/invoiceDraft';
 import InvoiceRefundPanel from '@/components/InvoiceRefundPanel.vue';
+import InvoiceRefundProposalPanel from '@/components/InvoiceRefundProposalPanel.vue';
 import InvoiceCashPayment from '@/components/InvoiceCashPayment.vue';
 import InvoiceBankTransfer from '@/components/InvoiceBankTransfer.vue';
 import InvoiceDiscountPanel from '@/components/InvoiceDiscountPanel.vue';

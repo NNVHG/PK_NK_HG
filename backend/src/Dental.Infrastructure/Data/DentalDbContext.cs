@@ -21,6 +21,8 @@ public sealed class DentalDbContext : DbContext
     public DbSet<VisitService> VisitServices => Set<VisitService>();
     public DbSet<InvoiceRefund> InvoiceRefunds => Set<InvoiceRefund>();
     public DbSet<InvoiceRefundItem> InvoiceRefundItems => Set<InvoiceRefundItem>();
+    public DbSet<InvoiceRefundProposal> InvoiceRefundProposals => Set<InvoiceRefundProposal>();
+    public DbSet<InvoiceRefundProposalItem> InvoiceRefundProposalItems => Set<InvoiceRefundProposalItem>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<DiscountPreset> DiscountPresets => Set<DiscountPreset>();
     public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
@@ -85,6 +87,8 @@ public sealed class DentalDbContext : DbContext
         modelBuilder.Entity<Invoice>().Property(x => x.RefundRevision).HasDefaultValue(0);
         modelBuilder.ApplyConfiguration(new InvoiceRefundConfiguration());
         modelBuilder.ApplyConfiguration(new InvoiceRefundItemConfiguration());
+        modelBuilder.ApplyConfiguration(new InvoiceRefundProposalConfiguration());
+        modelBuilder.ApplyConfiguration(new InvoiceRefundProposalItemConfiguration());
         modelBuilder.ApplyConfiguration(new DiscountPresetConfiguration());
         modelBuilder.ApplyConfiguration(new InvoiceItemConfiguration());
         modelBuilder.ApplyConfiguration(new InvoiceNumberCounterConfiguration());
@@ -106,6 +110,7 @@ public sealed class DentalDbContext : DbContext
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         GuardPrescriptionImmutability();
+        GuardRefundProposalScope();
         GuardAuditLogImmutability();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
@@ -115,6 +120,7 @@ public sealed class DentalDbContext : DbContext
         CancellationToken cancellationToken = default)
     {
         GuardPrescriptionImmutability();
+        GuardRefundProposalScope();
         GuardAuditLogImmutability();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
@@ -151,6 +157,24 @@ public sealed class DentalDbContext : DbContext
              Invoices.Any(i => i.VisitId == p.VisitId && (i.PaidAmount != 0 || i.Status == Dental.Domain.Enums.InvoiceStatus.Paid || i.Status == Dental.Domain.Enums.InvoiceStatus.PartiallyPaid || i.Status == Dental.Domain.Enums.InvoiceStatus.PartiallyRefunded || i.Status == Dental.Domain.Enums.InvoiceStatus.Refunded)) ||
              PaymentTransactions.Any(t => t.Invoice.VisitId == p.VisitId))))
             throw new InvalidOperationException("Nội dung đơn thuốc đã phát sinh thanh toán/cấp phát/hủy là bất biến.");
+    }
+
+    private void GuardRefundProposalScope()
+    {
+        var decisionFields = new HashSet<string>(StringComparer.Ordinal)
+        {
+            nameof(InvoiceRefundProposal.Status), nameof(InvoiceRefundProposal.ReviewerId),
+            nameof(InvoiceRefundProposal.DecidedAt), nameof(InvoiceRefundProposal.DecisionNotes),
+            nameof(InvoiceRefundProposal.RefundId)
+        };
+        foreach (var entry in ChangeTracker.Entries<InvoiceRefundProposal>())
+        {
+            if (entry.State == EntityState.Deleted || entry.State == EntityState.Modified &&
+                entry.Properties.Any(p => p.IsModified && !decisionFields.Contains(p.Metadata.Name)))
+                throw new InvalidOperationException("Phạm vi và lý do đề xuất hoàn tiền là bất biến; chỉ trạng thái quyết định được cập nhật.");
+        }
+        if (ChangeTracker.Entries<InvoiceRefundProposalItem>().Any(e => e.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Dòng và số lượng trong đề xuất hoàn tiền là bất biến.");
     }
 
     private void GuardAuditLogImmutability()

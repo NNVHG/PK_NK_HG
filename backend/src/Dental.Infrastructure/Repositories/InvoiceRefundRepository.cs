@@ -22,9 +22,7 @@ public sealed class InvoiceRefundRepository(DentalDbContext db,VietnamClock cloc
     private Task<bool> Admin(int actor,CancellationToken ct)=>db.Users.AnyAsync(u=>u.UserId==actor && u.IsActive && u.Role.RoleCode==RoleCodes.Admin,ct);
     private Task<Invoice?> Load(int id,CancellationToken ct)=>db.Invoices.Include(i=>i.Visit).Include(i=>i.Items)
         .Include(i=>i.Refunds).ThenInclude(r=>r.Items).AsSplitQuery().SingleOrDefaultAsync(i=>i.Id==id,ct);
-    private static string Snapshot(Invoice i)=>Hash(new{i.Id,i.RefundRevision,i.Status,i.TotalAmount,i.PaidAmount,i.DiscountAmount,i.DiscountType,i.DiscountValue,
-        items=i.Items.OrderBy(x=>x.Id).Select(x=>new{x.Id,x.Quantity,x.UnitPrice,x.ItemType,x.SourcePrescriptionItemId}),
-        returned=i.Refunds.OrderBy(x=>x.Revision).Select(x=>new{x.Id,x.Revision,items=x.Items.OrderBy(l=>l.InvoiceItemId).Select(l=>new{l.InvoiceItemId,l.Quantity})})});
+    private static string Snapshot(Invoice i)=>InvoiceRefundSnapshot.Create(i);
     private static string PreviewKey(string snapshot,IReadOnlyList<RefundSelection> items,string method)=>Hash(new{snapshot,items=items.OrderBy(x=>x.InvoiceItemId),method});
     private static string Payload(InvoiceRefundRequest r)=>Hash(new{r.Snapshot,items=r.Items.OrderBy(x=>x.InvoiceItemId),r.PaymentMethod,r.ExpectedPreview,r.RequestId,r.ReasonCode,notes=r.ReasonNotes.Trim(),r.Confirmed,r.LateApproval,r.ReserveConfirmed});
     private static RefundRecordDto Map(InvoiceRefund r)=>new(r.Id,r.Revision,r.RequestId,r.PaymentTransactionId,

@@ -55,7 +55,7 @@ public sealed class InvoiceDraftService(IInvoiceRepository invoices, IVisitRepos
         return Result<InvoiceResponse>.Success(new(invoice.Id, invoice.VisitId, invoice.InvoiceCode,
             (int)invoice.Status, invoice.TotalAmount, invoice.PaidAmount, invoice.FinalAmount - invoice.PaidAmount,
             invoice.CreatedAt, invoice.Items.OrderBy(x => x.Id).Select(x => new InvoiceItemResponse(x.ItemType,
-                x.Code, x.Name, x.ToothNumber, x.Surface, x.Quantity, x.UnitPrice, x.TotalAmount) { RefundedQuantity = invoice.Refunds.SelectMany(r => r.Items).Where(r => r.InvoiceItemId == x.Id).Sum(r => r.Quantity) }).ToArray())
+                x.Code, x.Name, x.ToothNumber, x.Surface, x.Quantity, x.UnitPrice, x.TotalAmount) { Id = x.Id, RefundedQuantity = invoice.Refunds.SelectMany(r => r.Items).Where(r => r.InvoiceItemId == x.Id).Sum(r => r.Quantity) }).ToArray())
             { DiscountAmount = invoice.DiscountAmount, DiscountType = invoice.DiscountType, DiscountValue = invoice.DiscountValue,
                 DiscountPresetId = invoice.DiscountPresetId, DiscountReason = invoice.DiscountReason });
     }

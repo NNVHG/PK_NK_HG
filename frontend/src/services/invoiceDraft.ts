@@ -1,7 +1,7 @@
 import { apiClient } from '@/services/api';
 
 export interface InvoiceItem {
-  itemType: string; code: string; name: string; toothNumber: number | null; surface: string | null;
+  id: number; itemType: string; code: string; name: string; toothNumber: number | null; surface: string | null;
   refundedQuantity?: number; quantity: number; unitPrice: number; totalAmount: number;
 }
 export interface InvoiceDraft {
