@@ -10,6 +10,7 @@ public sealed class DentalDbContext : DbContext
     public DentalDbContext(DbContextOptions<DentalDbContext> options) : base(options) { }
 
     public DbSet<StaffWorkspace> StaffWorkspaces => Set<StaffWorkspace>();
+    public DbSet<DentalImage> DentalImages => Set<DentalImage>();
     public DbSet<DentalChair> DentalChairs => Set<DentalChair>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<User> Users => Set<User>();
@@ -59,6 +60,7 @@ public sealed class DentalDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.ApplyConfiguration(new DentalImageConfiguration());
         modelBuilder.ApplyConfiguration(new PrescriptionConfiguration());
         modelBuilder.ApplyConfiguration(new PrescriptionDispenseEventConfiguration());
         modelBuilder.ApplyConfiguration(new DoctorSignatureConfiguration());

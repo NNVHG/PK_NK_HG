@@ -9,6 +9,9 @@ namespace Dental.Api.Policies;
 /// </summary>
 public static class Policies
 {
+    public const string DentalImageRead = "DentalImageRead";
+    public const string DentalImageUpload = "DentalImageUpload";
+    public const string DentalImageManage = "DentalImageManage";
     public const string PrescriptionHandover = "PrescriptionHandover";
     public const string PrescriptionWrite = "PrescriptionWrite";
     public const string DiagnosisCatalogView = "DiagnosisCatalogView";
@@ -45,6 +48,9 @@ public static class Policies
 
     public static void AddApplicationPolicies(this AuthorizationOptions opts)
     {
+        opts.AddPolicy(DentalImageRead, p => p.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Receptionist, RoleCodes.Patient));
+        opts.AddPolicy(DentalImageUpload, p => p.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant));
+        opts.AddPolicy(DentalImageManage, p => p.RequireRole(RoleCodes.Admin, RoleCodes.Dentist));
         opts.AddPolicy(DoctorSignatureManage, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist));
         opts.AddPolicy(PrescriptionHandover, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Receptionist, RoleCodes.Assistant));
         opts.AddPolicy(PrescriptionWrite, policy => policy.RequireRole(RoleCodes.Dentist));

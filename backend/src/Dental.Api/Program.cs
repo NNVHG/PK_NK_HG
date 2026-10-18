@@ -33,6 +33,9 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddScoped<Dental.Application.Features.MOD_IMG.IDentalImageRepository, DentalImageRepository>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_IMG.DentalImageService>();
+builder.Services.AddSingleton<Dental.Application.Features.MOD_IMG.IDentalImageStorage>(new DentalImageStorage(builder.Environment.ContentRootPath));
 builder.Services.AddScoped<IPrescriptionRepository, PrescriptionRepository>();
 builder.Services.AddScoped<IPrescriptionHandoverRepository, PrescriptionHandoverRepository>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_RX.Services.PrescriptionHandoverService>();
@@ -230,6 +233,7 @@ builder.Services.AddAuthorization(opts => opts.AddApplicationPolicies());
 // [CẦN XÁC NHẬN] Ngưỡng mặc định là 10 lần/phút cho đăng nhập và 5 lần/phút cho đăng ký.
 builder.Services.AddRateLimiter(options => AuthRateLimitPolicies.Configure(options, builder.Configuration));
 builder.Services.AddRateLimiter(PublicPrescriptionRateLimits.Configure);
+builder.Services.AddRateLimiter(DentalImageRateLimits.Configure);
 
 // ===== 8. CORS (chỉ cho phép frontend dev) =====
 builder.Services.AddCors(opts =>

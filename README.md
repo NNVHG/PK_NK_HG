@@ -539,3 +539,13 @@ Adapter dùng [Twilio Messages REST API](https://www.twilio.com/docs/messaging/a
 
 Migration 20261018184345_AddPasswordRecoveryTokenVersion thêm Users.TokenVersion; cần áp migration trước khi chạy bản mới. HTTP/PostgreSQL checks dùng mode --password-recovery-only trong harness backend/tests/CashPayment.Postgres với SMS test double chỉ ở tests. Fixture UI tổng hợp: frontend/tests/browser-password-recovery.html, không kết nối tài khoản thật.
 Migration tiếp nối 20261018185811_ProtectRecoveredCredentials chỉ cập nhật metadata concurrency trong model/snapshot, không đổi schema. Giữ nguyên migration thêm cột đã chạy trên DB kiểm thử.
+
+### Tải và gán ảnh hồ sơ (F_IMG_02, demo_11)
+
+Mở hồ sơ bệnh nhân → **Ảnh hồ sơ** → chọn JPG/PNG/WebP, phân loại, răng FDI tùy chọn và ca có thể gắn; hoặc lưu riêng theo bệnh nhân. Admin/Nha sĩ/Phụ tá được tải lên. Admin hoặc nha sĩ phụ trách có thể gán ảnh đang độc lập vào ca; liên kết đã gán được giữ cố định. Q-327a chỉ cho gắn vào ca đang mở/đính chính hợp lệ, chưa có thanh toán.
+
+Backend kiểm tra MIME/đuôi/header, giới hạn 10MB/tệp, 4096px mỗi chiều, 20 ảnh/ca, 3 ảnh/răng và 100MB/ca. Tệp nằm ngoài web root ở uploads/images/{patientId}/{UUID}.{ext}, cần sao lưu cùng CSDL; không có URL tĩnh công khai. Giới hạn 4 upload đồng thời để khống chế bộ nhớ. Audit và metadata cùng transaction; lưu CSDL lỗi thì dọn tệp vừa tạo.
+
+Migration 20261018192034_AddDentalImageAttachments tạo DentalImages. Mode kiểm thử --dental-images-only dùng DB/container riêng, dữ liệu tổng hợp. Danh sách metadata dành cho Admin/Nha sĩ/Lễ tân hoặc bệnh nhân sở hữu hồ sơ theo Q-247; quyền tải lên của Phụ tá không tự cấp quyền xem. Xem tệp/thu phóng thuộc lát cắt F_IMG_04 tiếp theo; chưa nghiệm thu trình duyệt/Gia UAT.
+
+Danh mục ảnh theo Q-274: Panorama, Periapical, Bitewing, Cephalometric, Intraoral; ghi chú tối đa500ký tự. Migration20261018193500_AddDentalImageNotes bổ sung Notes; enum lưu tên trong cột Category. Giữ nguyên migration đầu đã chạy ở DB kiểm thử.
