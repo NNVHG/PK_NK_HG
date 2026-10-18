@@ -1,0 +1,16 @@
+import { apiClient } from '@/services/api';
+import type { PagedResult } from '@/services/patients';
+export interface RxMedicine { id: number; version: number; code: string; name: string; activeIngredient: string | null; strength: string | null; unit: string; unitPrice: string; defaultUsageInstruction: string | null }
+export interface RxLine { id: number; medicineId: number; medicineVersion: number; medicineCode: string; medicineName: string; activeIngredient: string | null; strength: string | null; unit: string; quantity: number; unitPrice: string; totalPrice: string; usageInstructions: string; treatmentDays: number | null; allergyOverrideReason: string | null; medicineActive: boolean }
+export interface Prescription { id: number; visitId: number; doctorId: number; invoiceId: number | null; prescriptionCode: string; diagnosis: string; doctorAdvice: string | null; revisitDate: string | null; isCancelled: boolean; dispensedAt: string | null; createdAt: string; updatedAt: string | null; version: number; items: RxLine[] }
+export interface RxContext { visitId: number; patientId: number; dentistId: number | null; visitStatus: string; visitLocked: boolean; visitDiagnosis: string; canEdit: boolean; invoiceId: number | null; invoiceCode: string | null; invoiceStatus: string | null; allergyRecordId: number | null; allergies: { id: number; name: string; detail: string | null }[]; prescription: Prescription | null }
+export interface RxRequest { expectedVersion: number; diagnosis: string; items: { medicineId: number; medicineVersion: number; quantity: number; usageInstructions: string; treatmentDays: number | null; allergyConfirmed: boolean; allergyOverrideReason: string | null }[]; doctorAdvice: string | null; revisitDate: string | null; duplicateIngredientConfirmed: boolean; previewToken?: string }
+export interface RxPreview { token: string; allergyWarnings: { medicineId: number; allergyIds: number[]; allergyNames: string[] }[]; duplicateIngredients: string[]; medicineTotal: string; servicesTotal: string; discountAmount: string; finalAmount: string }
+export interface RxRepeat { sourcePrescriptionId: number; sourceCode: string; items: { medicineId: number; quantity: number; usageInstructions: string; treatmentDays: number | null; currentMedicine: RxMedicine | null }[] }
+export const prescriptionsService = {
+  async context(id: number): Promise<RxContext> { return (await apiClient.get<RxContext>(`/visits/${id}/prescription`)).data; },
+  async medicines(id: number, keyword = '', page = 1): Promise<PagedResult<RxMedicine>> { return (await apiClient.get<PagedResult<RxMedicine>>(`/visits/${id}/prescription/medicines`, { params: { keyword, page, pageSize: 20 } })).data; },
+  async latest(patientId: number, visitId: number): Promise<RxRepeat> { return (await apiClient.get<RxRepeat>(`/prescriptions/patient/${patientId}/latest`, { params: { targetVisitId: visitId } })).data; },
+  async preview(id: number, request: RxRequest): Promise<RxPreview> { return (await apiClient.post<RxPreview>(`/visits/${id}/prescription/preview`, request)).data; },
+  async save(id: number, creating: boolean, request: RxRequest): Promise<Prescription> { return creating ? (await apiClient.post<Prescription>(`/visits/${id}/prescription`, request)).data : (await apiClient.put<Prescription>(`/visits/${id}/prescription`, request)).data; }
+};

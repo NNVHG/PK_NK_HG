@@ -28,6 +28,7 @@ public sealed class InvoiceItem
     public int Id { get; set; }
     public int InvoiceId { get; set; }
     public int SourceVisitServiceId { get; set; }
+    public int? SourcePrescriptionItemId { get; set; }
     public string ItemType { get; set; } = "Service";
     public string Code { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;

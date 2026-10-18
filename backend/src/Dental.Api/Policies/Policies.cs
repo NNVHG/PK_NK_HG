@@ -9,6 +9,7 @@ namespace Dental.Api.Policies;
 /// </summary>
 public static class Policies
 {
+    public const string PrescriptionWrite = "PrescriptionWrite";
     public const string DiagnosisCatalogView = "DiagnosisCatalogView";
     public const string MedicineCatalogView = "MedicineCatalogView";
     public const string AdminOnly  = "AdminOnly";
@@ -41,6 +42,7 @@ public static class Policies
 
     public static void AddApplicationPolicies(this AuthorizationOptions opts)
     {
+        opts.AddPolicy(PrescriptionWrite, policy => policy.RequireRole(RoleCodes.Dentist));
         opts.AddPolicy(WorkspaceManage, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant));
         opts.AddPolicy(DiagnosisCatalogView, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist));
         opts.AddPolicy(MedicineCatalogView, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist));

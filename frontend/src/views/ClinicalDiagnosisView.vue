@@ -45,6 +45,7 @@
           </button>
           <template v-if="visit">
             <RouterLink v-if="!dirty && !busy" :to="`/clinical/visits/${visit.visitId}/fdi`">Mở sơ đồ và ghi tình trạng răng</RouterLink>
+            <RouterLink v-if="!dirty && !busy" :to="`/clinical/visits/${visit.visitId}/prescription`">Kê / xem đơn thuốc</RouterLink>
             <p>Trạng thái: {{ visitStatusLabel }}</p>
             <p v-if="visit.status === 'Correcting'">Đang đính chính ngoài ca khám. <RouterLink :to="`/clinical/visits/${visit.visitId}/invoice-draft`">Hoàn tất và khóa đính chính</RouterLink></p>
             <template v-if="auth.role === 'ADMIN' && [1, 6].includes(selected.status) && !visit.isLocked">

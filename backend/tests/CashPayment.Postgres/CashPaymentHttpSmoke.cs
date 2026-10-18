@@ -28,7 +28,7 @@ using Microsoft.IdentityModel.Tokens;
 internal static class CashPaymentHttpSmoke
 {
     public static async Task RunAsync(DbContextOptions<DentalDbContext> options, int cashierId, int patientId, Action<bool, string> check,
-        bool queueCallNextOnly = false, bool invoiceDiscountsOnly = false, bool serviceCatalogOnly = false, bool queueImagingOnly = false, bool queueCallingOnly = false, bool queueAbsenceOnly = false, bool queueCleanupOnly = false, bool chairCatalogOnly = false, bool staffWorkspacesOnly = false, bool queueLocationsOnly = false, bool visitCorrectionsOnly = false, bool physicalChairsOnly = false, bool visitCancellationOnly = false, bool postTreatmentNotesOnly = false, bool diagnosisCatalogOnly = false, bool revenueReportOnly = false, bool medicineCatalogOnly = false)
+        bool queueCallNextOnly = false, bool invoiceDiscountsOnly = false, bool serviceCatalogOnly = false, bool queueImagingOnly = false, bool queueCallingOnly = false, bool queueAbsenceOnly = false, bool queueCleanupOnly = false, bool chairCatalogOnly = false, bool staffWorkspacesOnly = false, bool queueLocationsOnly = false, bool visitCorrectionsOnly = false, bool physicalChairsOnly = false, bool visitCancellationOnly = false, bool postTreatmentNotesOnly = false, bool diagnosisCatalogOnly = false, bool revenueReportOnly = false, bool medicineCatalogOnly = false, bool prescriptionOnly = false)
     {
         // Dedicated test host validates ephemeral JWTs only. Never read clinic JWT keys/demo credentials.
         var signingKey = new SymmetricSecurityKey(RandomNumberGenerator.GetBytes(64));
@@ -40,6 +40,8 @@ internal static class CashPaymentHttpSmoke
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Services.AddControllers().AddApplicationPart(typeof(CashPaymentsController).Assembly);
         builder.Services.AddScoped(_ => new DentalDbContext(options));
+        builder.Services.AddScoped<IPrescriptionRepository, PrescriptionRepository>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_RX.Services.PrescriptionService>();
         builder.Services.AddScoped<IMedicineCatalogRepository, MedicineCatalogRepository>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_MST.Services.MedicineCatalogService>();
         builder.Services.AddScoped<IRevenueReportRepository, RevenueReportRepository>();
@@ -161,6 +163,11 @@ internal static class CashPaymentHttpSmoke
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", new JwtSecurityTokenHandler().WriteToken(token));
             }
             void Authenticate(string role) => AuthenticateActor(role, cashierId);
+            if (prescriptionOnly)
+            {
+                await PrescriptionHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);
+                return;
+            }
             if (medicineCatalogOnly)
             {
                 await MedicineCatalogHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
