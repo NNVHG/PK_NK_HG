@@ -28,6 +28,19 @@ async function ready(f) { await f.mount(); f.c.select(row); f.c.confirmed.value 
 test('desk loads selected date and scheduled filter', async () => {
   const f = fixture(); await f.mount(); assert.deepEqual(f.reads[0], [f.c.date.value, 1, 'Scheduled']); assert.deepEqual(f.c.rows.value, [row]);
 });
+test('desk presents same-dentist same-time appointments together and highlights an emergency pair', async () => {
+  const f = fixture();
+  f.c.rows.value = [
+    { ...row, appointmentId: 21, dentistId: 31, isEmergency: false },
+    { ...row, appointmentId: 22, dentistId: 31, isEmergency: true, emergencyReason: 'Synthetic reason' },
+    { ...row, appointmentId: 23, dentistId: 31, slotTime: '09:30:00', isEmergency: false }
+  ];
+  const groups = f.c.displayGroups.value;
+  assert.equal(groups.length, 2);
+  assert.deepEqual(groups[0].items.map(item => item.appointmentId), [21, 22]);
+  assert.equal(groups[0].isEmergency, true);
+  assert.equal(groups[1].isEmergency, false);
+});
 test('selecting and closing cancellation form never writes', async () => {
   const f = fixture(); await ready(f); f.c.close(); await f.c.cancel(); assert.equal(f.writes.length, 0); assert.equal(f.c.selected.value, null);
 });

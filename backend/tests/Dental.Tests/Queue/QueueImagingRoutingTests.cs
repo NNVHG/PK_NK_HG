@@ -21,7 +21,7 @@ public sealed class QueueImagingRoutingTests
     private readonly VietnamClock clock = new(new FixedTimeProvider(new DateTimeOffset(2026, 10, 16, 2, 0, 0, TimeSpan.Zero)));
     private readonly QueueEntry row;
     private QueueService Service() => new(queues, Substitute.For<IAppointmentRepository>(), Substitute.For<IPatientRepository>(),
-        Substitute.For<IVisitRepository>(), users, uow, audit, clock, Substitute.For<IInvoiceDraftGenerator>(), Dental.Tests.Common.TestVisitChairs.Create());
+        Substitute.For<IVisitRepository>(), Substitute.For<IInvoiceRepository>(), users, uow, audit, clock, Substitute.For<IInvoiceDraftGenerator>(), Dental.Tests.Common.TestVisitChairs.Create());
     public QueueImagingRoutingTests()
     {
         row = new() { QueueEntryId = 7, VisitId = 8, DentistId = 5, QueueDate = clock.Today, Status = QueueStatus.InConsultation,

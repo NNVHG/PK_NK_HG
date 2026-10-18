@@ -53,6 +53,7 @@ public sealed class DentalDbContext : DbContext
     public DbSet<PrescriptionItem> PrescriptionItems => Set<PrescriptionItem>();
     public DbSet<PrescriptionNumberCounter> PrescriptionNumberCounters => Set<PrescriptionNumberCounter>();
     public DbSet<Medicine> Medicines => Set<Medicine>();
+    public DbSet<MedicalSupply> MedicalSupplies => Set<MedicalSupply>();
     public DbSet<DentalDiagnosis> DentalDiagnoses => Set<DentalDiagnosis>();
     public DbSet<PostTreatmentNote> PostTreatmentNotes => Set<PostTreatmentNote>();
 
@@ -64,6 +65,7 @@ public sealed class DentalDbContext : DbContext
         modelBuilder.ApplyConfiguration(new PrescriptionItemConfiguration());
         modelBuilder.ApplyConfiguration(new PrescriptionNumberCounterConfiguration());
         modelBuilder.ApplyConfiguration(new MedicineConfiguration());
+        modelBuilder.ApplyConfiguration(new MedicalSupplyConfiguration());
         modelBuilder.ApplyConfiguration(new DentalDiagnosisConfiguration());
         modelBuilder.ApplyConfiguration(new PostTreatmentNoteConfiguration());
         modelBuilder.ApplyConfiguration(new PaymentTransactionConfiguration());

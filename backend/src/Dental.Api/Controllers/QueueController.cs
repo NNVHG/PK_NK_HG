@@ -18,6 +18,7 @@ public sealed class QueueController : ControllerBase
     private readonly QueueService _queueService;
     private readonly ICurrentUser _currentUser;
     private readonly CheckInRequestValidator _checkInValidator;
+    private readonly CheckInDebtRequestValidator _checkInDebtValidator;
     private readonly QueueQueryRequestValidator _queryValidator;
     private readonly UpdateQueueStatusRequestValidator _statusValidator;
     private readonly CallNextRequestValidator _callNextValidator;
@@ -27,6 +28,7 @@ public sealed class QueueController : ControllerBase
         QueueService queueService,
         ICurrentUser currentUser,
         CheckInRequestValidator checkInValidator,
+        CheckInDebtRequestValidator checkInDebtValidator,
         QueueQueryRequestValidator queryValidator,
         UpdateQueueStatusRequestValidator statusValidator,
         CallNextRequestValidator callNextValidator,
@@ -35,6 +37,7 @@ public sealed class QueueController : ControllerBase
         _queueService = queueService;
         _currentUser = currentUser;
         _checkInValidator = checkInValidator;
+        _checkInDebtValidator = checkInDebtValidator;
         _queryValidator = queryValidator;
         _statusValidator = statusValidator;
         _callNextValidator = callNextValidator;
@@ -66,6 +69,23 @@ public sealed class QueueController : ControllerBase
             return Failure(result.Error);
 
         return StatusCode(StatusCodes.Status201Created, result.Value);
+    }
+
+    [HttpGet("check-in/{patientId:int}/outstanding-debt")]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
+    [Authorize(Policy = AppPolicies.QueueCheckIn)]
+    [ProducesResponseType(typeof(OutstandingDebtResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetOutstandingDebt(int patientId, CancellationToken ct)
+    {
+        var request = new CheckInDebtRequest(patientId);
+        var validation = await _checkInDebtValidator.ValidateAsync(request, ct);
+        if (!validation.IsValid)
+            return ToValidationProblem(validation);
+
+        var result = await _queueService.GetOutstandingDebtAsync(patientId, ct);
+        return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
     }
 
     [HttpGet]

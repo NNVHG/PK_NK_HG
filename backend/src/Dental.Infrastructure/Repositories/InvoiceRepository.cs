@@ -105,6 +105,26 @@ public sealed class InvoiceRepository(DentalDbContext db) : IInvoiceRepository
     public Task<int?> GetQueueIdAsync(int visitId, CancellationToken ct = default)
         => db.QueueEntries.Where(x => x.VisitId == visitId).Select(x => (int?)x.QueueEntryId).FirstOrDefaultAsync(ct);
 
+    public async Task<OutstandingDebtSummary> GetOutstandingDebtForPatientAsync(int patientId, CancellationToken ct = default)
+    {
+        var outstanding = await db.Invoices.AsNoTracking()
+            .Where(invoice => invoice.Visit.PatientId == patientId &&
+                              (invoice.Status == InvoiceStatus.PendingPayment || invoice.Status == InvoiceStatus.PartiallyPaid) &&
+                              invoice.TotalAmount > invoice.PaidAmount)
+            .OrderBy(invoice => invoice.CreatedAt)
+            .ThenBy(invoice => invoice.Id)
+            .Select(invoice => new
+            {
+                invoice.InvoiceCode,
+                RemainingAmount = invoice.TotalAmount - invoice.PaidAmount
+            })
+            .ToListAsync(ct);
+
+        return new(
+            outstanding.Sum(invoice => invoice.RemainingAmount),
+            outstanding.Select(invoice => invoice.InvoiceCode).ToArray());
+    }
+
     public Task<Result<InvoiceDraftSynchronization>> SynchronizeDraftAsync(int visitId, int userId, DateOnly date, CancellationToken ct = default)
         => SaveAsync(visitId, userId, date, null, ct);
 

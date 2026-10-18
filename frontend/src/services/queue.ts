@@ -22,6 +22,7 @@ export interface QueueEntryResponse {
   queueDate: string;
   queueNumber: number;
   isPriority: boolean;
+  isEmergency?: boolean;
   status: number;
   statusText: string;
   canMarkAbsent: boolean;
@@ -54,6 +55,11 @@ export interface CallNextPayload {
 export interface CallingDentist { dentistId: number; dentistName: string; chairNumber: string | null; roomName: string | null; }
 
 export interface QueueCleanupResponse { cancelledCount: number; lastExpiredDate: string; }
+
+export interface OutstandingDebtResponse {
+  totalOutstandingDebt: number;
+  invoiceCodes: string[];
+}
 
 export const queueService = {
   async cleanupExpired(): Promise<QueueCleanupResponse> {
@@ -116,6 +122,11 @@ export const queueService = {
 
   async checkIn(payload: CheckInPayload): Promise<QueueEntryResponse> {
     const response = await apiClient.post<QueueEntryResponse>('/queue/check-in', payload);
+    return response.data;
+  },
+
+  async getOutstandingDebt(patientId: number): Promise<OutstandingDebtResponse> {
+    const response = await apiClient.get<OutstandingDebtResponse>(`/queue/check-in/${patientId}/outstanding-debt`);
     return response.data;
   }
 };

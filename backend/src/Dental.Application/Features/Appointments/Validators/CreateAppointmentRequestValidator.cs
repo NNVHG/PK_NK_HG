@@ -19,8 +19,25 @@ public sealed class CreateAppointmentRequestValidator : AbstractValidator<Create
             .WithMessage("Ngày hẹn không được để trống.");
 
         RuleFor(x => x.SlotTime)
-            .Must(AppointmentSlots.IsValidSlot)
-            .WithMessage("Giờ hẹn không hợp lệ. Giờ khám: 08:00–11:30 và 13:30–16:30, slot 30 phút.");
+            .Must((request, time) => request.IsEmergency
+                ? time.Ticks % TimeSpan.TicksPerMinute == 0
+                : AppointmentSlots.IsValidSlot(time))
+            .WithMessage("Giờ thường phải theo khung 30 phút; giờ cấp cứu được chọn theo phút.");
+
+        RuleFor(x => x.EmergencyReason)
+            .Must(reason => !string.IsNullOrWhiteSpace(reason) && reason.Trim().Length is >= 5 and <= 255)
+            .When(x => x.IsEmergency)
+            .WithMessage("Lý do cấp cứu phải có từ 5 đến 255 ký tự.");
+
+        RuleFor(x => x.EmergencyReason)
+            .Null()
+            .When(x => !x.IsEmergency)
+            .WithMessage("Chỉ nhập lý do cấp cứu khi bật lịch cấp cứu.");
+
+        RuleFor(x => x.ConfirmedDentistConflictAppointmentId)
+            .Null()
+            .When(x => !x.IsEmergency)
+            .WithMessage("Chỉ xác nhận chen ngang cho lịch cấp cứu.");
 
         RuleFor(x => x.Notes)
             .MaximumLength(500)

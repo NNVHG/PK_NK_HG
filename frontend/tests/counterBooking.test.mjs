@@ -11,13 +11,14 @@ const patient = { patientId: 71, fullName: 'Synthetic patient', dateOfBirth: '19
 function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
 const dentist = { dentistId: 31, dentistName: 'Synthetic dentist' };
 function fixture({ searchResult = { items: [patient] }, booking, failure, dentistResult = [dentist] } = {}) {
-  let cleanup, mount; const calls = [], searches = [], dentistReads = [];
+  let cleanup, mount; const calls = [], searches = [], dentistReads = [], failurePlan = Array.isArray(failure) ? [...failure] : failure ? [failure] : [];
   const imports = {
     vue: { defineComponent: c => c, ref: value => ({ value }), onMounted: cb => { mount = cb; }, onUnmounted: cb => { cleanup = cb; } },
     axios: { isAxiosError: e => Boolean(e?.response) },
     '@/services/patients': { patientsService: { search: async query => { searches.push(query); return searchResult; } } },
     '@/services/appointments': { appointmentsService: { getBookingDentists: async () => { dentistReads.push(true); if (dentistResult instanceof Error) throw dentistResult; return dentistResult; }, create: async request => {
-      calls.push(request); if (failure) throw { response: { data: { message: 'Synthetic rejection' } } };
+      calls.push(request); const issue = failurePlan.length ? failurePlan.shift() : null;
+      if (issue) throw issue === true ? { response: { data: { message: 'Synthetic rejection' } } } : issue;
       return booking ?? { appointmentId: 9, patientName: patient.fullName };
     } } },
   };
@@ -33,7 +34,7 @@ test('search uses API with bounded page and selecting resets confirmation', asyn
 });
 test('confirmed booking sends selected patient and normal slot without dentist assignment', async () => {
   const f = fixture(); await ready(f); f.c.notes.value = '  Synthetic reason  '; await f.c.book();
-  assert.deepEqual(f.calls, [{ patientId: 71, appointmentDate: '2099-01-01', slotTime: '08:30:00', dentistId: null, notes: 'Synthetic reason' }]);
+  assert.deepEqual(f.calls, [{ patientId: 71, appointmentDate: '2099-01-01', slotTime: '08:30:00', dentistId: null, notes: 'Synthetic reason', isEmergency: false, emergencyReason: null, confirmedDentistConflictAppointmentId: null }]);
   assert.equal(f.c.confirmed.value, false); assert.equal(f.c.success.value.appointmentId, 9);
 });
 test('unconfirmed, past date, wrong slot and long notes do not create appointments', async () => {
@@ -82,4 +83,22 @@ test('booking waits for dentist load and unmount ignores late dentist response',
 test('dentist conflict or ambiguous network outcome keeps draft without automatic retry', async () => {
   const f = fixture({ failure: true }); await ready(f); f.c.dentistId.value = 31; f.c.notes.value = 'Synthetic draft'; await f.c.book(); await f.c.book();
   assert.equal(f.calls.length, 1); assert.equal(f.c.notes.value, 'Synthetic draft'); assert.equal(f.c.dentistId.value, 31); assert.equal(f.c.confirmed.value, false);
+});
+test('emergency free-time booking requires reason and confirms the exact dentist conflict before retry', async () => {
+  const conflictResponse = { response: { data: { code: 'APP_011', message: 'Synthetic conflict', details: {
+    conflictAppointmentId: 88, dentistName: 'Synthetic dentist', patientName: 'Booked patient', appointmentDate: '2099-01-01', slotTime: '17:15:00'
+  } } } };
+  const f = fixture({ failure: [conflictResponse] }); await ready(f);
+  f.c.isEmergency.value = true; f.c.toggleEmergency(); f.c.slot.value = '17:15'; f.c.emergencyReason.value = '  Đau răng dữ dội  ';
+  f.c.dentistId.value = 31; f.c.confirmed.value = true;
+  await f.c.book();
+  assert.equal(f.calls.length, 1); assert.equal(f.c.conflict.value.conflictAppointmentId, 88);
+  assert.equal(f.c.overrideConflictConfirmed.value, false); assert.equal(f.c.confirmed.value, true);
+  f.c.overrideConflictConfirmed.value = true; await f.c.book();
+  assert.equal(f.calls.length, 2);
+  assert.equal(f.calls[0].isEmergency, true); assert.equal(f.calls[0].slotTime, '17:15:00');
+  assert.equal(f.calls[0].emergencyReason, 'Đau răng dữ dội');
+  assert.equal(f.calls[0].confirmedDentistConflictAppointmentId, null);
+  assert.equal(f.calls[1].confirmedDentistConflictAppointmentId, 88);
+  assert.equal(f.c.success.value.appointmentId, 9);
 });

@@ -28,7 +28,7 @@ using Microsoft.IdentityModel.Tokens;
 internal static class CashPaymentHttpSmoke
 {
     public static async Task RunAsync(DbContextOptions<DentalDbContext> options, int cashierId, int patientId, Action<bool, string> check,
-        bool queueCallNextOnly = false, bool invoiceDiscountsOnly = false, bool serviceCatalogOnly = false, bool queueImagingOnly = false, bool queueCallingOnly = false, bool queueAbsenceOnly = false, bool queueCleanupOnly = false, bool chairCatalogOnly = false, bool staffWorkspacesOnly = false, bool queueLocationsOnly = false, bool visitCorrectionsOnly = false, bool physicalChairsOnly = false, bool visitCancellationOnly = false, bool postTreatmentNotesOnly = false, bool diagnosisCatalogOnly = false, bool revenueReportOnly = false, bool medicineCatalogOnly = false, bool prescriptionOnly = false, bool invoiceRefundsOnly = false, bool invoiceDraftCancellationOnly = false)
+        bool queueCallNextOnly = false, bool invoiceDiscountsOnly = false, bool serviceCatalogOnly = false, bool queueImagingOnly = false, bool queueCallingOnly = false, bool queueAbsenceOnly = false, bool queueCleanupOnly = false, bool chairCatalogOnly = false, bool staffWorkspacesOnly = false, bool queueLocationsOnly = false, bool visitCorrectionsOnly = false, bool physicalChairsOnly = false, bool visitCancellationOnly = false, bool postTreatmentNotesOnly = false, bool diagnosisCatalogOnly = false, bool revenueReportOnly = false, bool medicineCatalogOnly = false, bool prescriptionOnly = false, bool invoiceRefundsOnly = false, bool invoiceDraftCancellationOnly = false, bool medicalSupplyCatalogOnly = false)
     {
         // Dedicated test host validates ephemeral JWTs only. Never read clinic JWT keys/demo credentials.
         var signingKey = new SymmetricSecurityKey(RandomNumberGenerator.GetBytes(64));
@@ -64,6 +64,8 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddScoped<Dental.Application.Features.MOD_MST.Services.MedicineCatalogService>();
         builder.Services.AddScoped<IRevenueReportRepository, RevenueReportRepository>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_RPT.Services.RevenueReportService>();
+        builder.Services.AddScoped<IMedicalSupplyCatalogRepository, MedicalSupplyCatalogRepository>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_MST.Services.MedicalSupplyCatalogService>();
         builder.Services.AddScoped<ICashPaymentRepository, CashPaymentRepository>();
         builder.Services.AddScoped<CashPaymentService>();
         builder.Services.AddScoped<CashPaymentRequestValidator>();
@@ -122,6 +124,7 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddScoped<IVisitChairCoordinator, Dental.Application.Features.MOD_MST.Services.VisitChairService>();
         builder.Services.AddScoped<Dental.Application.Features.Queue.Services.QueueService>();
         builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.CheckInRequestValidator>();
+        builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.CheckInDebtRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.QueueQueryRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.UpdateQueueStatusRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.CallNextRequestValidator>();
@@ -204,6 +207,11 @@ internal static class CashPaymentHttpSmoke
                 else if (Environment.GetCommandLineArgs().Contains("--patient-citizen-id-only"))
                     await PatientCitizenIdHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);
                 else await PrescriptionHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);
+                return;
+            }
+            if (medicalSupplyCatalogOnly)
+            {
+                await MedicalSupplyCatalogHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
                 return;
             }
             if (medicineCatalogOnly)

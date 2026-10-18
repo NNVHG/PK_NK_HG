@@ -13,6 +13,7 @@ public static class Policies
     public const string PrescriptionWrite = "PrescriptionWrite";
     public const string DiagnosisCatalogView = "DiagnosisCatalogView";
     public const string MedicineCatalogView = "MedicineCatalogView";
+    public const string MedicalSupplyCatalogView = "MedicalSupplyCatalogView";
     public const string AdminOnly  = "AdminOnly";
     public const string StaffAny   = "StaffAny";    // Admin, Lễ tân, Nha sĩ, Phụ tá
     public const string PatientManage = "PatientManage";
@@ -50,6 +51,7 @@ public static class Policies
         opts.AddPolicy(WorkspaceManage, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant));
         opts.AddPolicy(DiagnosisCatalogView, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist));
         opts.AddPolicy(MedicineCatalogView, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist));
+        opts.AddPolicy(MedicalSupplyCatalogView, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist));
         opts.AddPolicy(DentalChairView, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant));
         opts.AddPolicy(QueueSkip, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Receptionist));
         opts.AddPolicy(QueueCall, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant));

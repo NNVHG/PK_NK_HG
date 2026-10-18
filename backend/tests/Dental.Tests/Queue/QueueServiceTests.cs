@@ -17,6 +17,7 @@ public sealed class QueueServiceTests
     private readonly IAppointmentRepository _appointmentRepository = Substitute.For<IAppointmentRepository>();
     private readonly IPatientRepository _patientRepository = Substitute.For<IPatientRepository>();
     private readonly IVisitRepository _visitRepository = Substitute.For<IVisitRepository>();
+    private readonly IInvoiceRepository _invoiceRepository = Substitute.For<IInvoiceRepository>();
     private readonly IUserRepository _userRepository = Substitute.For<IUserRepository>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly IAuditLogger _auditLogger = Substitute.For<IAuditLogger>();
@@ -117,7 +118,32 @@ public sealed class QueueServiceTests
     }
 
     private QueueService CreateService()
-        => new(_queueRepository, _appointmentRepository, _patientRepository, _visitRepository, _userRepository, _unitOfWork, _auditLogger, _vietnamClock, _invoiceDraft, Dental.Tests.Common.TestVisitChairs.Create());
+        => new(_queueRepository, _appointmentRepository, _patientRepository, _visitRepository, _invoiceRepository, _userRepository, _unitOfWork, _auditLogger, _vietnamClock, _invoiceDraft, Dental.Tests.Common.TestVisitChairs.Create());
+
+    [Fact]
+    public async Task GetOutstandingDebtAsync_ReturnsTotalAndInvoiceCodesForActivePatient()
+    {
+        _patientRepository.GetByIdAsync(1, Arg.Any<CancellationToken>()).Returns(MakePatient());
+        _invoiceRepository.GetOutstandingDebtForPatientAsync(1, Arg.Any<CancellationToken>())
+            .Returns(new OutstandingDebtSummary(1200m, new[] { "INV-OLD-001", "INV-OLD-002" }));
+
+        var result = await CreateService().GetOutstandingDebtAsync(1);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1200m, result.Value!.TotalOutstandingDebt);
+        Assert.Equal(new[] { "INV-OLD-001", "INV-OLD-002" }, result.Value.InvoiceCodes);
+    }
+
+    [Fact]
+    public async Task GetOutstandingDebtAsync_MissingOrInactivePatientDoesNotQueryInvoices()
+    {
+        _patientRepository.GetByIdAsync(404, Arg.Any<CancellationToken>()).Returns((Patient?)null);
+        _patientRepository.GetByIdAsync(2, Arg.Any<CancellationToken>()).Returns(MakePatient(2, isActive: false));
+
+        Assert.Equal(Error.NotFound, (await CreateService().GetOutstandingDebtAsync(404)).Error);
+        Assert.Equal(Error.PatientInactive, (await CreateService().GetOutstandingDebtAsync(2)).Error);
+        Assert.Empty(_invoiceRepository.ReceivedCalls());
+    }
 
     private static Patient MakePatient(int patientId = 1, bool isActive = true)
         => new()
@@ -191,6 +217,43 @@ public sealed class QueueServiceTests
         Assert.NotNull(capturedEntry);
         Assert.True(capturedEntry!.IsPriority);
         Assert.Equal(AppointmentStatuses.CheckedIn, appointment.Status);
+    }
+
+    [Fact]
+    public async Task CheckInAsync_EmergencyAppointmentIsPriorityOutsideNormalArrivalWindow()
+    {
+        var appointment = new Appointment
+        {
+            AppointmentId = 28,
+            PatientId = 1,
+            AppointmentDate = _vietnamClock.Today,
+            SlotTime = new TimeOnly(16, 0),
+            Status = AppointmentStatuses.Scheduled,
+            IsEmergency = true,
+            EmergencyReason = "Synthetic reason"
+        };
+        _patientRepository.GetByIdAsync(1, Arg.Any<CancellationToken>()).Returns(MakePatient());
+        _appointmentRepository.GetByIdAsync(28, Arg.Any<CancellationToken>()).Returns(appointment);
+        _queueRepository.GetOpenQueueEntriesForPatientAsync(1, Arg.Any<CancellationToken>()).Returns(new List<QueueEntry>());
+        _visitRepository.HasOpenVisitAsync(1, Arg.Any<CancellationToken>()).Returns(false);
+        _queueRepository.GetNextQueueNumberAsync(_vietnamClock.Today, Arg.Any<CancellationToken>()).Returns(3);
+        QueueEntry? capturedEntry = null;
+        QueueStatusHistory? capturedHistory = null;
+        await _queueRepository.AddAsync(Arg.Do<QueueEntry>(entry => capturedEntry = entry), Arg.Any<CancellationToken>());
+        await _queueRepository.AddStatusHistoryAsync(Arg.Do<QueueStatusHistory>(history => capturedHistory = history), Arg.Any<CancellationToken>());
+        _queueRepository.GetByIdAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            if (capturedEntry is not null) capturedEntry.Appointment = appointment;
+            return Task.FromResult(capturedEntry);
+        });
+
+        var result = await CreateService().CheckInAsync(3, new CheckInRequest(PatientId: 1, AppointmentId: 28), null);
+
+        Assert.True(result.IsSuccess);
+        Assert.True(capturedEntry!.IsPriority);
+        Assert.True(capturedEntry.Appointment!.IsEmergency);
+        Assert.True(result.Value!.IsEmergency);
+        Assert.Contains("Lịch cấp cứu", capturedHistory!.Reason);
     }
 
     [Fact]
@@ -396,7 +459,7 @@ public sealed class QueueServiceTests
     {
         var lateClock = new VietnamClock(new FixedTimeProvider(new DateTimeOffset(2026, 10, 10, 16, 30, 0, TimeSpan.Zero)));
         var service = new QueueService(_queueRepository, _appointmentRepository, _patientRepository, _visitRepository,
-            _userRepository, _unitOfWork, _auditLogger, lateClock, _invoiceDraft, Dental.Tests.Common.TestVisitChairs.Create());
+            _invoiceRepository, _userRepository, _unitOfWork, _auditLogger, lateClock, _invoiceDraft, Dental.Tests.Common.TestVisitChairs.Create());
         Assert.Equal(Error.Validation.Code, (await service.CheckInAsync(3, new(1), null)).Error.Code);
         Assert.Empty(_queueRepository.ReceivedCalls());
     }

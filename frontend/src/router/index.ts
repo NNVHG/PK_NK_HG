@@ -10,6 +10,7 @@ const router = createRouter({
     { path: '/clinical/visits/:visitId/prescription', name: 'prescription', component: () => import('@/views/PrescriptionView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'DENTIST', 'RECEPTIONIST', 'ASSISTANT', 'PATIENT'] } },
     { path: '/admin/medicines', name: 'medicine-catalog', component: () => import('@/views/MedicineCatalogView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
     { path: '/admin/reports/revenue', name: 'revenue-report', component: () => import('@/views/RevenueReportView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
+    { path: '/admin/medical-supplies', name: 'medical-supply-catalog', component: () => import('@/views/MedicalSupplyCatalogView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
     { path: '/admin/diagnoses', name: 'diagnosis-catalog', component: () => import('@/views/DiagnosisCatalogView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
     {
       path: '/admin/role-permissions',

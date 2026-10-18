@@ -15,5 +15,7 @@ public sealed record AppointmentResponse(
     int CreatedByUserId,
     DateTime CreatedAt,
     int RescheduleCount = 0,
-    string? RescheduleReason = null
+    string? RescheduleReason = null,
+    bool IsEmergency = false,
+    string? EmergencyReason = null
 );
