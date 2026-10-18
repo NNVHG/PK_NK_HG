@@ -4,6 +4,8 @@ using Dental.Application.Features.MOD_RX.DTOs;
 namespace Dental.Application.Interfaces;
 public interface IPrescriptionRepository
 {
+    Task<Result<PrescriptionCancellationResult>> CancelAsync(int visitId, int prescriptionId, int actorId, PrescriptionCancellationRequest request, string? ip, CancellationToken ct);
+    Task<Result<PagedResult<PrescriptionResponse>>> HistoryAsync(int visitId, int actorId, string role, int page, int pageSize, CancellationToken ct);
     Task<Result<PrescriptionContext>> GetContextAsync(int visitId, int actorId, string role, CancellationToken ct);
     Task<Result<PagedResult<PrescriptionMedicine>>> GetMedicinesAsync(int visitId, int actorId, MedicineQuery query, CancellationToken ct);
     Task<Result<RepeatPrescription>> GetLatestAsync(int patientId, int targetVisitId, int actorId, CancellationToken ct);

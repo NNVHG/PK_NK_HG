@@ -18,7 +18,10 @@ public sealed record PrescriptionResponse(int Id, int VisitId, int DoctorId, int
 public sealed record PrescriptionAllergy(int Id, string Name, string? Detail);
 public sealed record PrescriptionContext(int VisitId, int PatientId, int? DentistId, string VisitStatus, bool VisitLocked,
     string VisitDiagnosis, bool CanEdit, int? InvoiceId, string? InvoiceCode, string? InvoiceStatus,
-    int? AllergyRecordId, IReadOnlyList<PrescriptionAllergy> Allergies, PrescriptionResponse? Prescription);
+    int? AllergyRecordId, IReadOnlyList<PrescriptionAllergy> Allergies, PrescriptionResponse? Prescription)
+{
+    public bool CanCancel { get; init; }
+}
 public sealed record PrescriptionWarning(int MedicineId, IReadOnlyList<int> AllergyIds, IReadOnlyList<string> AllergyNames);
 public sealed record PrescriptionPreview(string Token, IReadOnlyList<PrescriptionWarning> AllergyWarnings,
     IReadOnlyList<string> DuplicateIngredients,
@@ -30,6 +33,12 @@ public sealed record RepeatPrescription(int SourcePrescriptionId, string SourceC
 public sealed record RepeatPrescriptionLine(int MedicineId, int Quantity, string UsageInstructions, int? TreatmentDays,
     PrescriptionMedicine? CurrentMedicine);
 public sealed record PrescriptionSnapshot(Visit Visit, Invoice? Invoice, Prescription? Prescription, bool HasReceiptHistory,
-    int? AllergyRecordId, IReadOnlyList<MedicalHistoryItem> Allergies, IReadOnlyList<Medicine> Medicines, IReadOnlyList<VisitService> Services);
+    int? AllergyRecordId, IReadOnlyList<MedicalHistoryItem> Allergies, IReadOnlyList<Medicine> Medicines, IReadOnlyList<VisitService> Services)
+{
+    public int CancellationGeneration { get; init; }
+}
 public sealed record PrescriptionPlan(IReadOnlyList<PrescriptionItem> Items, PrescriptionPreview Preview);
 public sealed record PrescriptionLookupLink(string PrescriptionCode, int Version, string RelativePath);
+public sealed record PrescriptionCancellationRequest(int ExpectedVersion);
+public sealed record PrescriptionCancellationResult(int PrescriptionId, int VisitId, int Version, int InvoiceId,
+    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal InvoiceTotal);

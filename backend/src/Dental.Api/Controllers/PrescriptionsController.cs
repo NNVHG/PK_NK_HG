@@ -16,6 +16,14 @@ public sealed class PrescriptionsController(PrescriptionService service, ICurren
     [Authorize(Policy = AppPolicies.PatientView)]
     public async Task<IActionResult> Get(int visitId, CancellationToken ct)
     { if (actor.UserId is not int id) return Unauthorized(); var r = await service.GetAsync(visitId, id, actor.RoleCode, ct); return r.IsSuccess ? Ok(r.Value) : Failure(r.Error); }
+    [HttpGet("history")]
+    [Authorize(Policy = AppPolicies.PatientView)]
+    public async Task<IActionResult> History(int visitId, [FromQuery] int page = 1, [FromQuery] int pageSize = 10, CancellationToken ct = default)
+    { if (actor.UserId is not int id) return Unauthorized(); var r = await service.HistoryAsync(visitId, id, actor.RoleCode, page, pageSize, ct); return r.IsSuccess ? Ok(r.Value) : Failure(r.Error); }
+    [HttpPost("{prescriptionId:int}/cancel")]
+    [Authorize(Policy = AppPolicies.PrescriptionWrite)]
+    public async Task<IActionResult> Cancel(int visitId, int prescriptionId, PrescriptionCancellationRequest request, CancellationToken ct)
+    { if (actor.UserId is not int id) return Unauthorized(); var r = await service.CancelAsync(visitId, prescriptionId, id, actor.RoleCode, request, HttpContext.Connection.RemoteIpAddress?.ToString(), ct); return r.IsSuccess ? Ok(r.Value) : Failure(r.Error); }
     [HttpGet("lookup-link")]
     [Authorize(Policy = AppPolicies.PatientView)]
     public async Task<IActionResult> LookupLink(int visitId, CancellationToken ct)

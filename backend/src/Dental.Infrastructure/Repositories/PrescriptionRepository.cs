@@ -14,13 +14,14 @@ using Dental.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 namespace Dental.Infrastructure.Repositories;
-public sealed class PrescriptionRepository(DentalDbContext db, IInvoiceRepository invoices, VietnamClock clock) : IPrescriptionRepository
+public sealed partial class PrescriptionRepository(DentalDbContext db, IInvoiceRepository invoices, VietnamClock clock) : IPrescriptionRepository
 {
     private async Task<PrescriptionSnapshot?> LoadAsync(int visitId, bool tracking, CancellationToken ct, IEnumerable<int>? requested = null)
     {
         var visit = await (tracking ? db.Visits : db.Visits.AsNoTracking()).SingleOrDefaultAsync(v => v.VisitId == visitId, ct);
         if (visit is null) return null;
-        var rx = await (tracking ? db.Prescriptions : db.Prescriptions.AsNoTracking()).Include(p => p.Items).SingleOrDefaultAsync(p => p.VisitId == visitId, ct);
+        var rx = await (tracking ? db.Prescriptions : db.Prescriptions.AsNoTracking()).Include(p => p.Items).SingleOrDefaultAsync(p => p.VisitId == visitId && !p.IsCancelled, ct);
+        var generation = await db.Prescriptions.Where(p => p.VisitId == visitId && p.IsCancelled).MaxAsync(p => (int?)p.Id, ct) ?? 0;
         var invoice = await (tracking ? db.Invoices : db.Invoices.AsNoTracking()).Include(i => i.Items).SingleOrDefaultAsync(i => i.VisitId == visitId && i.Status != InvoiceStatus.Cancelled, ct);
         var history = await db.MedicalHistoryRecords.AsNoTracking().Include(h => h.Items).Where(h => h.PatientId == visit.PatientId)
             .OrderByDescending(h => h.CreatedAt).ThenByDescending(h => h.RecordId).FirstOrDefaultAsync(ct);
@@ -29,7 +30,8 @@ public sealed class PrescriptionRepository(DentalDbContext db, IInvoiceRepositor
         var services = await db.VisitServices.AsNoTracking().Where(s => s.VisitId == visitId).ToListAsync(ct);
         var paid = await db.Invoices.AnyAsync(i => i.VisitId == visitId && (i.PaidAmount != 0 || i.Status == InvoiceStatus.Paid || i.Status == InvoiceStatus.PartiallyPaid), ct) ||
             await db.PaymentTransactions.AnyAsync(p => p.Invoice.VisitId == visitId, ct);
-        return new(visit, invoice, rx, paid, history?.RecordId, history?.Items.Where(i => i.Type == MedicalHistoryTypes.Allergy).ToArray() ?? [], medicines, services);
+        return new(visit, invoice, rx, paid, history?.RecordId, history?.Items.Where(i => i.Type == MedicalHistoryTypes.Allergy).ToArray() ?? [], medicines, services)
+            { CancellationGeneration = generation };
     }
     private async Task<bool> IsDoctorAsync(PrescriptionSnapshot s, int actor, CancellationToken ct)
         => s.Visit.DentistId == actor && (s.Prescription is null || s.Prescription.DoctorId == actor) &&
@@ -38,15 +40,15 @@ public sealed class PrescriptionRepository(DentalDbContext db, IInvoiceRepositor
     {
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
         var s = await LoadAsync(visitId, false, ct);
-        if (s is null || !await db.Users.AnyAsync(u => u.UserId == actorId && u.IsActive, ct) ||
-            role == RoleCodes.Dentist && s.Visit.DentistId != actorId ||
-            role == RoleCodes.Patient && !await db.Patients.AnyAsync(p => p.PatientId == s.Visit.PatientId && p.UserId == actorId, ct))
+        if (s is null || !await CanReadAsync(s.Visit, actorId, role, ct))
             return Result<PrescriptionContext>.Failure(Error.NotFound);
-        var canEdit = role == RoleCodes.Dentist && await IsDoctorAsync(s, actorId, ct) && PrescriptionRules.CanEdit(s.Visit, s.Invoice, s.HasReceiptHistory, s.Prescription);
+        var ownedDoctor = role == RoleCodes.Dentist && await IsDoctorAsync(s, actorId, ct);
+        var canEdit = ownedDoctor && PrescriptionRules.CanEdit(s);
         var response = new PrescriptionContext(visitId, s.Visit.PatientId, s.Visit.DentistId, s.Visit.Status, s.Visit.IsLocked,
             s.Visit.Diagnosis ?? "", canEdit, s.Invoice?.Id, s.Invoice?.InvoiceCode, s.Invoice?.Status.ToString(), role == RoleCodes.Dentist ? s.AllergyRecordId : null,
             role == RoleCodes.Dentist ? s.Allergies.Select(a => new PrescriptionAllergy(a.ItemId, a.Name, a.Detail)).ToArray() : [],
-            s.Prescription is null ? null : Map(s.Prescription, s.Medicines));
+            s.Prescription is null ? null : Map(s.Prescription, s.Medicines, role == RoleCodes.Dentist))
+            { CanCancel = ownedDoctor && PrescriptionRules.CanCancel(s) };
         await tx.CommitAsync(ct);
         return Result<PrescriptionContext>.Success(response);
     }
@@ -54,7 +56,7 @@ public sealed class PrescriptionRepository(DentalDbContext db, IInvoiceRepositor
     {
         var s = await LoadAsync(visitId, false, ct);
         if (s is null || !await IsDoctorAsync(s, actorId, ct)) return Result<PagedResult<PrescriptionMedicine>>.Failure(Error.NotFound);
-        if (!PrescriptionRules.CanEdit(s.Visit, s.Invoice, s.HasReceiptHistory, s.Prescription)) return Result<PagedResult<PrescriptionMedicine>>.Failure(Locked);
+        if (!PrescriptionRules.CanEdit(s)) return Result<PagedResult<PrescriptionMedicine>>.Failure(Locked);
         var rows = db.Medicines.AsNoTracking().Where(m => m.IsActive && m.UnitPrice > 0);
         if (!string.IsNullOrWhiteSpace(query.Keyword)) { var term = DiagnosisSearch.Normalize(query.Keyword); rows = rows.Where(m => m.SearchText.Contains(term)); }
         var count = await rows.CountAsync(ct);
@@ -66,7 +68,7 @@ public sealed class PrescriptionRepository(DentalDbContext db, IInvoiceRepositor
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
         var s = await LoadAsync(targetVisitId, false, ct);
         if (s is null || s.Visit.PatientId != patientId || !await IsDoctorAsync(s, actorId, ct)) return Result<RepeatPrescription>.Failure(Error.NotFound);
-        if (!PrescriptionRules.CanEdit(s.Visit, s.Invoice, s.HasReceiptHistory, s.Prescription)) return Result<RepeatPrescription>.Failure(Locked);
+        if (!PrescriptionRules.CanEdit(s)) return Result<RepeatPrescription>.Failure(Locked);
         var source = await db.Prescriptions.AsNoTracking().Include(p => p.Items).Where(p => p.Visit.PatientId == patientId &&
             p.VisitId != targetVisitId && p.Visit.Status == VisitStatuses.Completed && !p.IsCancelled)
             .OrderByDescending(p => p.CreatedAt).ThenByDescending(p => p.Id).FirstOrDefaultAsync(ct);
@@ -160,13 +162,13 @@ public sealed class PrescriptionRepository(DentalDbContext db, IInvoiceRepositor
         }
         finally { if (!committed) db.ChangeTracker.Clear(); }
     }
-    private static PrescriptionResponse Map(Prescription p, IReadOnlyList<Medicine> medicines)
+    private static PrescriptionResponse Map(Prescription p, IReadOnlyList<Medicine> medicines, bool includeOverrideReason = true)
     {
         var lookup = medicines.ToDictionary(m => m.Id);
         return new(p.Id, p.VisitId, p.DoctorId, p.InvoiceId, p.PrescriptionCode, p.Diagnosis, p.DoctorAdvice, p.RevisitDate, p.IsCancelled, p.DispensedAt,
             p.CreatedAt, p.UpdatedAt, p.Version, p.Items.OrderBy(i => i.Id).Select(i => new PrescriptionLineResponse(i.Id, i.MedicineId,
                 lookup.GetValueOrDefault(i.MedicineId)?.Version ?? 0, i.MedicineCode, i.MedicineName, i.ActiveIngredient, i.Strength, i.Unit, i.Quantity,
-                i.UnitPrice, i.TotalPrice, i.UsageInstructions, i.TreatmentDays, i.AllergyOverrideReason,
+                i.UnitPrice, i.TotalPrice, i.UsageInstructions, i.TreatmentDays, includeOverrideReason ? i.AllergyOverrideReason : null,
                 lookup.TryGetValue(i.MedicineId, out var m) && m.IsActive && m.UnitPrice > 0)).ToArray());
     }
     private static PrescriptionMedicine Medicine(Medicine m) => new(m.Id, m.Version, m.Code, m.Name, m.ActiveIngredient, m.Strength, m.Unit, m.UnitPrice, m.DefaultUsageInstruction);

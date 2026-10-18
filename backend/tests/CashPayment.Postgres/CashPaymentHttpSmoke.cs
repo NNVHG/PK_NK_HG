@@ -174,7 +174,9 @@ internal static class CashPaymentHttpSmoke
             void Authenticate(string role) => AuthenticateActor(role, cashierId);
             if (prescriptionOnly)
             {
-                if (Environment.GetCommandLineArgs().Contains("--doctor-signature-only"))
+                if (Environment.GetCommandLineArgs().Contains("--prescription-replacement-only"))
+                    await PrescriptionReplacementHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);
+                else if (Environment.GetCommandLineArgs().Contains("--doctor-signature-only"))
                     await DoctorSignatureHttpSmoke.RunAsync(client, options, AuthenticateActor, check);
                 else if (Environment.GetCommandLineArgs().Contains("--public-prescription-only"))
                     await PublicPrescriptionHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);

@@ -980,7 +980,10 @@ namespace Dental.Infrastructure.Migrations
                         .IsUnique();
 
                     b.HasIndex("VisitId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsCancelled\" = false");
+
+                    b.HasIndex("VisitId", "Id");
 
                     b.ToTable("Prescriptions", (string)null);
                 });

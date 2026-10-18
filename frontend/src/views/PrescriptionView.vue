@@ -6,10 +6,11 @@
   <template v-if="context">
    <RouterLink v-if="context.prescription && !context.prescription.isCancelled" :to="'/portal/prescriptions/' + context.prescription.prescriptionCode">Mở trang tra cứu đơn bằng CCCD</RouterLink>
    <PrescriptionQr v-if="context.prescription && !context.prescription.isCancelled" :visit-id="visitId" :prescription-version="context.prescription.version" />
+   <PrescriptionLifecycle :visit-id="visitId" :prescription="context.prescription" :can-cancel="context.canCancel === true" :blocked="busy || needsReview" @changed="load" />
    <p>Ca khám: {{ context.visitStatus }} · {{ context.invoiceCode || 'Chưa có hóa đơn' }} · {{ context.invoiceStatus || '' }}</p>
    <RouterLink v-if="!busy && ['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(auth.role)" :to="`/clinical/visits/${visitId}/invoice-draft`">Đối chiếu hóa đơn dịch vụ và thuốc</RouterLink>
    <section v-if="!editable && context.prescription" aria-label="Đơn thuốc đã lưu">
-    <h2>{{ context.prescription.prescriptionCode }}</h2><p v-if="context.prescription.isCancelled" class="error">Đơn đã hủy theo ca khám.</p>
+    <h2>{{ context.prescription.prescriptionCode }}</h2><p v-if="context.prescription.isCancelled" class="error">Đơn đã hủy; không dùng để cấp phát hoặc tra cứu QR.</p>
     <p>Chẩn đoán: {{ context.prescription.diagnosis }}</p>
     <table><thead><tr><th>Thuốc / Hàm lượng</th><th>Số lượng</th><th>Giá đã chụp</th><th>Cách dùng</th></tr></thead><tbody><tr v-for="line in context.prescription.items" :key="line.id"><td>{{ line.medicineName }} {{ line.strength || '' }}</td><td>{{ line.quantity }} {{ line.unit }}</td><td>{{ money(line.unitPrice) }}</td><td>{{ line.usageInstructions }}<br v-if="line.treatmentDays" /><span v-if="line.treatmentDays">Số ngày: {{ line.treatmentDays }}</span></td></tr></tbody></table>
     <p v-if="context.prescription.doctorAdvice">Lời dặn: {{ context.prescription.doctorAdvice }}</p><p v-if="context.prescription.revisitDate">Hẹn tái khám: {{ context.prescription.revisitDate }}</p>
@@ -61,6 +62,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import PrescriptionQr from '@/components/PrescriptionQr.vue';
+import PrescriptionLifecycle from '@/components/PrescriptionLifecycle.vue';
 import { useAuthStore } from '@/stores/auth';
 import { prescriptionsService, type RxContext, type RxMedicine, type RxPreview, type RxRequest } from '@/services/prescriptions';
 interface DraftLine { medicineId: number; medicineVersion: number; code: string; name: string; activeIngredient: string | null; strength: string | null; unit: string; unitPrice: string; quantity: string | number; usageInstructions: string; treatmentDays: string | number; active: boolean }

@@ -11,6 +11,12 @@ using Dental.Domain.Enums;
 namespace Dental.Application.Features.MOD_RX.Services;
 public static class PrescriptionRules
 {
+    public static bool CanEdit(PrescriptionSnapshot state) =>
+        !(state.Prescription is null && state.CancellationGeneration > 0 && state.Visit.Status != VisitStatuses.InProgress) &&
+        CanEdit(state.Visit, state.Invoice, state.HasReceiptHistory, state.Prescription);
+    public static bool CanCancel(PrescriptionSnapshot state) => state.Visit.Status == VisitStatuses.InProgress && !state.Visit.IsLocked &&
+        state.Prescription is { IsCancelled: false, DispensedAt: null, Version: < int.MaxValue } &&
+        state.Invoice is { Status: InvoiceStatus.Draft, PaidAmount: 0 } && !state.HasReceiptHistory;
     public static bool CanEdit(Visit visit, Invoice? invoice, bool hasHistory, Prescription? rx)
     {
         if (hasHistory || rx?.IsCancelled == true || rx?.DispensedAt is not null || (invoice is not null && invoice.PaidAmount != 0) ||
@@ -21,7 +27,7 @@ public static class PrescriptionRules
     }
     public static Result<PrescriptionPlan> Build(PrescriptionSnapshot state, PrescriptionWriteRequest request, bool enforceConfirmations)
     {
-        if (!CanEdit(state.Visit, state.Invoice, state.HasReceiptHistory, state.Prescription)) return Fail("RX_002", "Đơn đã khóa hoặc ca khám chưa cho phép kê đơn.");
+        if (!CanEdit(state)) return Fail("RX_002", "Đơn đã khóa hoặc ca khám chưa cho phép kê đơn.");
         if ((state.Prescription?.Version ?? 0) != request.ExpectedVersion) return Fail("RX_003", "Đơn vừa thay đổi; tải lại trước khi lưu.");
         var medicines = state.Medicines.ToDictionary(m => m.Id);
         var existing = state.Prescription?.Items.ToDictionary(i => i.MedicineId) ?? new Dictionary<int, PrescriptionItem>();
@@ -79,7 +85,7 @@ public static class PrescriptionRules
     {
         var body = new { s.Visit.VisitId, s.Visit.Status, s.Visit.IsLocked, s.Visit.DentistId,
             invoice = s.Invoice is null ? null : new { s.Invoice.Id, s.Invoice.Status, s.Invoice.TotalAmount, s.Invoice.PaidAmount, s.Invoice.DiscountAmount, s.Invoice.DiscountType, s.Invoice.DiscountValue },
-            prescription = new { Id = s.Prescription?.Id, Version = s.Prescription?.Version }, s.AllergyRecordId,
+            prescription = new { Id = s.Prescription?.Id, Version = s.Prescription?.Version }, s.CancellationGeneration, s.AllergyRecordId,
             allergies = s.Allergies.OrderBy(x => x.ItemId).Select(x => new { x.ItemId, x.Name, x.Detail }),
             medicines = s.Medicines.OrderBy(x => x.Id).Select(x => new { x.Id, x.Version, x.Code, x.Name, x.ActiveIngredient, x.Strength, x.Unit, x.UnitPrice, x.IsActive }),
             services = s.Services.OrderBy(x => x.Id).Select(x => new { x.Id, x.ServiceCode, x.ServiceName, x.Quantity, x.UnitPrice, x.ToothNumber, x.Surface }),
