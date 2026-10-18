@@ -4,17 +4,18 @@
 > **Trường Đại học Thủ Dầu Một — Viện Công nghệ số**  
 > **Sinh viên thực hiện:** Nguyễn Ngô Vũ Hoàng Gia — **MSSV:** 2224802010628 — **Lớp:** D22CNTT02  
 > **Giảng viên hướng dẫn:** TS. Ngô Thị Ngọc Dịu  
-> **Trạng thái:** Phase 1 — `main` đã tích hợp đặt lịch trực tuyến, check-in, khám/chẩn đoán, tình trạng răng FDI và thêm/đọc chỉ định dịch vụ; 342/342 backend tests pass. Hóa đơn WIP còn ở nhánh riêng, chưa đưa vào `main`.
+> **Trạng thái hiện hành (`main @ d10ecffa`):** Phạm vi chính thức gồm **52 chức năng trên 12 phân hệ và 5 vai trò** (theo nguồn chuẩn `nội dung/chuc_nang_Gia_demo_11.xlsx`). Đã tích hợp 46/52 chức năng cốt lõi trên `main` (**1514/1514 .NET tests PASS**, **651/651 Node tests PASS**, **559/559 PostgreSQL HTTP integration tests PASS**, 38 EF Core migrations).
 
 ---
 
 ## 1. Mục tiêu và Phạm vi đồ án
 
-Hệ thống cung cấp giải pháp chuyển đổi số toàn diện cho **phòng khám nha khoa đơn lẻ**:
-- **Chuẩn hóa hồ sơ răng:** Ứng dụng tiêu chuẩn FDI quốc tế (32 răng người lớn: 11–48; 20 răng trẻ em: 51–85) với chi tiết 5 mặt răng.
-- **Phân quyền chặt chẽ (RBAC):** Kiểm soát truy cập nghiêm ngặt giữa 5 vai trò: `Admin`, `Lễ tân/Thu ngân`, `Nha sĩ`, `Phụ tá`, `Bệnh nhân`.
-- **Quản lý kho an toàn:** Cơ chế gợi ý định mức vật tư (BOM) hỗ trợ nhân viên; bắt buộc xác nhận thủ công trước khi xuất kho, tuyệt đối không trừ kho tự động.
-- **Phạm vi loại trừ:** Không tích hợp BHYT; không xử lý chuẩn DICOM gốc (lưu trữ tệp hình ảnh siêu âm/X-quang thông thường); không quản lý ca làm việc (MOD_ROS đã loại khỏi phạm vi đồ án).
+Hệ thống cung cấp giải pháp chuyển đổi số toàn diện cho **phòng khám nha khoa đơn lẻ** (Phòng khám Nha khoa Hoàng Gia), bám sát 100% Đề cương tốt nghiệp:
+- **Chuẩn hóa hồ sơ răng:** Ứng dụng tiêu chuẩn FDI quốc tế (32 răng người lớn: 11–48; 20 răng trẻ em: 51–85) với chi tiết 5 mặt răng (`MOD_FDI`).
+- **Phân quyền chặt chẽ (RBAC):** Kiểm soát truy cập nghiêm ngặt giữa 5 vai trò: `Admin`, `Lễ tân/Thu ngân`, `Nha sĩ`, `Phụ tá`, `Bệnh nhân` (`MOD_AUTH`).
+- **Minh bạch tài chính & trả nhiều đợt:** Hỗ trợ thu tiền một lần hoặc **thu thành nhiều đợt (trả góp theo tiến độ các dịch vụ điều trị dài ngày)**, theo dõi số tiền đã đóng (`PaidAmount`), dư nợ còn lại (`RemainingAmount`) và cảnh báo tổng công nợ khi tái khám (`F_BIL_03`, `F_CHK_01`).
+- **Quản lý kho an toàn:** Hỗ trợ nhập kho (`F_INV_03`) và gợi ý vật tư tiêu hao khi hoàn tất dịch vụ, bắt buộc Phụ tá/Admin xác nhận thủ công trước khi trừ tồn kho (`F_INV_06`).
+- **Phạm vi loại trừ:** Không tích hợp BHYT; không xử lý chuẩn DICOM gốc (lưu trữ tệp hình ảnh X-quang JPG/PNG thông thường); không quản lý ca làm việc/lịch trực nhân sự (`MOD_ROS`).
 
 ---
 
@@ -40,26 +41,26 @@ Hệ thống được xây dựng theo kiến trúc phân tầng Clean Architect
 - **Backend:** ASP.NET Core 10, C# 13, Entity Framework Core 10 (PostgreSQL Npgsql provider), FluentValidation, BCrypt.Net-Next.
 - **Frontend:** Vue 3 (Composition API, `<script setup>`), TypeScript, Vite, Pinia Store, Vue Router 4, Axios.
 - **Database:** PostgreSQL 16 chạy container hóa qua Docker Compose (có cấu hình healthcheck tự động).
-- **Kiểm thử tự động:** xUnit, FluentAssertions, Moq.
+- **Kiểm thử tự động:** xUnit, FluentAssertions, Moq, Node Test Runner.
 
 ---
 
-## 3. Danh mục 12 Module chức năng
+## 3. Danh mục 12 Module & 52 Chức năng chính thức (`chuc_nang_Gia_demo_11.xlsx`)
 
-| Mã Module | Tên Module | Trách nhiệm chính |
-|---|---|---|
-| `MOD_AUTH` | Xác thực & Phân quyền | Đăng nhập JWT, Hồ sơ người dùng, Đổi mật khẩu, RBAC, Nhật ký Audit Log |
-| `MOD_PAT` | Quản lý Bệnh nhân | Hồ sơ hành chính, Tiền sử bệnh lý, Dị ứng, Sinh hiệu |
-| `MOD_APP` | Quản lý Lịch hẹn | Đặt lịch trực tuyến/tại quầy theo giờ hoạt động chung, slot 30 phút (DL-043), tối đa 100 khách/slot (DL-050); không quản lý ca làm việc MOD_ROS |
-| `MOD_CHK` | Tiếp đón & Xếp hàng | Check-in, số thứ tự hàng đợi, điều phối vào buồng khám |
-| `MOD_FDI` | Khám bệnh & Sơ đồ răng | Sơ đồ răng 32/20 chuẩn FDI, chẩn đoán ICD-10, kế hoạch điều trị |
-| `MOD_IMG` | Quản lý Hình ảnh | Tải lên và lưu trữ phim X-quang, ảnh trước/sau điều trị |
-| `MOD_RX` | Đơn thuốc điện tử | Kê đơn, cảnh báo tương tác thuốc và dị ứng tiền sử |
-| `MOD_BIL` | Hóa đơn & Thanh toán | Lập phiếu thu, giảm giá, thanh toán tiền mặt/chuyển khoản |
-| `MOD_INV` | Quản lý Kho & Vật tư | Danh mục thuốc/vật tư, cảnh báo tồn kho, phiếu xuất theo gợi ý BOM |
-| `MOD_ASS` | Hỗ trợ Điều trị | Ghi nhận trợ thủ, vật tư tiêu hao thực tế của ca thủ thuật |
-| `MOD_MST` | Danh mục Dòng máy/Dịch vụ | Bảng giá dịch vụ nha khoa, danh mục thủ thuật kỹ thuật |
-| `MOD_RPT` | Báo cáo & Thống kê | Doanh thu phòng khám, hiệu suất bác sĩ, tỷ lệ quay lại |
+| Mã Module | Tên Module | Số CN | Trách nhiệm chính |
+|---|---|:---:|---|
+| `MOD_AUTH` | Xác thực & Phân quyền | **6** | Đăng ký bệnh nhân, Đăng nhập JWT & RBAC, Hồ sơ cá nhân & đổi mật khẩu, Khôi phục mật khẩu OTP (`F_AUTH_04`), Quản lý vai trò/quyền, Nhật ký Audit Log |
+| `MOD_PAT` | Bệnh nhân & Hồ sơ | **9** | Tạo hồ sơ (kèm nhập/đối soát CCCD SHA-256), Tìm kiếm nhanh, Kiểm tra trùng, Tiền sử & dị ứng, Sinh hiệu, Cảnh báo an toàn, Lịch sử điều trị timeline, Khóa/chốt hồ sơ, Tạo bản ghi khám mới (`Visit`) |
+| `MOD_APP` | Đặt lịch bệnh nhân | **2** | Đặt lịch trực tuyến (`F_APP_01`) và Đặt lịch tại quầy do Lễ tân thao tác hộ (`F_APP_02`, kèm ca cấp cứu & nhắc hẹn) |
+| `MOD_CHK` | Tiếp đón & Hàng đợi | **6** | Xác nhận khách đến (kèm cảnh báo công nợ), Hàng đợi chung, Gọi số & màn hình TV, Quản lý trạng thái tiến trình, Điều phối Nha sĩ/X-quang (gộp chỉ định chụp), Bắt đầu/kết thúc lần khám |
+| `MOD_FDI` | Sơ đồ răng FDI | **7** | Hiển thị sơ đồ 32/20 răng chuẩn FDI, Chọn răng & mặt răng, Gán tình trạng bệnh lý, Chỉ định dịch vụ theo răng, Cập nhật sau điều trị, Lịch sử trạng thái răng, Ghi chú lâm sàng theo răng |
+| `MOD_IMG` | Hình ảnh hồ sơ | **2** | Tải lên tệp ảnh X-quang/chụp trong miệng gắn với lần khám/răng (`F_IMG_02` đơn giản hóa) và Xem/thu phóng ảnh (`F_IMG_04` đơn giản hóa) |
+| `MOD_RX` | Đơn thuốc | **4** | Kê đơn thuốc điện tử (kèm cảnh báo dị ứng), Kiểm tra tồn/an toàn thuốc, In/xuất đơn thuốc A5 (kèm mã QR tra cứu), Lịch sử đơn thuốc |
+| `MOD_BIL` | Thanh toán & Hóa đơn | **5** | Tạo hóa đơn nháp từ dịch vụ & đơn thuốc, Áp dụng giảm giá/khuyến mãi, Thu tiền viện phí & theo dõi các đợt trả (hỗ trợ trả nhiều đợt cho dịch vụ dài ngày), In/xuất biên lai K80 & hoàn tiền, Hủy/điều chỉnh hóa đơn nháp |
+| `MOD_INV` | Kho & Vật tư | **2** | Lập phiếu nhập kho vật tư kèm cảnh báo tồn tối thiểu (`F_INV_03` đơn giản hóa) và Gợi ý/xác nhận trừ tồn kho vật tư tiêu hao khi hoàn tất dịch vụ (`F_INV_06` đơn giản hóa) |
+| `MOD_ASS` | Nghiệp vụ phụ tá | **1** | Cập nhật và theo dõi trạng thái ghế/phòng điều trị (`F_ASS_06` đơn giản hóa) |
+| `MOD_MST` | Danh mục hệ thống | **7** | Quản lý dịch vụ & bảng giá, Danh mục bệnh lý/triệu chứng, Danh mục thuốc, Danh mục vật tư & ngưỡng tồn, Danh mục phòng & ghế nha khoa, Cấu hình hệ thống (`F_MST_06` đơn giản hóa), Quản lý người dùng nhân viên |
+| `MOD_RPT` | Báo cáo & Thống kê | **1** | Báo cáo tổng hợp doanh thu và công nợ phòng khám theo kỳ, phương thức thanh toán (`F_RPT_01`) |
 
 ---
 
@@ -113,11 +114,11 @@ Yêu cầu đã bật Docker Desktop. Tại thư mục gốc dự án:
 
 Toàn bộ logic bảo mật, mã hóa BCrypt, phát hành JWT và phân quyền của đồ án đều được kiểm thử tự động:
 
-- **Backend Unit Tests:**
+- **Backend Unit & Integration Tests:**
   ```powershell
   dotnet test backend/DentalClinic.sln
   ```
-  *Kết quả:* **501/501 tests PASSED** (100% thành công, 0 lỗi).
+  *Kết quả:* **1514/1514 .NET tests PASSED** (kèm **559/559 PostgreSQL HTTP smoke tests** & **651/651 Node frontend tests PASSED**, 0 lỗi).
 - **Frontend Type-check & Build:**
   ```powershell
   cd frontend
