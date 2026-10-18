@@ -38,6 +38,7 @@
           {{ loading ? 'Đang xác thực...' : 'Đăng nhập' }}
         </button>
       </form>
+      <p class="register-link"><RouterLink to="/forgot-password">Quên mật khẩu?</RouterLink></p>
       <p class="register-link">Chưa có tài khoản? <RouterLink to="/register">Đăng ký</RouterLink></p>
     </div>
   </div>

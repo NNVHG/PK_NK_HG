@@ -131,6 +131,14 @@ builder.Services.AddSingleton<VietnamClock>();
 
 // ===== 4. Application Services =====
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_AUTH.PasswordRecoveryService>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_AUTH.IPasswordRecoveryRepository, PasswordRecoveryRepository>();
+builder.Services.AddSingleton<Dental.Application.Features.MOD_AUTH.IPasswordRecoveryCodes, PasswordRecoveryCodes>();
+builder.Services.AddSingleton<PasswordRecoveryDelivery>();
+builder.Services.AddSingleton<Dental.Application.Features.MOD_AUTH.IPasswordRecoveryDelivery>(sp => sp.GetRequiredService<PasswordRecoveryDelivery>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<PasswordRecoveryDelivery>());
+builder.Services.AddHttpClient<Dental.Application.Features.MOD_AUTH.IPasswordRecoverySms, PasswordRecoverySms>(client => client.Timeout = TimeSpan.FromSeconds(10))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false }).RemoveAllLoggers();
 builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddScoped<StaffService>();
 builder.Services.AddScoped<PatientsService>();
@@ -209,6 +217,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience            = builder.Configuration["Jwt:Audience"] ?? "DentalClinicClient",
             IssuerSigningKey         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
             ClockSkew                = TimeSpan.Zero, // không cho phép slack thời gian
+        };
+        opts.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = AccessTokenVersionValidation.ValidateAsync
         };
     });
 
