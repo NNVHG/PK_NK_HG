@@ -21,6 +21,9 @@ public sealed class Patient : BaseEntity
 
     public string? Email { get; set; }
     public string? Address { get; set; }
+    public string? CitizenIdHash { get; set; }
+    public string? CitizenIdMasked { get; set; }
+    public int CitizenIdVersion { get; set; }
     public int? UserId { get; set; }
     public bool IsActive { get; set; } = true;
 

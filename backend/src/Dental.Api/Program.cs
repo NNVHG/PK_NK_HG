@@ -85,6 +85,8 @@ builder.Services.AddScoped<Dental.Application.Features.MOD_MST.Services.Diagnosi
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 builder.Services.AddScoped<IPatientRepository, PatientRepository>();
+builder.Services.AddScoped<IPatientCitizenIdRepository, PatientCitizenIdRepository>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_PAT.PatientCitizenIdService>();
 builder.Services.AddScoped<IVisitRepository, VisitRepository>();
 builder.Services.AddScoped<IPostTreatmentNoteRepository, PostTreatmentNoteRepository>();
 builder.Services.AddScoped<IMedicalHistoryRepository, MedicalHistoryRepository>();

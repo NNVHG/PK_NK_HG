@@ -35,6 +35,7 @@ function fixture(role = 'DENTIST', userId = 5) {
         getOpenVisits: async () => [],
       },
     },
+    '@/components/PatientCitizenId.vue': { default: {} },
     '@/services/visits': {
       visitsService: {
         getPostTreatmentNotes: async (visitId) => { calls.push(['getNotes', visitId]); if (readDeferred) await readDeferred.promise; return [...notes]; },

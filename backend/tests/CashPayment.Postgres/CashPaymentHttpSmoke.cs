@@ -41,6 +41,8 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddControllers().AddApplicationPart(typeof(CashPaymentsController).Assembly);
         builder.Services.AddScoped(_ => new DentalDbContext(options));
         builder.Services.AddScoped<IPrescriptionRepository, PrescriptionRepository>();
+        builder.Services.AddScoped<IPatientCitizenIdRepository, PatientCitizenIdRepository>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_PAT.PatientCitizenIdService>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_RX.Services.PrescriptionService>();
         builder.Services.AddScoped<IMedicineCatalogRepository, MedicineCatalogRepository>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_MST.Services.MedicineCatalogService>();
@@ -165,7 +167,9 @@ internal static class CashPaymentHttpSmoke
             void Authenticate(string role) => AuthenticateActor(role, cashierId);
             if (prescriptionOnly)
             {
-                await PrescriptionHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);
+                if (Environment.GetCommandLineArgs().Contains("--patient-citizen-id-only"))
+                    await PatientCitizenIdHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);
+                else await PrescriptionHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);
                 return;
             }
             if (medicineCatalogOnly)
