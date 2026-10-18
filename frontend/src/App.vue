@@ -15,6 +15,7 @@
           <router-link to="/patients">Bệnh nhân</router-link>
         </template>
         <router-link v-if="isAdmin" to="/admin/staff">Tài khoản nhân viên</router-link>
+        <router-link v-if="isAdmin" to="/admin/reports/revenue">Báo cáo doanh thu</router-link>
         <router-link v-if="isAdmin" to="/admin/role-permissions">Ma trận quyền</router-link>
         <router-link v-if="['ADMIN', 'DENTIST', 'ASSISTANT'].includes(authStore.role)" to="/staff/workspace">Vị trí nha sĩ/phụ tá</router-link>
         <router-link v-if="isAdmin" to="/admin/diagnoses">Danh mục chẩn đoán</router-link>
