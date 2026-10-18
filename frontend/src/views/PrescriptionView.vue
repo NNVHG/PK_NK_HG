@@ -4,6 +4,7 @@
   <button :disabled="busy" @click="load">{{ draft.length ? 'Bỏ thay đổi và tải lại' : 'Tải lại hồ sơ' }}</button>
   <p v-if="busy" role="status">Đang xử lý…</p><p v-if="error" role="alert" class="error">{{ error }}</p><p v-if="message" role="status">{{ message }}</p>
   <template v-if="context">
+   <RouterLink v-if="context.prescription && !context.prescription.isCancelled" :to="'/portal/prescriptions/' + context.prescription.prescriptionCode">Mở trang tra cứu đơn bằng CCCD</RouterLink>
    <p>Ca khám: {{ context.visitStatus }} · {{ context.invoiceCode || 'Chưa có hóa đơn' }} · {{ context.invoiceStatus || '' }}</p>
    <RouterLink v-if="!busy && ['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(auth.role)" :to="`/clinical/visits/${visitId}/invoice-draft`">Đối chiếu hóa đơn dịch vụ và thuốc</RouterLink>
    <section v-if="!editable && context.prescription" aria-label="Đơn thuốc đã lưu">

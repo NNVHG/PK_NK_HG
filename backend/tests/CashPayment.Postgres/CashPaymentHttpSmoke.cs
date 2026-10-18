@@ -41,6 +41,11 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddControllers().AddApplicationPart(typeof(CashPaymentsController).Assembly);
         builder.Services.AddScoped(_ => new DentalDbContext(options));
         builder.Services.AddScoped<IPrescriptionRepository, PrescriptionRepository>();
+        builder.Services.AddScoped<IPublicPrescriptionRepository, PublicPrescriptionRepository>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_RX.PublicPrescriptionService>();
+        builder.Services.AddSingleton<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>(new Microsoft.AspNetCore.DataProtection.EphemeralDataProtectionProvider());
+        builder.Services.AddSingleton<IPublicPrescriptionAccess, Dental.Infrastructure.Services.PublicPrescriptionAccess>();
+        builder.Services.AddRateLimiter(o => { o.RejectionStatusCode = 429; Dental.Api.RateLimiting.PublicPrescriptionRateLimits.Configure(o); });
         builder.Services.AddScoped<IPatientCitizenIdRepository, PatientCitizenIdRepository>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_PAT.PatientCitizenIdService>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_RX.Services.PrescriptionService>();
@@ -144,7 +149,7 @@ internal static class CashPaymentHttpSmoke
                 ValidateAudience = true, ValidAudience = "cash-test", ValidateLifetime = true, ClockSkew = TimeSpan.Zero });
         builder.Services.AddAuthorization(policies => policies.AddApplicationPolicies());
         await using var app = builder.Build();
-        app.UseAuthentication(); app.UseAuthorization(); app.MapControllers();
+        app.UseRateLimiter(); app.UseAuthentication(); app.UseAuthorization(); app.MapControllers();
         await app.StartAsync();
         try
         {
@@ -167,7 +172,9 @@ internal static class CashPaymentHttpSmoke
             void Authenticate(string role) => AuthenticateActor(role, cashierId);
             if (prescriptionOnly)
             {
-                if (Environment.GetCommandLineArgs().Contains("--patient-citizen-id-only"))
+                if (Environment.GetCommandLineArgs().Contains("--public-prescription-only"))
+                    await PublicPrescriptionHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);
+                else if (Environment.GetCommandLineArgs().Contains("--patient-citizen-id-only"))
                     await PatientCitizenIdHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);
                 else await PrescriptionHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);
                 return;

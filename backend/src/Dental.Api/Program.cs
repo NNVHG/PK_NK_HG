@@ -86,6 +86,10 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 builder.Services.AddScoped<IPatientRepository, PatientRepository>();
 builder.Services.AddScoped<IPatientCitizenIdRepository, PatientCitizenIdRepository>();
+builder.Services.AddScoped<IPublicPrescriptionRepository, PublicPrescriptionRepository>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_RX.PublicPrescriptionService>();
+builder.Services.AddDataProtection();
+builder.Services.AddSingleton<IPublicPrescriptionAccess, PublicPrescriptionAccess>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_PAT.PatientCitizenIdService>();
 builder.Services.AddScoped<IVisitRepository, VisitRepository>();
 builder.Services.AddScoped<IPostTreatmentNoteRepository, PostTreatmentNoteRepository>();
@@ -201,6 +205,7 @@ builder.Services.AddAuthorization(opts => opts.AddApplicationPolicies());
 
 // [CẦN XÁC NHẬN] Ngưỡng mặc định là 10 lần/phút cho đăng nhập và 5 lần/phút cho đăng ký.
 builder.Services.AddRateLimiter(options => AuthRateLimitPolicies.Configure(options, builder.Configuration));
+builder.Services.AddRateLimiter(PublicPrescriptionRateLimits.Configure);
 
 // ===== 8. CORS (chỉ cho phép frontend dev) =====
 builder.Services.AddCors(opts =>

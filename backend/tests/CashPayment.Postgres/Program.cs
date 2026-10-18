@@ -10,9 +10,9 @@ using Npgsql;
 
 // Explicit opt-in; synthetic data and a unique disposable database, never the clinic database.
 if (args.Length is not (2 or 3) || args[0] != "--isolated-config" ||
-    args.Length == 3 && args[2] is not ("--queue-call-next-only" or "--invoice-discounts-only" or "--service-catalog-only" or "--queue-imaging-only" or "--queue-calling-only" or "--queue-absence-only" or "--queue-cleanup-only" or "--chair-catalog-only" or "--staff-workspaces-only" or "--queue-locations-only" or "--visit-corrections-only" or "--physical-chairs-only" or "--visit-cancellation-only" or "--post-treatment-notes-only" or "--diagnosis-catalog-only" or "--revenue-report-only" or "--medicine-catalog-only" or "--prescription-only" or "--patient-citizen-id-only"))
-    throw new ArgumentException("Use --isolated-config <config.json> [--queue-call-next-only|--invoice-discounts-only|--service-catalog-only|--queue-imaging-only|--queue-calling-only|--queue-absence-only|--queue-cleanup-only|--chair-catalog-only|--staff-workspaces-only|--queue-locations-only|--visit-corrections-only|--physical-chairs-only|--visit-cancellation-only|--post-treatment-notes-only|--diagnosis-catalog-only|--revenue-report-only|--medicine-catalog-only|--prescription-only|--patient-citizen-id-only]");
-var prescriptionOnly = args.Length == 3 && args[2] is "--prescription-only" or "--patient-citizen-id-only";
+    args.Length == 3 && args[2] is not ("--queue-call-next-only" or "--invoice-discounts-only" or "--service-catalog-only" or "--queue-imaging-only" or "--queue-calling-only" or "--queue-absence-only" or "--queue-cleanup-only" or "--chair-catalog-only" or "--staff-workspaces-only" or "--queue-locations-only" or "--visit-corrections-only" or "--physical-chairs-only" or "--visit-cancellation-only" or "--post-treatment-notes-only" or "--diagnosis-catalog-only" or "--revenue-report-only" or "--medicine-catalog-only" or "--prescription-only" or "--patient-citizen-id-only" or "--public-prescription-only"))
+    throw new ArgumentException("Use --isolated-config <config.json> [--queue-call-next-only|--invoice-discounts-only|--service-catalog-only|--queue-imaging-only|--queue-calling-only|--queue-absence-only|--queue-cleanup-only|--chair-catalog-only|--staff-workspaces-only|--queue-locations-only|--visit-corrections-only|--physical-chairs-only|--visit-cancellation-only|--post-treatment-notes-only|--diagnosis-catalog-only|--revenue-report-only|--medicine-catalog-only|--prescription-only|--patient-citizen-id-only|--public-prescription-only]");
+var prescriptionOnly = args.Length == 3 && args[2] is "--prescription-only" or "--patient-citizen-id-only" or "--public-prescription-only";
 var medicineCatalogOnly = args.Length == 3 && args[2] == "--medicine-catalog-only";
 var revenueReportOnly = args.Length == 3 && args[2] == "--revenue-report-only";
 var diagnosisCatalogOnly = args.Length == 3 && args[2] == "--diagnosis-catalog-only";
@@ -51,7 +51,7 @@ try
     if (prescriptionOnly)
     {
         await CashPaymentHttpSmoke.RunAsync(options, cashier.UserId, patient.PatientId, Check, prescriptionOnly: true);
-        Console.WriteLine($"PostgreSQL {(args[2] == "--patient-citizen-id-only" ? "patient citizen identity" : "prescription")} checks: {checks}/{checks} PASS");
+        Console.WriteLine($"PostgreSQL {(args[2] == "--patient-citizen-id-only" ? "patient citizen identity" : args[2] == "--public-prescription-only" ? "public prescription" : "prescription")} checks: {checks}/{checks} PASS");
         return;
     }
     if (medicineCatalogOnly)
