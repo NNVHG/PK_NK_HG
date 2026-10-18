@@ -49,7 +49,7 @@ public sealed class MedicalSupplyCatalogService(
                 if (await repo.CodeExistsAsync(cleaned.Code, id, token))
                     return Result<MedicalSupplyResponse>.Failure(new Error("MST_091", "Mã vật tư đã tồn tại."));
                 MedicalSupply item;
-                string? oldValue = null;
+                object? oldValue = null;
                 if (id.HasValue)
                 {
                     var found = await repo.FindAsync(id.Value, token);
@@ -84,9 +84,9 @@ public sealed class MedicalSupplyCatalogService(
                     "MedicalSupply",
                     item.Id,
                     actorId,
-                    Snapshot(item),
-                    oldValue,
-                    token);
+                    JsonSerializer.Serialize(new { Before = oldValue, After = Snapshot(item) }),
+                    ipAddress: null,
+                    ct: token);
                 return Result<MedicalSupplyResponse>.Success(Map(item));
             }, ct);
         }
@@ -117,7 +117,8 @@ public sealed class MedicalSupplyCatalogService(
                 item.UpdatedAt = clock.UtcNow;
                 item.UpdatedByUserId = actorId.Value;
                 await uow.SaveChangesAsync(token);
-                await audit.LogRequiredAsync("MOD_MST_MEDICAL_SUPPLY_DEACTIVATED", "MedicalSupply", item.Id, actorId, Snapshot(item), oldValue, token);
+                await audit.LogRequiredAsync("MOD_MST_MEDICAL_SUPPLY_DEACTIVATED", "MedicalSupply", item.Id, actorId,
+                    JsonSerializer.Serialize(new { Before = oldValue, After = Snapshot(item) }), ipAddress: null, ct: token);
                 return Result<MedicalSupplyResponse>.Success(Map(item));
             }, ct);
         }
@@ -129,8 +130,8 @@ public sealed class MedicalSupplyCatalogService(
 
     private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    private static string Snapshot(MedicalSupply x) =>
-        JsonSerializer.Serialize(new { x.Id, x.Code, x.Unit, x.MinimumStockThreshold, x.IsActive, x.Version });
+    private static object Snapshot(MedicalSupply x) =>
+        new { x.Id, x.Code, x.Unit, x.MinimumStockThreshold, x.IsActive, x.Version };
 
     private static MedicalSupplyResponse Map(MedicalSupply x) =>
         new(x.Id, x.Code, x.Name, x.Unit, x.MinimumStockThreshold, x.Description, x.IsActive, x.Version, x.CreatedAt, x.UpdatedAt, x.CreatedByUserId, x.UpdatedByUserId);

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Dental.Application.Common;
 using Dental.Application.Features.MOD_MST.DTOs;
 using Dental.Application.Features.MOD_MST.Services;
@@ -169,6 +170,50 @@ public sealed class MedicalSupplyCatalogTests
         Assert.Equal(10, item.MinimumStockThreshold);
         Assert.Equal(2, item.Version);
         Assert.Equal(9, item.UpdatedByUserId);
+    }
+
+    [Fact]
+    public async Task UpdateAuditKeepsStructuredBeforeAfterMetadataOutOfIpAddress()
+    {
+        var result = await Service().SaveAsync(7, 9, RoleCodes.Admin, Input() with { MinimumStockThreshold = 25 });
+        Assert.True(result.IsSuccess);
+        var args = Assert.Single(audit.ReceivedCalls()).GetArguments();
+        Assert.Equal("MOD_MST_MEDICAL_SUPPLY_UPDATED", args[0]);
+        Assert.Null(args[5]);
+        var json = Assert.IsType<string>(args[4]);
+        using var detail = JsonDocument.Parse(json);
+        var before = detail.RootElement.GetProperty("Before");
+        var after = detail.RootElement.GetProperty("After");
+        Assert.Equal(10, before.GetProperty("MinimumStockThreshold").GetInt32());
+        Assert.Equal(25, after.GetProperty("MinimumStockThreshold").GetInt32());
+        Assert.Equal(1, before.GetProperty("Version").GetInt32());
+        Assert.Equal(2, after.GetProperty("Version").GetInt32());
+        Assert.True(before.GetProperty("IsActive").GetBoolean());
+        Assert.True(after.GetProperty("IsActive").GetBoolean());
+        Assert.DoesNotContain("\"Name\"", json);
+        Assert.DoesNotContain("\"Description\"", json);
+    }
+
+    [Fact]
+    public async Task DeactivationAuditKeepsStructuredBeforeAfterMetadataOutOfIpAddress()
+    {
+        var result = await Service().DeactivateAsync(7, 1, 9, RoleCodes.Admin);
+        Assert.True(result.IsSuccess);
+        var args = Assert.Single(audit.ReceivedCalls()).GetArguments();
+        Assert.Equal("MOD_MST_MEDICAL_SUPPLY_DEACTIVATED", args[0]);
+        Assert.Null(args[5]);
+        var json = Assert.IsType<string>(args[4]);
+        using var detail = JsonDocument.Parse(json);
+        var before = detail.RootElement.GetProperty("Before");
+        var after = detail.RootElement.GetProperty("After");
+        Assert.True(before.GetProperty("IsActive").GetBoolean());
+        Assert.False(after.GetProperty("IsActive").GetBoolean());
+        Assert.Equal(1, before.GetProperty("Version").GetInt32());
+        Assert.Equal(2, after.GetProperty("Version").GetInt32());
+        Assert.Equal(10, before.GetProperty("MinimumStockThreshold").GetInt32());
+        Assert.Equal(10, after.GetProperty("MinimumStockThreshold").GetInt32());
+        Assert.DoesNotContain("\"Name\"", json);
+        Assert.DoesNotContain("\"Description\"", json);
     }
 
     [Fact]
