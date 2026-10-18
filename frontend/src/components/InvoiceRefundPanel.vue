@@ -24,7 +24,7 @@
    <p>Hoàn trả khách: <strong>{{ money(preview.refundAmount) }}</strong></p>
    <p>Tổng còn lại {{ money(preview.totalAfter) }} · Giảm giá còn lại {{ money(preview.discountAfter) }} · Đã thu còn lại {{ money(preview.paidAfter) }} · Còn nợ {{ money(preview.remainingAfter) }}</p>
    <p v-if="preview.refundAmount === '0'">Chỉ điều chỉnh giảm nợ hoặc hủy phần miễn phí; không phát sinh chi tiền và không tạo giao dịch 0 đồng.</p>
-   <label v-if="preview.requiresLateApproval"><input v-model="late" type="checkbox" :disabled="busy || blocked" /> Admin phê duyệt ngoại lệ quá 7 ngày kể từ lần thu gốc, theo lý do đã ghi.</label>
+   <label v-if="preview.requiresLateApproval"><input v-model="late" type="checkbox" :disabled="busy || blocked" /> Admin phê duyệt ngoại lệ quá 7 ngày kể từ lần thu dương đầu tiên, theo lý do đã ghi.</label>
    <label v-if="preview.requiresReserve"><input v-model="reserve" type="checkbox" :disabled="busy || blocked" /> Số hoàn vượt tiền mặt thu trong ngày của tôi. Xác nhận xuất quỹ dự phòng.</label>
    <label><input v-model="confirmed" type="checkbox" :disabled="busy || blocked" /> Tôi đã đối chiếu khoản hủy, số tiền và xác nhận {{ preview.refundAmount === '0' ? 'điều chỉnh công nợ' : 'chi hoàn đúng một lần theo phương thức đã chọn' }}.</label>
    <button :disabled="busy || blocked || !confirmed || preview.requiresLateApproval && !late || preview.requiresReserve && !reserve" @click="save">Xác nhận hoàn / điều chỉnh</button>

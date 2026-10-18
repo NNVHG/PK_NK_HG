@@ -51,7 +51,12 @@ public sealed class InvoiceRefundTests
     [Theory][InlineData(0,false)][InlineData(7,false)][InlineData(8,true)]
     public void SingleReceiptOrUnambiguousWindow_UsesApprovedSevenDayLimit(int days,bool expected)
     {var now=new DateTime(2026,10,18,2,0,0,DateTimeKind.Utc);Assert.Equal(expected,InvoiceRefundRules.RequiresLateApproval([now.AddDays(-days)],now).Value);}
-    [Fact]public void SplitReceiptsAcrossLimit_WaitsForQ324InsteadOfChoosingBusinessPolicy()
-    {var now=new DateTime(2026,10,18,2,0,0,DateTimeKind.Utc);Assert.Equal("BIL_REFUND_WINDOW_UNRESOLVED",InvoiceRefundRules.RequiresLateApproval([now.AddDays(-8),now.AddDays(-1)],now).Error.Code);}
+    [Fact]public void MultipleReceipts_SevenDayWindowStartsAtFirstPositiveReceipt()
+    {
+        var now=new DateTime(2026,10,18,2,0,0,DateTimeKind.Utc);
+        Assert.True(InvoiceRefundRules.RequiresLateApproval([now.AddDays(-8),now.AddDays(-1)],now).Value);
+        Assert.True(InvoiceRefundRules.RequiresLateApproval([now.AddDays(-1),now.AddDays(-8)],now).Value);
+        Assert.False(InvoiceRefundRules.RequiresLateApproval([now.AddDays(-7),now.AddDays(-1)],now).Value);
+    }
 
 }

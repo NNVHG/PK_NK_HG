@@ -10,10 +10,8 @@ public static class InvoiceRefundRules
 {
     public static Result<bool> RequiresLateApproval(IReadOnlyList<DateTime> receipts, DateTime now)
     {
-        var late = receipts.Select(at => now - at > TimeSpan.FromDays(7)).Distinct().ToArray();
-        // [CẦN XÁC NHẬN] Q-324: multiple receipts straddle the 7-day limit; do not choose first/latest without a decision.
-        if (late.Length > 1) return Result<bool>.Failure(new("BIL_REFUND_WINDOW_UNRESOLVED", "Các lần thu nằm ở hai phía hạn 7 ngày. Chưa chốt mốc hoàn tiền cho hóa đơn thu nhiều lần (Q-324); chưa ghi nhận điều chỉnh."));
-        return Result<bool>.Success(late.FirstOrDefault());
+        // DL-303: Hạn 7 ngày tính từ khoản thu dương đầu tiên; thu thêm không gia hạn.
+        return Result<bool>.Success(receipts.Count > 0 && now - receipts.Min() > TimeSpan.FromDays(7));
     }
     public static readonly string[] Reasons = ["CANCEL_BEFORE_TREATMENT", "MEDICAL_CONTRAINDICATION", "BILLING_ERROR", "PATIENT_REQUEST", "OTHER"];
     public static Result<RefundCalculation> Calculate(Invoice invoice, IReadOnlyList<RefundSelection> selection)
