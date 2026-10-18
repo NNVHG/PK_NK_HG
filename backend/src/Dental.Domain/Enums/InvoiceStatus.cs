@@ -7,5 +7,7 @@ public enum InvoiceStatus
     PendingPayment = 1,
     PartiallyPaid = 2,
     Paid = 3,
-    Cancelled = 4
+    Cancelled = 4,
+    PartiallyRefunded = 5,
+    Refunded = 6
 }

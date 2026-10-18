@@ -2,7 +2,7 @@ import { apiClient } from '@/services/api';
 
 export interface InvoiceItem {
   itemType: string; code: string; name: string; toothNumber: number | null; surface: string | null;
-  quantity: number; unitPrice: number; totalAmount: number;
+  refundedQuantity?: number; quantity: number; unitPrice: number; totalAmount: number;
 }
 export interface InvoiceDraft {
   id: number; visitId: number; invoiceCode: string; status: number; totalAmount: number;

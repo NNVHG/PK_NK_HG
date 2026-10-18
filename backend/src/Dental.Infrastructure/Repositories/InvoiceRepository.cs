@@ -16,7 +16,7 @@ namespace Dental.Infrastructure.Repositories;
 public sealed class InvoiceRepository(DentalDbContext db) : IInvoiceRepository
 {
     public Task<Invoice?> GetForVisitAsync(int visitId, CancellationToken ct = default)
-        => db.Invoices.AsNoTracking().Include(x => x.Items).FirstOrDefaultAsync(x => x.VisitId == visitId && x.Status != InvoiceStatus.Cancelled, ct);
+        => db.Invoices.AsNoTracking().Include(x => x.Items).Include(x => x.Refunds).ThenInclude(r => r.Items).FirstOrDefaultAsync(x => x.VisitId == visitId && x.Status != InvoiceStatus.Cancelled, ct);
     public async Task<Result> StageVisitCancellationAsync(int visitId, int userId, string role, string? ip, CancellationToken ct = default)
     {
         if (db.Database.CurrentTransaction?.GetDbTransaction().IsolationLevel != IsolationLevel.Serializable)

@@ -55,7 +55,7 @@ public sealed class BankTransferWebhookController(BankTransferWebhookService ser
         if (invoiceId <= 0) return BadRequest();
         var invoice = await repository.GetInvoiceAsync(invoiceId, ct);
         if (invoice is null) return NotFound();
-        if (invoice.Status is not (InvoiceStatus.PendingPayment or InvoiceStatus.PartiallyPaid) || !invoice.Visit.IsLocked ||
+        if (invoice.Status is not (InvoiceStatus.PendingPayment or InvoiceStatus.PartiallyPaid or InvoiceStatus.PartiallyRefunded) || !invoice.Visit.IsLocked ||
             invoice.Visit.Status != VisitStatuses.Completed || invoice.FinalAmount <= invoice.PaidAmount)
             return Conflict(new { message = "Hóa đơn chưa sẵn sàng hoặc không còn nợ." });
         var content = $"PKNK {invoice.InvoiceCode}";

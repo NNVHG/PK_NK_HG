@@ -224,9 +224,9 @@ public sealed class InvoiceDraftServiceTests
         => Assert.Equal(valid, new InvoiceVisitRequestValidator().Validate(new InvoiceVisitRequest(id)).IsValid);
 
     [Fact]
-    public void Enum_MatchesDl144()
+    public void Enum_PreservesDl144AndAddsDl251RefundStates()
     {
-        Assert.Equal(new[] { 0, 1, 2, 3, 4 }, Enum.GetValues<InvoiceStatus>().Select(x => (int)x));
+        Assert.Equal(new[] { 0, 1, 2, 3, 4, 5, 6 }, Enum.GetValues<InvoiceStatus>().Select(x => (int)x));
         Assert.Equal("PendingPayment", Enum.GetName((InvoiceStatus)1));
     }
 

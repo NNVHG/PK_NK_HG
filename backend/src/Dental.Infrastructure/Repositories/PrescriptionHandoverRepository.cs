@@ -24,7 +24,16 @@ public sealed class PrescriptionHandoverRepository(DentalDbContext db, VietnamCl
         return rx;
     }
     private static bool Active(Prescription p) => !p.IsCancelled && p.Visit.Status != VisitStatuses.Cancelled;
-    private static bool Paid(Prescription p) => p.Invoice is { Status: InvoiceStatus.Paid } invoice && invoice.VisitId == p.VisitId && invoice.PaidAmount == invoice.FinalAmount;
+    private async Task<bool> SettledAsync(Prescription p, CancellationToken ct)
+    {
+        if (p.Invoice is not {} invoice || invoice.VisitId != p.VisitId || invoice.Status is not (InvoiceStatus.Paid or InvoiceStatus.PartiallyRefunded) ||
+            invoice.PaidAmount < 0 || invoice.FinalAmount < 0 || invoice.PaidAmount != invoice.FinalAmount) return false;
+        // DL-301: a status flag cannot replace refund provenance or the unrefunded medicine-line check.
+        if (invoice.Status == InvoiceStatus.PartiallyRefunded && !await db.InvoiceRefunds.AnyAsync(r => r.InvoiceId == invoice.Id, ct)) return false;
+        var rxItems = db.PrescriptionItems.Where(x => x.PrescriptionId == p.Id).Select(x => x.Id);
+        return !await db.InvoiceRefundItems.AnyAsync(r => r.InvoiceRefund.InvoiceId == invoice.Id && r.InvoiceItem.ItemType == "Medicine" &&
+            r.InvoiceItem.SourcePrescriptionItemId.HasValue && rxItems.Contains(r.InvoiceItem.SourcePrescriptionItemId.Value), ct);
+    }
     private bool InWindow(Prescription p) => p.DispensedAt is DateTime at && at <= clock.UtcNow && clock.UtcNow - at <= TimeSpan.FromMinutes(30);
     private bool MayUndo(Prescription p, int actorId, string role) => Active(p) && PrescriptionHandoverService.CanWrite(role) && InWindow(p) && (role == RoleCodes.Admin || p.DispensedBy == actorId);
     private async Task<PrescriptionHandoverStatus> StatusAsync(Prescription rx, int actorId, string role, CancellationToken ct)
@@ -32,7 +41,8 @@ public sealed class PrescriptionHandoverRepository(DentalDbContext db, VietnamCl
         var patient = await db.Patients.AsNoTracking().SingleAsync(p => p.PatientId == rx.Visit.PatientId, ct);
         var required = patient.DateOfBirth.AddYears(15) > clock.Today;
         var expires = rx.CreatedAt.AddDays(5); // Q-267: elapsed five days from the saved prescribing timestamp.
-        var ready = Active(rx) && rx.DispensedAt is null && Paid(rx) && rx.Version < int.MaxValue;
+        var settled = await SettledAsync(rx, ct);
+        var ready = Active(rx) && rx.DispensedAt is null && settled && rx.Version < int.MaxValue;
         var authorized = PrescriptionHandoverService.CanWrite(role);
         var name = rx.DispensedBy is int userId ? await db.Users.Where(u => u.UserId == userId).Select(u => u.FullName).SingleOrDefaultAsync(ct) : null;
         return new(rx.Id, rx.VisitId, rx.Version, rx.PrescriptionCode, patient.FullName, required, expires,
@@ -40,7 +50,7 @@ public sealed class PrescriptionHandoverRepository(DentalDbContext db, VietnamCl
             ready && authorized && clock.UtcNow <= expires && rx.CreatedAt <= clock.UtcNow,
             MayUndo(rx, actorId, role) && rx.Version < int.MaxValue,
             ready && role == RoleCodes.Admin && clock.UtcNow > expires,
-            !Active(rx) ? "Đơn hoặc lần khám đã hủy." : rx.DispensedAt is not null ? "Đơn đã giao thuốc." : !Paid(rx) ? "Chỉ giao thuốc sau khi hóa đơn đã thanh toán đủ số tiền sau chiết khấu." : clock.UtcNow > expires ? "Đơn quá hạn cấp phát 5 ngày; chỉ Admin được xác nhận ngoại lệ có lý do." : !authorized ? "Bạn chỉ có quyền xem thông tin bàn giao." : null);
+            !Active(rx) ? "Đơn hoặc lần khám đã hủy." : rx.DispensedAt is not null ? "Đơn đã giao thuốc." : !settled ? "Chỉ giao thuốc khi phần còn lại đã thanh toán đủ sau chiết khấu và toàn bộ thuốc cần giao chưa bị hoàn." : clock.UtcNow > expires ? "Đơn quá hạn cấp phát 5 ngày; chỉ Admin được xác nhận ngoại lệ có lý do." : !authorized ? "Bạn chỉ có quyền xem thông tin bàn giao." : null);
     }
     public async Task<Result<PrescriptionHandoverStatus>> ReadAsync(int id, int actorId, string role, CancellationToken ct)
     {

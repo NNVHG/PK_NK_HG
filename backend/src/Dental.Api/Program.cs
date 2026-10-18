@@ -44,6 +44,8 @@ builder.Services.AddScoped<Dental.Application.Features.MOD_RPT.Services.RevenueR
 builder.Services.AddScoped<IRolePermissionMatrixProvider, RolePermissionMatrixProvider>();
 builder.Services.AddScoped<RolePermissionMatrixService>();
 builder.Services.AddScoped<IInvoiceDiscountRepository, InvoiceDiscountRepository>();
+        builder.Services.AddScoped<IInvoiceRefundRepository, InvoiceRefundRepository>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.InvoiceRefundService>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.InvoiceDiscountService>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.DiscountPresetRequestValidator>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.ApplyInvoiceDiscountRequestValidator>();

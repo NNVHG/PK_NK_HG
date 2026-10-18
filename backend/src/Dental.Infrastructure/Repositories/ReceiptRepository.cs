@@ -14,9 +14,10 @@ public sealed class ReceiptRepository(DentalDbContext db) : IReceiptRepository
     private Task<PaymentTransaction?> LoadAsync(ReceiptRequest request, bool tracked, CancellationToken ct)
     {
         var query = db.PaymentTransactions.Include(p => p.Cashier).Include(p => p.Invoice).ThenInclude(i => i.Items)
+            .Include(p => p.Invoice).ThenInclude(i => i.Refunds).ThenInclude(r => r.Items)
             .Include(p => p.Invoice).ThenInclude(i => i.Visit).ThenInclude(v => v.Patient).AsQueryable();
         if (!tracked) query = query.AsNoTracking();
-        return query.FirstOrDefaultAsync(p => p.Id == request.PaymentId && p.InvoiceId == request.InvoiceId, ct);
+        return query.FirstOrDefaultAsync(p => p.Id == request.PaymentId && p.InvoiceId == request.InvoiceId && p.Amount > 0, ct);
     }
     private async Task<ReceiptPrintDto> MapAsync(PaymentTransaction p, int number, DateTime? printedAt, CancellationToken ct)
     {
@@ -28,7 +29,8 @@ public sealed class ReceiptRepository(DentalDbContext db) : IReceiptRepository
             patient.PatientCode, patient.DateOfBirth.Year, p.Cashier.FullName, p.PaidAt, p.PaymentMethod, p.Source,
             p.Amount, p.AmountTendered, p.ChangeAmount, p.Note, invoice.FinalAmount, invoice.PaidAmount,
             invoice.FinalAmount - invoice.PaidAmount, p.PrintCount, number, printedAt,
-            invoice.Items.OrderBy(i => i.Id).Select(i => new ReceiptLineDto(i.Name, i.Quantity, i.UnitPrice, i.TotalAmount)).ToArray())
+            invoice.Items.OrderBy(i => i.Id).Select(i => new { Item = i, Quantity = i.Quantity - invoice.Refunds.SelectMany(r => r.Items).Where(r => r.InvoiceItemId == i.Id).Sum(r => r.Quantity) })
+                .Where(x => x.Quantity > 0).Select(x => new ReceiptLineDto(x.Item.Name, x.Quantity, x.Item.UnitPrice, x.Quantity * x.Item.UnitPrice)).ToArray())
             { DiscountAmount = invoice.DiscountAmount, SubTotalAmount = invoice.TotalAmount };
     }
     public async Task<Result<ReceiptPrintDto>> GetAsync(ReceiptRequest request, CancellationToken ct = default)

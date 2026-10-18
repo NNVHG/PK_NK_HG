@@ -28,7 +28,7 @@ public sealed class FdiServiceDeletionRepository(DentalDbContext db) : IFdiServi
             if (row is null) return Result.Failure(Error.NotFound);
             var invoices = await db.Invoices.Include(i => i.Items).Where(i => i.VisitId == request.VisitId).ToListAsync(ct);
             var invoiceIds = invoices.Select(i => i.Id).ToArray();
-            if (invoices.Any(i => i.PaidAmount != 0 || i.Status is InvoiceStatus.Paid or InvoiceStatus.PartiallyPaid) ||
+            if (invoices.Any(i => i.PaidAmount != 0 || i.Status is InvoiceStatus.Paid or InvoiceStatus.PartiallyPaid or InvoiceStatus.PartiallyRefunded or InvoiceStatus.Refunded) ||
                 await db.PaymentTransactions.AnyAsync(p => invoiceIds.Contains(p.InvoiceId), ct))
                 return Result.Failure("FDI_044", "Lần khám đã phát sinh thanh toán; không được xóa chỉ định dịch vụ.");
             // DL-139/145: remove only this assignment's live invoice snapshot; preserve cancelled history.

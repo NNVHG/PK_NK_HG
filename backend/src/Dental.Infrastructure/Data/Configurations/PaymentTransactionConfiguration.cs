@@ -13,6 +13,9 @@ public sealed class PaymentTransactionConfiguration : IEntityTypeConfiguration<P
         b.Property(x => x.AmountTendered).HasPrecision(18, 0);
         b.Property(x => x.ChangeAmount).HasPrecision(18, 0);
         b.Property(x => x.PaymentMethod).HasMaxLength(20).IsRequired();
+        b.Property(x => x.TransactionType).HasMaxLength(20).HasDefaultValue("Receipt");
+        b.Property(x => x.RefundReasonCode).HasMaxLength(40);
+        b.Property(x => x.RefundReasonNotes).HasMaxLength(500);
         b.HasIndex(x => x.RequestId).IsUnique();
         b.Property(x => x.TransactionReference).HasMaxLength(20);
         b.Property(x => x.Source).HasMaxLength(20);

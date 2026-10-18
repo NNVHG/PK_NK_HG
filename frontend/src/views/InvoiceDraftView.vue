@@ -47,21 +47,22 @@
         <li v-for="(item, index) in invoice.items" :key="index">
           <strong>{{ item.code }} · {{ item.name }}</strong>
           <p>{{ item.toothNumber ? `Răng ${item.toothNumber} · ${item.surface || 'Toàn răng'}` : 'Toàn hàm / tổng quát' }}</p>
-          <p>{{ item.quantity }} × {{ money(item.unitPrice) }} = {{ money(item.totalAmount) }}</p>
+          <p>{{ item.quantity }} × {{ money(item.unitPrice) }} = {{ money(item.totalAmount) }} (giá trị gốc)<span v-if="item.refundedQuantity"> · Đã hủy {{ item.refundedQuantity }} / còn {{ item.quantity - item.refundedQuantity }}</span></p>
         </li>
       </ul>
       <p>Tổng giá niêm yết: {{ money(invoice.totalAmount) }}</p>
       <p>Giảm giá: {{ money(invoice.discountAmount) }}<span v-if="invoice.discountReason"> · {{ invoice.discountReason }}</span></p>
       <strong>Phải thu sau giảm: {{ money(invoice.finalAmount) }}</strong>
       <p>Đã thu: {{ money(invoice.paidAmount) }} · Còn lại: {{ money(invoice.remainingAmount) }}</p>
-      <p>Dòng dịch vụ giữ nguyên giá đã ghi nhận khi chỉ định.</p>
+      <p>Dòng gốc giữ nguyên giá đã ghi nhận. Sau hoàn, tổng tiền phía dưới là phần còn lại.</p>
       <InvoiceDiscountPanel v-if="auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST'"
         :invoice="invoice" :role="auth.role" @applied="load" @refresh="load" @busy="discountBusy = $event" />
       <InvoiceCashPayment v-if="!discountBusy && (auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST')"
         :invoice-id="invoice.id" :remaining-amount="invoice.remainingAmount" :status="invoice.status" @paid="onPaymentReceived" />
-      <InvoiceBankTransfer v-if="!discountBusy && (auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST') && [1, 2].includes(invoice.status) && invoice.remainingAmount > 0"
+      <InvoiceBankTransfer v-if="!discountBusy && (auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST') && [1, 2, 5].includes(invoice.status) && invoice.remainingAmount > 0"
         :invoice-id="invoice.id" @paid="onBankReceived" />
     </section>
+    <InvoiceRefundPanel v-if="invoice && auth.role === 'ADMIN'" :invoice-id="invoice.id" :blocked="busy || discountBusy" @changed="load" />
     <section v-if="auth.role === 'ADMIN' && unlockHistory.length" aria-label="Lịch sử mở khóa">
       <h2>Lịch sử mở khóa</h2>
       <ul><li v-for="record in unlockHistory" :key="record.id">
@@ -81,6 +82,7 @@ import axios from 'axios';
 import { visitsService } from '@/services/visits';
 import { invoiceDraftApi } from '@/services/invoiceDraft';
 import type { VisitUnlockHistory } from '@/services/invoiceDraft';
+import InvoiceRefundPanel from '@/components/InvoiceRefundPanel.vue';
 import InvoiceCashPayment from '@/components/InvoiceCashPayment.vue';
 import InvoiceBankTransfer from '@/components/InvoiceBankTransfer.vue';
 import InvoiceDiscountPanel from '@/components/InvoiceDiscountPanel.vue';
@@ -110,7 +112,7 @@ const canCorrect = computed(() => isCorrection.value && !visit.value?.isLocked &
 const unlockHistory = ref<VisitUnlockHistory[]>([]);
 const canUnlock = computed(() => auth.role === 'ADMIN' && visit.value?.status === 'Completed' && visit.value.isLocked &&
   (!invoice.value || invoice.value.paidAmount === 0 && [0, 1].includes(invoice.value.status)));
-const statuses: Record<number, string> = { 0: 'Nháp', 1: 'Chờ thanh toán', 2: 'Thanh toán một phần', 3: 'Đã thanh toán', 4: 'Đã hủy' };
+const statuses: Record<number, string> = { 0: 'Nháp', 1: 'Chờ thanh toán', 2: 'Thanh toán một phần', 3: 'Đã thanh toán', 4: 'Đã hủy', 5: 'Đã hoàn một phần', 6: 'Đã hoàn toàn bộ' };
 const canComplete = computed(() => ['InProgress', 'Correcting'].includes(visit.value?.status ?? '') && !visit.value?.isLocked && !correctionDirty.value && !correctionNeedsReview.value &&
   (auth.role === 'ADMIN' || auth.role === 'DENTIST' && visit.value?.dentistId === auth.user?.userId));
 const money = (value: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
