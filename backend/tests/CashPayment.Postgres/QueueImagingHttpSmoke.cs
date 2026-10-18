@@ -108,7 +108,7 @@ internal static class QueueImagingHttpSmoke
         {
             var visits = new VisitRepository(faultDb); var patients = new PatientRepository(faultDb);
             var audit = new AuditLogger(faultDb, NullLogger<AuditLogger>.Instance); var clock = new VietnamClock(SmokeTestTimeProvider.Instance);
-            var service = new QueueService(new QueueRepository(faultDb), new AppointmentRepository(faultDb), patients, visits, new UserRepository(faultDb),
+            var service = new QueueService(new QueueRepository(faultDb), new AppointmentRepository(faultDb), patients, visits, new InvoiceRepository(faultDb), new UserRepository(faultDb),
                 new UnitOfWork(faultDb), audit, clock, new InvoiceDraftService(new InvoiceRepository(faultDb), visits, patients, audit, clock), TestChairFixtures.Service(faultDb, clock));
             var threw = false;
             try { await service.UpdateQueueStatusAsync(failed.QueueEntryId, dentist.UserId, RoleCodes.Dentist, new(5, Reason: "Synthetic rollback indication"), null); }

@@ -19,7 +19,7 @@ public sealed class QueueLocationTests
     private readonly IUnitOfWork uow = Substitute.For<IUnitOfWork>();
     private readonly VietnamClock clock = new(new FixedTimeProvider(new DateTimeOffset(2026, 10, 16, 2, 0, 0, TimeSpan.Zero)));
     private QueueService Service() => new(queues, Substitute.For<IAppointmentRepository>(), Substitute.For<IPatientRepository>(),
-        Substitute.For<IVisitRepository>(), users, uow, Substitute.For<IAuditLogger>(), clock, Substitute.For<IInvoiceDraftGenerator>(), Dental.Tests.Common.TestVisitChairs.Create());
+        Substitute.For<IVisitRepository>(), Substitute.For<IInvoiceRepository>(), users, uow, Substitute.For<IAuditLogger>(), clock, Substitute.For<IInvoiceDraftGenerator>(), Dental.Tests.Common.TestVisitChairs.Create());
     private QueueEntry Row(int id, int? dentist = 5, QueueStatus status = QueueStatus.Calling) => new()
     {
         QueueEntryId = id, DentistId = dentist, QueueDate = clock.Today, Status = status, QueueNumber = id,

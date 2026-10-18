@@ -9,12 +9,15 @@ public interface IInvoiceRepository
     // Stages cancellation and required audit only; caller must own the Serializable visit transaction.
     Task<Result> StageVisitCancellationAsync(int visitId, int userId, string role, string? ip, CancellationToken ct = default);
     Task<int?> GetQueueIdAsync(int visitId, CancellationToken ct = default);
+    Task<OutstandingDebtSummary> GetOutstandingDebtForPatientAsync(int patientId, CancellationToken ct = default);
     Task<Result<InvoiceDraftSynchronization>> SynchronizeDraftAsync(int visitId, int userId, DateOnly date, CancellationToken ct = default);
     // Saves pending tracked Visit/Queue/history changes with the invoice in one serializable transaction.
     Task<Result<Invoice>> SaveCompletedVisitDraftAsync(Visit visit, int userId, DateOnly date, CancellationToken ct = default);
     Task<Result<InvoiceDraftSynchronization>> CompleteCorrectionAsync(int visitId, int userId, string role,
         DateOnly date, string? ip, CancellationToken ct = default);
 }
+
+public sealed record OutstandingDebtSummary(decimal TotalOutstandingDebt, IReadOnlyList<string> InvoiceCodes);
 
 public sealed record InvoiceDraftSynchronization(Invoice Invoice, bool Changed);
 

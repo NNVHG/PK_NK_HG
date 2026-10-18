@@ -30,7 +30,7 @@ public sealed class QueueSelectedStartTests
             .Returns(call => call.Arg<Func<CancellationToken, Task<Result<QueueEntryResponse>>>>()(CancellationToken.None));
     }
     private QueueService Service() => new(queues, Substitute.For<IAppointmentRepository>(), Substitute.For<IPatientRepository>(),
-        visits, users, uow, audit, clock, Substitute.For<IInvoiceDraftGenerator>(), Dental.Tests.Common.TestVisitChairs.Create());
+        visits, Substitute.For<IInvoiceRepository>(), users, uow, audit, clock, Substitute.For<IInvoiceDraftGenerator>(), Dental.Tests.Common.TestVisitChairs.Create());
     private Task<Result<QueueEntryResponse>> Start(string role = RoleCodes.Dentist, int? dentistId = 5, int id = 7)
         => Service().UpdateQueueStatusAsync(id, 5, role, new(2, dentistId), null);
     [Theory] [InlineData(RoleCodes.Admin)] [InlineData(RoleCodes.Dentist)]

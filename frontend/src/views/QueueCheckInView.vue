@@ -37,6 +37,17 @@
     <section v-if="selectedPatient" class="card checkin-card">
       <h2>{{ selectedPatient.fullName }} <small>{{ selectedPatient.patientCode }}</small></h2>
 
+      <div v-if="debtLoading" class="hint" role="status">Đang kiểm tra công nợ cũ…</div>
+      <div v-else-if="debtLookupFailed" class="message debt-error" role="alert">
+        <p>Không thể tải công nợ cũ. Bạn vẫn có thể check-in, nhưng cần kiểm tra hóa đơn thủ công.</p>
+        <button type="button" class="secondary" @click="loadOutstandingDebt(selectedPatient)">Thử tải lại công nợ</button>
+      </div>
+      <div v-else-if="outstandingDebt && outstandingDebt.totalOutstandingDebt > 0" class="debt-warning" role="alert">
+        <strong>Bệnh nhân còn nợ cũ: {{ formatCurrency(outstandingDebt.totalOutstandingDebt) }}</strong>
+        <p>Mã hóa đơn còn dư nợ:</p>
+        <ul><li v-for="invoiceCode in outstandingDebt.invoiceCodes" :key="invoiceCode">{{ invoiceCode }}</li></ul>
+      </div>
+
       <div v-if="loadingAppointments" class="hint">Đang kiểm tra lịch hẹn hôm nay…</div>
       <div v-else-if="appointmentLookupFailed" class="message error" role="alert">
         <p>Không thể kiểm tra lịch hẹn hôm nay. Vui lòng thử lại trước khi check-in.</p>
@@ -57,7 +68,7 @@
       <textarea id="notes" v-model.trim="notes" rows="2" maxlength="500" placeholder="Ghi chú ngắn nếu cần" />
 
       <p v-if="checkInError" class="message error" role="alert">{{ checkInError }}</p>
-      <button type="button" :disabled="checkingIn || loadingAppointments || appointmentLookupFailed" @click="submitCheckIn">
+      <button type="button" :disabled="checkingIn || loadingAppointments || appointmentLookupFailed || debtLoading" @click="submitCheckIn">
         {{ checkingIn ? 'Đang xác nhận…' : 'Xác nhận khách đã đến' }}
       </button>
     </section>
@@ -77,11 +88,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onBeforeUnmount, ref } from 'vue';
 import axios from 'axios';
 import { appointmentsService, type AppointmentResponse } from '@/services/appointments';
 import { patientsService, type PatientSummary } from '@/services/patients';
-import { queueService, type QueueEntryResponse } from '@/services/queue';
+import { queueService, type OutstandingDebtResponse, type QueueEntryResponse } from '@/services/queue';
 
 const keyword = ref('');
 const patients = ref<PatientSummary[]>([]);
@@ -97,6 +108,10 @@ const checkingIn = ref(false);
 const searchError = ref('');
 const checkInError = ref('');
 const ticket = ref<QueueEntryResponse | null>(null);
+const outstandingDebt = ref<OutstandingDebtResponse | null>(null);
+const debtLoading = ref(false);
+const debtLookupFailed = ref(false);
+let debtRequestSequence = 0;
 
 async function searchPatients() {
   searching.value = true;
@@ -106,6 +121,10 @@ async function searchPatients() {
   appointments.value = [];
   appointmentId.value = null;
   ticket.value = null;
+  debtRequestSequence++;
+  outstandingDebt.value = null;
+  debtLoading.value = false;
+  debtLookupFailed.value = false;
   try {
     const result = await patientsService.search({ keyword: keyword.value, page: 1, pageSize: 20 });
     patients.value = result.items;
@@ -119,7 +138,30 @@ async function searchPatients() {
 
 async function selectPatient(patient: PatientSummary) {
   selectedPatient.value = patient;
-  await loadAppointments(patient);
+  await Promise.all([loadAppointments(patient), loadOutstandingDebt(patient)]);
+}
+
+async function loadOutstandingDebt(patient: PatientSummary) {
+  const requestSequence = ++debtRequestSequence;
+  outstandingDebt.value = null;
+  debtLookupFailed.value = false;
+  debtLoading.value = true;
+  try {
+    const result = await queueService.getOutstandingDebt(patient.patientId);
+    if (requestSequence !== debtRequestSequence || selectedPatient.value?.patientId !== patient.patientId) return;
+    outstandingDebt.value = result;
+  } catch {
+    if (requestSequence !== debtRequestSequence || selectedPatient.value?.patientId !== patient.patientId) return;
+    debtLookupFailed.value = true;
+  } finally {
+    if (requestSequence === debtRequestSequence && selectedPatient.value?.patientId === patient.patientId) {
+      debtLoading.value = false;
+    }
+  }
+}
+
+function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(amount);
 }
 
 async function loadAppointments(patient: PatientSummary) {
@@ -163,6 +205,7 @@ async function submitCheckIn() {
 }
 
 function resetForm() {
+  debtRequestSequence++;
   keyword.value = '';
   patients.value = [];
   selectedPatient.value = null;
@@ -172,9 +215,18 @@ function resetForm() {
   notes.value = '';
   searched.value = false;
   ticket.value = null;
+  outstandingDebt.value = null;
+  debtLoading.value = false;
+  debtLookupFailed.value = false;
   searchError.value = '';
   checkInError.value = '';
 }
+
+onBeforeUnmount(() => {
+  debtRequestSequence++;
+  outstandingDebt.value = null;
+  selectedPatient.value = null;
+});
 
 function todayLocal(): string {
   const now = new Date();
@@ -203,6 +255,10 @@ textarea { resize: vertical; }
 .checkin-card h2 small { color: #607080; font-size: .85rem; font-weight: 500; }
 .hint, .message { margin: .15rem 0 .5rem; font-size: .92rem; }
 .error { color: #a32323; }
+.debt-warning { margin: .35rem 0 .6rem; padding: .85rem 1rem; color: #704500; background: #fff5d8; border: 1px solid #efd58b; border-left: 4px solid #d99b16; border-radius: 6px; }
+.debt-warning p { margin: .35rem 0 .2rem; }
+.debt-warning ul { margin: .2rem 0 0; padding-left: 1.25rem; }
+.debt-error { color: #704500; background: #fff8e5; padding: .75rem; border-radius: 6px; }
 button { padding: .75rem 1rem; border: 0; border-radius: 6px; color: #fff; background: #13795b; font: inherit; font-weight: 700; cursor: pointer; }
 button.secondary { flex: 0 0 auto; padding: .65rem .85rem; color: #174e3d; background: #e7f3ee; }
 button:disabled { cursor: wait; opacity: .6; }
