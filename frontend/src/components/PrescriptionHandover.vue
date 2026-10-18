@@ -12,7 +12,7 @@
    <p v-if="status.receivedByProxy">Người nhận thay: {{ status.receiverName || 'Chưa ghi nhận' }} · {{ status.receiverPhone || 'Chưa ghi nhận SĐT' }}</p>
    <p v-if="status.blockReason">{{ status.blockReason }}</p>
    <form v-if="mayWrite && (status.canDispense || status.canOverrideExpired)" @submit.prevent="save(false)">
-    <p>Đối chiếu bệnh nhân, đơn đã lưu và số thuốc thực giao. Thao tác này chỉ ghi nhận bàn giao; không tự cập nhật kho.</p>
+    <p>Hóa đơn cần thanh toán đủ số tiền sau chiết khấu. Đối chiếu bệnh nhân, đơn đã lưu và số thuốc thực giao. Thao tác này chỉ ghi nhận bàn giao; không tự cập nhật kho.</p>
     <label><input v-model="proxy" type="checkbox" :disabled="busy || blocked || needsReview || status.receiverRequired" /> Người nhà / Người giám hộ nhận thay</label>
     <p v-if="status.receiverRequired">Bệnh nhân dưới 15 tuổi: bắt buộc họ tên và SĐT người nhận thay.</p>
     <template v-if="proxy">

@@ -23,10 +23,10 @@ internal static class PrescriptionHandoverHttpSmoke
   var patient=new Patient{FullName="Synthetic adult",DateOfBirth=clock.Today.AddYears(-30),Phone="0990000111",UserId=owner.UserId};db.Patients.Add(patient);
   var child=new Patient{FullName="Synthetic child",DateOfBirth=clock.Today.AddYears(-10),Phone="0990000112",UserId=owner.UserId};db.Patients.Add(child);
   var medicine=new Medicine{Code="HANDOVER-TEST",Name="Synthetic medicine",Unit="unit",UnitPrice=500};db.Medicines.Add(medicine);await db.SaveChangesAsync();
-  async Task<Prescription> Order(Patient? person=null,InvoiceStatus invoiceStatus=InvoiceStatus.Paid,double ageDays=0,bool cancelled=false,DateTime? handedAt=null)
+  async Task<Prescription> Order(Patient? person=null,InvoiceStatus invoiceStatus=InvoiceStatus.Paid,double ageDays=0,bool cancelled=false,DateTime? handedAt=null,decimal discount=0,decimal? actualPaid=null)
   {
    var visit=new Visit{PatientId=(person??patient).PatientId,DentistId=doctor.UserId,CreatedByUserId=cashierId,Status=VisitStatuses.Completed,IsLocked=true};
-   var invoice=new Invoice{Visit=visit,CreatedByUserId=cashierId,InvoiceCode="HANDOVER-"+(++sequence),Status=invoiceStatus,TotalAmount=1000,PaidAmount=invoiceStatus==InvoiceStatus.Paid?1000:0,CreatedAt=clock.UtcNow};
+   var invoice=new Invoice{Visit=visit,CreatedByUserId=cashierId,InvoiceCode="HANDOVER-"+(++sequence),Status=invoiceStatus,TotalAmount=1000,DiscountAmount=discount,DiscountType=discount>0?"FixedAmount":null,DiscountValue=discount>0?discount:null,PaidAmount=actualPaid??(invoiceStatus==InvoiceStatus.Paid?1000-discount:0),CreatedAt=clock.UtcNow};
    var rx=new Prescription{Visit=visit,Invoice=invoice,DoctorId=doctor.UserId,CreatedByUserId=doctor.UserId,PrescriptionCode="RX-20261018-"+(9000+sequence),Diagnosis="Saved clinical content",CreatedAt=clock.UtcNow.AddDays(-ageDays),IsCancelled=cancelled,DispensedAt=handedAt,DispensedBy=handedAt is null?null:cashierId,
     Items=[new(){MedicineId=medicine.Id,MedicineCode=medicine.Code,MedicineName=medicine.Name,Unit="unit",UnitPrice=500,Quantity=2,UsageInstructions="Saved clinician instructions"}]};
    db.Prescriptions.Add(rx);await db.SaveChangesAsync();db.ChangeTracker.Clear();return rx;
@@ -75,6 +75,17 @@ internal static class PrescriptionHandoverHttpSmoke
   await using(var ctx=new DentalDbContext(undoOptions))try{await new PrescriptionHandoverRepository(ctx,clock).UndoAsync(undoFault.Id,admin.UserId,RoleCodes.Admin,new(1,true,"Synthetic rollback reason"),null,default);}catch(InvalidOperationException e)when(e.Message=="Synthetic handover audit failure"){undoFailed=true;}
   check(undoFailed && await db.Prescriptions.AnyAsync(p=>p.Id==undoFault.Id && p.DispensedAt!=null && p.Version==1) && !await db.PrescriptionDispenseEvents.AnyAsync(e=>e.PrescriptionId==undoFault.Id),"Undo audit fault preserves prior handed-over state/version");
   check(await db.Invoices.AnyAsync(i=>i.Id==rx.InvoiceId && i.Status==InvoiceStatus.Paid && i.PaidAmount==1000 && i.TotalAmount==1000),"Repeated handover and undo retain Paid invoice amounts");
+  var discounted=await Order(discount:100);state=await Read(discounted);check(state.CanDispense,"Paid net amount after discount unlocks handover");
+  using(var response=await client.PostAsJsonAsync(Path(discounted),new PrescriptionDispenseRequest(1,true)))check(response.StatusCode==HttpStatusCode.OK,"Discounted Paid invoice hands over200");
+  check(await db.Invoices.AnyAsync(i=>i.Id==discounted.InvoiceId && i.TotalAmount==1000 && i.DiscountAmount==100 && i.PaidAmount==900 && i.Status==InvoiceStatus.Paid),"Handover preserves gross discount and net paid values");
+  var grossPaid=await Order(discount:100,actualPaid:1000);state=await Read(grossPaid);check(!state.CanDispense,"Gross amount in Paid field cannot masquerade as settled discounted invoice");
+  using(var response=await client.PostAsJsonAsync(Path(grossPaid),new PrescriptionDispenseRequest(1,true)))check(response.StatusCode==HttpStatusCode.Conflict,"Inconsistent overpaid discounted invoice blocked409");
+  var shortPaid=await Order(discount:100,actualPaid:800);using(var response=await client.PostAsJsonAsync(Path(shortPaid),new PrescriptionDispenseRequest(1,true)))check(response.StatusCode==HttpStatusCode.Conflict,"Net underpaid invoice blocked despite Paid status409");
+  var zeroPayable=await Order(discount:1000);state=await Read(zeroPayable);check(state.CanDispense,"Zero-final invoice settled by approved discount is ready");
+  using(var response=await client.PostAsJsonAsync(Path(zeroPayable),new PrescriptionDispenseRequest(1,true)))check(response.StatusCode==HttpStatusCode.OK,"Zero-final Paid invoice can hand over200");
+  check(!await db.PaymentTransactions.AnyAsync(t=>t.InvoiceId==zeroPayable.InvoiceId),"Zero-final handover creates no artificial zero receipt");
+  var partialDiscounted=await Order(invoiceStatus:InvoiceStatus.PartiallyPaid,discount:100,actualPaid:400);state=await Read(partialDiscounted);check(!state.CanDispense,"Discount does not permit PartiallyPaid handover");
+  using(var response=await client.PostAsJsonAsync(Path(partialDiscounted),new PrescriptionDispenseRequest(1,true)))check(response.StatusCode==HttpStatusCode.Conflict,"PartiallyPaid with discount still blocked409");
   var faultRx=await Order();var faultOptions=new DbContextOptionsBuilder<DentalDbContext>(options).AddInterceptors(new FailAudit()).Options;var failed=false;
   await using(var ctx=new DentalDbContext(faultOptions))try{await new PrescriptionHandoverRepository(ctx,clock).DispenseAsync(faultRx.Id,admin.UserId,RoleCodes.Admin,new(1,true),null,default);}catch(InvalidOperationException e)when(e.Message=="Synthetic handover audit failure"){failed=true;}
   check(failed && await db.Prescriptions.AnyAsync(p=>p.Id==faultRx.Id && p.Version==1 && p.DispensedAt==null) && !await db.PrescriptionDispenseEvents.AnyAsync(e=>e.PrescriptionId==faultRx.Id),"Required audit fault rolls back status/version/event");
