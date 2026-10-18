@@ -48,6 +48,10 @@
         <PatientCitizenId :patient-id="patient.patientId" />
       </section>
 
+      <section v-else-if="activeTab === 'prescriptions'" class="panel content-panel">
+        <PatientPrescriptionHistory :key="patient.patientId" :patient-id="patient.patientId" />
+      </section>
+
       <section v-else-if="activeTab === 'timeline'" class="panel content-panel">
         <header class="section-heading"><div><p class="eyebrow">CÁC LẦN KHÁM</p><h2>Lịch sử khám</h2></div></header>
         <p v-if="timelineError" class="notice error" role="alert">{{ timelineError }}</p>
@@ -237,6 +241,7 @@ import axios from 'axios';
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import SafetyAlertBanner from '@/components/SafetyAlertBanner.vue';
+import PatientPrescriptionHistory from '@/components/PatientPrescriptionHistory.vue';
 import PatientCitizenId from '@/components/PatientCitizenId.vue';
 import {
   patientsService,
@@ -254,7 +259,7 @@ import {
 import { useAuthStore } from '@/stores/auth';
 import { visitsService, type PostTreatmentNote } from '@/services/visits';
 
-type TabId = 'info' | 'timeline' | 'history' | 'vitals';
+type TabId = 'info' | 'timeline' | 'history' | 'vitals' | 'prescriptions';
 interface EditForm { fullName: string; dateOfBirth: string; gender: string; phone: string; email: string; address: string }
 interface MedicalHistoryFormItem { rowId: number; type: 'Allergy' | 'Condition'; name: string; detail: string; isCritical: boolean }
 interface VitalForm { systolicBp: string; diastolicBp: string; pulseBpm: string; temperatureC: string; note: string }
@@ -269,7 +274,7 @@ const notFound = ref(false);
 const activeTab = ref<TabId>('info');
 const tabs: Array<{ id: TabId; label: string }> = [
   { id: 'info', label: 'Thông tin' }, { id: 'timeline', label: 'Lịch sử khám' },
-  { id: 'history', label: 'Tiền sử & dị ứng' }, { id: 'vitals', label: 'Sinh hiệu' }
+  { id: 'prescriptions', label: 'Đơn thuốc' }, { id: 'history', label: 'Tiền sử & dị ứng' }, { id: 'vitals', label: 'Sinh hiệu' }
 ];
 const canEdit = computed(() => ['ADMIN', 'RECEPTIONIST'].includes(authStore.role));
 const canCreateVisit = computed(() => ['ADMIN', 'RECEPTIONIST', 'ASSISTANT'].includes(authStore.role));

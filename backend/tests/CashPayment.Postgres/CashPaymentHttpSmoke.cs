@@ -183,7 +183,9 @@ internal static class CashPaymentHttpSmoke
             void Authenticate(string role) => AuthenticateActor(role, cashierId);
             if (prescriptionOnly)
             {
-                if (Environment.GetCommandLineArgs().Contains("--prescription-handover-only"))
+                if (Environment.GetCommandLineArgs().Contains("--patient-prescription-history-only"))
+                    await PatientPrescriptionHistoryHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);
+                else if (Environment.GetCommandLineArgs().Contains("--prescription-handover-only"))
                     await PrescriptionHandoverHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);
                 else if (Environment.GetCommandLineArgs().Contains("--prescription-print-only"))
                     await PrescriptionPrintHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);
