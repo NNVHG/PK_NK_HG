@@ -29,6 +29,7 @@ public static class DatabaseSeeder
         bool isDevelopment)
     {
         await DentalDiagnosesSeeder.SeedAsync(db);
+        await MedicinesSeeder.SeedAsync(db);
 
         // --- Seed roles ---
         foreach (var (code, name, desc) in RoleDefs)
