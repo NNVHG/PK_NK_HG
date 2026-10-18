@@ -24,12 +24,18 @@ public sealed class MedicineCatalogTests
         uow.ExecuteSerializableTransactionAsync(Arg.Any<Func<CancellationToken, Task<Result<MedicineResponse>>>>(), Arg.Any<CancellationToken>())
             .Returns(c => c.Arg<Func<CancellationToken, Task<Result<MedicineResponse>>>>()(CancellationToken.None));
     }
-    [Theory] [InlineData(RoleCodes.Receptionist)] [InlineData(RoleCodes.Dentist)] [InlineData(RoleCodes.Assistant)] [InlineData(RoleCodes.Patient)] [InlineData(null)]
+    [Theory] [InlineData(RoleCodes.Receptionist)] [InlineData(RoleCodes.Assistant)] [InlineData(RoleCodes.Patient)] [InlineData(null)]
     public async Task NonAdminCannotManageOrRead(string? role)
     {
         Assert.Equal(Error.Forbidden, (await Service().GetAsync(role, new())).Error);
         Assert.Equal(Error.Forbidden, (await Service().SaveAsync(null, 1, role, Input())).Error);
         Assert.Equal(Error.Forbidden, (await Service().DeactivateAsync(7, 1, 1, role)).Error); Assert.Empty(repo.ReceivedCalls());
+    }
+    [Fact] public async Task DentistCanReadButCannotManage()
+    {
+        Assert.Equal(7, Assert.Single((await Service().GetAsync(RoleCodes.Dentist, new())).Value!.Items).Id);
+        Assert.Equal(Error.Forbidden, (await Service().SaveAsync(null, 1, RoleCodes.Dentist, Input())).Error);
+        Assert.Equal(Error.Forbidden, (await Service().DeactivateAsync(7, 1, 1, RoleCodes.Dentist)).Error);
     }
     [Theory] [InlineData("Viên")] [InlineData("Vỉ")] [InlineData("Gói")] [InlineData("Chai")] [InlineData("Ống")] [InlineData("Tuýp")] [InlineData("Hộp")]
     public void SevenUnitsAccepted(string unit) => Assert.True(new MedicineWriteValidator().Validate(Input() with { Unit = unit }).IsValid);

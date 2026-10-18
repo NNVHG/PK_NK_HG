@@ -25,7 +25,10 @@ internal static class MedicineCatalogHttpSmoke
             authenticate(role);
             using var get = await client.GetAsync(path); using var post = await client.PostAsJsonAsync(path, input);
             using var put = await client.PutAsJsonAsync(path + "/1", input); using var delete = await client.DeleteAsync(path + "/1?expectedVersion=1");
-            check(get.StatusCode == HttpStatusCode.Forbidden && post.StatusCode == HttpStatusCode.Forbidden && put.StatusCode == HttpStatusCode.Forbidden && delete.StatusCode == HttpStatusCode.Forbidden, role + " master catalog read/write403");
+            check(role == RoleCodes.Dentist
+                ? get.StatusCode == HttpStatusCode.OK && get.Headers.CacheControl?.NoStore == true
+                : get.StatusCode == HttpStatusCode.Forbidden, role + " master catalog read follows role policy");
+            check(post.StatusCode == HttpStatusCode.Forbidden && put.StatusCode == HttpStatusCode.Forbidden && delete.StatusCode == HttpStatusCode.Forbidden, role + " master catalog write403");
         }
         await using var db = new DentalDbContext(options);
         await MedicinesSeeder.SeedAsync(db);

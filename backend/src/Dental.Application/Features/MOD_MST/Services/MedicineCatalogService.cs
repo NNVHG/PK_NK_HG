@@ -10,7 +10,7 @@ public sealed class MedicineCatalogService(IMedicineCatalogRepository medicines,
 {
     public async Task<Result<PagedResult<MedicineResponse>>> GetAsync(string? role, MedicineQuery request, CancellationToken ct = default)
     {
-        if (role != RoleCodes.Admin) return Result<PagedResult<MedicineResponse>>.Failure(Error.Forbidden);
+        if (role is not (RoleCodes.Admin or RoleCodes.Dentist)) return Result<PagedResult<MedicineResponse>>.Failure(Error.Forbidden);
         if (!(await new MedicineQueryValidator().ValidateAsync(request, ct)).IsValid) return Result<PagedResult<MedicineResponse>>.Failure(Error.Validation);
         var page = await medicines.GetPageAsync(request, ct);
         return Result<PagedResult<MedicineResponse>>.Success(PagedResult<MedicineResponse>.Create(page.Items.Select(ToResponse).ToList(), page.TotalCount, page.Page, page.PageSize));
