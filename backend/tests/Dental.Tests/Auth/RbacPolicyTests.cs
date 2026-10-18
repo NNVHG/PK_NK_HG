@@ -380,6 +380,27 @@ public class RbacPolicyTests
         }
     }
 
+    [Fact]
+    public void MedicalSupplyCatalogController_UsesViewAndAdminPoliciesForEndpoints()
+    {
+        var methods = typeof(MedicalSuppliesController).GetMethods(BindingFlags.Instance | BindingFlags.Public)
+            .Where(method => method.DeclaringType == typeof(MedicalSuppliesController))
+            .ToDictionary(method => method.Name);
+
+        Assert.Equal(ApiPolicies.MedicalSupplyCatalogView, Assert.Single(methods[nameof(MedicalSuppliesController.Get)]
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+        Assert.True(methods[nameof(MedicalSuppliesController.Get)].GetCustomAttribute<ResponseCacheAttribute>()!.NoStore);
+        foreach (var methodName in new[]
+                 {
+                     nameof(MedicalSuppliesController.Create), nameof(MedicalSuppliesController.Update), nameof(MedicalSuppliesController.Deactivate),
+                 })
+        {
+            Assert.Equal(ApiPolicies.AdminOnly, Assert.Single(methods[methodName]
+                .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+            Assert.True(methods[methodName].GetCustomAttribute<ResponseCacheAttribute>()!.NoStore);
+        }
+    }
+
     [Theory]
     [InlineData(RoleCodes.Admin, true)]
     [InlineData(RoleCodes.Dentist, true)]
@@ -412,6 +433,24 @@ public class RbacPolicyTests
         }, "TestAuth"));
 
         var result = await _authService.AuthorizeAsync(user, null, ApiPolicies.MedicineCatalogView);
+
+        Assert.Equal(expectedAllowed, result.Succeeded);
+    }
+
+    [Theory]
+    [InlineData(RoleCodes.Admin, true)]
+    [InlineData(RoleCodes.Dentist, true)]
+    [InlineData(RoleCodes.Assistant, false)]
+    [InlineData(RoleCodes.Receptionist, false)]
+    [InlineData(RoleCodes.Patient, false)]
+    public async Task MedicalSupplyCatalogViewPolicy_AllowsOnlyAdminAndDentist(string roleCode, bool expectedAllowed)
+    {
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.Role, roleCode)
+        }, "TestAuth"));
+
+        var result = await _authService.AuthorizeAsync(user, null, ApiPolicies.MedicalSupplyCatalogView);
 
         Assert.Equal(expectedAllowed, result.Succeeded);
     }

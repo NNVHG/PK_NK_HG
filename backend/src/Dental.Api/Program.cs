@@ -35,6 +35,8 @@ using Microsoft.OpenApi.Models;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddScoped<IMedicineCatalogRepository, MedicineCatalogRepository>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_MST.Services.MedicineCatalogService>();
+builder.Services.AddScoped<IMedicalSupplyCatalogRepository, MedicalSupplyCatalogRepository>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_MST.Services.MedicalSupplyCatalogService>();
 builder.Services.AddScoped<IRolePermissionMatrixProvider, RolePermissionMatrixProvider>();
 builder.Services.AddScoped<RolePermissionMatrixService>();
 builder.Services.AddScoped<IInvoiceDiscountRepository, InvoiceDiscountRepository>();
