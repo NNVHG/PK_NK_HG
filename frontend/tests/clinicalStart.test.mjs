@@ -14,6 +14,7 @@ function fixture({ role = 'DENTIST', failure = false, dentists = [{ dentistId: 5
   let mount, cleanup; const writes = [], diagnoses = [], reads = [], doctorReads = [];
   const state = { row: { ...row }, visit: { ...visit } };
   const imports = {
+    '@/components/DiagnosisAutocomplete.vue': { default: {} },
     vue: { defineComponent: c => c, ref: value => ({ value }), computed: get => ({ get value() { return get(); } }), onMounted: cb => { mount = cb; }, onUnmounted: cb => { cleanup = cb; } },
     axios: { default: { isAxiosError: e => !!e.response } },
     '@/stores/auth': { useAuthStore: () => ({ role, user: { userId: 5 } }) },

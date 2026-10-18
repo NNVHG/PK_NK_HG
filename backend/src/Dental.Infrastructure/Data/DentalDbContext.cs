@@ -34,10 +34,12 @@ public sealed class DentalDbContext : DbContext
     public DbSet<NotificationLog> NotificationLogs => Set<NotificationLog>();
     public DbSet<QueueEntry> QueueEntries => Set<QueueEntry>();
     public DbSet<QueueStatusHistory> QueueStatusHistories => Set<QueueStatusHistory>();
+    public DbSet<DentalDiagnosis> DentalDiagnoses => Set<DentalDiagnosis>();
     public DbSet<PostTreatmentNote> PostTreatmentNotes => Set<PostTreatmentNote>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.ApplyConfiguration(new DentalDiagnosisConfiguration());
         modelBuilder.ApplyConfiguration(new PostTreatmentNoteConfiguration());
         modelBuilder.ApplyConfiguration(new PaymentTransactionConfiguration());
         modelBuilder.ApplyConfiguration(new SystemConfigConfiguration());
