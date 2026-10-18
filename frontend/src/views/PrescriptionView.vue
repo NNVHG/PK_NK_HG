@@ -5,6 +5,7 @@
   <p v-if="busy" role="status">Đang xử lý…</p><p v-if="error" role="alert" class="error">{{ error }}</p><p v-if="message" role="status">{{ message }}</p>
   <template v-if="context">
    <RouterLink v-if="context.prescription && !context.prescription.isCancelled" :to="'/portal/prescriptions/' + context.prescription.prescriptionCode">Mở trang tra cứu đơn bằng CCCD</RouterLink>
+   <PrescriptionQr v-if="context.prescription && !context.prescription.isCancelled" :visit-id="visitId" :prescription-version="context.prescription.version" />
    <p>Ca khám: {{ context.visitStatus }} · {{ context.invoiceCode || 'Chưa có hóa đơn' }} · {{ context.invoiceStatus || '' }}</p>
    <RouterLink v-if="!busy && ['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(auth.role)" :to="`/clinical/visits/${visitId}/invoice-draft`">Đối chiếu hóa đơn dịch vụ và thuốc</RouterLink>
    <section v-if="!editable && context.prescription" aria-label="Đơn thuốc đã lưu">
@@ -59,6 +60,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
+import PrescriptionQr from '@/components/PrescriptionQr.vue';
 import { useAuthStore } from '@/stores/auth';
 import { prescriptionsService, type RxContext, type RxMedicine, type RxPreview, type RxRequest } from '@/services/prescriptions';
 interface DraftLine { medicineId: number; medicineVersion: number; code: string; name: string; activeIngredient: string | null; strength: string | null; unit: string; unitPrice: string; quantity: string | number; usageInstructions: string; treatmentDays: string | number; active: boolean }

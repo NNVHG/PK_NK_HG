@@ -16,6 +16,10 @@ public sealed class PrescriptionsController(PrescriptionService service, ICurren
     [Authorize(Policy = AppPolicies.PatientView)]
     public async Task<IActionResult> Get(int visitId, CancellationToken ct)
     { if (actor.UserId is not int id) return Unauthorized(); var r = await service.GetAsync(visitId, id, actor.RoleCode, ct); return r.IsSuccess ? Ok(r.Value) : Failure(r.Error); }
+    [HttpGet("lookup-link")]
+    [Authorize(Policy = AppPolicies.PatientView)]
+    public async Task<IActionResult> LookupLink(int visitId, CancellationToken ct)
+    { if (actor.UserId is not int id) return Unauthorized(); var r = await service.LookupLinkAsync(visitId, id, actor.RoleCode, ct); return r.IsSuccess ? Ok(r.Value) : Failure(r.Error); }
     [HttpGet("medicines")]
     [Authorize(Policy = AppPolicies.PrescriptionWrite)]
     public async Task<IActionResult> Medicines(int visitId, [FromQuery] MedicineQuery query, CancellationToken ct)
