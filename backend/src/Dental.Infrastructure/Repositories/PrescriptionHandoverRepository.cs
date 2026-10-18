@@ -24,7 +24,7 @@ public sealed class PrescriptionHandoverRepository(DentalDbContext db, VietnamCl
         return rx;
     }
     private static bool Active(Prescription p) => !p.IsCancelled && p.Visit.Status != VisitStatuses.Cancelled;
-    private static bool Paid(Prescription p) => p.Invoice is { Status: InvoiceStatus.Paid } invoice && invoice.VisitId == p.VisitId && invoice.PaidAmount == invoice.TotalAmount;
+    private static bool Paid(Prescription p) => p.Invoice is { Status: InvoiceStatus.Paid } invoice && invoice.VisitId == p.VisitId && invoice.PaidAmount == invoice.FinalAmount;
     private bool InWindow(Prescription p) => p.DispensedAt is DateTime at && at <= clock.UtcNow && clock.UtcNow - at <= TimeSpan.FromMinutes(30);
     private bool MayUndo(Prescription p, int actorId, string role) => Active(p) && PrescriptionHandoverService.CanWrite(role) && InWindow(p) && (role == RoleCodes.Admin || p.DispensedBy == actorId);
     private async Task<PrescriptionHandoverStatus> StatusAsync(Prescription rx, int actorId, string role, CancellationToken ct)
@@ -40,7 +40,7 @@ public sealed class PrescriptionHandoverRepository(DentalDbContext db, VietnamCl
             ready && authorized && clock.UtcNow <= expires && rx.CreatedAt <= clock.UtcNow,
             MayUndo(rx, actorId, role) && rx.Version < int.MaxValue,
             ready && role == RoleCodes.Admin && clock.UtcNow > expires,
-            !Active(rx) ? "Đơn hoặc lần khám đã hủy." : rx.DispensedAt is not null ? "Đơn đã giao thuốc." : !Paid(rx) ? "Chỉ giao thuốc sau khi hóa đơn đã thanh toán đủ." : clock.UtcNow > expires ? "Đơn quá hạn cấp phát 5 ngày; chỉ Admin được xác nhận ngoại lệ có lý do." : !authorized ? "Bạn chỉ có quyền xem thông tin bàn giao." : null);
+            !Active(rx) ? "Đơn hoặc lần khám đã hủy." : rx.DispensedAt is not null ? "Đơn đã giao thuốc." : !Paid(rx) ? "Chỉ giao thuốc sau khi hóa đơn đã thanh toán đủ số tiền sau chiết khấu." : clock.UtcNow > expires ? "Đơn quá hạn cấp phát 5 ngày; chỉ Admin được xác nhận ngoại lệ có lý do." : !authorized ? "Bạn chỉ có quyền xem thông tin bàn giao." : null);
     }
     public async Task<Result<PrescriptionHandoverStatus>> ReadAsync(int id, int actorId, string role, CancellationToken ct)
     {
