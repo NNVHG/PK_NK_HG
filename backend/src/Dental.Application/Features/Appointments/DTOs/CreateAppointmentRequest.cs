@@ -5,5 +5,8 @@ public sealed record CreateAppointmentRequest(
     DateOnly AppointmentDate,
     TimeOnly SlotTime,
     int? DentistId = null,
-    string? Notes = null
+    string? Notes = null,
+    bool IsEmergency = false,
+    string? EmergencyReason = null,
+    int? ConfirmedDentistConflictAppointmentId = null
 );

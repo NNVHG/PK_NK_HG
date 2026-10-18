@@ -13,6 +13,8 @@ export interface AppointmentResponse {
   dentistName: string | null;
   rescheduleCount: number;
   rescheduleReason: string | null;
+  isEmergency?: boolean;
+  emergencyReason?: string | null;
 }
 
 export interface CreateAppointmentPayload {
@@ -21,6 +23,9 @@ export interface CreateAppointmentPayload {
   slotTime: string;
   notes: string | null;
   dentistId?: number | null;
+  isEmergency?: boolean;
+  emergencyReason?: string | null;
+  confirmedDentistConflictAppointmentId?: number | null;
 }
 
 export interface BookingDentist { dentistId: number; dentistName: string; }

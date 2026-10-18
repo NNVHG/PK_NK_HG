@@ -21,5 +21,6 @@ public sealed record QueueEntryResponse(
     bool CanMarkAbsent = false,
     string? ChairNumber = null,
     string? RoomName = null,
-    bool CanCancelConsultation = false
+    bool CanCancelConsultation = false,
+    bool IsEmergency = false
 );

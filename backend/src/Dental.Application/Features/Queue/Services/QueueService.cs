@@ -83,6 +83,7 @@ public sealed class QueueService
 
         // Xử lý lịch hẹn và tính độ ưu tiên (DL-046 & DL-054)
         var isPriority = false;
+        var isEmergency = false;
         Appointment? appointment = null;
         if (request.AppointmentId.HasValue)
         {
@@ -96,10 +97,11 @@ public sealed class QueueService
             if (appointment.Status != AppointmentStatuses.Scheduled)
                 return Result<QueueEntryResponse>.Failure(Error.AppointmentCannotCheckIn);
 
+            isEmergency = appointment.IsEmergency;
             var scheduledDateTime = appointment.AppointmentDate.ToDateTime(appointment.SlotTime);
             var nowVietnam = _vietnamClock.Now;
-            isPriority = nowVietnam >= scheduledDateTime.AddMinutes(-30) &&
-                         nowVietnam <= scheduledDateTime.AddMinutes(15);
+            isPriority = isEmergency || (nowVietnam >= scheduledDateTime.AddMinutes(-30) &&
+                                         nowVietnam <= scheduledDateTime.AddMinutes(15));
 
         }
 
@@ -124,7 +126,7 @@ public sealed class QueueService
             appointment.Status = AppointmentStatuses.CheckedIn;
             appointment.UpdatedAt = _vietnamClock.UtcNow;
         }
-        return await CreateCheckInAsync(actorUserId, request, today, isPriority, ipAddress, ct);
+        return await CreateCheckInAsync(actorUserId, request, today, isPriority, isEmergency, ipAddress, ct);
     }
 
     private async Task<Result<QueueEntryResponse>> CreateCheckInAsync(
@@ -132,6 +134,7 @@ public sealed class QueueService
         CheckInRequest request,
         DateOnly today,
         bool isPriority,
+        bool isEmergency,
         string? ipAddress,
         CancellationToken ct)
     {
@@ -164,7 +167,8 @@ public sealed class QueueService
             ToStatus = QueueStatus.Waiting,
             ChangedByUserId = actorUserId,
             ChangedAt = _vietnamClock.UtcNow,
-            Reason = isPriority ? "Tiếp đón check-in (Ưu tiên đúng giờ)" : "Tiếp đón check-in"
+            Reason = isEmergency ? "Tiếp đón check-in (Lịch cấp cứu)"
+                : isPriority ? "Tiếp đón check-in (Ưu tiên đúng giờ)" : "Tiếp đón check-in"
         };
 
         await _queueRepository.AddStatusHistoryAsync(history, ct);
@@ -697,7 +701,8 @@ public sealed class QueueService
             location?.ChairNumber,
             location?.RoomName,
             q.Visit is { Status: VisitStatuses.InProgress, IsLocked: false } &&
-                q.Status is (QueueStatus.Waiting or QueueStatus.Calling or QueueStatus.InConsultation or QueueStatus.InImaging)
+                q.Status is (QueueStatus.Waiting or QueueStatus.Calling or QueueStatus.InConsultation or QueueStatus.InImaging),
+            q.Appointment?.IsEmergency ?? false
         );
 
     private static QueueStatusHistoryResponse ToHistoryResponse(QueueStatusHistory h)

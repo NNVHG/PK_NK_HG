@@ -194,6 +194,43 @@ public sealed class QueueServiceTests
     }
 
     [Fact]
+    public async Task CheckInAsync_EmergencyAppointmentIsPriorityOutsideNormalArrivalWindow()
+    {
+        var appointment = new Appointment
+        {
+            AppointmentId = 28,
+            PatientId = 1,
+            AppointmentDate = _vietnamClock.Today,
+            SlotTime = new TimeOnly(16, 0),
+            Status = AppointmentStatuses.Scheduled,
+            IsEmergency = true,
+            EmergencyReason = "Synthetic reason"
+        };
+        _patientRepository.GetByIdAsync(1, Arg.Any<CancellationToken>()).Returns(MakePatient());
+        _appointmentRepository.GetByIdAsync(28, Arg.Any<CancellationToken>()).Returns(appointment);
+        _queueRepository.GetOpenQueueEntriesForPatientAsync(1, Arg.Any<CancellationToken>()).Returns(new List<QueueEntry>());
+        _visitRepository.HasOpenVisitAsync(1, Arg.Any<CancellationToken>()).Returns(false);
+        _queueRepository.GetNextQueueNumberAsync(_vietnamClock.Today, Arg.Any<CancellationToken>()).Returns(3);
+        QueueEntry? capturedEntry = null;
+        QueueStatusHistory? capturedHistory = null;
+        await _queueRepository.AddAsync(Arg.Do<QueueEntry>(entry => capturedEntry = entry), Arg.Any<CancellationToken>());
+        await _queueRepository.AddStatusHistoryAsync(Arg.Do<QueueStatusHistory>(history => capturedHistory = history), Arg.Any<CancellationToken>());
+        _queueRepository.GetByIdAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            if (capturedEntry is not null) capturedEntry.Appointment = appointment;
+            return Task.FromResult(capturedEntry);
+        });
+
+        var result = await CreateService().CheckInAsync(3, new CheckInRequest(PatientId: 1, AppointmentId: 28), null);
+
+        Assert.True(result.IsSuccess);
+        Assert.True(capturedEntry!.IsPriority);
+        Assert.True(capturedEntry.Appointment!.IsEmergency);
+        Assert.True(result.Value!.IsEmergency);
+        Assert.Contains("Lịch cấp cứu", capturedHistory!.Reason);
+    }
+
+    [Fact]
     public async Task CheckInAsync_AppointmentFromAnotherDate_ReturnsConflictWithoutCreatingQueueEntry()
     {
         var patient = MakePatient();
