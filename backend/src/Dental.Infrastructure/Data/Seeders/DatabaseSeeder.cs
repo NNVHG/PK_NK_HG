@@ -28,6 +28,8 @@ public static class DatabaseSeeder
         ILogger logger,
         bool isDevelopment)
     {
+        await DentalDiagnosesSeeder.SeedAsync(db);
+
         // --- Seed roles ---
         foreach (var (code, name, desc) in RoleDefs)
         {
