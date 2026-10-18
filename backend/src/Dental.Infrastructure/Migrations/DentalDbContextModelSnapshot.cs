@@ -321,6 +321,40 @@ namespace Dental.Infrastructure.Migrations
                     b.ToTable("DiscountPresets", (string)null);
                 });
 
+            modelBuilder.Entity("Dental.Domain.Entities.DoctorSignature", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DoctorId")
+                        .HasColumnType("integer");
+
+                    b.Property<byte[]>("ImagePng")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<int>("UpdatedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UpdatedByUserId");
+
+                    b.HasIndex("DoctorId", "Version")
+                        .IsUnique();
+
+                    b.ToTable("DoctorSignatures", (string)null);
+                });
+
             modelBuilder.Entity("Dental.Domain.Entities.Invoice", b =>
                 {
                     b.Property<int>("Id")
@@ -1632,6 +1666,21 @@ namespace Dental.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("UpdatedByUserId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.DoctorSignature", b =>
+                {
+                    b.HasOne("Dental.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("DoctorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.Invoice", b =>

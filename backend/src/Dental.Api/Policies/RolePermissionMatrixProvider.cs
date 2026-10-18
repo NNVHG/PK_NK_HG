@@ -18,6 +18,7 @@ public sealed class RolePermissionMatrixProvider(IAuthorizationPolicyProvider po
     private static readonly IReadOnlyDictionary<string, (string Name, string Module, string Conditions)> Labels =
         new Dictionary<string, (string, string, string)>
         {
+            [Policies.DoctorSignatureManage] = ("Quản lý ảnh chữ ký bác sĩ", "MOD_AUTH", "Admin quản lý; nha sĩ chỉ chữ ký của mình, tài khoản và nha sĩ đang hoạt động. Lưu phiên bản/audit theo Q316."),
             [Policies.PrescriptionWrite] = ("Kê đơn thuốc", "MOD_RX", "Chỉ nha sĩ phụ trách; Admin và các role hỗ trợ chỉ đọc. Không sửa đơn đã thu tiền/cấp phát/hủy; thuốc active/giá đã thiết lập."),
             [Policies.AdminOnly] = ("Quản trị hệ thống", "MOD_AUTH", "Chỉ Admin; từng thao tác còn kiểm tra ràng buộc dữ liệu."),
             [Policies.StaffAny] = ("Truy cập nghiệp vụ nhân viên", "MOD_AUTH", "Các nghiệp vụ nội bộ; không áp dụng cho tài khoản bệnh nhân."),
