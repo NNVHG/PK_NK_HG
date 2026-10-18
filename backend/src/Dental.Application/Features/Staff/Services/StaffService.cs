@@ -71,6 +71,7 @@ public sealed class StaffService
             Phone = phone,
             PasswordHash = _passwordHasher.Hash(request.Password),
             FullName = request.FullName.Trim(),
+            AcademicTitle = NormalizeOptional(request.AcademicTitle),
             Email = NormalizeOptional(request.Email),
             DateOfBirth = request.DateOfBirth,
             Gender = NormalizeOptional(request.Gender),
@@ -92,7 +93,7 @@ public sealed class StaffService
             roleAfter: role.RoleCode,
             isActiveBefore: null,
             isActiveAfter: user.IsActive,
-            changedFields: [nameof(User.FullName), nameof(User.Phone), nameof(User.Email), nameof(User.DateOfBirth), nameof(User.Gender), "RoleCode"],
+            changedFields: [nameof(User.AcademicTitle), nameof(User.FullName), nameof(User.Phone), nameof(User.Email), nameof(User.DateOfBirth), nameof(User.Gender), "RoleCode"],
             ipAddress,
             ct);
 
@@ -131,6 +132,7 @@ public sealed class StaffService
         }
 
         var changedFields = new List<string>();
+        SetIfChanged(user.AcademicTitle, NormalizeOptional(request.AcademicTitle), value => user.AcademicTitle = value, nameof(User.AcademicTitle), changedFields);
         SetIfChanged(user.FullName, request.FullName.Trim(), value => user.FullName = value, nameof(User.FullName), changedFields);
         SetIfChanged(user.Phone, phone, value => user.Phone = value, nameof(User.Phone), changedFields);
         SetIfChanged(user.Email, NormalizeOptional(request.Email), value => user.Email = value, nameof(User.Email), changedFields);
@@ -270,7 +272,8 @@ public sealed class StaffService
             user.Gender,
             user.Role.RoleCode,
             user.Role.RoleName,
-            user.IsActive);
+            user.IsActive,
+            user.AcademicTitle);
 
     private static string NormalizeRoleCode(string? roleCode)
         => roleCode?.Trim().ToUpperInvariant() ?? string.Empty;

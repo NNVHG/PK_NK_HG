@@ -6,4 +6,5 @@ public sealed record UpdateStaffRequest(
     string? Email,
     DateOnly? DateOfBirth,
     string? Gender,
-    string RoleCode);
+    string RoleCode,
+    string? AcademicTitle = null);

@@ -139,6 +139,7 @@
               <span>Họ và tên <b>*</b></span>
               <input v-model="form.fullName" maxlength="100" autocomplete="name" />
             </label>
+            <label v-if="form.roleCode === 'DENTIST'" class="field field-wide"><span>Học hàm/học vị trên đơn thuốc</span><input v-model="form.academicTitle" maxlength="100" /><small>Nhập đúng hồ sơ bác sĩ; không tự mặc định học vị.</small></label>
             <label class="field">
               <span>Số điện thoại <b>*</b></span>
               <input v-model="form.phone" type="tel" inputmode="numeric" maxlength="10" autocomplete="tel" />
@@ -219,6 +220,7 @@ import { useAuthStore } from '@/stores/auth';
 interface StaffAccount {
   userId: number;
   phone: string;
+  academicTitle?: string | null;
   fullName: string;
   email: string | null;
   dateOfBirth: string | null;
@@ -229,6 +231,7 @@ interface StaffAccount {
 }
 
 interface StaffForm {
+  academicTitle: string;
   fullName: string;
   phone: string;
   email: string;
@@ -277,6 +280,7 @@ onMounted(() => loadStaff());
 
 function emptyForm(): StaffForm {
   return {
+    academicTitle: '',
     fullName: '',
     phone: '',
     email: '',
@@ -348,6 +352,7 @@ function openCreateForm() {
 function openEditForm(staff: StaffAccount) {
   editingStaffId.value = staff.userId;
   Object.assign(form, {
+    academicTitle: staff.academicTitle ?? '',
     fullName: staff.fullName,
     phone: staff.phone,
     email: staff.email ?? '',
@@ -368,6 +373,7 @@ function closeForm() {
 }
 
 function validateForm(): string | null {
+  if (form.academicTitle.length > 100 || /[\x00-\x1f\x7f]/.test(form.academicTitle)) return 'Học hàm/học vị không hợp lệ hoặc dài quá 100 ký tự.';
   if (!form.fullName.trim()) return 'Họ tên không được để trống.';
   if (!/^0\d{9}$/.test(form.phone.trim())) return 'Số điện thoại cần có 10 chữ số và bắt đầu bằng số 0.';
   if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
@@ -394,6 +400,7 @@ async function saveStaff() {
   saving.value = true;
   try {
     const commonPayload = {
+      academicTitle: form.academicTitle.trim() || null,
       fullName: form.fullName.trim(),
       phone: form.phone.trim(),
       email: form.email.trim() || null,
