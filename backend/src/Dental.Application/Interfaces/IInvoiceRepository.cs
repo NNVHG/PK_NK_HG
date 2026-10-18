@@ -6,6 +6,7 @@ namespace Dental.Application.Interfaces;
 public interface IInvoiceRepository
 {
     Task<Invoice?> GetForVisitAsync(int visitId, CancellationToken ct = default);
+    Task<Result> CancelDraftAsync(int invoiceId, int userId, string reason, string? ip, CancellationToken ct = default);
     // Stages cancellation and required audit only; caller must own the Serializable visit transaction.
     Task<Result> StageVisitCancellationAsync(int visitId, int userId, string role, string? ip, CancellationToken ct = default);
     Task<int?> GetQueueIdAsync(int visitId, CancellationToken ct = default);

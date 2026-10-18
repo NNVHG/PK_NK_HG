@@ -55,15 +55,26 @@
       <strong>Phải thu sau giảm: {{ money(invoice.finalAmount) }}</strong>
       <p>Đã thu: {{ money(invoice.paidAmount) }} · Còn lại: {{ money(invoice.remainingAmount) }}</p>
       <p>Dòng gốc giữ nguyên giá đã ghi nhận. Sau hoàn, tổng tiền phía dưới là phần còn lại.</p>
-      <InvoiceDiscountPanel v-if="auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST'"
+      <section v-if="canCancelDraft" aria-labelledby="cancel-draft-title" class="cancel-draft">
+        <h3 id="cancel-draft-title">Hủy hóa đơn nháp</h3>
+        <p>Chỉ hủy hóa đơn chưa phát sinh khoản thu. Hóa đơn và lý do được giữ trong lịch sử. Nếu lần khám còn mở, khi xem lại hệ thống tiếp tục tạo bản nháp mới từ dịch vụ hiện tại.</p>
+        <form @submit.prevent="cancelDraft">
+          <label for="cancel-draft-reason">Lý do hủy (bắt buộc, tối đa 500 ký tự)</label>
+          <textarea id="cancel-draft-reason" v-model="cancelDraftReason" required maxlength="500" :disabled="busy || discountBusy" />
+          <p>Chỉ ghi lý do nghiệp vụ; không nhập CCCD, số điện thoại hoặc thông tin y tế.</p>
+          <label><input v-model="cancelDraftConfirmed" type="checkbox" :disabled="busy || discountBusy" /> Tôi đã đối chiếu đúng mã hóa đơn và xác nhận hủy hóa đơn nháp.</label>
+          <button type="submit" :disabled="busy || discountBusy || !cancelDraftConfirmed || !cancelDraftReason.trim()">{{ cancellingDraft ? 'Đang hủy…' : 'Xác nhận hủy hóa đơn nháp' }}</button>
+        </form>
+      </section>
+      <InvoiceDiscountPanel v-if="invoice.status !== 4 && (auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST')"
         :invoice="invoice" :role="auth.role" @applied="load" @refresh="load" @busy="discountBusy = $event" />
-      <InvoiceCashPayment v-if="!discountBusy && (auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST')"
+      <InvoiceCashPayment v-if="invoice.status !== 4 && !discountBusy && (auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST')"
         :invoice-id="invoice.id" :remaining-amount="invoice.remainingAmount" :status="invoice.status" @paid="onPaymentReceived" />
       <InvoiceBankTransfer v-if="!discountBusy && (auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST') && [1, 2, 5].includes(invoice.status) && invoice.remainingAmount > 0"
         :invoice-id="invoice.id" @paid="onBankReceived" />
     </section>
-    <InvoiceRefundProposalPanel v-if="invoice && (auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST')" :invoice="invoice" @changed="load" />
-    <InvoiceRefundPanel v-if="invoice && auth.role === 'ADMIN'" :invoice-id="invoice.id" :blocked="busy || discountBusy" @changed="load" />
+    <InvoiceRefundProposalPanel v-if="invoice && invoice.status !== 4 && (auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST')" :invoice="invoice" @changed="load" />
+    <InvoiceRefundPanel v-if="invoice && invoice.status !== 4 && auth.role === 'ADMIN'" :invoice-id="invoice.id" :blocked="busy || discountBusy" @changed="load" />
     <section v-if="auth.role === 'ADMIN' && unlockHistory.length" aria-label="Lịch sử mở khóa">
       <h2>Lịch sử mở khóa</h2>
       <ul><li v-for="record in unlockHistory" :key="record.id">
@@ -102,6 +113,9 @@ const visitId = computed(() => Number(route.params.visitId));
 const visit = ref<VisitDetails | null>(null);
 const busy = ref(false);
 const discountBusy = ref(false);
+const cancellingDraft = ref(false);
+const cancelDraftReason = ref('');
+const cancelDraftConfirmed = ref(false);
 const error = ref('');
 const success = ref('');
 const confirmed = ref(false);
@@ -114,6 +128,7 @@ const canCorrect = computed(() => isCorrection.value && !visit.value?.isLocked &
 const unlockHistory = ref<VisitUnlockHistory[]>([]);
 const canUnlock = computed(() => auth.role === 'ADMIN' && visit.value?.status === 'Completed' && visit.value.isLocked &&
   (!invoice.value || invoice.value.paidAmount === 0 && [0, 1].includes(invoice.value.status)));
+const canCancelDraft = computed(() => auth.role === 'ADMIN' && invoice.value?.status === 0 && invoice.value.paidAmount === 0);
 const statuses: Record<number, string> = { 0: 'Nháp', 1: 'Chờ thanh toán', 2: 'Thanh toán một phần', 3: 'Đã thanh toán', 4: 'Đã hủy', 5: 'Đã hoàn một phần', 6: 'Đã hoàn toàn bộ' };
 const canComplete = computed(() => ['InProgress', 'Correcting'].includes(visit.value?.status ?? '') && !visit.value?.isLocked && !correctionDirty.value && !correctionNeedsReview.value &&
   (auth.role === 'ADMIN' || auth.role === 'DENTIST' && visit.value?.dentistId === auth.user?.userId));
@@ -124,7 +139,8 @@ function message(cause: unknown) {
 }
 async function load() {
   const ticket = ++version;
-  busy.value = true; error.value = ''; success.value = ''; visit.value = null; store.replace(null); confirmed.value = false; unlockReason.value = ''; unlockHistory.value = []; correctionDiagnosis.value = ''; correctionNotes.value = ''; correctionNeedsReview.value = false;
+  busy.value = true; cancellingDraft.value = false; cancelDraftReason.value = ''; cancelDraftConfirmed.value = false;
+  error.value = ''; success.value = ''; visit.value = null; store.replace(null); confirmed.value = false; unlockReason.value = ''; unlockHistory.value = []; correctionDiagnosis.value = ''; correctionNotes.value = ''; correctionNeedsReview.value = false;
   if (!Number.isInteger(visitId.value) || visitId.value <= 0) { error.value = 'Mã lần khám không hợp lệ.'; busy.value = false; return; }
   try {
     const details = await visitsService.getById(visitId.value);
@@ -142,6 +158,24 @@ async function load() {
     }
   } catch (cause) { if (ticket === version) { error.value = message(cause); visit.value = null; } }
   finally { if (ticket === version) busy.value = false; }
+}
+async function cancelDraft() {
+  const current = invoice.value;
+  const reason = cancelDraftReason.value.trim();
+  if (!current || !canCancelDraft.value || busy.value || discountBusy.value || !cancelDraftConfirmed.value || !reason || reason.length > 500) return;
+  const ticket = version;
+  busy.value = true; cancellingDraft.value = true; error.value = ''; success.value = '';
+  try {
+    await invoiceDraftApi.cancelDraft(current.id, reason);
+    if (ticket !== version) return;
+    store.replace({ ...current, status: 4 });
+    cancelDraftReason.value = ''; cancelDraftConfirmed.value = false;
+    success.value = `Đã hủy hóa đơn ${current.invoiceCode}; lý do và lịch sử được giữ lại.`;
+  } catch (cause) {
+    if (ticket === version) error.value = message(cause);
+  } finally {
+    if (ticket === version) { busy.value = false; cancellingDraft.value = false; }
+  }
 }
 async function onPaymentReceived(payment: CashPaymentResponse) {
   const expectedVersion = version + 1;

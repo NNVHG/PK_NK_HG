@@ -17,6 +17,52 @@ public sealed class InvoiceRepository(DentalDbContext db) : IInvoiceRepository
 {
     public Task<Invoice?> GetForVisitAsync(int visitId, CancellationToken ct = default)
         => db.Invoices.AsNoTracking().Include(x => x.Items).Include(x => x.Refunds).ThenInclude(r => r.Items).FirstOrDefaultAsync(x => x.VisitId == visitId && x.Status != InvoiceStatus.Cancelled, ct);
+
+    public async Task<Result> CancelDraftAsync(int invoiceId, int userId, string reason, string? ip, CancellationToken ct = default)
+    {
+        if (db.Database.CurrentTransaction is not null)
+            throw new InvalidOperationException("Independent invoice cancellation owns its Serializable transaction.");
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        var committed = false;
+        try
+        {
+            if (!await db.Users.AnyAsync(u => u.UserId == userId && u.IsActive && u.Role.RoleCode == RoleCodes.Admin, ct))
+                return Result.Failure(Error.Forbidden);
+
+            var invoice = await db.Invoices.SingleOrDefaultAsync(i => i.Id == invoiceId, ct);
+            if (invoice is null) return Result.Failure(Error.NotFound);
+            if (invoice.Status != InvoiceStatus.Draft || invoice.PaidAmount != 0 ||
+                await db.PaymentTransactions.AnyAsync(p => p.InvoiceId == invoiceId, ct))
+                return Result.Failure(new Error("BIL_014", "Chỉ hủy được hóa đơn Draft chưa phát sinh khoản thu."));
+
+            invoice.Status = InvoiceStatus.Cancelled;
+            db.AuditLogs.Add(new AuditLog
+            {
+                UserId = userId,
+                Action = "MOD_BIL_DRAFT_CANCELLED",
+                EntityType = "Invoice",
+                EntityId = invoice.Id,
+                IpAddress = ip,
+                CreatedAt = DateTime.UtcNow,
+                Detail = JsonSerializer.Serialize(new { from = nameof(InvoiceStatus.Draft), to = nameof(InvoiceStatus.Cancelled), reason = reason.Trim() })
+            });
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            committed = true;
+            return Result.Success();
+        }
+        catch (Exception error) when (IsConflict(error))
+        {
+            try { await transaction.RollbackAsync(CancellationToken.None); }
+            catch (InvalidOperationException) { /* PostgreSQL can already have aborted a failed Serializable commit. */ }
+            return Result.Failure(new Error("BIL_015", "Hóa đơn vừa được cập nhật đồng thời; tải lại trước khi tiếp tục."));
+        }
+        finally
+        {
+            if (!committed) db.ChangeTracker.Clear();
+        }
+    }
+
     public async Task<Result> StageVisitCancellationAsync(int visitId, int userId, string role, string? ip, CancellationToken ct = default)
     {
         if (db.Database.CurrentTransaction?.GetDbTransaction().IsolationLevel != IsolationLevel.Serializable)

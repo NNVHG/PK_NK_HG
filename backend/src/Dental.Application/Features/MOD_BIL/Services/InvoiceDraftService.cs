@@ -1,5 +1,6 @@
 using Dental.Application.Common;
 using Dental.Application.Features.MOD_BIL.DTOs;
+using Dental.Application.Features.MOD_BIL.Validators;
 using Dental.Application.Interfaces;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
@@ -9,6 +10,16 @@ namespace Dental.Application.Features.MOD_BIL.Services;
 public sealed class InvoiceDraftService(IInvoiceRepository invoices, IVisitRepository visits,
     IPatientRepository patients, IAuditLogger audit, VietnamClock clock) : IInvoiceDraftGenerator
 {
+    public Task<Result> CancelDraftAsync(int invoiceId, int userId, string? role,
+        CancelInvoiceDraftRequest request, string? ip, CancellationToken ct = default)
+    {
+        if (role != RoleCodes.Admin) return Task.FromResult(Result.Failure(Error.Forbidden));
+        if (invoiceId <= 0 || userId <= 0 || request is null ||
+            !new CancelInvoiceDraftRequestValidator().Validate(request).IsValid)
+            return Task.FromResult(Result.Failure(Error.Validation));
+        return invoices.CancelDraftAsync(invoiceId, userId, request.Reason.Trim(), ip, ct);
+    }
+
     public Task<Result> StageVisitCancellationAsync(Visit visit, int userId, string role, string? ip, CancellationToken ct = default)
     {
         if (role is not (RoleCodes.Admin or RoleCodes.Dentist) || role == RoleCodes.Dentist && visit.DentistId != userId)

@@ -1,4 +1,5 @@
 using Dental.Application.Common;
+using Dental.Application.Features.MOD_BIL.DTOs;
 using Dental.Application.Features.MOD_BIL.Services;
 using Dental.Application.Features.MOD_BIL.Validators;
 using Dental.Application.Interfaces;
@@ -21,6 +22,39 @@ public sealed class InvoiceDraftServiceTests
         new VietnamClock(new FixedTimeProvider(new DateTimeOffset(2026, 10, 10, 18, 0, 0, TimeSpan.Zero))));
     private static Visit Completed() => new() { VisitId = 8, PatientId = 6, DentistId = 5,
         Status = VisitStatuses.Completed, IsLocked = true };
+
+    [Theory]
+    [InlineData(RoleCodes.Patient)]
+    [InlineData(RoleCodes.Receptionist)]
+    [InlineData(RoleCodes.Dentist)]
+    [InlineData(RoleCodes.Assistant)]
+    public async Task CancelDraft_RejectsNonAdminWithoutRepository(string role)
+    {
+        var result = await Service().CancelDraftAsync(9, 7, role, new("sai hóa đơn"), null);
+        Assert.Equal(Error.Forbidden, result.Error);
+        Assert.Empty(invoices.ReceivedCalls());
+    }
+
+    [Theory]
+    [InlineData(0, "lý do hợp lệ")]
+    [InlineData(9, "   ")]
+    [InlineData(9, "")]
+    public async Task CancelDraft_RejectsInvalidInput(int invoiceId, string reason)
+    {
+        var result = await Service().CancelDraftAsync(invoiceId, 7, RoleCodes.Admin, new(reason), null);
+        Assert.Equal(Error.Validation, result.Error);
+        Assert.Empty(invoices.ReceivedCalls());
+    }
+
+    [Fact]
+    public async Task CancelDraft_AdminTrimsReasonAndDelegatesToAtomicRepository()
+    {
+        invoices.CancelDraftAsync(9, 7, "sai hóa đơn", "127.0.0.1", Arg.Any<CancellationToken>())
+            .Returns(Result.Success());
+        var result = await Service().CancelDraftAsync(9, 7, RoleCodes.Admin, new("  sai hóa đơn  "), "127.0.0.1");
+        Assert.True(result.IsSuccess);
+        await invoices.Received(1).CancelDraftAsync(9, 7, "sai hóa đơn", "127.0.0.1", Arg.Any<CancellationToken>());
+    }
 
     [Theory]
     [InlineData(RoleCodes.Patient, 5)]

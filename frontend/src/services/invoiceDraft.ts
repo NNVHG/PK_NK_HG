@@ -21,6 +21,9 @@ export const invoiceDraftApi = {
   async get(visitId: number): Promise<InvoiceDraft> {
     return (await apiClient.get<InvoiceDraft>(`/invoices/by-visit/${visitId}`)).data;
   },
+  async cancelDraft(invoiceId: number, reason: string): Promise<void> {
+    await apiClient.post(`/invoices/${invoiceId}/cancel`, { reason });
+  },
   async complete(visitId: number): Promise<void> {
     await apiClient.put(`/visits/${visitId}/complete`);
   }

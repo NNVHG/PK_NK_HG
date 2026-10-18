@@ -28,6 +28,17 @@ public sealed class InvoiceDraftController(InvoiceDraftService service, IInvoice
         return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
     }
 
+    [HttpPost("api/invoices/{invoiceId:int}/cancel")]
+    [Authorize(Policy = AppPolicies.AdminOnly)]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
+    public async Task<IActionResult> CancelDraft(int invoiceId, Dental.Application.Features.MOD_BIL.DTOs.CancelInvoiceDraftRequest request, CancellationToken ct)
+    {
+        if (user.UserId is not int userId) return Unauthorized();
+        var result = await service.CancelDraftAsync(invoiceId, userId, user.RoleCode, request,
+            HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
+        return result.IsFailure ? Failure(result.Error) : NoContent();
+    }
+
     [HttpPut("api/visits/{visitId:int}/complete")]
     [HttpPost("api/visits/{visitId:int}/lock")]
     [Authorize(Policy = AppPolicies.FdiServiceAssign)]
