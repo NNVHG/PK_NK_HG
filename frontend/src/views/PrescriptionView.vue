@@ -6,6 +6,7 @@
   <template v-if="context">
    <RouterLink v-if="context.prescription && !context.prescription.isCancelled" :to="'/portal/prescriptions/' + context.prescription.prescriptionCode">Mở trang tra cứu đơn bằng CCCD</RouterLink>
    <PrescriptionPrint v-if="context.prescription && !context.prescription.isCancelled" :visit-id="visitId" :prescription-id="context.prescription.id" :prescription-version="context.prescription.version" :blocked="busy || needsReview" />
+   <PrescriptionHandover v-if="context.prescription && !context.prescription.isCancelled" :visit-id="visitId" :prescription-id="context.prescription.id" :prescription-version="context.prescription.version" :blocked="busy || needsReview" @changed="load" />
    <PrescriptionQr v-if="context.prescription && !context.prescription.isCancelled" :visit-id="visitId" :prescription-version="context.prescription.version" />
    <PrescriptionLifecycle :visit-id="visitId" :prescription="context.prescription" :can-cancel="context.canCancel === true" :blocked="busy || needsReview" @changed="load" />
    <p>Ca khám: {{ context.visitStatus }} · {{ context.invoiceCode || 'Chưa có hóa đơn' }} · {{ context.invoiceStatus || '' }}</p>
@@ -63,6 +64,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import PrescriptionQr from '@/components/PrescriptionQr.vue';
+import PrescriptionHandover from '@/components/PrescriptionHandover.vue';
 import PrescriptionPrint from '@/components/PrescriptionPrint.vue';
 import PrescriptionLifecycle from '@/components/PrescriptionLifecycle.vue';
 import { useAuthStore } from '@/stores/auth';

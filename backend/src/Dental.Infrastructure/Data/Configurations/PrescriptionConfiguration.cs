@@ -13,6 +13,7 @@ public sealed class PrescriptionConfiguration : IEntityTypeConfiguration<Prescri
         b.HasIndex(x => new { x.VisitId, x.Id });
         b.Property(x => x.Diagnosis).HasMaxLength(500).IsRequired();
         b.Property(x => x.DoctorAdvice).HasMaxLength(1000); b.Property(x => x.Version).IsConcurrencyToken();
+        b.Property(x => x.DispenseNote).HasMaxLength(300);
         b.Property(x => x.ReceiverName).HasMaxLength(100); b.Property(x => x.ReceiverPhone).HasMaxLength(20);
         b.HasOne(x => x.Visit).WithMany().HasForeignKey(x => x.VisitId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.Invoice).WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict);

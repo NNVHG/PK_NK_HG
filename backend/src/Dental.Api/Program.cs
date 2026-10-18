@@ -34,6 +34,8 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddScoped<IPrescriptionRepository, PrescriptionRepository>();
+builder.Services.AddScoped<IPrescriptionHandoverRepository, PrescriptionHandoverRepository>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_RX.Services.PrescriptionHandoverService>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_RX.Services.PrescriptionService>();
 builder.Services.AddScoped<IMedicineCatalogRepository, MedicineCatalogRepository>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_MST.Services.MedicineCatalogService>();

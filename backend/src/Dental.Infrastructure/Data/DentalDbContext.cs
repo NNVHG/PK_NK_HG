@@ -34,6 +34,16 @@ public sealed class DentalDbContext : DbContext
     public DbSet<NotificationLog> NotificationLogs => Set<NotificationLog>();
     public DbSet<QueueEntry> QueueEntries => Set<QueueEntry>();
     public DbSet<QueueStatusHistory> QueueStatusHistories => Set<QueueStatusHistory>();
+    public DbSet<PrescriptionDispenseEvent> PrescriptionDispenseEvents => Set<PrescriptionDispenseEvent>();
+    private bool savingHandover;
+
+    internal async Task<int> SavePrescriptionHandoverAsync(CancellationToken ct)
+    {
+        savingHandover = true;
+        try { return await SaveChangesAsync(ct); }
+        finally { savingHandover = false; }
+    }
+
     public DbSet<Prescription> Prescriptions => Set<Prescription>();
     public DbSet<DoctorSignature> DoctorSignatures => Set<DoctorSignature>();
     public DbSet<PrescriptionItem> PrescriptionItems => Set<PrescriptionItem>();
@@ -45,6 +55,7 @@ public sealed class DentalDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new PrescriptionConfiguration());
+        modelBuilder.ApplyConfiguration(new PrescriptionDispenseEventConfiguration());
         modelBuilder.ApplyConfiguration(new DoctorSignatureConfiguration());
         modelBuilder.ApplyConfiguration(new PrescriptionItemConfiguration());
         modelBuilder.ApplyConfiguration(new PrescriptionNumberCounterConfiguration());
@@ -109,12 +120,21 @@ public sealed class DentalDbContext : DbContext
         var protectedIds = new HashSet<int>();
         foreach (var entry in parents)
         {
+            var handoverOnly = savingHandover && entry.State == EntityState.Modified &&
+                !entry.Property(p => p.IsCancelled).OriginalValue &&
+                entry.Entity.Version == (long)entry.Property(p => p.Version).OriginalValue + 1 &&
+                (entry.Property(p => p.DispensedAt).OriginalValue is null) != (entry.Entity.DispensedAt is null) &&
+                entry.Properties.All(p => !p.IsModified || p.Metadata.Name is
+                    nameof(Prescription.DispensedAt) or nameof(Prescription.DispensedBy) or
+                    nameof(Prescription.ReceivedByProxy) or nameof(Prescription.ReceiverName) or
+                    nameof(Prescription.ReceiverPhone) or nameof(Prescription.DispenseNote) or
+                    nameof(Prescription.Version) or nameof(Prescription.UpdatedAt)) &&
+                ChangeTracker.Entries<PrescriptionDispenseEvent>().Any(e => e.State == EntityState.Added &&
+                    e.Entity.PrescriptionId == entry.Entity.Id && e.Entity.PrescriptionVersion == entry.Entity.Version);
             if (entry.State == EntityState.Deleted || entry.Property(p => p.IsCancelled).OriginalValue ||
-                entry.Property(p => p.DispensedAt).OriginalValue is not null)
-                throw new InvalidOperationException("Prescription đã hủy/cấp phát là bất biến; không xóa vật lý đơn thuốc.");
-            var initialDispense = entry.Entity.DispensedAt is not null &&
-                entry.Properties.All(p => !p.IsModified || p.Metadata.Name is nameof(Prescription.DispensedAt) or nameof(Prescription.DispensedBy) or nameof(Prescription.Version) or nameof(Prescription.UpdatedAt));
-            if (!initialDispense) protectedIds.Add(entry.Entity.Id);
+                entry.Property(p => p.DispensedAt).OriginalValue is not null && !handoverOnly)
+                throw new InvalidOperationException("Prescription đã hủy/cấp phát là bất biến; ngoại lệ bàn giao chỉ qua giao dịch DL-298.");
+            if (!handoverOnly) protectedIds.Add(entry.Entity.Id);
         }
         foreach (var entry in ChangeTracker.Entries<PrescriptionItem>().Where(e => e.State is EntityState.Modified or EntityState.Deleted or EntityState.Added))
         {
@@ -130,6 +150,8 @@ public sealed class DentalDbContext : DbContext
 
     private void GuardAuditLogImmutability()
     {
+        if (ChangeTracker.Entries<PrescriptionDispenseEvent>().Any(e => e.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Lịch sử bàn giao thuốc chỉ được nối thêm.");
         if (ChangeTracker.Entries<DoctorSignature>().Any(e => e.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("Phiên bản ảnh chữ ký chỉ thêm mới; không sửa hoặc xóa lịch sử.");
         if (ChangeTracker.Entries<NotificationLog>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
