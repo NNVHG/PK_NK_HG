@@ -17,7 +17,7 @@ public sealed partial class PrescriptionRepository
         try
         {
             var visit = await db.Visits.AsNoTracking().SingleOrDefaultAsync(v => v.VisitId == visitId, ct);
-            if (visit is null || !await CanReadAsync(visit, actorId, role, ct)) return Result<PrescriptionPrintDocument>.Failure(Error.NotFound);
+            if (visit is null || !await CanReadPrescriptionHistoryAsync(visit, actorId, role, ct)) return Result<PrescriptionPrintDocument>.Failure(Error.NotFound);
             var rx = await db.Prescriptions.AsNoTracking().Include(p => p.Items).SingleOrDefaultAsync(p => p.Id == prescriptionId && p.VisitId == visitId, ct);
             if (rx is null) return Result<PrescriptionPrintDocument>.Failure(Error.NotFound);
             if (rx.IsCancelled || visit.Status == VisitStatuses.Cancelled) return Result<PrescriptionPrintDocument>.Failure(new("RX_002", "Đơn đã hủy, không được chuẩn bị bản in."));
@@ -38,7 +38,7 @@ public sealed partial class PrescriptionRepository
                 rx.DoctorAdvice, rx.RevisitDate, DateOnly.FromDateTime(clock.ToVietnamTime(rx.CreatedAt)), doctor.FullName, doctor.AcademicTitle,
                 signature.Version, Convert.ToBase64String(signature.ImagePng), "/portal/prescriptions/" + rx.PrescriptionCode, rx.ReceiverName, rx.ReceiverPhone);
             db.AuditLogs.Add(new AuditLog { UserId = actorId, Action = "MOD_RX_PRINT_PREPARED", EntityType = "Prescription", EntityId = rx.Id,
-                CreatedAt = clock.UtcNow, IpAddress = ip, Detail = JsonSerializer.Serialize(new { rx.Version, signatureId = signature.Id, signatureVersion = signature.Version, trigger = "print_preparation" }) });
+                CreatedAt = clock.UtcNow, IpAddress = ip, Detail = JsonSerializer.Serialize(new { rx.Version, signatureId = signature.Id, signatureVersion = signature.Version, sharedHistoryAccess = role == RoleCodes.Dentist && visit.DentistId != actorId, trigger = "print_preparation" }) });
             await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); committed = true;
             return Result<PrescriptionPrintDocument>.Success(document);
         }
