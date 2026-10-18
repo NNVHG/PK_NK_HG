@@ -18,6 +18,7 @@
       <p>Hóa đơn: {{ receipt.invoiceCode }} · Giao dịch #{{ receipt.paymentId }}</p>
       <p>Ngày thu: {{ date(receipt.paidAt) }}<br />Thu ngân: {{ receipt.cashierName }}</p>
       <p>Bệnh nhân: {{ receipt.patientName }}<br />Mã: {{ receipt.patientCode }} · Năm sinh: {{ receipt.birthYear }}</p>
+      <p>Chi tiết và tổng hóa đơn bên dưới là phần còn lại hiện tại sau điều chỉnh; khoản thu kỳ này giữ nguyên.</p>
       <table><thead><tr><th>Khoản mục</th><th>SL</th><th>Đơn giá</th><th>Thành tiền</th></tr></thead>
         <tbody><tr v-for="(item, index) in receipt.items" :key="index"><td>{{ item.name }}</td><td>{{ item.quantity }}</td><td>{{ money(item.unitPrice) }}</td><td>{{ money(item.totalAmount) }}</td></tr></tbody>
       </table>

@@ -8,6 +8,8 @@ public sealed class Invoice
     public int VisitId { get; set; }
     public string InvoiceCode { get; set; } = string.Empty;
     public InvoiceStatus Status { get; set; }
+    public int RefundRevision { get; set; }
+    public ICollection<InvoiceRefund> Refunds { get; set; } = new List<InvoiceRefund>();
     public decimal TotalAmount { get; set; }
     public decimal PaidAmount { get; set; }
     public decimal DiscountAmount { get; set; }

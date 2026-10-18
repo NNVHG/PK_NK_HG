@@ -23,11 +23,12 @@
     <h3 v-if="history.length">Các lần thu đã ghi nhận</h3>
     <ul><li v-for="payment in history" :key="payment.id">
       #{{ payment.id }} · {{ new Date(payment.paidAt).toLocaleString('vi-VN') }} · Thu ngân #{{ payment.cashierId }}
-      <p v-if="payment.paymentMethod === 'Cash'">Tiền mặt · Đã thu {{ money(payment.amount) }} · Khách đưa {{ money(payment.amountTendered ?? 0) }} · Thối {{ money(payment.changeAmount ?? 0) }}</p>
+      <p v-if="payment.amount < 0">Chi hoàn {{ money(-payment.amount) }} · {{ payment.paymentMethod }}. Admin xem phiếu chi trong lịch sử hoàn / điều chỉnh.</p>
+      <p v-else-if="payment.paymentMethod === 'Cash'">Tiền mặt · Đã thu {{ money(payment.amount) }} · Khách đưa {{ money(payment.amountTendered ?? 0) }} · Thối {{ money(payment.changeAmount ?? 0) }}</p>
       <p v-else>Chuyển khoản · Ghi vào hóa đơn {{ money(payment.amount) }} · Ngân hàng nhận {{ money(payment.bankReceivedAmount ?? 0) }} · Mã {{ payment.transactionReference }}
         <strong v-if="payment.source === 'Simulation'"> · MÔ PHỎNG</strong></p>
       <p v-if="payment.note" role="alert">{{ payment.note }}</p>
-      <PaymentReceiptModal :invoice-id="invoiceId" :payment-id="payment.id" />
+      <PaymentReceiptModal v-if="payment.amount > 0" :invoice-id="invoiceId" :payment-id="payment.id" />
     </li></ul>
   </section>
 </template>
@@ -54,7 +55,7 @@ const busy = ref(false);
 const error = ref('');
 const history = ref<CashPaymentResponse[]>([]);
 const historyReady = ref(false);
-const canPay = computed(() => [1, 2].includes(props.status) && props.remainingAmount > 0);
+const canPay = computed(() => [1, 2, 5].includes(props.status) && props.remainingAmount > 0);
 const valid = computed(() => canPay.value && Number.isSafeInteger(Number(amount.value)) && Number(amount.value) > 0 &&
   Number(amount.value) <= props.remainingAmount && Number.isSafeInteger(Number(tendered.value)) && Number(tendered.value) >= Number(amount.value));
 const change = computed(() => Math.max(0, Number(tendered.value) - Number(amount.value)));

@@ -28,7 +28,7 @@ public sealed partial class PrescriptionRepository(DentalDbContext db, IInvoiceR
         var ids = (requested ?? []).Concat(rx?.Items.Select(i => i.MedicineId) ?? []).Distinct().ToArray();
         var medicines = await db.Medicines.AsNoTracking().Where(m => ids.Contains(m.Id)).ToListAsync(ct);
         var services = await db.VisitServices.AsNoTracking().Where(s => s.VisitId == visitId).ToListAsync(ct);
-        var paid = await db.Invoices.AnyAsync(i => i.VisitId == visitId && (i.PaidAmount != 0 || i.Status == InvoiceStatus.Paid || i.Status == InvoiceStatus.PartiallyPaid), ct) ||
+        var paid = await db.Invoices.AnyAsync(i => i.VisitId == visitId && (i.PaidAmount != 0 || i.Status == InvoiceStatus.Paid || i.Status == InvoiceStatus.PartiallyPaid || i.Status == InvoiceStatus.PartiallyRefunded || i.Status == InvoiceStatus.Refunded), ct) ||
             await db.PaymentTransactions.AnyAsync(p => p.Invoice.VisitId == visitId, ct);
         return new(visit, invoice, rx, paid, history?.RecordId, history?.Items.Where(i => i.Type == MedicalHistoryTypes.Allergy).ToArray() ?? [], medicines, services)
             { CancellationGeneration = generation };

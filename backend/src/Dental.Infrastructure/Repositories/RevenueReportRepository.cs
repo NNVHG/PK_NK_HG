@@ -32,13 +32,13 @@ public sealed class RevenueReportRepository(DentalDbContext db) : IRevenueReport
         }
         var cashiers = await payments.GroupBy(p => new { p.CashierId, p.Cashier.FullName })
             .OrderBy(g => g.Key.CashierId).Select(g => new RevenueCashier(g.Key.CashierId, g.Key.FullName, g.Sum(p => p.Amount), g.Count())).ToListAsync(ct);
-        var issued = db.Invoices.AsNoTracking().Where(i => i.Status == InvoiceStatus.PendingPayment || i.Status == InvoiceStatus.PartiallyPaid || i.Status == InvoiceStatus.Paid);
+        var issued = db.Invoices.AsNoTracking().Where(i => i.Status == InvoiceStatus.PendingPayment || i.Status == InvoiceStatus.PartiallyPaid || i.Status == InvoiceStatus.Paid || i.Status == InvoiceStatus.PartiallyRefunded || i.Status == InvoiceStatus.Refunded);
         var periodInvoices = issued.Where(i => i.CreatedAt >= filter.FromUtc && i.CreatedAt < filter.UntilUtc);
         var invoiced = await periodInvoices.SumAsync(i => i.TotalAmount - i.DiscountAmount, ct);
         var discount = await periodInvoices.SumAsync(i => i.DiscountAmount, ct);
         var outstanding = await issued.Where(i => i.Status != InvoiceStatus.Paid).SumAsync(i =>
             i.TotalAmount - i.DiscountAmount > i.PaidAmount ? i.TotalAmount - i.DiscountAmount - i.PaidAmount : 0, ct);
-        var temporary = await payments.Where(p => p.Amount > 0 && p.Invoice.Status == InvoiceStatus.PartiallyPaid).SumAsync(p => p.Amount, ct);
+        var temporary = await payments.Where(p => p.Amount > 0 && (p.Invoice.Status == InvoiceStatus.PartiallyPaid || p.Invoice.Status == InvoiceStatus.PartiallyRefunded && p.Invoice.TotalAmount - p.Invoice.DiscountAmount > p.Invoice.PaidAmount)).SumAsync(p => p.Amount, ct);
         // The model has no CancelledAt; explicitly report creation-period invoices currently cancelled before any collection.
         var cancelled = await db.Invoices.CountAsync(i => i.CreatedAt >= filter.FromUtc && i.CreatedAt < filter.UntilUtc && i.Status == InvoiceStatus.Cancelled &&
             i.PaidAmount == 0 && !db.PaymentTransactions.Any(p => p.InvoiceId == i.Id && p.Amount > 0), ct);

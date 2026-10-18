@@ -399,6 +399,11 @@ namespace Dental.Infrastructure.Migrations
                         .HasPrecision(18)
                         .HasColumnType("numeric(18,0)");
 
+                    b.Property<int>("RefundRevision")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -496,6 +501,243 @@ namespace Dental.Infrastructure.Migrations
                     b.HasKey("InvoiceDate");
 
                     b.ToTable("InvoiceNumberCounters", (string)null);
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.InvoiceRefund", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ActorId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("DebtReduction")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.Property<decimal>("DiscountAfter")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.Property<decimal>("DiscountBefore")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.Property<int>("InvoiceId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("LateApproval")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("PaidAfter")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.Property<decimal>("PaidBefore")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.Property<string>("PayloadHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int?>("PaymentTransactionId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ReasonCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("ReasonNotes")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<decimal>("RefundAmount")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("ReserveConfirmed")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("TotalAfter")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.Property<decimal>("TotalBefore")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("PaymentTransactionId")
+                        .IsUnique();
+
+                    b.HasIndex("RequestId")
+                        .IsUnique();
+
+                    b.HasIndex("InvoiceId", "Revision")
+                        .IsUnique();
+
+                    b.ToTable("InvoiceRefunds", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_InvoiceRefunds_Amounts", "\"RefundAmount\" >= 0 AND \"DebtReduction\" >= 0 AND \"TotalAfter\" >= \"DiscountAfter\" AND \"PaidAfter\" >= 0 AND \"PaidAfter\" <= \"TotalAfter\" - \"DiscountAfter\"");
+
+                            t.HasCheckConstraint("CK_InvoiceRefunds_Payment", "(\"RefundAmount\" = 0 AND \"PaymentTransactionId\" IS NULL) OR (\"RefundAmount\" > 0 AND \"PaymentTransactionId\" IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.InvoiceRefundItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("InvoiceItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("InvoiceRefundId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvoiceItemId");
+
+                    b.HasIndex("InvoiceRefundId", "InvoiceItemId")
+                        .IsUnique();
+
+                    b.ToTable("InvoiceRefundItems", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_InvoiceRefundItems_Quantity", "\"Quantity\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.InvoiceRefundProposal", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CreatorId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DecisionNotes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("InvoiceId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ReasonCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("ReasonNotes")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("RefundId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("ReviewerId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Snapshot")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatorId");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("RequestId")
+                        .IsUnique();
+
+                    b.HasIndex("ReviewerId");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.ToTable("InvoiceRefundProposals", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_InvoiceRefundProposals_Status", "\"Status\" IN ('Pending','Approved','Rejected','Stale')");
+                        });
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.InvoiceRefundProposalItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("InvoiceItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ProposalId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvoiceItemId");
+
+                    b.HasIndex("ProposalId", "InvoiceItemId")
+                        .IsUnique();
+
+                    b.ToTable("InvoiceRefundProposalItems", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_InvoiceRefundProposalItems_Quantity", "\"Quantity\" > 0");
+                        });
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.MedicalHistoryItem", b =>
@@ -836,6 +1078,14 @@ namespace Dental.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasDefaultValue(0);
 
+                    b.Property<string>("RefundReasonCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("RefundReasonNotes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<Guid>("RequestId")
                         .HasColumnType("uuid");
 
@@ -846,6 +1096,13 @@ namespace Dental.Infrastructure.Migrations
                     b.Property<string>("TransactionReference")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<string>("TransactionType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Receipt");
 
                     b.HasKey("Id");
 
@@ -1793,6 +2050,96 @@ namespace Dental.Infrastructure.Migrations
                     b.Navigation("Invoice");
                 });
 
+            modelBuilder.Entity("Dental.Domain.Entities.InvoiceRefund", b =>
+                {
+                    b.HasOne("Dental.Domain.Entities.User", "Actor")
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.Invoice", "Invoice")
+                        .WithMany("Refunds")
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.PaymentTransaction", "PaymentTransaction")
+                        .WithMany()
+                        .HasForeignKey("PaymentTransactionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Actor");
+
+                    b.Navigation("Invoice");
+
+                    b.Navigation("PaymentTransaction");
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.InvoiceRefundItem", b =>
+                {
+                    b.HasOne("Dental.Domain.Entities.InvoiceItem", "InvoiceItem")
+                        .WithMany()
+                        .HasForeignKey("InvoiceItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.InvoiceRefund", "InvoiceRefund")
+                        .WithMany("Items")
+                        .HasForeignKey("InvoiceRefundId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("InvoiceItem");
+
+                    b.Navigation("InvoiceRefund");
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.InvoiceRefundProposal", b =>
+                {
+                    b.HasOne("Dental.Domain.Entities.User", "Creator")
+                        .WithMany()
+                        .HasForeignKey("CreatorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.Invoice", "Invoice")
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.User", "Reviewer")
+                        .WithMany()
+                        .HasForeignKey("ReviewerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Creator");
+
+                    b.Navigation("Invoice");
+
+                    b.Navigation("Reviewer");
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.InvoiceRefundProposalItem", b =>
+                {
+                    b.HasOne("Dental.Domain.Entities.InvoiceItem", "InvoiceItem")
+                        .WithMany()
+                        .HasForeignKey("InvoiceItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.InvoiceRefundProposal", "Proposal")
+                        .WithMany("Items")
+                        .HasForeignKey("ProposalId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("InvoiceItem");
+
+                    b.Navigation("Proposal");
+                });
+
             modelBuilder.Entity("Dental.Domain.Entities.MedicalHistoryItem", b =>
                 {
                     b.HasOne("Dental.Domain.Entities.MedicalHistoryRecord", "Record")
@@ -2208,6 +2555,18 @@ namespace Dental.Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.Invoice", b =>
+                {
+                    b.Navigation("Items");
+
+                    b.Navigation("Refunds");
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.InvoiceRefund", b =>
+                {
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.InvoiceRefundProposal", b =>
                 {
                     b.Navigation("Items");
                 });

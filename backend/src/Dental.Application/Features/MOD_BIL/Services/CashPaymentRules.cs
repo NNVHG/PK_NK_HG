@@ -14,13 +14,14 @@ public static class CashPaymentRules
     public static Result Apply(Invoice invoice, decimal amount)
     {
         if (invoice.Visit.Status != VisitStatuses.Completed || !invoice.Visit.IsLocked ||
-            invoice.Status is not (InvoiceStatus.PendingPayment or InvoiceStatus.PartiallyPaid))
+            invoice.Status is not (InvoiceStatus.PendingPayment or InvoiceStatus.PartiallyPaid or InvoiceStatus.PartiallyRefunded))
             return Result.Failure(new Error("BIL_031", "Chỉ thu tiền khi khám đã hoàn tất và hóa đơn còn nợ."));
         if (amount <= 0 || decimal.Truncate(amount) != amount || invoice.PaidAmount < 0 ||
             invoice.FinalAmount < invoice.PaidAmount || amount > invoice.FinalAmount - invoice.PaidAmount)
             return Result.Failure(new Error("BIL_032", "Số tiền thanh toán không được vượt quá số tiền còn nợ của hóa đơn."));
         invoice.PaidAmount += amount;
-        invoice.Status = invoice.PaidAmount == invoice.FinalAmount ? InvoiceStatus.Paid : InvoiceStatus.PartiallyPaid;
+        if (invoice.Status != InvoiceStatus.PartiallyRefunded)
+            invoice.Status = invoice.PaidAmount == invoice.FinalAmount ? InvoiceStatus.Paid : InvoiceStatus.PartiallyPaid;
         return Result.Success();
     }
 }

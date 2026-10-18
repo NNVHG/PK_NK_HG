@@ -4,6 +4,9 @@ namespace Dental.Domain.Entities;
 public sealed class PaymentTransaction
 {
     public int Id { get; set; }
+    public string TransactionType { get; set; } = "Receipt";
+    public string? RefundReasonCode { get; set; }
+    public string? RefundReasonNotes { get; set; }
     public int InvoiceId { get; set; }
     public decimal Amount { get; set; }
     public decimal? AmountTendered { get; set; }

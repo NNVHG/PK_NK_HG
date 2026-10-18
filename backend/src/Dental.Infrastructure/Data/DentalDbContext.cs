@@ -19,6 +19,10 @@ public sealed class DentalDbContext : DbContext
     public DbSet<VisitUnlockRecord> VisitUnlockRecords => Set<VisitUnlockRecord>();
     public DbSet<ToothCondition> ToothConditions => Set<ToothCondition>();
     public DbSet<VisitService> VisitServices => Set<VisitService>();
+    public DbSet<InvoiceRefund> InvoiceRefunds => Set<InvoiceRefund>();
+    public DbSet<InvoiceRefundItem> InvoiceRefundItems => Set<InvoiceRefundItem>();
+    public DbSet<InvoiceRefundProposal> InvoiceRefundProposals => Set<InvoiceRefundProposal>();
+    public DbSet<InvoiceRefundProposalItem> InvoiceRefundProposalItems => Set<InvoiceRefundProposalItem>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<DiscountPreset> DiscountPresets => Set<DiscountPreset>();
     public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
@@ -80,6 +84,11 @@ public sealed class DentalDbContext : DbContext
         modelBuilder.ApplyConfiguration(new ToothConditionConfiguration());
         modelBuilder.ApplyConfiguration(new VisitServiceConfiguration());
         modelBuilder.ApplyConfiguration(new InvoiceConfiguration());
+        modelBuilder.Entity<Invoice>().Property(x => x.RefundRevision).HasDefaultValue(0);
+        modelBuilder.ApplyConfiguration(new InvoiceRefundConfiguration());
+        modelBuilder.ApplyConfiguration(new InvoiceRefundItemConfiguration());
+        modelBuilder.ApplyConfiguration(new InvoiceRefundProposalConfiguration());
+        modelBuilder.ApplyConfiguration(new InvoiceRefundProposalItemConfiguration());
         modelBuilder.ApplyConfiguration(new DiscountPresetConfiguration());
         modelBuilder.ApplyConfiguration(new InvoiceItemConfiguration());
         modelBuilder.ApplyConfiguration(new InvoiceNumberCounterConfiguration());
@@ -101,6 +110,7 @@ public sealed class DentalDbContext : DbContext
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         GuardPrescriptionImmutability();
+        GuardRefundProposalScope();
         GuardAuditLogImmutability();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
@@ -110,6 +120,7 @@ public sealed class DentalDbContext : DbContext
         CancellationToken cancellationToken = default)
     {
         GuardPrescriptionImmutability();
+        GuardRefundProposalScope();
         GuardAuditLogImmutability();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
@@ -143,13 +154,42 @@ public sealed class DentalDbContext : DbContext
         }
         if (protectedIds.Count > 0 && Prescriptions.AsNoTracking().Any(p => protectedIds.Contains(p.Id) &&
             (p.IsCancelled || p.DispensedAt != null ||
-             Invoices.Any(i => i.VisitId == p.VisitId && (i.PaidAmount != 0 || i.Status == Dental.Domain.Enums.InvoiceStatus.Paid || i.Status == Dental.Domain.Enums.InvoiceStatus.PartiallyPaid)) ||
+             Invoices.Any(i => i.VisitId == p.VisitId && (i.PaidAmount != 0 || i.Status == Dental.Domain.Enums.InvoiceStatus.Paid || i.Status == Dental.Domain.Enums.InvoiceStatus.PartiallyPaid || i.Status == Dental.Domain.Enums.InvoiceStatus.PartiallyRefunded || i.Status == Dental.Domain.Enums.InvoiceStatus.Refunded)) ||
              PaymentTransactions.Any(t => t.Invoice.VisitId == p.VisitId))))
             throw new InvalidOperationException("Nội dung đơn thuốc đã phát sinh thanh toán/cấp phát/hủy là bất biến.");
     }
 
+    private void GuardRefundProposalScope()
+    {
+        var decisionFields = new HashSet<string>(StringComparer.Ordinal)
+        {
+            nameof(InvoiceRefundProposal.Status), nameof(InvoiceRefundProposal.ReviewerId),
+            nameof(InvoiceRefundProposal.DecidedAt), nameof(InvoiceRefundProposal.DecisionNotes),
+            nameof(InvoiceRefundProposal.RefundId)
+        };
+        foreach (var entry in ChangeTracker.Entries<InvoiceRefundProposal>())
+        {
+            if (entry.State == EntityState.Deleted || entry.State == EntityState.Modified &&
+                entry.Properties.Any(p => p.IsModified && !decisionFields.Contains(p.Metadata.Name)))
+                throw new InvalidOperationException("Phạm vi và lý do đề xuất hoàn tiền là bất biến; chỉ trạng thái quyết định được cập nhật.");
+        }
+        if (ChangeTracker.Entries<InvoiceRefundProposalItem>().Any(e => e.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Dòng và số lượng trong đề xuất hoàn tiền là bất biến.");
+    }
+
     private void GuardAuditLogImmutability()
     {
+        var changedInvoiceIds = ChangeTracker.Entries<InvoiceItem>()
+            .Where(e => e.State is EntityState.Modified or EntityState.Deleted or EntityState.Added)
+            .Select(e => e.State == EntityState.Added ? e.Entity.InvoiceId : e.Property(x => x.InvoiceId).OriginalValue).Where(id => id > 0).Distinct().ToArray();
+        if (changedInvoiceIds.Length > 0 && Invoices.AsNoTracking().Any(i => changedInvoiceIds.Contains(i.Id) &&
+            (i.Status == Dental.Domain.Enums.InvoiceStatus.Paid || i.Status == Dental.Domain.Enums.InvoiceStatus.PartiallyPaid ||
+             i.Status == Dental.Domain.Enums.InvoiceStatus.PartiallyRefunded || i.Status == Dental.Domain.Enums.InvoiceStatus.Refunded ||
+             PaymentTransactions.Any(t => t.InvoiceId == i.Id) || InvoiceRefunds.Any(r => r.InvoiceId == i.Id))))
+            throw new InvalidOperationException("Chi tiết hóa đơn gốc đã thanh toán/hoàn tiền là bất biến.");
+        if (ChangeTracker.Entries<InvoiceRefund>().Any(e => e.State is EntityState.Modified or EntityState.Deleted) ||
+            ChangeTracker.Entries<InvoiceRefundItem>().Any(e => e.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Lịch sử hoàn tiền chỉ được nối thêm.");
         if (ChangeTracker.Entries<PrescriptionDispenseEvent>().Any(e => e.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("Lịch sử bàn giao thuốc chỉ được nối thêm.");
         if (ChangeTracker.Entries<DoctorSignature>().Any(e => e.State is EntityState.Modified or EntityState.Deleted))
