@@ -20,6 +20,7 @@
         <router-link v-if="isAdmin" to="/admin/reports/revenue">Báo cáo doanh thu</router-link>
         <router-link v-if="isAdmin" to="/admin/role-permissions">Ma trận quyền</router-link>
         <router-link v-if="['ADMIN', 'DENTIST', 'ASSISTANT'].includes(authStore.role)" to="/staff/workspace">Vị trí nha sĩ/phụ tá</router-link>
+        <router-link v-if="['ADMIN', 'ASSISTANT'].includes(authStore.role)" to="/staff/chair-status">Trạng thái ghế</router-link>
         <router-link v-if="isAdmin" to="/admin/medicines">Danh mục thuốc</router-link>
         <router-link v-if="isAdmin" to="/admin/medical-supplies">Danh mục vật tư</router-link>
         <router-link v-if="['ADMIN', 'ASSISTANT', 'DENTIST'].includes(authStore.role)" to="/inventory/receipts">Tồn kho & nhập kho</router-link>

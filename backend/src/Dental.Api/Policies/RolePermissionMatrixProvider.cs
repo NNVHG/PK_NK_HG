@@ -18,6 +18,7 @@ public sealed class RolePermissionMatrixProvider(IAuthorizationPolicyProvider po
     private static readonly IReadOnlyDictionary<string, (string Name, string Module, string Conditions)> Labels =
         new Dictionary<string, (string, string, string)>
         {
+            [Policies.ChairStatusManage] = ("Đổi trạng thái vận hành ghế", "MOD_ASS", "Admin/Phụ tá; ghế không còn vị trí nha sĩ hoặc ca InProgress. Không đặt/giải phóng Occupied thủ công; không sửa danh mục (DL-317)."),
             [Policies.DentalImageRead] = ("Xem danh sách và tệp ảnh", "MOD_IMG", "Admin/Nha sĩ/Lễ tân hoặc Bệnh nhân sở hữu hồ sơ theo Q-247; stream JWT, không mở tệp công khai."),
             [Policies.DentalImageUpload] = ("Tải ảnh hồ sơ", "MOD_IMG", "Admin/Nha sĩ/Phụ tá; ca mở chưa thu tiền hoặc ảnh độc lập. Nha sĩ chỉ tải vào ca phụ trách."),
             [Policies.DentalImageManage] = ("Gán ảnh vào ca khám", "MOD_IMG", "Admin hoặc nha sĩ phụ trách; chỉ gán từ null vào ca mở/đính chính hợp lệ, chưa thu tiền theo Q-241/327."),

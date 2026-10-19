@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>Kiểm thử trạng thái ghế</title>
+<style>body{font:16px system-ui;margin:0}button,input,select{font:inherit}a{color:#1d4ed8}</style></head>
+<body><p>Fixture chỉ trong tests — dữ liệu ghế tổng hợp, vai trò Phụ tá; không kết nối API/CSDL thật.</p><div id="app"></div>
+<script type="module">
+import { createApp } from 'vue';
+import { createPinia } from 'pinia';
+import { createRouter, createMemoryHistory } from 'vue-router';
+import ChairStatusView from '../src/views/ChairStatusView.vue';
+import { useAuthStore } from '../src/stores/auth';
+import { apiClient } from '../src/services/api';
+const labels={1:'Sẵn sàng',2:'Đang phục vụ',3:'Bảo trì',4:'Ngừng sử dụng'};
+const rows=[1,2,3,4,5].map((id,i)=>({id,chairNumber:`GHE-0${id}`,roomName:`Phòng ${id}`,status:[1,2,3,4,1][i],statusText:labels[[1,2,3,4,1][i]],isActive:i!==3,version:1,isAssigned:i===4,hasActiveVisit:i===1}));
+apiClient.defaults.adapter=async config=>{
+  let data;
+  if(config.method==='get'&&config.url==='/chair-status'){
+    const {keyword='',status,page=1,pageSize=20}=config.params;
+    const filtered=rows.filter(x=>(!status||x.status===Number(status))&&(`${x.chairNumber} ${x.roomName}`).toLowerCase().includes(keyword.toLowerCase()));
+    data={items:filtered.slice((page-1)*pageSize,page*pageSize).map(x=>({...x})),page,pageSize,totalCount:filtered.length,hasNextPage:page*pageSize<filtered.length};
+  }else if(config.method==='put'&&config.url?.startsWith('/chair-status/')){
+    const input=JSON.parse(config.data),row=rows.find(x=>x.id===Number(config.url.split('/').at(-1)));
+    if(!row||row.isAssigned||row.hasActiveVisit||row.version!==input.expectedVersion||!input.confirmed||![1,3,4].includes(input.status))throw{response:{data:{message:'Xung đột dữ liệu fixture.'}}};
+    row.status=input.status;row.statusText=labels[input.status];row.isActive=input.status!==4;row.version++;data={...row};
+  }else throw new Error('Unexpected fixture request');
+  return{data,status:200,statusText:'OK',headers:{'cache-control':'no-store'},config};
+};
+const router=createRouter({history:createMemoryHistory(),routes:[{path:'/',component:ChairStatusView},{path:'/staff/workspace',component:{template:'<p>Fixture vị trí: nha sĩ/Admin bỏ hoặc đổi vị trí trước khi bảo trì. <router-link to="/">Quay lại ghế</router-link></p>'}}]});
+const pinia=createPinia(),app=createApp({template:'<router-view />'});app.use(pinia);app.use(router);
+useAuthStore(pinia).user={userId:99,fullName:'Nhân viên kiểm thử',roleCode:'ASSISTANT',roleName:'Phụ tá'};
+await router.isReady();app.mount('#app');
+</script></body></html>
