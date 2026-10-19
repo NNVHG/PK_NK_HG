@@ -19,6 +19,7 @@
    </section>
    <p v-if="!editable">{{ context.prescription ? 'Đơn chỉ đọc với quyền hoặc trạng thái hiện tại.' : 'Chưa có đơn thuốc. Chỉ nha sĩ phụ trách kê đơn khi ca khám cho phép.' }}</p>
    <template v-if="editable">
+    <PrescriptionStockNotice :visit-id="visitId" :items="draft.map(d => ({ medicineId: d.medicineId, quantity: Number(d.quantity), unit: d.unit }))" />
     <p>{{ context.prescription?.prescriptionCode || 'Đơn mới' }} · Chỉ lưu sau khi kiểm tra xem trước và xác nhận.</p>
     <p>Chưa có đơn mẫu đã được duyệt. Có thể kê thủ công hoặc nạp từ đơn bác sĩ đã lưu.</p>
     <aside v-if="context.allergies.length" class="warning" aria-label="Tiền sử dị ứng"><strong>Tiền sử dị ứng đã ghi nhận</strong><ul><li v-for="a in context.allergies" :key="a.id">{{ a.name }} {{ a.detail || '' }}</li></ul></aside>
@@ -67,6 +68,7 @@ import PrescriptionQr from '@/components/PrescriptionQr.vue';
 import PrescriptionHandover from '@/components/PrescriptionHandover.vue';
 import PrescriptionPrint from '@/components/PrescriptionPrint.vue';
 import PrescriptionLifecycle from '@/components/PrescriptionLifecycle.vue';
+import PrescriptionStockNotice from '@/components/PrescriptionStockNotice.vue';
 import { useAuthStore } from '@/stores/auth';
 import { prescriptionsService, type RxContext, type RxMedicine, type RxPreview, type RxRequest } from '@/services/prescriptions';
 interface DraftLine { medicineId: number; medicineVersion: number; code: string; name: string; activeIngredient: string | null; strength: string | null; unit: string; unitPrice: string; quantity: string | number; usageInstructions: string; treatmentDays: string | number; active: boolean }

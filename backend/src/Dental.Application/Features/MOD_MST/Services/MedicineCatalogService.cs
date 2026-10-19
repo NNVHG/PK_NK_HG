@@ -28,6 +28,8 @@ public sealed class MedicineCatalogService(IMedicineCatalogRepository medicines,
                 var item = id.HasValue ? await medicines.FindAsync(id.Value, tct) : new Medicine { CreatedAt = clock.UtcNow };
                 if (item is null) return Result<MedicineResponse>.Failure(Error.NotFound);
                 if (id.HasValue && item.Version != request.ExpectedVersion) return Conflict();
+                if (id.HasValue && item.Unit != request.Unit && await medicines.HasStockHistoryAsync(item.Id, tct))
+                    return Result<MedicineResponse>.Failure("MST_083", "Thuốc đã có chứng từ tồn; không đổi đơn vị. Tạo mã thuốc phù hợp thay vì tự quy đổi số lượng.");
                 var code = request.Code.ToUpperInvariant();
                 if (await medicines.CodeExistsAsync(code, id, tct)) return Result<MedicineResponse>.Failure("MST_081", "Mã thuốc đã tồn tại.");
                 item.Code = code; item.Name = request.Name; item.ActiveIngredient = Optional(request.ActiveIngredient); item.Strength = Optional(request.Strength);

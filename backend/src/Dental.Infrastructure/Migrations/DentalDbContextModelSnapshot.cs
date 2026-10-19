@@ -1046,6 +1046,160 @@ namespace Dental.Infrastructure.Migrations
                     b.ToTable("Medicines", (string)null);
                 });
 
+            modelBuilder.Entity("Dental.Domain.Entities.MedicineStockBalance", b =>
+                {
+                    b.Property<int>("MedicineId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("OnHand")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("MedicineId");
+
+                    b.ToTable("MedicineStockBalances", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_MedicineStockBalance_Nonnegative", "\"OnHand\" >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.MedicineStockIssue", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("DispenseEventId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("IssuedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("IssuedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("MedicineCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("MedicineId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("MedicineName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("PrescriptionId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PrescriptionItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DispenseEventId");
+
+                    b.HasIndex("IssuedByUserId");
+
+                    b.HasIndex("MedicineId");
+
+                    b.HasIndex("PrescriptionItemId")
+                        .IsUnique();
+
+                    b.HasIndex("PrescriptionId", "MedicineId")
+                        .IsUnique();
+
+                    b.ToTable("MedicineStockIssues", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_MedicineStockIssue_Quantity", "\"Quantity\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.MedicineStockReceipt", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("ConfirmedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ConfirmedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("MedicineCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("MedicineId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("MedicineName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("PayloadHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SupplierName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConfirmedByUserId");
+
+                    b.HasIndex("RequestId")
+                        .IsUnique();
+
+                    b.HasIndex("MedicineId", "Id");
+
+                    b.ToTable("MedicineStockReceipts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_MedicineStockReceipt_Quantity", "\"Quantity\" > 0");
+                        });
+                });
+
             modelBuilder.Entity("Dental.Domain.Entities.NotificationLog", b =>
                 {
                     b.Property<int>("Id")
@@ -2606,6 +2760,65 @@ namespace Dental.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("UpdatedByUserId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.MedicineStockBalance", b =>
+                {
+                    b.HasOne("Dental.Domain.Entities.Medicine", null)
+                        .WithMany()
+                        .HasForeignKey("MedicineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.MedicineStockIssue", b =>
+                {
+                    b.HasOne("Dental.Domain.Entities.PrescriptionDispenseEvent", "DispenseEvent")
+                        .WithMany()
+                        .HasForeignKey("DispenseEventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("IssuedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.Medicine", null)
+                        .WithMany()
+                        .HasForeignKey("MedicineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.Prescription", null)
+                        .WithMany()
+                        .HasForeignKey("PrescriptionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.PrescriptionItem", null)
+                        .WithMany()
+                        .HasForeignKey("PrescriptionItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("DispenseEvent");
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.MedicineStockReceipt", b =>
+                {
+                    b.HasOne("Dental.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ConfirmedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.Medicine", null)
+                        .WithMany()
+                        .HasForeignKey("MedicineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.NotificationLog", b =>

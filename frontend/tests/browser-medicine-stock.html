@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>Fixture tồn thuốc</title>
+<style>body{font:16px system-ui;margin:0;padding:1rem}button,input,select{font:inherit}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #2563eb;outline-offset:2px}</style></head>
+<body><p>Fixture chỉ dùng trong tests — dữ liệu tổng hợp, API giả lập trong trang; không kết nối CSDL/tài khoản thật.</p><div id="app"></div>
+<script type="module">
+import {createApp,ref} from 'vue';import{createPinia}from'pinia';import{createRouter,createMemoryHistory}from'vue-router';
+import MedicineStockView from '../src/views/MedicineStockView.vue';import PrescriptionStockNotice from '../src/components/PrescriptionStockNotice.vue';import PrescriptionHandover from '../src/components/PrescriptionHandover.vue';
+import{useAuthStore}from'../src/stores/auth';import{apiClient}from'../src/services/api';
+const medicine={id:7,code:'M-FIXTURE',name:'Thuốc kiểm thử',unit:'Viên',unitPrice:'1000',version:1,isActive:true};let onHand=0,issued=false,version=1,dispensedAt=null;const receipts=[],keys=new Map();
+function state(){return{prescriptionId:7,visitId:7,version,prescriptionCode:'RX-20261019-9001',patientName:'Bệnh nhân tổng hợp',receiverRequired:false,expiresAt:'2099-01-01T00:00:00Z',dispensedAt,dispensedByName:dispensedAt?'Nhân viên kiểm thử':null,receivedByProxy:false,receiverName:null,receiverPhone:null,canDispense:!dispensedAt&&(issued||onHand>=2),canUndo:!!dispensedAt,canOverrideExpired:false,blockReason:!issued&&onHand<2?'Không đủ tồn thuốc để giao.':null,stock:{needsDeduction:!issued,legacyHandover:false,canFulfill:issued||onHand>=2,lines:[{medicineId:7,code:medicine.code,name:medicine.name,unit:medicine.unit,quantity:2,onHand,unitMatches:true}]}};}
+apiClient.defaults.adapter=async config=>{
+ let data,status=200;const url=config.url,input=typeof config.data==='string'?JSON.parse(config.data):config.data;
+ if(url==='/medicines')data={items:[medicine],page:config.params?.page??1,hasNextPage:false};
+ else if(url==='/medicine-stock/7'&&config.method==='get')data={medicineId:7,code:medicine.code,name:medicine.name,unit:medicine.unit,medicineVersion:1,isActive:true,onHand,receipts:[...receipts].reverse(),hasMore:false};
+ else if(url==='/medicine-stock/7/receipts'){
+  let receipt=keys.get(input.requestId),replayed=!!receipt;if(!receipt){onHand+=input.quantity;receipt={id:receipts.length+1,code:'NTH'+String(receipts.length+1).padStart(6,'0'),medicineId:7,medicineCode:medicine.code,medicineName:medicine.name,unit:medicine.unit,quantity:input.quantity,supplierName:input.supplierName,notes:input.notes,confirmedAt:new Date().toISOString(),confirmedByName:'Admin kiểm thử'};receipts.push(receipt);keys.set(input.requestId,receipt);status=201;}data={receipt,replayed};
+ }else if(url==='/visits/7/prescription/stock')data=[{medicineId:7,code:medicine.code,name:medicine.name,unit:medicine.unit,onHand,isActive:true}];
+ else if(url==='/prescriptions/7/dispense'&&config.method==='get')data=state();
+ else if(url==='/prescriptions/7/dispense'){
+  if(input.expectedVersion!==version||(!issued&&onHand<2))throw{response:{status:409,data:{code:'RX_STOCK_INSUFFICIENT',message:'Không đủ tồn thuốc.'}}};if(!issued){onHand-=2;issued=true;}dispensedAt=new Date().toISOString();version++;data=state();
+ }else if(url==='/prescriptions/7/undo-dispense'){dispensedAt=null;version++;data=state();}
+ else throw new Error('Unexpected fixture request');return{data,status,statusText:'OK',headers:{'cache-control':'no-store'},config};
+};
+const pinia=createPinia(),role=ref('ADMIN');const app=createApp({components:{MedicineStockView,PrescriptionStockNotice,PrescriptionHandover},setup(){const auth=useAuthStore();function change(){auth.user={userId:99,fullName:'Nhân viên kiểm thử',roleCode:role.value,roleName:role.value};}change();return{role,change};},template:'<label>Vai trò kiểm thử<select v-model="role" @change="change"><option>ADMIN</option><option>DENTIST</option><option>ASSISTANT</option></select></label><MedicineStockView v-if="role===\'ADMIN\'"/><PrescriptionStockNotice v-else-if="role===\'DENTIST\'" :visit-id="7" :items="[{medicineId:7,quantity:2,unit:\'Viên\'}]"/><PrescriptionHandover v-else :prescription-id="7" :visit-id="7" :prescription-version="1" :blocked="false"/>'});
+app.use(pinia);app.use(createRouter({history:createMemoryHistory(),routes:[{path:'/',component:{template:'<span />'}}]}));app.mount('#app');
+</script></body></html>

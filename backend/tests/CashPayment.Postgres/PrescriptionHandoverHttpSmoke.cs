@@ -23,6 +23,7 @@ internal static class PrescriptionHandoverHttpSmoke
   var patient=new Patient{FullName="Synthetic adult",DateOfBirth=clock.Today.AddYears(-30),Phone="0990000111",UserId=owner.UserId};db.Patients.Add(patient);
   var child=new Patient{FullName="Synthetic child",DateOfBirth=clock.Today.AddYears(-10),Phone="0990000112",UserId=owner.UserId};db.Patients.Add(child);
   var medicine=new Medicine{Code="HANDOVER-TEST",Name="Synthetic medicine",Unit="unit",UnitPrice=500};db.Medicines.Add(medicine);await db.SaveChangesAsync();
+  db.MedicineStockBalances.Add(new(){MedicineId=medicine.Id,OnHand=1000,UpdatedAt=clock.UtcNow});await db.SaveChangesAsync();
   async Task<Prescription> Order(Patient? person=null,InvoiceStatus invoiceStatus=InvoiceStatus.Paid,double ageDays=0,bool cancelled=false,DateTime? handedAt=null,decimal discount=0,decimal? actualPaid=null)
   {
    var visit=new Visit{PatientId=(person??patient).PatientId,DentistId=doctor.UserId,CreatedByUserId=cashierId,Status=VisitStatuses.Completed,IsLocked=true};

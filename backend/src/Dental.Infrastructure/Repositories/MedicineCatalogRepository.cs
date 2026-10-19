@@ -19,4 +19,6 @@ public sealed class MedicineCatalogRepository(DentalDbContext db) : IMedicineCat
     public Task<Medicine?> FindAsync(int id, CancellationToken ct) => db.Medicines.SingleOrDefaultAsync(x => x.Id == id, ct);
     public Task<bool> CodeExistsAsync(string code, int? exceptId, CancellationToken ct) => db.Medicines.AnyAsync(x => x.Code == code && x.Id != exceptId, ct);
     public async Task AddAsync(Medicine medicine, CancellationToken ct) => await db.Medicines.AddAsync(medicine, ct);
+    public async Task<bool> HasStockHistoryAsync(int id, CancellationToken ct) => await db.MedicineStockBalances.AnyAsync(b => b.MedicineId == id, ct) ||
+        await db.MedicineStockReceipts.AnyAsync(r => r.MedicineId == id, ct) || await db.MedicineStockIssues.AnyAsync(i => i.MedicineId == id, ct);
 }
