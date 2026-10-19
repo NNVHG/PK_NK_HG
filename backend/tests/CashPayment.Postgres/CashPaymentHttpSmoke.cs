@@ -58,6 +58,8 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddSingleton<IPublicPrescriptionAccess, Dental.Infrastructure.Services.PublicPrescriptionAccess>();
         builder.Services.AddRateLimiter(o => { o.RejectionStatusCode = 429; Dental.Api.RateLimiting.PublicPrescriptionRateLimits.Configure(o); });
         builder.Services.AddScoped<IPatientCitizenIdRepository, PatientCitizenIdRepository>();
+        builder.Services.AddScoped<IQrPatientIntakeRepository, QrPatientIntakeRepository>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_PAT.QrPatientIntakeService>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_PAT.PatientCitizenIdService>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_RX.Services.PrescriptionService>();
         builder.Services.AddScoped<IMedicineCatalogRepository, MedicineCatalogRepository>();
@@ -206,7 +208,10 @@ internal static class CashPaymentHttpSmoke
                 else if (Environment.GetCommandLineArgs().Contains("--public-prescription-only"))
                     await PublicPrescriptionHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);
                 else if (Environment.GetCommandLineArgs().Contains("--patient-citizen-id-only"))
+                    {
                     await PatientCitizenIdHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);
+                    await QrPatientIntakeHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);
+                    }
                 else await PrescriptionHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);
                 return;
             }

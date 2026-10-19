@@ -14,6 +14,7 @@
     <p v-if="pageError" class="alert alert-error" role="alert">{{ pageError }}</p>
     <p v-if="successMessage" class="alert alert-success" role="status">{{ successMessage }}</p>
 
+    <QrPatientIntake v-if="canCreate" @created="loadPatients" />
     <section class="panel search-panel" aria-label="Tìm kiếm hồ sơ bệnh nhân">
       <label class="search-field">
         <span>Tìm theo SĐT, mã bệnh nhân hoặc họ tên</span>
@@ -177,6 +178,7 @@
 
 <script setup lang="ts">
 import axios from 'axios';
+import QrPatientIntake from '@/components/QrPatientIntake.vue';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import {
   patientsService,
