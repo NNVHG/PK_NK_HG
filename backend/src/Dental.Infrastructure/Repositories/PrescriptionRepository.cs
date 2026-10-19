@@ -33,9 +33,11 @@ public sealed partial class PrescriptionRepository(DentalDbContext db, IInvoiceR
         return new(visit, invoice, rx, paid, history?.RecordId, history?.Items.Where(i => i.Type == MedicalHistoryTypes.Allergy).ToArray() ?? [], medicines, services)
             { CancellationGeneration = generation };
     }
-    private async Task<bool> IsDoctorAsync(PrescriptionSnapshot s, int actor, CancellationToken ct)
-        => s.Visit.DentistId == actor && (s.Prescription is null || s.Prescription.DoctorId == actor) &&
+    private async Task<bool> IsResponsibleDoctorAsync(PrescriptionSnapshot s, int actor, CancellationToken ct)
+        => s.Visit.DentistId == actor &&
             await db.Users.AnyAsync(u => u.UserId == actor && u.IsActive && u.Role.RoleCode == RoleCodes.Dentist, ct);
+    private async Task<bool> IsDoctorAsync(PrescriptionSnapshot s, int actor, CancellationToken ct)
+        => (s.Prescription is null || s.Prescription.DoctorId == actor) && await IsResponsibleDoctorAsync(s, actor, ct);
     public async Task<Result<PrescriptionContext>> GetContextAsync(int visitId, int actorId, string role, CancellationToken ct)
     {
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
@@ -48,7 +50,7 @@ public sealed partial class PrescriptionRepository(DentalDbContext db, IInvoiceR
             s.Visit.Diagnosis ?? "", canEdit, s.Invoice?.Id, s.Invoice?.InvoiceCode, s.Invoice?.Status.ToString(), role == RoleCodes.Dentist ? s.AllergyRecordId : null,
             role == RoleCodes.Dentist ? s.Allergies.Select(a => new PrescriptionAllergy(a.ItemId, a.Name, a.Detail)).ToArray() : [],
             s.Prescription is null ? null : Map(s.Prescription, s.Medicines, role == RoleCodes.Dentist))
-            { CanCancel = ownedDoctor && PrescriptionRules.CanCancel(s) };
+            { CanCancel = role == RoleCodes.Dentist && await IsResponsibleDoctorAsync(s, actorId, ct) && PrescriptionRules.CanCancel(s) };
         await tx.CommitAsync(ct);
         return Result<PrescriptionContext>.Success(response);
     }

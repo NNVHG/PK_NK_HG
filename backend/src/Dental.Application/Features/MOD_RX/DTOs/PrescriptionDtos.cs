@@ -39,6 +39,6 @@ public sealed record PrescriptionSnapshot(Visit Visit, Invoice? Invoice, Prescri
 }
 public sealed record PrescriptionPlan(IReadOnlyList<PrescriptionItem> Items, PrescriptionPreview Preview);
 public sealed record PrescriptionLookupLink(string PrescriptionCode, int Version, string RelativePath);
-public sealed record PrescriptionCancellationRequest(int ExpectedVersion);
+public sealed record PrescriptionCancellationRequest(int ExpectedVersion, string? Reason = null);
 public sealed record PrescriptionCancellationResult(int PrescriptionId, int VisitId, int Version, int InvoiceId,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal InvoiceTotal);

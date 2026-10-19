@@ -35,11 +35,15 @@ public sealed partial class PrescriptionRepository
         try
         {
             var state = await LoadAsync(visitId, true, ct);
-            if (state is null || !await IsDoctorAsync(state, actorId, ct)) return Result<PrescriptionCancellationResult>.Failure(Error.NotFound);
+            if (state is null || !await IsResponsibleDoctorAsync(state, actorId, ct)) return Result<PrescriptionCancellationResult>.Failure(Error.NotFound);
             if (state.Prescription?.Id != prescriptionId || state.Prescription.Version != request.ExpectedVersion)
                 return Result<PrescriptionCancellationResult>.Failure(Conflict);
             if (!PrescriptionRules.CanCancel(state)) return Result<PrescriptionCancellationResult>.Failure(Locked);
             var rx = state.Prescription;
+            var replacingColleagueOrder = rx.DoctorId != actorId;
+            if (request.Reason?.Length > 500 || replacingColleagueOrder && string.IsNullOrWhiteSpace(request.Reason))
+                return Result<PrescriptionCancellationResult>.Failure(Error.Validation);
+            var reason = request.Reason?.Trim();
             rx.IsCancelled = true; rx.Version++; rx.UpdatedAt = clock.UtcNow;
             // Persist the flag inside this transaction so the invoice query excludes this prescription.
             await db.SaveChangesAsync(ct);
@@ -48,7 +52,8 @@ public sealed partial class PrescriptionRepository
             var invoice = sync.Value!.Invoice;
             db.AuditLogs.Add(new AuditLog { UserId = actorId, Action = "MOD_RX_PRESCRIPTION_CANCELLED", EntityType = "Prescription",
                 EntityId = rx.Id, IpAddress = ip, CreatedAt = clock.UtcNow,
-                Detail = JsonSerializer.Serialize(new { rx.VisitId, rx.Version, invoiceId = invoice.Id, trigger = "prescription_cancelled" }) });
+                Detail = JsonSerializer.Serialize(new { rx.VisitId, rx.Version, originalDoctorId = rx.DoctorId,
+                    cancellingDoctorId = actorId, replacingColleagueOrder, reason, invoiceId = invoice.Id, trigger = "prescription_cancelled" }) });
             db.AuditLogs.Add(new AuditLog { UserId = actorId, Action = "MOD_BIL_PRESCRIPTION_SYNCHRONIZED", EntityType = "Invoice",
                 EntityId = invoice.Id, IpAddress = ip, CreatedAt = clock.UtcNow,
                 Detail = JsonSerializer.Serialize(new { prescriptionId = rx.Id, rx.Version, invoice.TotalAmount, invoice.DiscountAmount, trigger = "prescription_cancelled" }) });

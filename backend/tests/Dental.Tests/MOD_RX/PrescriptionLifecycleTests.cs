@@ -42,6 +42,16 @@ public sealed class PrescriptionLifecycleTests
     }
     [Theory] [InlineData(0)] [InlineData(-1)] [InlineData(int.MaxValue)]
     public void CancellationVersionBounds(int value) => Assert.False(new PrescriptionCancellationValidator().Validate(new PrescriptionCancellationRequest(value)).IsValid);
+    [Theory] [InlineData(null)] [InlineData("")] [InlineData("Transfer replacement")]
+    public void OptionalReasonPreservesExistingCancellation(string? reason) => Assert.True(new PrescriptionCancellationValidator().Validate(new PrescriptionCancellationRequest(1,reason)).IsValid);
+    [Fact] public async Task ReasonLengthIsBoundedBeforeRepository()
+    {
+        var validator=new PrescriptionCancellationValidator();
+        Assert.True(validator.Validate(new PrescriptionCancellationRequest(1,new string('x',500))).IsValid);
+        var repo=Substitute.For<IPrescriptionRepository>();
+        Assert.Equal(Error.Validation,(await new PrescriptionService(repo).CancelAsync(7,9,3,RoleCodes.Dentist,new(1,new string('x',501)))).Error);
+        Assert.Empty(repo.ReceivedCalls());
+    }
     [Theory] [InlineData(RoleCodes.Admin)] [InlineData(RoleCodes.Receptionist)] [InlineData(RoleCodes.Assistant)] [InlineData(RoleCodes.Patient)] [InlineData(null)]
     public async Task OnlyDentistMayCancel(string? role)
     {
@@ -60,7 +70,7 @@ public sealed class PrescriptionLifecycleTests
     }
     [Fact] public async Task ValidCancelDelegatesExactTargetIdAndVersion()
     {
-        var repo=Substitute.For<IPrescriptionRepository>();var request=new PrescriptionCancellationRequest(2);
+        var repo=Substitute.For<IPrescriptionRepository>();var request=new PrescriptionCancellationRequest(2,"Transfer replacement");
         repo.CancelAsync(7,9,3,request,null,default).Returns(Result<PrescriptionCancellationResult>.Success(new(9,7,3,8,100)));
         Assert.True((await new PrescriptionService(repo).CancelAsync(7,9,3,RoleCodes.Dentist,request)).IsSuccess);
         await repo.Received().CancelAsync(7,9,3,request,null,default);

@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using Dental.Application.Common;
 using Dental.Application.Features.MOD_PAT;
 using Dental.Application.Features.MOD_RX.DTOs;
+using Dental.Application.Features.Queue.DTOs;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
 using Dental.Domain.Enums;
@@ -115,6 +116,59 @@ internal static class PrescriptionReplacementHttpSmoke
   check(!await db.Prescriptions.AnyAsync(p=>p.VisitId==id && !p.IsCancelled),"Visit cancellation leaves no effective prescription");
   var original=await db.PrescriptionItems.AsNoTracking().Where(i=>i.PrescriptionId==first.Id).Select(i=>new { i.Id,i.MedicineName,i.Quantity,i.UsageInstructions,i.UnitPrice }).ToListAsync();check(oldItems.SequenceEqual(original),"Canceled original snapshots survive replacement edits and Visit cancellation");
   check(await db.AuditLogs.CountAsync(a=>a.Action=="MOD_RX_PRESCRIPTION_CANCELLED" && a.EntityId==first.Id)==1 && await db.AuditLogs.AllAsync(a=>a.Detail==null || !a.Detail.Contains("Synthetic doctor instruction")),"Cancel audit once, contains no clinical text");
+  // Q-334: transfer a real queue/occupied chair while retaining the original prescription author.
+  var transferVisit=await Visit();var transferRx=await Create(transferVisit);
+  await TestChairFixtures.EnsureAsync(db,doctor.UserId,cashierId);
+  await TestChairFixtures.EnsureAsync(db,foreign.UserId,cashierId);
+  var sourceChairId=await db.StaffWorkspaces.Where(w=>w.UserId==doctor.UserId).Select(w=>w.ChairId).SingleAsync();
+  var sourceChair=await db.DentalChairs.FindAsync(sourceChairId);sourceChair!.Status=DentalChairStatus.Occupied;
+  var moving=await db.Visits.FindAsync(transferVisit);moving!.ChairId=sourceChairId;
+  var queue=new QueueEntry { VisitId=transferVisit,PatientId=patient.PatientId,DentistId=doctor.UserId,QueueDate=clock.Today,
+   QueueNumber=(await db.QueueEntries.MaxAsync(q=>(int?)q.QueueNumber)??0)+1,CheckInTime=clock.UtcNow,Status=QueueStatus.InConsultation };
+  db.QueueEntries.Add(queue);await db.SaveChangesAsync();db.ChangeTracker.Clear();
+  var originalOrder=await db.Prescriptions.AsNoTracking().Include(p=>p.Items).SingleAsync(p=>p.Id==transferRx.Id);
+  var originalItem=originalOrder.Items.Single();
+  var originalEdit=Request() with { ExpectedVersion=1 };
+  var originalEditPreview=await Repo(db).PreviewAsync(transferVisit,doctor.UserId,originalEdit,default);
+  originalEdit=originalEdit with { PreviewToken=originalEditPreview.Value!.Token };
+  using(var r=await client.PostAsJsonAsync($"/api/queue/{queue.QueueEntryId}/transfer",new TransferDentistRequest(foreign.UserId,true,"Synthetic transfer",doctor.UserId,(int)QueueStatus.InConsultation)))
+   check(r.StatusCode==HttpStatusCode.OK,"Transfer with unpaid prescription succeeds without changing original author");
+  var transferPath=Path(transferVisit);var transferCancel=transferPath+$"/{transferRx.Id}/cancel";
+  using(var r=await client.PostAsJsonAsync(transferCancel,new PrescriptionCancellationRequest(1,"Synthetic replacement")))
+   check(r.StatusCode==HttpStatusCode.NotFound,"Former responsible dentist cannot cancel after transfer404");
+  authenticate(RoleCodes.Dentist,foreign.UserId);
+  using(var r=await client.GetAsync(transferPath)) { var context=await r.Content.ReadFromJsonAsync<PrescriptionContext>();
+   check(r.StatusCode==HttpStatusCode.OK && context!.CanCancel && !context.CanEdit && context.Prescription!.DoctorId==doctor.UserId,"Receiving dentist may cancel but not edit colleague order"); }
+  using(var r=await client.PutAsJsonAsync(transferPath,originalEdit))check(r.StatusCode==HttpStatusCode.NotFound,"Receiving dentist cannot overwrite colleague order404");
+  using(var r=await client.PostAsJsonAsync(transferPath+"/preview",Request()))check(r.StatusCode==HttpStatusCode.NotFound,"Receiving dentist cannot preview edits to colleague order404");
+  foreach(var reason in new string?[] { null,"","   ",new string('x',501) })
+  { using var r=await client.PostAsJsonAsync(transferCancel,new PrescriptionCancellationRequest(1,reason));check(r.StatusCode==HttpStatusCode.BadRequest,"Colleague cancellation requires bounded nonblank reason400"); }
+  using(var r=await client.PostAsJsonAsync(transferCancel,new PrescriptionCancellationRequest(2,"Synthetic replacement")))check(r.StatusCode==HttpStatusCode.Conflict,"Colleague cancellation stale version409");
+  await using(var ctx=new DentalDbContext(faultOptions)) { var rolledBack=false;
+   try { await Repo(ctx).CancelAsync(transferVisit,transferRx.Id,foreign.UserId,new(1,"Synthetic replacement"),null,default); }catch(InvalidOperationException e)when(e.Message=="Synthetic cancel audit fault") { rolledBack=true; }
+   check(rolledBack && await db.Prescriptions.AnyAsync(p=>p.Id==transferRx.Id && !p.IsCancelled && p.Version==1),"Colleague cancellation audit failure rolls back"); }
+  using(var r=await client.PostAsJsonAsync(transferCancel,new PrescriptionCancellationRequest(1,"  Synthetic replacement  ")))check(r.StatusCode==HttpStatusCode.OK && r.Headers.CacheControl?.NoStore==true,"Receiving dentist cancels colleague order with reason200 NoStore");
+  var preserved=await db.Prescriptions.AsNoTracking().Include(p=>p.Items).SingleAsync(p=>p.Id==transferRx.Id);var preservedItem=preserved.Items.Single();
+  check(preserved.IsCancelled && preserved.DoctorId==doctor.UserId && preserved.CreatedByUserId==originalOrder.CreatedByUserId && preserved.Diagnosis==originalOrder.Diagnosis && preserved.DoctorAdvice==originalOrder.DoctorAdvice &&
+   preservedItem.Id==originalItem.Id && preservedItem.UsageInstructions==originalItem.UsageInstructions && preservedItem.UnitPrice==originalItem.UnitPrice && preservedItem.Quantity==originalItem.Quantity,"Original author, clinical content and item snapshots survive colleague cancellation");
+  var cancellationAudit=await db.AuditLogs.AsNoTracking().SingleAsync(a=>a.Action=="MOD_RX_PRESCRIPTION_CANCELLED" && a.EntityId==transferRx.Id);
+  var audit=System.Text.Json.JsonDocument.Parse(cancellationAudit.Detail!).RootElement;
+  check(cancellationAudit.UserId==foreign.UserId && audit.GetProperty("originalDoctorId").GetInt32()==doctor.UserId && audit.GetProperty("cancellingDoctorId").GetInt32()==foreign.UserId && audit.GetProperty("reason").GetString()=="Synthetic replacement" && audit.GetProperty("replacingColleagueOrder").GetBoolean(),"Audit records original and cancelling doctors plus trimmed reason");
+  var replacement=await Create(transferVisit);
+  check(replacement.DoctorId==foreign.UserId && replacement.Id!=transferRx.Id && replacement.PrescriptionCode!=transferRx.PrescriptionCode &&
+   await db.Prescriptions.CountAsync(p=>p.VisitId==transferVisit && !p.IsCancelled)==1,"Receiving dentist creates replacement with own author, new code and one effective order");
+  var receivingDoctor=await db.Users.FindAsync(foreign.UserId);receivingDoctor!.FullName="Synthetic receiving dentist B";receivingDoctor.AcademicTitle="Synthetic title B";
+  var signature=SignaturePngFixture.Png(width:3);
+  db.DoctorSignatures.Add(new() { DoctorId=foreign.UserId,Version=1,ImagePng=signature,UpdatedByUserId=foreign.UserId,CreatedAt=clock.UtcNow });
+  foreach(var setting in new[] { ("Clinic:Address","Synthetic address"),("Clinic:Phone","0990000882") })
+  { var config=await db.SystemConfigs.SingleOrDefaultAsync(c=>c.Key==setting.Item1);if(config is null)db.SystemConfigs.Add(new() { Key=setting.Item1,Value=setting.Item2 });else config.Value=setting.Item2; }
+  await db.SaveChangesAsync();db.ChangeTracker.Clear();
+  using(var r=await client.PostAsJsonAsync(transferPath+$"/{replacement.Id}/print",new PrescriptionPrintRequest(1))) { var document=await r.Content.ReadFromJsonAsync<PrescriptionPrintDocument>();
+   check(r.StatusCode==HttpStatusCode.OK && document!.DoctorName=="Synthetic receiving dentist B" && document.SignaturePngBase64==Convert.ToBase64String(signature),"Replacement print uses receiving dentist B name and signature"); }
+  using(var r=await client.PostAsJsonAsync(transferPath+$"/{transferRx.Id}/print",new PrescriptionPrintRequest(2)))check(r.StatusCode==HttpStatusCode.Conflict,"Canceled colleague order cannot print409");
+  using(var r=await client.GetAsync(transferPath+"/history")) { var history=await r.Content.ReadFromJsonAsync<PagedResult<PrescriptionResponse>>();check(history!.Items.Any(p=>p.Id==transferRx.Id && p.IsCancelled && p.DoctorId==doctor.UserId) && history.Items.Any(p=>p.Id==replacement.Id && !p.IsCancelled && p.DoctorId==foreign.UserId),"History preserves both authors and cancellation status"); }
+  authenticate(RoleCodes.Dentist,doctor.UserId);
+  using(var r=await client.PostAsJsonAsync(transferPath+$"/{replacement.Id}/cancel",new PrescriptionCancellationRequest(1,"Synthetic reason")))check(r.StatusCode==HttpStatusCode.NotFound,"Former dentist cannot cancel new replacement404");
   db.ChangeTracker.Clear();var actual=await db.Users.FindAsync(doctor.UserId);actual!.IsActive=false;await db.SaveChangesAsync();db.ChangeTracker.Clear();
   using(var r=await client.PostAsJsonAsync(Path(discountVisit)+$"/{discountRx.Id}/cancel",new PrescriptionCancellationRequest(1)))check(r.StatusCode==HttpStatusCode.NotFound,"Disabled doctor stale JWT cannot cancel404");
   using(var r=await client.GetAsync(path+"/history"))check(r.StatusCode==HttpStatusCode.NotFound,"Disabled doctor history404");
