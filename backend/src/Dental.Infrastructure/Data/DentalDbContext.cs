@@ -55,6 +55,9 @@ public sealed class DentalDbContext : DbContext
     public DbSet<PrescriptionNumberCounter> PrescriptionNumberCounters => Set<PrescriptionNumberCounter>();
     public DbSet<Medicine> Medicines => Set<Medicine>();
     public DbSet<MedicalSupply> MedicalSupplies => Set<MedicalSupply>();
+    public DbSet<StockBalance> StockBalances => Set<StockBalance>();
+    public DbSet<StockReceipt> StockReceipts => Set<StockReceipt>();
+    public DbSet<StockReceiptLine> StockReceiptLines => Set<StockReceiptLine>();
     public DbSet<DentalDiagnosis> DentalDiagnoses => Set<DentalDiagnosis>();
     public DbSet<PostTreatmentNote> PostTreatmentNotes => Set<PostTreatmentNote>();
 
@@ -68,6 +71,9 @@ public sealed class DentalDbContext : DbContext
         modelBuilder.ApplyConfiguration(new PrescriptionNumberCounterConfiguration());
         modelBuilder.ApplyConfiguration(new MedicineConfiguration());
         modelBuilder.ApplyConfiguration(new MedicalSupplyConfiguration());
+        modelBuilder.ApplyConfiguration(new StockBalanceConfiguration());
+        modelBuilder.ApplyConfiguration(new StockReceiptConfiguration());
+        modelBuilder.ApplyConfiguration(new StockReceiptLineConfiguration());
         modelBuilder.ApplyConfiguration(new DentalDiagnosisConfiguration());
         modelBuilder.ApplyConfiguration(new PostTreatmentNoteConfiguration());
         modelBuilder.ApplyConfiguration(new PaymentTransactionConfiguration());
@@ -113,6 +119,7 @@ public sealed class DentalDbContext : DbContext
     /// </summary>
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
+        GuardStockReceiptImmutability();
         GuardPrescriptionImmutability();
         GuardRefundProposalScope();
         GuardAuditLogImmutability();
@@ -123,10 +130,20 @@ public sealed class DentalDbContext : DbContext
         bool acceptAllChangesOnSuccess,
         CancellationToken cancellationToken = default)
     {
+        GuardStockReceiptImmutability();
         GuardPrescriptionImmutability();
         GuardRefundProposalScope();
         GuardAuditLogImmutability();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void GuardStockReceiptImmutability()
+    {
+        if (ChangeTracker.Entries<StockReceipt>().Any(e => e.State is EntityState.Modified or EntityState.Deleted) ||
+            ChangeTracker.Entries<StockReceiptLine>().Any(e => e.State is EntityState.Modified or EntityState.Deleted ||
+                e.State == EntityState.Added && e.Entity.StockReceiptId > 0 &&
+                !ChangeTracker.Entries<StockReceipt>().Any(r => r.State == EntityState.Added && r.Entity.Id == e.Entity.StockReceiptId)))
+            throw new InvalidOperationException("Phiếu nhập đã xác nhận là bất biến.");
     }
 
     private void GuardPrescriptionImmutability()

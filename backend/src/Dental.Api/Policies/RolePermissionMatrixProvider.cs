@@ -35,6 +35,8 @@ public sealed class RolePermissionMatrixProvider(IAuthorizationPolicyProvider po
             [Policies.WorkspaceManage] = ("Vị trí nha sĩ và phụ tá", "MOD_MST", "Nha sĩ tự chọn ghế; phụ tá chọn nha sĩ rồi theo phòng; Admin can thiệp. Chặn đổi khi đang khám/gọi chưa xử lý (DL-261)."),
             [Policies.DiagnosisCatalogView] = ("Xem gợi ý chẩn đoán", "MOD_MST", "Admin quản lý danh mục; nha sĩ chỉ đọc mục đang dùng. Chẩn đoán lâm sàng vẫn nhập tự do."),
             [Policies.MedicineCatalogView] = ("Xem danh mục thuốc", "MOD_MST", "Admin quản lý danh mục và giá; nha sĩ chỉ đọc để kê đơn."),
+            [Policies.StockView] = ("Xem tồn kho vật tư", "MOD_INV", "Admin/Phụ tá xem tồn và bộ chọn nhập kho; Nha sĩ chỉ đọc vật tư đang dùng (DL-314)."),
+            [Policies.StockReceiptWrite] = ("Lập và xem phiếu nhập kho", "MOD_INV", "Admin/Phụ tá xác nhận thủ công; cộng tồn và audit cùng giao dịch (DL-311/314)."),
             [Policies.MedicalSupplyCatalogView] = ("Xem danh mục vật tư tiêu hao", "MOD_MST", "Admin quản lý danh mục vật tư tiêu hao; nha sĩ chỉ đọc mục đang dùng (DL-070, DL-103, DL-167)."),
             [Policies.DentalChairView] = ("Xem danh mục phòng và ghế", "MOD_MST", "Admin/Nha sĩ/Phụ tá xem; chỉ Admin khai báo/sửa danh mục. Ghế bảo trì/ngừng dùng không phục vụ."),
             [Policies.ServiceCatalogView] = ("Xem danh mục dịch vụ", "MOD_MST", "Nha sĩ/Phụ tá được xem; tạo/sửa danh mục và bảng giá chỉ Admin."),

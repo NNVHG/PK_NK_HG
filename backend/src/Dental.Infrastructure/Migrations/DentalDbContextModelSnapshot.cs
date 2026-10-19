@@ -1773,6 +1773,115 @@ namespace Dental.Infrastructure.Migrations
                     b.ToTable("StaffWorkspaces", (string)null);
                 });
 
+            modelBuilder.Entity("Dental.Domain.Entities.StockBalance", b =>
+                {
+                    b.Property<int>("MedicalSupplyId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("OnHand")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("MedicalSupplyId");
+
+                    b.ToTable("StockBalances", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_StockBalance_OnHand", "\"OnHand\" >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.StockReceipt", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("ConfirmedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ConfirmedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("PayloadHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SupplierName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConfirmedByUserId");
+
+                    b.HasIndex("RequestId")
+                        .IsUnique();
+
+                    b.ToTable("StockReceipts", (string)null);
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.StockReceiptLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("MedicalSupplyId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("StockReceiptId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SupplyCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("SupplyName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MedicalSupplyId");
+
+                    b.HasIndex("StockReceiptId", "MedicalSupplyId")
+                        .IsUnique();
+
+                    b.ToTable("StockReceiptLines", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_StockReceiptLine_Quantity", "\"Quantity\" > 0");
+                        });
+                });
+
             modelBuilder.Entity("Dental.Domain.Entities.SystemConfig", b =>
                 {
                     b.Property<string>("Key")
@@ -2604,6 +2713,41 @@ namespace Dental.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Dental.Domain.Entities.StockBalance", b =>
+                {
+                    b.HasOne("Dental.Domain.Entities.MedicalSupply", null)
+                        .WithMany()
+                        .HasForeignKey("MedicalSupplyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.StockReceipt", b =>
+                {
+                    b.HasOne("Dental.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ConfirmedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.StockReceiptLine", b =>
+                {
+                    b.HasOne("Dental.Domain.Entities.MedicalSupply", null)
+                        .WithMany()
+                        .HasForeignKey("MedicalSupplyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.StockReceipt", "Receipt")
+                        .WithMany("Lines")
+                        .HasForeignKey("StockReceiptId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Receipt");
+                });
+
             modelBuilder.Entity("Dental.Domain.Entities.ToothCondition", b =>
                 {
                     b.HasOne("Dental.Domain.Entities.Visit", "Visit")
@@ -2785,6 +2929,11 @@ namespace Dental.Infrastructure.Migrations
             modelBuilder.Entity("Dental.Domain.Entities.Role", b =>
                 {
                     b.Navigation("Users");
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.StockReceipt", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.User", b =>

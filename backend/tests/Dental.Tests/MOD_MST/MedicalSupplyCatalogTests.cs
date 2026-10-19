@@ -31,6 +31,15 @@ public sealed class MedicalSupplyCatalogTests
     };
 
     private MedicalSupplyCatalogService Service() => new(repo, uow, audit, new VietnamClock(TimeProvider.System));
+    [Fact]
+    public async Task UnitCannotChangeAfterStockDocument()
+    {
+        repo.HasStockHistoryAsync(7, Arg.Any<CancellationToken>()).Returns(true);
+        var result = await Service().SaveAsync(7, 1, RoleCodes.Admin, Input() with { Unit = "Cái" });
+        Assert.Equal("MST_093", result.Error.Code);
+        Assert.Equal("Hộp", item.Unit);
+        await uow.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
     private static MedicalSupplyWriteRequest Input() => new("vt-gangtay", "Găng tay y tế", "Hộp", 10, "Hộp 100 chiếc", IsActive: true, ExpectedVersion: 1);
 
     public MedicalSupplyCatalogTests()

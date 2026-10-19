@@ -10,4 +10,5 @@ public interface IMedicalSupplyCatalogRepository
     Task<MedicalSupply?> FindAsync(int id, CancellationToken ct);
     Task<bool> CodeExistsAsync(string code, int? exceptId, CancellationToken ct);
     Task AddAsync(MedicalSupply supply, CancellationToken ct);
+    Task<bool> HasStockHistoryAsync(int id, CancellationToken ct);
 }

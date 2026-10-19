@@ -9,6 +9,8 @@ namespace Dental.Api.Policies;
 /// </summary>
 public static class Policies
 {
+    public const string StockView = "StockView";
+    public const string StockReceiptWrite = "StockReceiptWrite";
     public const string DentalImageRead = "DentalImageRead";
     public const string DentalImageUpload = "DentalImageUpload";
     public const string DentalImageManage = "DentalImageManage";
@@ -48,6 +50,8 @@ public static class Policies
 
     public static void AddApplicationPolicies(this AuthorizationOptions opts)
     {
+        opts.AddPolicy(StockView, p => p.RequireRole(RoleCodes.Admin, RoleCodes.Assistant, RoleCodes.Dentist));
+        opts.AddPolicy(StockReceiptWrite, p => p.RequireRole(RoleCodes.Admin, RoleCodes.Assistant));
         opts.AddPolicy(DentalImageRead, p => p.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Receptionist, RoleCodes.Patient));
         opts.AddPolicy(DentalImageUpload, p => p.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant));
         opts.AddPolicy(DentalImageManage, p => p.RequireRole(RoleCodes.Admin, RoleCodes.Dentist));

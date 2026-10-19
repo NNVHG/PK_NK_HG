@@ -33,6 +33,8 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddScoped<Dental.Application.Features.MOD_INV.IStockReceiptRepository, StockReceiptRepository>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_INV.StockReceiptService>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_IMG.IDentalImageRepository, DentalImageRepository>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_IMG.DentalImageService>();
 builder.Services.AddSingleton<Dental.Application.Features.MOD_IMG.IDentalImageStorage>(new DentalImageStorage(builder.Environment.ContentRootPath));
