@@ -16,8 +16,9 @@ public sealed class RescheduleAppointmentRequestValidator : AbstractValidator<Re
             .WithMessage("Ngày hẹn không được để trống.");
 
         RuleFor(x => x.SlotTime)
-            .Must(AppointmentSlots.IsValidSlot)
-            .WithMessage("Giờ hẹn không hợp lệ. Giờ khám: 08:00–11:30 và 13:30–16:30, slot 30 phút.");
+            .Must(time => time.Ticks % TimeSpan.TicksPerMinute == 0)
+            .WithMessage("Giờ hẹn phải chính xác đến phút; khung giờ được đối chiếu cấu hình hiện hành.");
+        RuleFor(x => x.ExpectedScheduleRevision).Matches("^[A-F0-9]{64}$").When(x => x.ExpectedScheduleRevision is not null);
 
         RuleFor(x => x.Notes)
             .MaximumLength(500)

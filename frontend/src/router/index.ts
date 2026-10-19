@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/auth';
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+    { path: '/admin/scheduling-settings', name: 'scheduling-settings', component: () => import('@/views/SchedulingSettingsView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
     { path: '/inventory/issues', name: 'stock-issues', component: () => import('@/views/StockIssuesView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'ASSISTANT'] } },
     { path: '/inventory/receipts', name: 'stock-receipts', component: () => import('@/views/StockReceiptsView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'ASSISTANT', 'DENTIST'] } },
     { path: '/forgot-password', name: 'password-recovery', component: () => import('@/views/PasswordRecoveryView.vue'), meta: { guestOnly: true } },

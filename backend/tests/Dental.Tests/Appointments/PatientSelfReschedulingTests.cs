@@ -93,7 +93,7 @@ public sealed class PatientSelfReschedulingTests
     {
         row.DentistId = 30;
         users.FindByIdAsync(30, Arg.Any<CancellationToken>()).Returns(new User { UserId = 30, IsActive = true, Role = new Role { RoleCode = RoleCodes.Dentist } });
-        appointments.HasDentistBookingAsync(30, Request().AppointmentDate, Request().SlotTime, 7, Arg.Any<CancellationToken>()).Returns(true);
+        appointments.HasDentistBookingAsync(30, Request().AppointmentDate, Request().SlotTime, 7, Arg.Any<CancellationToken>(), durationMinutes: 30).Returns(true);
         Assert.Equal(Error.Validation.Code, (await Move()).Error.Code); Assert.Equal(0, row.RescheduleCount);
     }
     [Fact] public async Task PatientReplayAtLimitDoesNotConsumeAnotherChange()

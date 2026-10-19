@@ -4,6 +4,7 @@ using Dental.Application.Features.Appointments.DTOs;
 using Dental.Application.Interfaces;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
+using Dental.Application.Features.MOD_MST.Services;
 
 namespace Dental.Application.Features.Appointments.Services;
 
@@ -54,9 +55,12 @@ public sealed class AppointmentService
     private async Task<Result<AppointmentResponse>> CreateCoreAsync(
         int actorUserId, string actorRoleCode, CreateAppointmentRequest request, string? ipAddress, CancellationToken ct)
     {
+        var snapshot = await _appointmentRepository.GetScheduleAsync(ct) ?? new ScheduleSnapshot(ClinicSchedule.Default, "", true);
+        if (request.ExpectedScheduleRevision is not null && request.ExpectedScheduleRevision != snapshot.Revision)
+            return Result<AppointmentResponse>.Failure(new Error("APP_SCHEDULE", "Cấu hình giờ khám đã đổi. Tải lại và chọn lại khung giờ trước khi gửi."));
         var validTime = request.IsEmergency
             ? request.SlotTime.Ticks % TimeSpan.TicksPerMinute == 0
-            : AppointmentSlots.IsValidSlot(request.SlotTime);
+            : snapshot.Schedule.IsValidSlot(request.SlotTime);
         var reason = request.EmergencyReason?.Trim();
         if (!validTime || request.Notes?.Length > 500 || request.DentistId <= 0 ||
             (request.IsEmergency && (reason is null || reason.Length is < 5 or > 255)) ||
@@ -85,8 +89,8 @@ public sealed class AppointmentService
         if (await _appointmentRepository.HasActiveAppointmentOnDateAsync(request.PatientId, request.AppointmentDate, ct))
             return Result<AppointmentResponse>.Failure(Error.AppointmentPatientHasActive);
 
-        // Trần tiếp nhận tối đa 100 khách / slot 30 phút theo DL-050
-        var currentSlotCount = await _appointmentRepository.GetSlotBookingCountAsync(request.AppointmentDate, request.SlotTime, ct);
+        // DL050/DL316: tối đa100 chỗ đồng thời, kể cả lịch cũ dùng thời lượng khác.
+        var currentSlotCount = await _appointmentRepository.GetSlotBookingCountAsync(request.AppointmentDate, request.SlotTime, ct, durationMinutes: snapshot.Schedule.DurationMinutes);
         if (currentSlotCount >= AppointmentSlots.MaxBookingsPerSlot)
             return Result<AppointmentResponse>.Failure(Error.AppointmentSlotFull);
 
@@ -98,7 +102,7 @@ public sealed class AppointmentService
                 return Result<AppointmentResponse>.Failure(Error.Validation.Code, "Nha sĩ được chọn không hợp lệ hoặc không hoạt động.");
 
             var conflict = await _appointmentRepository.GetDentistBookingConflictAsync(
-                request.DentistId.Value, request.AppointmentDate, request.SlotTime, 0, ct);
+                request.DentistId.Value, request.AppointmentDate, request.SlotTime, 0, ct, snapshot.Schedule.DurationMinutes);
             if (conflict is not null)
             {
                 if (!request.IsEmergency)
@@ -124,6 +128,7 @@ public sealed class AppointmentService
             PatientId = request.PatientId,
             AppointmentDate = request.AppointmentDate,
             SlotTime = request.SlotTime,
+            SlotDurationMinutes = snapshot.Schedule.DurationMinutes,
             DentistId = request.DentistId,
             Status = AppointmentStatuses.Scheduled,
             Notes = request.Notes?.Trim(),
@@ -149,6 +154,7 @@ public sealed class AppointmentService
                         nameof(Appointment.PatientId),
                         nameof(Appointment.AppointmentDate),
                         nameof(Appointment.SlotTime),
+                        nameof(Appointment.SlotDurationMinutes),
                         nameof(Appointment.DentistId),
                         nameof(Appointment.Status),
                         nameof(Appointment.IsEmergency),
@@ -159,9 +165,11 @@ public sealed class AppointmentService
                         nameof(Appointment.PatientId),
                         nameof(Appointment.AppointmentDate),
                         nameof(Appointment.SlotTime),
+                        nameof(Appointment.SlotDurationMinutes),
                         nameof(Appointment.DentistId),
                         nameof(Appointment.Status)
                     },
+                slotDurationMinutes = appointment.SlotDurationMinutes,
                 confirmedDentistConflictOverride = overriddenAppointmentId.HasValue,
                 overriddenAppointmentId
             }),
@@ -180,6 +188,13 @@ public sealed class AppointmentService
         var dentists = await _userRepository.GetActiveDentistsAsync(ct);
         return Result<IReadOnlyList<BookingDentistResponse>>.Success(
             dentists.Select(d => new BookingDentistResponse(d.UserId, d.FullName)).ToList());
+    }
+
+    public async Task<Result<BookingScheduleDto>> GetBookingScheduleAsync(string? role, CancellationToken ct = default)
+    {
+        if (role is not (RoleCodes.Admin or RoleCodes.Receptionist or RoleCodes.Patient)) return Result<BookingScheduleDto>.Failure(Error.Forbidden);
+        var snapshot = await _appointmentRepository.GetScheduleAsync(ct) ?? new ScheduleSnapshot(ClinicSchedule.Default, "", true);
+        return Result<BookingScheduleDto>.Success(new(snapshot.Schedule.Slots().Select(x => x.ToString("HH:mm")).ToArray(), snapshot.Schedule.DurationMinutes, snapshot.Revision));
     }
 
     public async Task<Result<PagedResult<AppointmentResponse>>> GetAppointmentsAsync(
@@ -353,11 +368,13 @@ public sealed class AppointmentService
 
         if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Length > 500 || request.Notes?.Length > 500)
             return Result<AppointmentResponse>.Failure(Error.Validation.Code, "Cần lý do đổi lịch tối đa 500 ký tự; ghi chú tối đa 500 ký tự.");
-        if (!AppointmentSlots.IsValidSlot(request.SlotTime))
-            return Result<AppointmentResponse>.Failure(Error.AppointmentInvalidTime);
         var dentistId = request.DentistId ?? appointment.DentistId;
         if (appointment.AppointmentDate == request.AppointmentDate && appointment.SlotTime == request.SlotTime && appointment.DentistId == dentistId)
             return Result<AppointmentResponse>.Success(ToResponse(appointment));
+        var snapshot = await _appointmentRepository.GetScheduleAsync(ct) ?? new ScheduleSnapshot(ClinicSchedule.Default, "", true);
+        if (request.ExpectedScheduleRevision is not null && request.ExpectedScheduleRevision != snapshot.Revision)
+            return Result<AppointmentResponse>.Failure(new Error("APP_SCHEDULE", "Cấu hình giờ khám đã đổi. Tải lại và chọn lại khung giờ trước khi gửi."));
+        if (!snapshot.Schedule.IsValidSlot(request.SlotTime)) return Result<AppointmentResponse>.Failure(Error.AppointmentInvalidTime);
 
         if (actorRoleCode == RoleCodes.Patient && SelfReschedulingMessage(appointment) is string message)
             return Result<AppointmentResponse>.Failure(Error.AppointmentCannotReschedule.Code, message);
@@ -375,7 +392,7 @@ public sealed class AppointmentService
 
         if (await _appointmentRepository.HasActiveAppointmentOnDateAsync(appointment.PatientId, request.AppointmentDate, ct, appointmentId))
             return Result<AppointmentResponse>.Failure(Error.AppointmentPatientHasActive);
-        var currentSlotCount = await _appointmentRepository.GetSlotBookingCountAsync(request.AppointmentDate, request.SlotTime, ct, appointmentId);
+        var currentSlotCount = await _appointmentRepository.GetSlotBookingCountAsync(request.AppointmentDate, request.SlotTime, ct, appointmentId, snapshot.Schedule.DurationMinutes);
         if (currentSlotCount >= AppointmentSlots.MaxBookingsPerSlot)
             return Result<AppointmentResponse>.Failure(Error.AppointmentSlotFull);
 
@@ -384,17 +401,19 @@ public sealed class AppointmentService
             var dentist = await _userRepository.FindByIdAsync(dentistId.Value, ct);
             if (dentist is null || !dentist.IsActive || dentist.Role?.RoleCode != RoleCodes.Dentist)
                 return Result<AppointmentResponse>.Failure(Error.Validation.Code, "Nha sĩ được chọn không hợp lệ hoặc không hoạt động.");
-            if (await _appointmentRepository.HasDentistBookingAsync(dentistId.Value, request.AppointmentDate, request.SlotTime, appointmentId, ct))
+            if (await _appointmentRepository.HasDentistBookingAsync(dentistId.Value, request.AppointmentDate, request.SlotTime, appointmentId, ct, snapshot.Schedule.DurationMinutes))
                 return Result<AppointmentResponse>.Failure(Error.Validation.Code, "Bác sĩ đã có lịch hẹn trong khung giờ này.");
         }
 
         if (appointment.RescheduleCount == int.MaxValue) return Result<AppointmentResponse>.Failure(Error.Validation);
         var oldDate = appointment.AppointmentDate;
         var oldTime = appointment.SlotTime;
+        var oldDurationMinutes = appointment.SlotDurationMinutes;
         var oldDentistId = appointment.DentistId;
 
         appointment.AppointmentDate = request.AppointmentDate;
         appointment.SlotTime = request.SlotTime;
+        appointment.SlotDurationMinutes = snapshot.Schedule.DurationMinutes;
         appointment.DentistId = dentistId;
         appointment.RescheduleCount++;
         appointment.RescheduleReason = request.Reason.Trim();
@@ -411,13 +430,15 @@ public sealed class AppointmentService
             userId: actorUserId,
             detail: JsonSerializer.Serialize(new
             {
-                oldDate, oldTime, oldDentistId,
+                oldDate, oldTime, oldDentistId, oldDurationMinutes,
                 newDate = appointment.AppointmentDate, newTime = appointment.SlotTime, newDentistId = dentistId,
+                newDurationMinutes = appointment.SlotDurationMinutes,
                 rescheduleCount = appointment.RescheduleCount,
                 changedFields = new[]
                 {
                     nameof(Appointment.AppointmentDate),
                     nameof(Appointment.SlotTime),
+                    nameof(Appointment.SlotDurationMinutes),
                     nameof(Appointment.DentistId),
                     nameof(Appointment.Notes),
                     nameof(Appointment.RescheduleCount),
@@ -469,7 +490,8 @@ public sealed class AppointmentService
             a.RescheduleCount,
             a.RescheduleReason,
             a.IsEmergency,
-            a.EmergencyReason
+            a.EmergencyReason,
+            a.SlotDurationMinutes
         );
 
 }

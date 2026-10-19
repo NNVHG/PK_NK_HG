@@ -12,6 +12,7 @@ public sealed class Appointment : BaseEntity
     public int PatientId { get; set; }
     public DateOnly AppointmentDate { get; set; }
     public TimeOnly SlotTime { get; set; }
+    public int SlotDurationMinutes { get; set; } = 30;
     public int? DentistId { get; set; }
     public string Status { get; set; } = AppointmentStatuses.Scheduled;
     public string? Notes { get; set; }

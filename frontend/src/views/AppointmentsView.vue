@@ -19,7 +19,10 @@
       <input id="date" v-model="appointmentDate" type="date" :min="today" :disabled="submitting" required />
 
       <label for="slot">Khung giờ</label>
-      <select id="slot" v-model="slotTime" :disabled="submitting" required>
+      <p v-if="slotDurationMinutes">Độ dài khung hẹn mới: {{ slotDurationMinutes }} phút.</p>
+      <p v-if="scheduleError" role="alert">{{ scheduleError }} <button type="button" :disabled="submitting || scheduleLoading" @click="loadSchedule">Tải lại giờ</button></p>
+      <p v-if="scheduleLoading" role="status">Đang tải khung giờ…</p>
+      <select id="slot" v-model="slotTime" :disabled="submitting || scheduleLoading" required>
         <option value="" disabled>Chọn khung giờ</option>
         <option v-for="slot in slots" :key="slot" :value="slot">{{ slot }}</option>
       </select>
@@ -40,10 +43,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import axios from 'axios';
 import { appointmentsService, type AppointmentResponse } from '@/services/appointments';
 import { patientsService, type PatientSummary } from '@/services/patients';
+import { useBookingSchedule } from '@/composables/useBookingSchedule';
 
 const profiles = ref<PatientSummary[]>([]);
 const patientId = ref(0);
@@ -62,10 +66,8 @@ const today = computed(() => {
   return localDate.toISOString().slice(0, 10);
 });
 
-const slots = [
-  ...makeSlots(8, 0, 11, 30),
-  ...makeSlots(13, 30, 16, 30)
-];
+const { slots, revision: scheduleRevision, duration: slotDurationMinutes, loading: scheduleLoading, error: scheduleError, load: loadSchedule } = useBookingSchedule();
+watch(scheduleRevision, () => { slotTime.value = ''; });
 
 onMounted(async () => {
   const ticket = version;
@@ -80,12 +82,12 @@ onMounted(async () => {
 });
 
 async function submit() {
-  if (submitting.value || loadingProfiles.value) return;
+  if (submitting.value || loadingProfiles.value || scheduleLoading.value || !scheduleRevision.value) return;
   errorMessage.value = '';
   success.value = null;
 
   if (!Number.isInteger(patientId.value) || !profiles.value.some(profile => profile.patientId === patientId.value) ||
-      !appointmentDate.value || !slots.includes(slotTime.value) || notes.value.length > 500) {
+      !appointmentDate.value || !slots.value.includes(slotTime.value) || notes.value.length > 500) {
     errorMessage.value = 'Vui lòng chọn hồ sơ, ngày và khung giờ khám.';
     return;
   }
@@ -97,7 +99,8 @@ async function submit() {
       patientId: patientId.value,
       appointmentDate: appointmentDate.value,
       slotTime: `${slotTime.value}:00`,
-      notes: notes.value || null
+      notes: notes.value || null,
+      expectedScheduleRevision: scheduleRevision.value
     });
     if (ticket !== version) return;
     success.value = result;
@@ -105,6 +108,8 @@ async function submit() {
   } catch (error) {
     if (ticket !== version) return;
     const response = axios.isAxiosError(error) ? error.response?.data : null;
+    if (response?.code === 'APP_SCHEDULE') { slotTime.value = ''; await loadSchedule(); }
+    if (ticket !== version) return;
     errorMessage.value = response?.message
       ?? response?.errors?.[0]?.message
       ?? 'Không thể đặt lịch. Khung giờ có thể đã đầy hoặc thông tin không hợp lệ.';
@@ -113,15 +118,6 @@ async function submit() {
   }
 }
 onUnmounted(() => { version++; profiles.value = []; patientId.value = 0; notes.value = ''; success.value = null; });
-
-function makeSlots(startHour: number, startMinute: number, endHour: number, endMinute: number): string[] {
-  const result: string[] = [];
-  const end = endHour * 60 + endMinute;
-  for (let minute = startHour * 60 + startMinute; minute <= end; minute += 30) {
-    result.push(`${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`);
-  }
-  return result;
-}
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat('vi-VN').format(new Date(`${value}T00:00:00`));

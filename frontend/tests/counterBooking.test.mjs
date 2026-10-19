@@ -13,7 +13,8 @@ const dentist = { dentistId: 31, dentistName: 'Synthetic dentist' };
 function fixture({ searchResult = { items: [patient] }, booking, failure, dentistResult = [dentist] } = {}) {
   let cleanup, mount; const calls = [], searches = [], dentistReads = [], failurePlan = Array.isArray(failure) ? [...failure] : failure ? [failure] : [];
   const imports = {
-    vue: { defineComponent: c => c, ref: value => ({ value }), onMounted: cb => { mount = cb; }, onUnmounted: cb => { cleanup = cb; } },
+    '@/composables/useBookingSchedule': { useBookingSchedule: () => ({ slots: { value: ['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00'] }, revision: { value: 'A'.repeat(64) }, duration: { value: 30 }, loading: { value: false }, error: { value: '' }, load: async () => {} }) },
+    vue: { defineComponent: c => c, ref: value => ({ value }), watch() {}, onMounted: cb => { mount = cb; }, onUnmounted: cb => { cleanup = cb; } },
     axios: { isAxiosError: e => Boolean(e?.response) },
     '@/services/patients': { patientsService: { search: async query => { searches.push(query); return searchResult; } } },
     '@/services/appointments': { appointmentsService: { getBookingDentists: async () => { dentistReads.push(true); if (dentistResult instanceof Error) throw dentistResult; return dentistResult; }, create: async request => {
@@ -34,7 +35,7 @@ test('search uses API with bounded page and selecting resets confirmation', asyn
 });
 test('confirmed booking sends selected patient and normal slot without dentist assignment', async () => {
   const f = fixture(); await ready(f); f.c.notes.value = '  Synthetic reason  '; await f.c.book();
-  assert.deepEqual(f.calls, [{ patientId: 71, appointmentDate: '2099-01-01', slotTime: '08:30:00', dentistId: null, notes: 'Synthetic reason', isEmergency: false, emergencyReason: null, confirmedDentistConflictAppointmentId: null }]);
+  assert.deepEqual(f.calls, [{ patientId: 71, appointmentDate: '2099-01-01', slotTime: '08:30:00', dentistId: null, notes: 'Synthetic reason', isEmergency: false, emergencyReason: null, confirmedDentistConflictAppointmentId: null, expectedScheduleRevision: 'A'.repeat(64) }]);
   assert.equal(f.c.confirmed.value, false); assert.equal(f.c.success.value.appointmentId, 9);
 });
 test('unconfirmed, past date, wrong slot and long notes do not create appointments', async () => {

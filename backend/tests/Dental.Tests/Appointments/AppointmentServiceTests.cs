@@ -62,7 +62,7 @@ public sealed class AppointmentServiceTests
 
         _patientRepository.GetByIdAsync(1, Arg.Any<CancellationToken>()).Returns(patient);
         _appointmentRepository.HasActiveAppointmentOnDateAsync(1, tomorrow, Arg.Any<CancellationToken>()).Returns(false);
-        _appointmentRepository.GetSlotBookingCountAsync(tomorrow, slot, Arg.Any<CancellationToken>()).Returns(5);
+        _appointmentRepository.GetSlotBookingCountAsync(tomorrow, slot, Arg.Any<CancellationToken>(), durationMinutes: 30).Returns(5);
 
         _appointmentRepository.AddAsync(Arg.Any<Appointment>(), Arg.Any<CancellationToken>()).Returns(call =>
         {
@@ -101,7 +101,7 @@ public sealed class AppointmentServiceTests
         patient.UserId = 2;
         _patientRepository.GetByIdAsync(patient.PatientId, Arg.Any<CancellationToken>()).Returns(patient);
         _appointmentRepository.HasActiveAppointmentOnDateAsync(patient.PatientId, tomorrow, Arg.Any<CancellationToken>()).Returns(false);
-        _appointmentRepository.GetSlotBookingCountAsync(tomorrow, slot, Arg.Any<CancellationToken>()).Returns(0);
+        _appointmentRepository.GetSlotBookingCountAsync(tomorrow, slot, Arg.Any<CancellationToken>(), durationMinutes: 30).Returns(0);
         _appointmentRepository.AddAsync(Arg.Any<Appointment>(), Arg.Any<CancellationToken>()).Returns(call =>
         {
             call.Arg<Appointment>().AppointmentId = 12;
@@ -164,7 +164,7 @@ public sealed class AppointmentServiceTests
 
         _patientRepository.GetByIdAsync(1, Arg.Any<CancellationToken>()).Returns(patient);
         _appointmentRepository.HasActiveAppointmentOnDateAsync(1, tomorrow, Arg.Any<CancellationToken>()).Returns(false);
-        _appointmentRepository.GetSlotBookingCountAsync(tomorrow, slot, Arg.Any<CancellationToken>()).Returns(100);
+        _appointmentRepository.GetSlotBookingCountAsync(tomorrow, slot, Arg.Any<CancellationToken>(), durationMinutes: 30).Returns(100);
 
         var result = await CreateService().CreateAppointmentAsync(
             actorUserId: 2,
@@ -234,7 +234,7 @@ public sealed class AppointmentServiceTests
             Status = AppointmentStatuses.Scheduled
         };
         _appointmentRepository.GetByIdAsync(5, Arg.Any<CancellationToken>()).Returns(appointment);
-        _appointmentRepository.GetSlotBookingCountAsync(newDate, new TimeOnly(14, 0), Arg.Any<CancellationToken>()).Returns(10);
+        _appointmentRepository.GetSlotBookingCountAsync(newDate, new TimeOnly(14, 0), Arg.Any<CancellationToken>(), durationMinutes: 30).Returns(10);
 
         var result = await CreateService().RescheduleAppointmentAsync(
             appointmentId: 5,

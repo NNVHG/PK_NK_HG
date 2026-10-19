@@ -33,6 +33,8 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddScoped<Dental.Application.Features.MOD_MST.Services.ISchedulingSettingsRepository, SchedulingSettingsRepository>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_MST.Services.SchedulingSettingsService>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_INV.IStockIssueRepository, StockIssueRepository>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_INV.StockIssueService>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_INV.IStockReceiptRepository, StockReceiptRepository>();

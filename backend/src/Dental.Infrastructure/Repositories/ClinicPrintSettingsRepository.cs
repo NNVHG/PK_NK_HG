@@ -32,8 +32,9 @@ public sealed class ClinicPrintSettingsRepository(DentalDbContext db) : IClinicP
             if ((await Read(ct)).Revision != request.ExpectedRevision) return Result<ClinicPrintSettings>.Failure(Error.Conflict);
             foreach (var pair in new[] { ("Clinic:Address", request.Address.Trim()), ("Clinic:Phone", request.Phone.Trim()) })
             {
-                var row = await db.SystemConfigs.FindAsync([pair.Item1], ct);
-                if (row is null) db.SystemConfigs.Add(new() { Key = pair.Item1, Value = pair.Item2 }); else row.Value = pair.Item2;
+                var row = await db.SystemConfigs.SingleOrDefaultAsync(x => x.Key == pair.Item1, ct);
+                if (row is null) { row = new SystemConfig { Key = pair.Item1 }; db.SystemConfigs.Add(row); }
+                row.Value = pair.Item2; row.DataType = "String"; row.UpdatedAt = DateTime.UtcNow; row.UpdatedByUserId = actor;
             }
             db.AuditLogs.Add(new() { UserId = actor, Action = "MOD_MST_CLINIC_PRINT_SETTINGS_UPDATED", EntityType = "SystemConfig", IpAddress = ip, CreatedAt = DateTime.UtcNow,
                 Detail = JsonSerializer.Serialize(new { fields = new[] { "Clinic:Address", "Clinic:Phone" } }) });
