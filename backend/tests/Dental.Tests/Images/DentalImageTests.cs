@@ -50,20 +50,20 @@ public sealed class DentalImageTests
     }
     [Fact] public async Task InvalidInputDoesNotReachStorage()
     {
-        var repo = Substitute.For<IDentalImageRepository>(); var service = new DentalImageService(repo);
+        var repo = Substitute.For<IDentalImageRepository>(); var service = new DentalImageService(repo, Substitute.For<IDentalImageStorage>());
         var r = await service.UploadAsync(new(1, null, 19, "Intraoral"), "x.png", "image/png", Png, 5, RoleCodes.Admin, null);
         Assert.True(r.IsFailure); Assert.Empty(repo.ReceivedCalls());
     }
     [Theory] [InlineData(RoleCodes.Patient)] [InlineData(RoleCodes.Receptionist)] [InlineData("UNKNOWN")]
     public async Task UploadRoleCannotBeBypassed(string role)
     {
-        var repo = Substitute.For<IDentalImageRepository>(); var r = await new DentalImageService(repo).UploadAsync(new(1, null, null, "Intraoral"), "x.png", "image/png", Png, 5, role, null);
+        var repo = Substitute.For<IDentalImageRepository>(); var r = await new DentalImageService(repo, Substitute.For<IDentalImageStorage>()).UploadAsync(new(1, null, null, "Intraoral"), "x.png", "image/png", Png, 5, role, null);
         Assert.Equal(Error.Forbidden, r.Error); Assert.Empty(repo.ReceivedCalls());
     }
     [Fact] public async Task OriginalNameCannotBecomeStoragePath()
     {
         var repo = Substitute.For<IDentalImageRepository>(); var b = Png;
-        await new DentalImageService(repo).UploadAsync(new(1, null, null, "Intraoral"), "..\\..\\ảnh.png", "image/png", b, 5, RoleCodes.Admin, null);
+        await new DentalImageService(repo, Substitute.For<IDentalImageStorage>()).UploadAsync(new(1, null, null, "Intraoral"), "..\\..\\ảnh.png", "image/png", b, 5, RoleCodes.Admin, null);
         await repo.Received(1).UploadAsync(Arg.Any<DentalImageRequest>(), "ảnh.png", "image/png", b, 1, 1, 5, RoleCodes.Admin, null, Arg.Any<CancellationToken>());
     }
     [Fact] public void ModelHasRequiredRelationshipsAndConcurrency()

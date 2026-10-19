@@ -21,4 +21,9 @@ public sealed class DentalImageStorage(string contentRoot) : IDentalImageStorage
         await stream.WriteAsync(bytes, ct);
     }
     public Task RemoveAsync(string relativePath) { File.Delete(Resolve(relativePath)); return Task.CompletedTask; }
+    public Task<Stream> OpenReadAsync(string relativePath, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult<Stream>(new FileStream(Resolve(relativePath), FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.Asynchronous | FileOptions.SequentialScan));
+    }
 }
