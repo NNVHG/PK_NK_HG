@@ -10,6 +10,7 @@ namespace Dental.Api.Policies;
 public static class Policies
 {
     public const string StockView = "StockView";
+    public const string StockIssueWrite = "StockIssueWrite";
     public const string StockReceiptWrite = "StockReceiptWrite";
     public const string DentalImageRead = "DentalImageRead";
     public const string DentalImageUpload = "DentalImageUpload";
@@ -50,6 +51,7 @@ public static class Policies
 
     public static void AddApplicationPolicies(this AuthorizationOptions opts)
     {
+        opts.AddPolicy(StockIssueWrite, p => p.RequireRole(RoleCodes.Admin, RoleCodes.Assistant));
         opts.AddPolicy(StockView, p => p.RequireRole(RoleCodes.Admin, RoleCodes.Assistant, RoleCodes.Dentist));
         opts.AddPolicy(StockReceiptWrite, p => p.RequireRole(RoleCodes.Admin, RoleCodes.Assistant));
         opts.AddPolicy(DentalImageRead, p => p.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Receptionist, RoleCodes.Patient));

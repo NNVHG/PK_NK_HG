@@ -43,6 +43,7 @@ onMounted(() => { void loadStock(); void loadHistory(); });
 <template>
   <section class="stock-page">
     <h1>Tồn kho & phiếu nhập</h1>
+    <RouterLink v-if="canWrite" to="/inventory/issues">Ghi tiêu hao thực tế theo ca</RouterLink>
     <p>Số lượng nguyên theo đơn vị danh mục. Chỉ cộng tồn sau khi xác nhận phiếu.</p>
     <p v-if="auth.role === 'ADMIN'"><RouterLink to="/admin/medical-supplies">Quản lý danh mục vật tư</RouterLink></p>
     <form class="toolbar" @submit.prevent="loadStock(1)"><label>Tìm mã/tên vật tư <input v-model="keyword" maxlength="200" /></label><button :disabled="loading">Tìm kiếm</button></form>
