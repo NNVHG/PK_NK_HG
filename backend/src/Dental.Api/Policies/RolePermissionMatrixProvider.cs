@@ -51,6 +51,7 @@ public sealed class RolePermissionMatrixProvider(IAuthorizationPolicyProvider po
             [Policies.QueueSkip] = ("Đánh dấu vắng mặt", "MOD_CHK", "Chỉ lượt Calling chưa khám; Nha sĩ chỉ thao tác lượt của mình. Gọi lại dành cho Lễ tân/Admin (DL-259)."),
             [Policies.QueueCall] = ("Gọi số mời vào phòng", "MOD_CHK", "Phụ tá gọi lượt đã có nha sĩ; gọi số không bắt đầu hoặc ghi ca khám. Bắt đầu khám chỉ Nha sĩ/Admin (DL-258)."),
             [Policies.QueueStatusUpdate] = ("Chuyển trạng thái hàng đợi", "MOD_CHK", "Mỗi bước chuyển kiểm tra quyền riêng: Nha sĩ khám/chỉ định chụp; Phụ tá hoàn tất chụp."),
+            [Policies.QueueTransfer] = ("Chuyển bệnh nhân sang nha sĩ khác", "MOD_CHK", "Admin/Lễ tân hoặc nha sĩ đang phụ trách; ca InProgress chuyển ghế cùng giao dịch (DL-086/DL-319)."),
             [Policies.ClinicalDiagnosisUpdate] = ("Khám và ghi chẩn đoán", "MOD_PAT", "Chỉ Admin hoặc nha sĩ phụ trách; lần khám đang mở, chưa khóa."),
             [Policies.FdiConditionWrite] = ("Ghi tình trạng răng", "MOD_FDI", "Chỉ Admin hoặc nha sĩ phụ trách; lần khám đang mở, chưa khóa."),
             [Policies.FdiServiceAssign] = ("Chỉ định dịch vụ điều trị", "MOD_FDI", "Chỉ Admin hoặc nha sĩ phụ trách; còn kiểm tra lần khám và dịch vụ đang dùng."),

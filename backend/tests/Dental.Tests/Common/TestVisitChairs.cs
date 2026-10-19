@@ -10,6 +10,7 @@ internal static class TestVisitChairs
         var coordinator = Substitute.For<IVisitChairCoordinator>();
         coordinator.CheckReadyAsync(Arg.Any<Visit>(), Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(Result.Success());
         coordinator.AcquireAsync(Arg.Any<Visit>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(Result.Success());
+        coordinator.TransferAsync(Arg.Any<Visit>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(Result.Success());
         coordinator.ReleaseAsync(Arg.Any<Visit>(), Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(Result.Success());
         return coordinator;
     }

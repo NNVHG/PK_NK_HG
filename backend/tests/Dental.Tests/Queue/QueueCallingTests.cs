@@ -111,7 +111,7 @@ public sealed class QueueCallingTests
         Assert.False(new UpdateQueueStatusRequestValidator().Validate(new UpdateQueueStatusRequest(6)).IsValid);
         Assert.Empty(queues.ReceivedCalls());
     }
-    [Theory] [InlineData(RoleCodes.Admin)] [InlineData(RoleCodes.Dentist)] [InlineData(RoleCodes.Assistant)]
+    [Theory] [InlineData(RoleCodes.Admin)] [InlineData(RoleCodes.Dentist)] [InlineData(RoleCodes.Assistant)] [InlineData(RoleCodes.Receptionist)]
     public async Task CallingDirectoryIsMinimalAndAuthorized(string role)
     {
         var result = await Service().GetCallingDentistsAsync(role); Assert.True(result.IsSuccess);
@@ -120,17 +120,16 @@ public sealed class QueueCallingTests
             dentist.GetType().GetProperties().Select(p => p.Name).OrderBy(n => n).ToArray());
         Assert.Null(dentist.ChairNumber); Assert.Null(dentist.RoomName);
     }
-    [Theory] [InlineData(RoleCodes.Patient)] [InlineData(RoleCodes.Receptionist)] [InlineData(null)]
+    [Theory] [InlineData(RoleCodes.Patient)] [InlineData(null)]
     public async Task CallingDirectoryRejectsOtherRolesBeforeReading(string? role)
     { Assert.Equal(Error.Forbidden, (await Service().GetCallingDentistsAsync(role)).Error); Assert.Empty(users.ReceivedCalls()); }
     [Fact] public void CallingEndpointsUseDedicatedPolicyAndNoStoreForDirectory()
     {
-        foreach (var name in new[] { nameof(QueueController.CallNext), nameof(QueueController.GetCallingDentists) })
-        {
-            var method = typeof(QueueController).GetMethod(name)!;
-            Assert.Contains(method.GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>(), p => p.Policy == AppPolicies.QueueCall);
-        }
-        Assert.True(((ResponseCacheAttribute)Attribute.GetCustomAttribute(typeof(QueueController).GetMethod(nameof(QueueController.GetCallingDentists))!, typeof(ResponseCacheAttribute))!).NoStore);
+        var call = typeof(QueueController).GetMethod(nameof(QueueController.CallNext))!;
+        Assert.Contains(call.GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>(), p => p.Policy == AppPolicies.QueueCall);
+        var directory = typeof(QueueController).GetMethod(nameof(QueueController.GetCallingDentists))!;
+        Assert.Contains(directory.GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>(), p => p.Policy == AppPolicies.QueueView);
+        Assert.True(((ResponseCacheAttribute)Attribute.GetCustomAttribute(directory, typeof(ResponseCacheAttribute))!).NoStore);
     }
     [Fact] public async Task PublicMonitorIncludesCallingFirstWithoutClinicalData()
     {

@@ -551,6 +551,8 @@ public class RbacPolicyTests
             .GetCustomAttributes<AuthorizeAttribute>()).Policy);
         Assert.Equal(ApiPolicies.QueueStatusUpdate, Assert.Single(methods[nameof(QueueController.UpdateStatus)]
             .GetCustomAttributes<AuthorizeAttribute>()).Policy);
+        Assert.Equal(ApiPolicies.QueueTransfer, Assert.Single(methods[nameof(QueueController.TransferDentist)]
+            .GetCustomAttributes<AuthorizeAttribute>()).Policy);
     }
 
     [Theory]
@@ -584,6 +586,19 @@ public class RbacPolicyTests
         }, "TestAuth"));
 
         var result = await _authService.AuthorizeAsync(user, null, ApiPolicies.QueueView);
+        Assert.Equal(expectedAllowed, result.Succeeded);
+    }
+
+    [Theory]
+    [InlineData(RoleCodes.Admin, true)]
+    [InlineData(RoleCodes.Receptionist, true)]
+    [InlineData(RoleCodes.Dentist, true)]
+    [InlineData(RoleCodes.Assistant, false)]
+    [InlineData(RoleCodes.Patient, false)]
+    public async Task QueueTransferPolicy_AllowsOnlyDl086Roles(string roleCode, bool expectedAllowed)
+    {
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(ClaimTypes.Role, roleCode) }, "TestAuth"));
+        var result = await _authService.AuthorizeAsync(user, null, ApiPolicies.QueueTransfer);
         Assert.Equal(expectedAllowed, result.Succeeded);
     }
 

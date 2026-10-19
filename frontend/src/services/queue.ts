@@ -52,6 +52,14 @@ export interface CallNextPayload {
   dentistId?: number | null;
 }
 
+export interface TransferDentistPayload {
+  targetDentistId: number;
+  expectedDentistId: number;
+  expectedStatus: number;
+  confirmed: boolean;
+  reason: string | null;
+}
+
 export interface CallingDentist { dentistId: number; dentistName: string; chairNumber: string | null; roomName: string | null; }
 
 export interface QueueCleanupResponse { cancelledCount: number; lastExpiredDate: string; }
@@ -67,6 +75,9 @@ export const queueService = {
   },
   async getCallingDentists(): Promise<CallingDentist[]> {
     return (await apiClient.get<CallingDentist[]>('/queue/call-dentists')).data;
+  },
+  async transferDentist(queueEntryId: number, payload: TransferDentistPayload): Promise<QueueEntryResponse> {
+    return (await apiClient.post<QueueEntryResponse>(`/queue/${queueEntryId}/transfer`, payload)).data;
   },
   async getToday(page = 1, status?: number): Promise<PagedResult<QueueEntryResponse>> {
     const response = await apiClient.get<PagedResult<QueueEntryResponse>>('/queue', {

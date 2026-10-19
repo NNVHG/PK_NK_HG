@@ -15,6 +15,47 @@ public sealed class VisitChairService(IStaffWorkspaceRepository workspaces, IDen
         => AllocateCoreAsync(visit, dentistId, 0, false, ct);
     public Task<Result> AcquireAsync(Visit visit, int dentistId, int actorId, CancellationToken ct = default)
         => AllocateCoreAsync(visit, dentistId, actorId, true, ct);
+
+    public async Task<Result> TransferAsync(Visit visit, int dentistId, int actorId, CancellationToken ct = default)
+    {
+        if (visit.Status != VisitStatuses.InProgress || visit.ChairId is not int sourceChairId ||
+            dentistId <= 0 || actorId <= 0)
+            return Result.Failure(Inconsistent);
+
+        var dentist = await users.FindByIdAsync(dentistId, ct);
+        if (dentist is not { IsActive: true } || dentist.Role?.RoleCode != RoleCodes.Dentist)
+            return Result.Failure(Unavailable);
+        if (await visits.HasActiveVisitForDentistAsync(dentistId, ct, visit.VisitId))
+            return Result.Failure(Error.DentistHasActiveVisit);
+
+        var workspace = await workspaces.FindAsync(dentistId, ct);
+        var targetChair = workspace?.ChairId is int targetChairId ? await chairs.FindAsync(targetChairId, ct) : null;
+        if (targetChair is not { IsActive: true } ||
+            await visits.HasActiveVisitForChairAsync(targetChair.Id, visit.VisitId, ct))
+            return Result.Failure(Unavailable);
+
+        var sourceChair = await chairs.FindAsync(sourceChairId, ct);
+        if (sourceChair is not { IsActive: true, Status: DentalChairStatus.Occupied } ||
+            await visits.HasActiveVisitForChairAsync(sourceChairId, visit.VisitId, ct))
+            return Result.Failure(Inconsistent);
+
+        if (targetChair.Status != DentalChairStatus.Available)
+            return Result.Failure(Unavailable);
+
+        var now = clock.UtcNow;
+        sourceChair.Status = DentalChairStatus.Available;
+        sourceChair.Version++;
+        sourceChair.UpdatedAt = now;
+        sourceChair.UpdatedByUserId = actorId;
+
+        targetChair.Status = DentalChairStatus.Occupied;
+        targetChair.Version++;
+        targetChair.UpdatedAt = now;
+        targetChair.UpdatedByUserId = actorId;
+        visit.ChairId = targetChair.Id;
+        return Result.Success();
+    }
+
     private async Task<Result> AllocateCoreAsync(Visit visit, int dentistId, int actorId, bool allocate, CancellationToken ct)
     {
         if (visit.Status is not (VisitStatuses.Created or VisitStatuses.InProgress)) return Result.Failure(Inconsistent);

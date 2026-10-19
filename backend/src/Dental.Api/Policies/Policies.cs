@@ -41,6 +41,7 @@ public static class Policies
     public const string QueueSkip = "QueueSkip";
     public const string QueueCall = "QueueCall";
     public const string QueueStatusUpdate = "QueueStatusUpdate";
+    public const string QueueTransfer = "QueueTransfer";
     public const string ClinicalDiagnosisUpdate = "ClinicalDiagnosisUpdate";
     public const string FdiConditionWrite = "FdiConditionWrite";
     public const string FdiServiceAssign = "FdiServiceAssign";
@@ -125,6 +126,10 @@ public static class Policies
         // DL-047, DL-053: Cập nhật trạng thái hàng đợi (chuyển trạng thái chi tiết kiểm tra theo vai trò trong service)
         opts.AddPolicy(QueueStatusUpdate, policy =>
             policy.RequireRole(RoleCodes.Admin, RoleCodes.Receptionist, RoleCodes.Dentist, RoleCodes.Assistant));
+
+        // DL-086 / DL-319: Admin, Lễ tân, or the currently responsible dentist may transfer a queue visit.
+        opts.AddPolicy(QueueTransfer, policy =>
+            policy.RequireRole(RoleCodes.Admin, RoleCodes.Receptionist, RoleCodes.Dentist));
 
         // DL-085: Sửa chẩn đoán và ghi chú lâm sàng: Nha sĩ và Admin (kiểm tra Dentist phụ trách tại service)
         opts.AddPolicy(ClinicalDiagnosisUpdate, policy =>
