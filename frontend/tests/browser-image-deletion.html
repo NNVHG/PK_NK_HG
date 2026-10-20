@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fixture xóa mềm ảnh</title>
+<style>body{font:16px system-ui;margin:1.5rem;max-width:1000px;}button{font:inherit;padding:.65rem;margin:.3rem;}button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid #2563eb;outline-offset:2px;}</style></head>
+<body><h1>Kiểm thử xóa mềm ảnh — dữ liệu tổng hợp</h1><p>Chỉ dùng fixture trong tests; không có bệnh nhân hoặc tài khoản thật.</p>
+<button id="dentist">Fixture: Nha sĩ</button><button id="assistant">Fixture: Phụ tá</button><button id="admin">Fixture: Admin</button><div id="app"></div>
+<script type="module">
+import {createApp,h,ref} from 'vue';import {createPinia} from 'pinia';
+import DentalImageDeletion from '../src/components/DentalImageDeletion.vue';
+import {useAuthStore} from '../src/stores/auth';import {apiClient} from '../src/services/api';
+const data=[{id:7,owner:5,name:'Ảnh nha sĩ tổng hợp.png',locked:false},{id:6,owner:6,name:'Ảnh phụ tá tổng hợp.png',locked:false},{id:5,owner:6,name:'Ảnh ca hoàn tất tổng hợp.png',locked:true}];
+const pinia=createPinia(),auth=useAuthStore(pinia),refreshKey=ref(0),message=ref('');
+function as(role,userId){auth.user={userId,roleCode:role,fullName:'Tài khoản tổng hợp',roleName:role};message.value='';}
+as('DENTIST',5);document.querySelector('#dentist').onclick=()=>as('DENTIST',5);document.querySelector('#assistant').onclick=()=>as('ASSISTANT',6);document.querySelector('#admin').onclick=()=>as('ADMIN',8);
+apiClient.defaults.adapter=async config=>{
+ let result,status=200;
+ if(config.method==='get'&&config.url==='/dental-images/deletion')result={items:data.filter(i=>!i.deleted&&(auth.role==='ADMIN'||i.owner===auth.user.userId)).map(i=>({id:i.id,patientId:9,visitId:i.locked?10:null,version:1,originalFileName:i.name,category:'Intraoral',toothNumber:46,createdAt:'2026-10-20T00:00:00Z',canDelete:!i.locked,unavailableReason:i.locked?'Ca đã hoàn tất, không được xóa.':null})),hasMore:false};
+ else if(config.method==='delete'){const id=Number(config.url.split('/').at(-1)),image=data.find(i=>i.id===id),body=JSON.parse(config.data);if(!image||image.locked||image.deleted||!body.confirmed||body.expectedVersion!==1||!body.reason.trim()||auth.role!=='ADMIN'&&image.owner!==auth.user.userId)throw Error('Rejected fixture write');image.deleted=true;result='';status=204;}
+ else throw Error('Unexpected fixture request');
+ return{data:result,status,statusText:status===204?'No Content':'OK',headers:{'cache-control':'no-store'},config};
+};
+const app=createApp({render:()=>h('div',[h('p',{role:'status'},message.value),h(DentalImageDeletion,{patientId:9,refreshKey:refreshKey.value,onDeleted:id=>{message.value=`Đã xóa mềm ảnh #${id}; tệp vẫn được giữ lại.`;refreshKey.value++;}})])});app.use(pinia);app.mount('#app');
+</script></body></html>

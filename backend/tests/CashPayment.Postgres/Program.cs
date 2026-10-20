@@ -82,6 +82,7 @@ try
     {
         await DentalImageHttpSmoke.RunAsync(options, Check);
         await DentalImageClinicalHttpSmoke.RunAsync(options, Check);
+        await DentalImageDeletionHttpSmoke.RunAsync(options, Check);
         Console.WriteLine($"PostgreSQL image upload checks: {checks}/{checks} PASS");
         return;
     }

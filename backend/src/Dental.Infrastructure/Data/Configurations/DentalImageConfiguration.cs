@@ -10,6 +10,9 @@ public sealed class DentalImageConfiguration : IEntityTypeConfiguration<DentalIm
         b.ToTable("DentalImages"); b.HasKey(x => x.Id);
         b.Property(x => x.Category).HasConversion<string>().HasMaxLength(20).IsRequired();
         b.Property(x => x.Notes).HasMaxLength(500);
+        b.Property(x => x.DeleteReason).HasMaxLength(500);
+        b.Property(x => x.DeletedAt).HasColumnType("timestamptz");
+        b.HasOne<User>().WithMany().HasForeignKey(x => x.DeletedByUserId).OnDelete(DeleteBehavior.Restrict);
         b.Property(x => x.ClinicalNotes).HasColumnType("text").HasMaxLength(1000);
         b.Property(x => x.DoctorDiagnosis).HasMaxLength(255);
         b.Property(x => x.ClinicalUpdatedAt).HasColumnType("timestamptz");

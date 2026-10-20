@@ -13,13 +13,15 @@ const blobs=await Promise.all([sample('Ảnh A','#2563eb'),sample('Ảnh B','#16
 const images=blobs.map((blob,i)=>({id:i+1,patientId:7,visitId:i+10,toothNumber:46,category:'Intraoral',originalFileName:`Ảnh kiểm thử ${i+1}.png`,contentType:'image/png',sizeBytes:blob.size,width:640,height:480,createdAt:new Date().toISOString(),version:1,notes:'Ghi chú ảnh tổng hợp',uploadedByFullName:'Nhân viên kiểm thử'}));
 let completed=false;document.querySelector('#complete-visit').onclick=()=>{completed=true;};
 const clinical=images.map(i=>({imageId:i.id,patientId:7,visitId:i.visitId,version:1,clinicalNotes:'Ghi chú tổng hợp '+i.id,doctorDiagnosis:'Chẩn đoán ảnh tổng hợp',updatedByUserId:null,updatedByName:null,updatedAt:null,canReplace:true,canAppend:false})),addenda=[[],[]];
-apiClient.defaults.adapter=async config=>{let data;
-if(config.url?.includes('/clinical-notes')){
+apiClient.defaults.adapter=async config=>{let data,status=200;
+if(config.method==='delete') {const image=images.find(i=>i.id===Number(config.url.split('/').at(-1)));if(!image||completed)throw Error('Rejected fixture delete');image.deleted=true;data='';status=204;}
+else if(config.url==='/dental-images/deletion')data={items:images.filter(i=>!i.deleted).sort((a,b)=>b.id-a.id).map(i=>({id:i.id,patientId:i.patientId,visitId:i.visitId,version:clinical[i.id-1].version,originalFileName:i.originalFileName,category:i.category,toothNumber:i.toothNumber,createdAt:i.createdAt,canDelete:!completed,unavailableReason:completed?'Ca đã hoàn tất, không được xóa.':null})),hasMore:false};
+else if(config.url?.includes('/clinical-notes')){
  const index=Number(config.url.split('/')[2])-1,row=clinical[index],body=typeof config.data==='string'?JSON.parse(config.data):config.data;
  if(config.method==='put'){Object.assign(row,{clinicalNotes:body.clinicalNotes,doctorDiagnosis:body.doctorDiagnosis,version:row.version+1,updatedByUserId:5,updatedByName:'Nha sĩ kiểm thử',updatedAt:new Date().toISOString()});data={...row};}
  else if(config.method==='post'){row.version++;data={id:addenda[index].length+1,imageId:row.imageId,imageVersion:row.version,createdByUserId:5,authorName:'Nha sĩ kiểm thử',authorRole:'DENTIST',createdAt:new Date().toISOString(),note:body.note};addenda[index].unshift(data);}
  else if(config.url.endsWith('/addenda'))data={items:addenda[index],totalCount:addenda[index].length,page:1,pageSize:20,totalPages:addenda[index].length?1:0,hasNextPage:false,hasPreviousPage:false};
  else data={...row,canReplace:!completed,canAppend:completed};
-}else if(config.url==='/dental-images')data={items:images,hasMore:false};else if(config.url==='/dental-images/targets')data=[];else if(config.url?.endsWith('/file'))data=blobs[Number(config.url.split('/').at(-2))-1];else throw new Error('Unexpected fixture request');return{data,status:200,statusText:'OK',headers:{'cache-control':'no-store'},config};};
+}else if(config.url==='/dental-images')data={items:images.filter(i=>!i.deleted),hasMore:false};else if(config.url==='/dental-images/targets')data=[];else if(config.url?.endsWith('/file'))data=blobs[Number(config.url.split('/').at(-2))-1];else throw new Error('Unexpected fixture request');return{data,status,statusText:status===204?'No Content':'OK',headers:{'cache-control':'no-store'},config};};
 const pinia=createPinia(),app=createApp({render:()=>h(DentalImageAttachments,{patientId:7})});app.use(pinia);useAuthStore(pinia).user={userId:5,fullName:'Nhân viên kiểm thử',roleCode:'DENTIST',roleName:'Nha sĩ'};app.mount('#app');
 </script></body></html>

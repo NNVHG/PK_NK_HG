@@ -59,6 +59,16 @@ public sealed class RolePermissionMatrixTests
     }
 
     [Fact]
+    public async Task ImageDeletionDescribesUploaderScopeWithoutGrantingAssistantImageRead()
+    {
+        var matrix = (await Provider().GetAsync()).Value!;
+        var deletion = matrix.Permissions.Single(x => x.Code == AppPolicies.DentalImageDelete);
+        Assert.Equal(new[] { RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant }, deletion.AllowedRoles);
+        Assert.Contains("DL-323", deletion.Conditions);
+        Assert.DoesNotContain(RoleCodes.Assistant, matrix.Permissions.Single(x => x.Code == AppPolicies.DentalImageRead).AllowedRoles);
+    }
+
+    [Fact]
     public async Task Matrix_ReadsRuntimeRoleRequirementsInsteadOfCopyingAnIndependentGrantTable()
     {
         var matrix = (await Provider(x => x.AddPolicy(AppPolicies.PatientManage, p => p.RequireRole(RoleCodes.Dentist))).GetAsync()).Value!;

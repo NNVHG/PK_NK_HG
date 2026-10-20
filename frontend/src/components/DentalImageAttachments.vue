@@ -48,6 +48,7 @@
       <DentalImageViewer v-if="viewerImages.length" :images="viewerImages" @close="viewerImages = []" @changed="refresh" />
     </template>
     <p v-else-if="canUpload">Phụ tá được tải lên theo quyền hiện hành. Danh sách ảnh đã lưu dành cho vai trò có quyền xem.</p>
+    <DentalImageDeletion v-if="canUpload" :patient-id="patientId" :refresh-key="deletionRefreshKey" @deleted="imageDeleted" />
   </section>
 </template>
 
@@ -58,6 +59,7 @@ import { useDentalImagesStore } from '@/stores/dentalImages';
 import { dentalImagesService, imageFileError, validImageTooth, type DentalImage, type ImageVisitTarget } from '@/services/dentalImages';
 import DentalImageThumbnail from './DentalImageThumbnail.vue';
 import DentalImageViewer from './DentalImageViewer.vue';
+import DentalImageDeletion from './DentalImageDeletion.vue';
 const props = defineProps<{ patientId: number }>();
 const auth = useAuthStore(), store = useDentalImagesStore();
 const canUpload = computed(() => ['ADMIN', 'DENTIST', 'ASSISTANT'].includes(auth.role));
@@ -70,6 +72,7 @@ const category = ref('Intraoral'), notes = ref(''), toothText = ref(''), visitId
 const busy = ref(false), error = ref(''), success = ref(''), listError = ref(''), targetError = ref(''), loadingTargets = ref(false);
 const targets = ref<ImageVisitTarget[]>([]), attachTargets = ref<Record<number, number | undefined>>({});
 const comparisonIds = ref<number[]>([]), viewerImages = ref<DentalImage[]>([]);
+const deletionRefreshKey = ref(0);
 const comparedImages = computed(() => comparisonIds.value.map(id => store.items.find(image => image.id === id)).filter((image): image is DentalImage => !!image));
 function showImage(image: DentalImage) { if (canRead.value && image.patientId === props.patientId) viewerImages.value = [image]; }
 function toggleComparison(image: DentalImage) {
@@ -87,7 +90,8 @@ async function loadTargets() {
   catch (e) { if (current === generation) { targets.value = []; visitId.value = null; targetError.value = problem(e); } }
   finally { if (current === generation) loadingTargets.value = false; }
 }
-async function refresh() { if (!canRead.value) return; const current = generation; listError.value = ''; try { await store.load(props.patientId); } catch(e) { if(current === generation) listError.value = problem(e); } }
+async function refresh() { deletionRefreshKey.value++; if (!canRead.value) return; const current = generation; listError.value = ''; try { await store.load(props.patientId); } catch(e) { if(current === generation) listError.value = problem(e); } }
+function imageDeleted(id:number) { viewerImages.value=[]; comparisonIds.value=[]; store.clear(); error.value=''; success.value=`Đã xóa mềm ảnh #${id}. Tệp vật lý và lịch sử được giữ lại.`; void refresh(); }
 async function loadMore() { const current = generation; try { await store.load(props.patientId, true); } catch(e) { if(current === generation) listError.value = problem(e); } }
 async function upload() {
   if (busy.value || !canUpload.value) return;
