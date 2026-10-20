@@ -117,6 +117,15 @@ public sealed class AppointmentsController : ControllerBase
         return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
     }
 
+    [HttpGet("booking-schedule")]
+    [Authorize(Policy = AppPolicies.AppointmentCreate)]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
+    public async Task<IActionResult> GetBookingSchedule(CancellationToken ct)
+    {
+        var result = await _appointmentService.GetBookingScheduleAsync(_currentUser.RoleCode, ct);
+        return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
+    }
+
     [HttpGet("{id:int}/cancellation-eligibility")]
     [Authorize(Roles = Dental.Domain.Constants.RoleCodes.Patient)]
     [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
@@ -208,7 +217,7 @@ public sealed class AppointmentsController : ControllerBase
         {
             "GEN_002" => StatusCodes.Status403Forbidden,
             "GEN_001" or "APP_001" => StatusCodes.Status404NotFound,
-            "APP_002" or "APP_005" or "APP_009" or "APP_011" => StatusCodes.Status409Conflict,
+            "APP_002" or "APP_005" or "APP_009" or "APP_011" or "APP_SCHEDULE" => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status400BadRequest,
         };
 

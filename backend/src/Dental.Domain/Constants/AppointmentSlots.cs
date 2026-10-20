@@ -1,8 +1,8 @@
 namespace Dental.Domain.Constants;
 
 /// <summary>
-/// Cấu hình khung giờ và slot đặt lịch (DL-043, DL-050).
-/// Giờ hoạt động: 08:00–11:30 và 13:30–16:30, slot 30 phút, tối đa 100 khách/slot.
+/// Trần công suất DL050; ValidSlots giữ lưới lịch sử cho tương thích.
+/// Luồng đặt/đổi mới dùng ClinicSchedule từ SystemConfigs theo DL174/316.
 /// </summary>
 public static class AppointmentSlots
 {

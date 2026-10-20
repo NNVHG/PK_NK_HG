@@ -13,7 +13,8 @@ function deferred() { let resolve; const promise = new Promise(done => { resolve
 function fixture({ profiles = members, booking, failure } = {}) {
   let mount, cleanup; const calls = [];
   const imports = {
-    vue: { defineComponent: c => c, ref: value => ({ value }), computed: get => ({ get value() { return get(); } }),
+    '@/composables/useBookingSchedule': { useBookingSchedule: () => ({ slots: { value: ['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00'] }, revision: { value: 'A'.repeat(64) }, duration: { value: 30 }, loading: { value: false }, error: { value: '' }, load: async () => {} }) },
+    vue: { defineComponent: c => c, ref: value => ({ value }), watch() {}, computed: get => ({ get value() { return get(); } }),
       onMounted: cb => { mount = cb; }, onUnmounted: cb => { cleanup = cb; } },
     axios: { isAxiosError: e => Boolean(e.response) },
     '@/services/patients': { patientsService: { getMyProfiles: async () => profiles } },
@@ -36,7 +37,7 @@ test('loads both family members without automatically choosing one', async () =>
 });
 test('booking sends the explicitly selected family member', async () => {
   const f = fixture(); await f.mount(); f.c.notes.value = 'Synthetic reason'; await f.c.submit();
-  assert.deepEqual(f.calls, [{ patientId: 2, appointmentDate: '2026-12-01', slotTime: '08:00:00', notes: 'Synthetic reason' }]);
+  assert.deepEqual(f.calls, [{ patientId: 2, appointmentDate: '2026-12-01', slotTime: '08:00:00', notes: 'Synthetic reason', expectedScheduleRevision: 'A'.repeat(64) }]);
   assert.equal(f.c.notes.value, ''); assert.equal(f.c.success.value.patientName, 'Synthetic child');
 });
 test('unknown or missing profile cannot be submitted', async () => {

@@ -56,7 +56,7 @@ public sealed class AppointmentReschedulingTests
     }
     [Fact] public async Task FullSlotRejectsMove()
     {
-        Row(); appointments.GetSlotBookingCountAsync(Request().AppointmentDate, Request().SlotTime, Arg.Any<CancellationToken>(), 7).Returns(100);
+        Row(); appointments.GetSlotBookingCountAsync(Request().AppointmentDate, Request().SlotTime, Arg.Any<CancellationToken>(), 7, Arg.Any<int?>()).Returns(100);
         Assert.Equal(Error.AppointmentSlotFull, (await Move()).Error); Assert.Empty(audit.ReceivedCalls());
     }
     [Fact] public async Task OtherPatientBookingOnTargetDayRejectsMove()
@@ -66,7 +66,7 @@ public sealed class AppointmentReschedulingTests
     }
     [Fact] public async Task DentistConflictRejectsWithoutMutating()
     {
-        var row = Row(dentist: 30); appointments.HasDentistBookingAsync(30, Request().AppointmentDate, Request().SlotTime, 7, Arg.Any<CancellationToken>()).Returns(true);
+        var row = Row(dentist: 30); appointments.HasDentistBookingAsync(30, Request().AppointmentDate, Request().SlotTime, 7, Arg.Any<CancellationToken>(), durationMinutes: 30).Returns(true);
         Assert.Equal(Error.Validation.Code, (await Move()).Error.Code); Assert.Equal(0, row.RescheduleCount);
     }
     [Fact] public async Task InactiveDentistRejectsMove()

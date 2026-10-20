@@ -12,7 +12,8 @@ function deferred() { let resolve; const promise = new Promise(done => { resolve
 function fixture({ reads = [current], result, failure, selfService = false, eligibilityReads = [] } = {}) {
   let cleanup; const getCalls = [], eligibilityCalls = [], writes = [], events = [];
   const imports = {
-    vue: { defineComponent: c => c, ref: value => ({ value }), onUnmounted: cb => { cleanup = cb; } },
+    '@/composables/useBookingSchedule': { useBookingSchedule: () => ({ slots: { value: ['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00'] }, revision: { value: 'A'.repeat(64) }, duration: { value: 30 }, loading: { value: false }, error: { value: '' }, load: async () => {} }) },
+    vue: { defineComponent: c => c, ref: value => ({ value }), watch() {}, onUnmounted: cb => { cleanup = cb; } },
     axios: { isAxiosError: e => Boolean(e?.response) },
     '@/services/appointments': { appointmentsService: {
       selfReschedulingEligibility: async id => { eligibilityCalls.push(id); const response = eligibilityReads.shift() ?? { appointment: { ...current, rescheduleCount: 1 }, canReschedule: true, remainingChanges: 1, message: null }; if (response instanceof Error) throw response; return response; },
@@ -34,7 +35,7 @@ test('close clears form without moving appointment', async () => {
 });
 test('confirmation sends target and reason, preserving dentist through API contract', async () => {
   const f = fixture(); await ready(f); f.c.confirmed.value = false; await f.c.save(); assert.equal(f.writes.length, 0);
-  f.c.confirmed.value = true; await f.c.save(); assert.deepEqual(f.writes, [[7, '2099-01-02', '09:00:00', 'Synthetic shift']]); assert.deepEqual(f.events, [['rescheduled']]);
+  f.c.confirmed.value = true; await f.c.save(); assert.deepEqual(f.writes, [[7, '2099-01-02', '09:00:00', 'Synthetic shift', 'A'.repeat(64)]]); assert.deepEqual(f.events, [['rescheduled']]);
 });
 test('invalid date, unchanged slot, lunch slot and missing/long reason rejected', async () => {
   for (const [key, value] of [['day', '2000-01-01'], ['time', '12:00'], ['reason', ' '], ['reason', 'x'.repeat(501)]]) {
@@ -68,7 +69,7 @@ test('portal cannot submit when deadline or count limit is reached', async () =>
 });
 test('portal sends only time and mandatory reason, never dentist or staff notes', async () => {
   const f = fixture({ selfService: true }); await ready(f); await f.c.save();
-  assert.deepEqual(f.writes, [[7, '2099-01-02', '09:00:00', 'Synthetic shift']]); assert.deepEqual(f.events, [['rescheduled']]); assert.equal(f.c.eligibility.value, null);
+  assert.deepEqual(f.writes, [[7, '2099-01-02', '09:00:00', 'Synthetic shift', 'A'.repeat(64)]]); assert.deepEqual(f.events, [['rescheduled']]); assert.equal(f.c.eligibility.value, null);
 });
 test('portal close and unmount clear eligibility and unsaved form', async () => {
   const f = fixture({ selfService: true }); await ready(f); f.c.close(); assert.equal(f.c.eligibility.value, null); assert.equal(f.writes.length, 0);

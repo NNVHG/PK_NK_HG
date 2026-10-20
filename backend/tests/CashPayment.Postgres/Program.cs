@@ -7,11 +7,13 @@ using Dental.Infrastructure.Data;
 using Dental.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 // Explicit opt-in; synthetic data and a unique disposable database, never the clinic database.
 if (args.Length is not (2 or 3) || args[0] != "--isolated-config" ||
-    args.Length == 3 && args[2] is not ("--invoice-refunds-only" or "--invoice-draft-cancellation-only" or "--queue-call-next-only" or "--invoice-discounts-only" or "--service-catalog-only" or "--queue-imaging-only" or "--queue-calling-only" or "--queue-absence-only" or "--queue-cleanup-only" or "--chair-catalog-only" or "--staff-workspaces-only" or "--queue-locations-only" or "--visit-corrections-only" or "--physical-chairs-only" or "--visit-cancellation-only" or "--post-treatment-notes-only" or "--diagnosis-catalog-only" or "--revenue-report-only" or "--medicine-catalog-only" or "--prescription-only" or "--patient-citizen-id-only" or "--public-prescription-only" or "--doctor-signature-only" or "--prescription-replacement-only" or "--prescription-print-only" or "--prescription-handover-only" or "--patient-prescription-history-only" or "--medical-supply-catalog-only" or "--password-recovery-only" or "--dental-images-only" or "--stock-receipts-only" or "--stock-issues-only"))
-    throw new ArgumentException("Use --isolated-config <config.json> [--invoice-refunds-only|--invoice-draft-cancellation-only|--queue-call-next-only|--invoice-discounts-only|--service-catalog-only|--queue-imaging-only|--queue-calling-only|--queue-absence-only|--queue-cleanup-only|--chair-catalog-only|--staff-workspaces-only|--queue-locations-only|--visit-corrections-only|--physical-chairs-only|--visit-cancellation-only|--post-treatment-notes-only|--diagnosis-catalog-only|--revenue-report-only|--medicine-catalog-only|--prescription-only|--patient-citizen-id-only|--public-prescription-only|--doctor-signature-only|--prescription-replacement-only|--prescription-print-only|--prescription-handover-only|--patient-prescription-history-only|--medical-supply-catalog-only|--password-recovery-only|--dental-images-only|--stock-receipts-only|--stock-issues-only]");
+    args.Length == 3 && args[2] is not ("--invoice-refunds-only" or "--invoice-draft-cancellation-only" or "--queue-call-next-only" or "--invoice-discounts-only" or "--service-catalog-only" or "--queue-imaging-only" or "--queue-calling-only" or "--queue-absence-only" or "--queue-cleanup-only" or "--chair-catalog-only" or "--staff-workspaces-only" or "--queue-locations-only" or "--visit-corrections-only" or "--physical-chairs-only" or "--visit-cancellation-only" or "--post-treatment-notes-only" or "--diagnosis-catalog-only" or "--revenue-report-only" or "--medicine-catalog-only" or "--prescription-only" or "--patient-citizen-id-only" or "--public-prescription-only" or "--doctor-signature-only" or "--prescription-replacement-only" or "--prescription-print-only" or "--prescription-handover-only" or "--patient-prescription-history-only" or "--medical-supply-catalog-only" or "--password-recovery-only" or "--dental-images-only" or "--stock-receipts-only" or "--stock-issues-only" or "--scheduling-settings-only"))
+    throw new ArgumentException("Use --isolated-config <config.json> [--invoice-refunds-only|--invoice-draft-cancellation-only|--queue-call-next-only|--invoice-discounts-only|--service-catalog-only|--queue-imaging-only|--queue-calling-only|--queue-absence-only|--queue-cleanup-only|--chair-catalog-only|--staff-workspaces-only|--queue-locations-only|--visit-corrections-only|--physical-chairs-only|--visit-cancellation-only|--post-treatment-notes-only|--diagnosis-catalog-only|--revenue-report-only|--medicine-catalog-only|--prescription-only|--patient-citizen-id-only|--public-prescription-only|--doctor-signature-only|--prescription-replacement-only|--prescription-print-only|--prescription-handover-only|--patient-prescription-history-only|--medical-supply-catalog-only|--password-recovery-only|--dental-images-only|--stock-receipts-only|--stock-issues-only|--scheduling-settings-only]");
 var prescriptionOnly = args.Length == 3 && args[2] is "--prescription-only" or "--patient-citizen-id-only" or "--public-prescription-only" or "--doctor-signature-only" or "--prescription-replacement-only" or "--prescription-print-only" or "--prescription-handover-only" or "--patient-prescription-history-only";
 var medicineCatalogOnly = args.Length == 3 && args[2] == "--medicine-catalog-only";
 var revenueReportOnly = args.Length == 3 && args[2] == "--revenue-report-only";
@@ -43,6 +45,13 @@ void Check(bool condition, string label) { if (!condition) throw new Exception("
 await using var setup = NewDb();
 try
 {
+    if (args.Length == 3 && args[2] == "--scheduling-settings-only")
+    {
+        await setup.GetService<IMigrator>().MigrateAsync("20261019011607_AddStockIssues");
+        await SchedulingSettingsHttpSmoke.RunAsync(options, Check);
+        Console.WriteLine($"PostgreSQL scheduling settings checks: {checks}/{checks} PASS");
+        return;
+    }
     await setup.Database.MigrateAsync();
     if (args.Length == 3 && args[2] == "--stock-issues-only")
     {

@@ -8,7 +8,8 @@ public sealed class AppointmentConfiguration : IEntityTypeConfiguration<Appointm
 {
     public void Configure(EntityTypeBuilder<Appointment> builder)
     {
-        builder.ToTable("Appointments");
+        builder.ToTable("Appointments", t => t.HasCheckConstraint("CK_Appointments_Duration", "\"SlotDurationMinutes\" BETWEEN 1 AND 1440"));
+        builder.Property(x => x.SlotDurationMinutes).HasDefaultValue(30).IsRequired();
         builder.HasKey(a => a.AppointmentId);
 
         builder.Property(a => a.AppointmentDate)

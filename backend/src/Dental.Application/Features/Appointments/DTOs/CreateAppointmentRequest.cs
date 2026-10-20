@@ -8,5 +8,6 @@ public sealed record CreateAppointmentRequest(
     string? Notes = null,
     bool IsEmergency = false,
     string? EmergencyReason = null,
-    int? ConfirmedDentistConflictAppointmentId = null
+    int? ConfirmedDentistConflictAppointmentId = null,
+    string? ExpectedScheduleRevision = null
 );

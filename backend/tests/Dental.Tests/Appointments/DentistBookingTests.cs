@@ -35,7 +35,7 @@ public sealed class DentistBookingTests
     public async Task SupportedActorsBookActiveDentist(string role)
     {
         var result = await Create(role: role); Assert.True(result.IsSuccess); Assert.Equal(31, result.Value!.DentistId);
-        await appointments.Received(1).GetDentistBookingConflictAsync(31, Request().AppointmentDate, Request().SlotTime, 0, Arg.Any<CancellationToken>());
+        await appointments.Received(1).GetDentistBookingConflictAsync(31, Request().AppointmentDate, Request().SlotTime, 0, Arg.Any<CancellationToken>(), durationMinutes: 30);
         await uow.Received(1).ExecuteSerializableTransactionAsync(Arg.Any<Func<CancellationToken, Task<Result<AppointmentResponse>>>>(), Arg.Any<CancellationToken>());
     }
     [Theory] [InlineData(RoleCodes.Dentist)] [InlineData(RoleCodes.Assistant)] [InlineData(null)] [InlineData("UNKNOWN")]
@@ -43,7 +43,7 @@ public sealed class DentistBookingTests
     { Assert.Equal(Error.Forbidden, (await Create(role: role)).Error); Assert.Empty(uow.ReceivedCalls()); Assert.Empty(patients.ReceivedCalls()); }
     [Fact] public async Task BusyDentistReturns400WithoutWriting()
     {
-        appointments.GetDentistBookingConflictAsync(31, Request().AppointmentDate, Request().SlotTime, 0, Arg.Any<CancellationToken>())
+        appointments.GetDentistBookingConflictAsync(31, Request().AppointmentDate, Request().SlotTime, 0, Arg.Any<CancellationToken>(), durationMinutes: 30)
             .Returns(new Appointment { AppointmentId = 42, Patient = new Patient { FullName = "Đang có lịch" } });
         var result = await Create(); Assert.Equal(Error.Validation.Code, result.Error.Code); Assert.Contains("Bác sĩ đã có lịch", result.Error.Message);
         Assert.Empty(audit.ReceivedCalls()); await appointments.DidNotReceive().AddAsync(Arg.Any<Appointment>(), Arg.Any<CancellationToken>());
@@ -59,7 +59,7 @@ public sealed class DentistBookingTests
             Dentist = new User { FullName = "Nha sĩ A" },
             Patient = new Patient { FullName = "Bệnh nhân B" }
         };
-        appointments.GetDentistBookingConflictAsync(31, request.AppointmentDate, request.SlotTime, 0, Arg.Any<CancellationToken>())
+        appointments.GetDentistBookingConflictAsync(31, request.AppointmentDate, request.SlotTime, 0, Arg.Any<CancellationToken>(), durationMinutes: 30)
             .Returns(conflict);
 
         var firstAttempt = await Create(request);
@@ -87,7 +87,7 @@ public sealed class DentistBookingTests
             Dentist = new User { FullName = "Nha sĩ A" },
             Patient = new Patient { FullName = "Bệnh nhân B" }
         };
-        appointments.GetDentistBookingConflictAsync(31, request.AppointmentDate, request.SlotTime, 0, Arg.Any<CancellationToken>())
+        appointments.GetDentistBookingConflictAsync(31, request.AppointmentDate, request.SlotTime, 0, Arg.Any<CancellationToken>(), durationMinutes: 30)
             .Returns(conflict);
         Appointment? saved = null;
         string? auditDetail = null;
@@ -133,7 +133,7 @@ public sealed class DentistBookingTests
     [Fact] public async Task OptionalUnassignedBookingStillWorks()
     {
         Assert.True((await Create(Request(null))).IsSuccess); Assert.Empty(users.ReceivedCalls());
-        await appointments.DidNotReceive().HasDentistBookingAsync(Arg.Any<int>(), Arg.Any<DateOnly>(), Arg.Any<TimeOnly>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+        await appointments.DidNotReceive().HasDentistBookingAsync(Arg.Any<int>(), Arg.Any<DateOnly>(), Arg.Any<TimeOnly>(), Arg.Any<int>(), Arg.Any<CancellationToken>(), durationMinutes: 30);
     }
     [Fact] public async Task PatientCannotBookUnownedProfileEvenWithValidDentist()
     {

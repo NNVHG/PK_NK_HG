@@ -17,5 +17,6 @@ public sealed record AppointmentResponse(
     int RescheduleCount = 0,
     string? RescheduleReason = null,
     bool IsEmergency = false,
-    string? EmergencyReason = null
+    string? EmergencyReason = null,
+    int SlotDurationMinutes = 30
 );

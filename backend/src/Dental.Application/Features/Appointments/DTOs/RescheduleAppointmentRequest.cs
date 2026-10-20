@@ -5,5 +5,6 @@ public sealed record RescheduleAppointmentRequest(
     TimeOnly SlotTime,
     int? DentistId = null,
     string? Notes = null,
-    string? Reason = null
+    string? Reason = null,
+    string? ExpectedScheduleRevision = null
 );

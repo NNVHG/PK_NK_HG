@@ -1,6 +1,9 @@
 <template>
   <main class="page">
     <h1>Đặt lịch tại quầy</h1>
+    <p v-if="slotDurationMinutes">Độ dài khung hẹn mới: {{ slotDurationMinutes }} phút.</p>
+    <p v-if="scheduleError" role="alert">{{ scheduleError }} <button type="button" :disabled="busy || scheduleLoading" @click="loadSchedule">Tải lại giờ</button></p>
+    <p v-if="scheduleLoading" role="status">Đang tải khung giờ…</p>
     <p>Chọn hồ sơ bệnh nhân để đặt lịch. Khách chỉ vào hàng đợi khi được check-in.</p>
     <form @submit.prevent="search">
       <label for="lookup">Tìm theo tên, SĐT hoặc mã hồ sơ</label>
@@ -53,10 +56,11 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref, watch } from 'vue';
 import axios from 'axios';
 import { patientsService, type PatientSummary } from '@/services/patients';
 import { appointmentsService, type AppointmentResponse, type BookingDentist } from '@/services/appointments';
+import { useBookingSchedule } from '@/composables/useBookingSchedule';
 const keyword = ref(''), patients = ref<PatientSummary[]>([]), selected = ref<PatientSummary | null>(null);
 const day = ref(''), slot = ref(''), notes = ref(''), confirmed = ref(false);
 const isEmergency = ref(false), emergencyReason = ref(''), overrideConflictConfirmed = ref(false);
@@ -64,8 +68,8 @@ const conflict = ref<{ conflictAppointmentId: number; dentistName: string; patie
 const dentists = ref<BookingDentist[]>([]), dentistId = ref(0), loadingDentists = ref(true), dentistError = ref('');
 const searching = ref(false), searched = ref(false), busy = ref(false), error = ref(''), success = ref<AppointmentResponse | null>(null);
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-const slots = Array.from({ length: 18 }, (_, i) => 480 + i * 30).filter(n => n <= 690 || (n >= 810 && n <= 990))
-  .map(n => `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`);
+const { slots, revision: scheduleRevision, duration: slotDurationMinutes, loading: scheduleLoading, error: scheduleError, load: loadSchedule } = useBookingSchedule();
+watch(scheduleRevision, () => { confirmed.value = false; slot.value = ''; clearConflict(); });
 let version = 0;
 let dentistVersion = 0;
 async function loadDentists() {
@@ -99,7 +103,7 @@ async function book() {
   if (busy.value || searching.value || loadingDentists.value || !confirmed.value || !selected.value || success.value || (conflict.value && !overrideConflictConfirmed.value)) return;
   error.value = '';
   if (!patients.value.some(p => p.patientId === selected.value?.patientId) || !/^\d{4}-\d{2}-\d{2}$/.test(day.value) ||
-      day.value < today || (isEmergency.value ? !/^\d{2}:\d{2}$/.test(slot.value) || emergencyReason.value.trim().length < 5 || emergencyReason.value.trim().length > 255 : !slots.includes(slot.value)) || notes.value.trim().length > 500 || !Number.isInteger(dentistId.value) ||
+      !scheduleRevision.value || scheduleLoading.value || day.value < today || (isEmergency.value ? !/^\d{2}:\d{2}$/.test(slot.value) || emergencyReason.value.trim().length < 5 || emergencyReason.value.trim().length > 255 : !slots.value.includes(slot.value)) || notes.value.trim().length > 500 || !Number.isInteger(dentistId.value) ||
       (dentistId.value !== 0 && !dentists.value.some(d => d.dentistId === dentistId.value))) {
     error.value = 'Kiểm tra lại hồ sơ, ngày khám, khung giờ và lý do.'; return;
   }
@@ -109,12 +113,15 @@ async function book() {
       patientId: selected.value.patientId, appointmentDate: day.value, slotTime: `${slot.value}:00`,
       dentistId: dentistId.value || null, notes: notes.value.trim() || null, isEmergency: isEmergency.value,
       emergencyReason: isEmergency.value ? emergencyReason.value.trim() : null,
-      confirmedDentistConflictAppointmentId: conflict.value && overrideConflictConfirmed.value ? conflict.value.conflictAppointmentId : null
+      confirmedDentistConflictAppointmentId: conflict.value && overrideConflictConfirmed.value ? conflict.value.conflictAppointmentId : null,
+      expectedScheduleRevision: scheduleRevision.value
     });
     if (ticket === version) { success.value = result; notes.value = ''; emergencyReason.value = ''; confirmed.value = false; clearConflict(); }
   } catch (cause) {
     if (ticket === version) {
       const data = axios.isAxiosError(cause) ? cause.response?.data as { code?: string; message?: string; details?: typeof conflict.value } | undefined : undefined;
+      if (data?.code === 'APP_SCHEDULE') { slot.value = ''; await loadSchedule(); }
+      if (ticket !== version) return;
       if (data?.code === 'APP_011' && data.details) {
         conflict.value = data.details;
         overrideConflictConfirmed.value = false;

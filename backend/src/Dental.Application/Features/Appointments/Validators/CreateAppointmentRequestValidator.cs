@@ -19,10 +19,9 @@ public sealed class CreateAppointmentRequestValidator : AbstractValidator<Create
             .WithMessage("Ngày hẹn không được để trống.");
 
         RuleFor(x => x.SlotTime)
-            .Must((request, time) => request.IsEmergency
-                ? time.Ticks % TimeSpan.TicksPerMinute == 0
-                : AppointmentSlots.IsValidSlot(time))
-            .WithMessage("Giờ thường phải theo khung 30 phút; giờ cấp cứu được chọn theo phút.");
+            .Must(time => time.Ticks % TimeSpan.TicksPerMinute == 0)
+            .WithMessage("Giờ hẹn phải chính xác đến phút; khung giờ được backend đối chiếu cấu hình hiện hành.");
+        RuleFor(x => x.ExpectedScheduleRevision).Matches("^[A-F0-9]{64}$").When(x => x.ExpectedScheduleRevision is not null);
 
         RuleFor(x => x.EmergencyReason)
             .Must(reason => !string.IsNullOrWhiteSpace(reason) && reason.Trim().Length is >= 5 and <= 255)

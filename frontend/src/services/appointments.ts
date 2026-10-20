@@ -15,6 +15,7 @@ export interface AppointmentResponse {
   rescheduleReason: string | null;
   isEmergency?: boolean;
   emergencyReason?: string | null;
+  slotDurationMinutes?: number;
 }
 
 export interface CreateAppointmentPayload {
@@ -26,6 +27,7 @@ export interface CreateAppointmentPayload {
   isEmergency?: boolean;
   emergencyReason?: string | null;
   confirmedDentistConflictAppointmentId?: number | null;
+  expectedScheduleRevision?: string;
 }
 
 export interface BookingDentist { dentistId: number; dentistName: string; }
@@ -55,6 +57,9 @@ export interface SelfReschedulingEligibility {
 }
 
 export const appointmentsService = {
+  async bookingSchedule(): Promise<{ slots: string[]; slotDurationMinutes: number; revision: string }> {
+    return (await apiClient.get('/appointments/booking-schedule')).data;
+  },
   async getBookingDentists(): Promise<BookingDentist[]> {
     return (await apiClient.get<BookingDentist[]>('/appointments/booking-dentists')).data;
   },
@@ -64,8 +69,8 @@ export const appointmentsService = {
   async getById(id: number): Promise<AppointmentResponse> {
     return (await apiClient.get<AppointmentResponse>(`/appointments/${id}`)).data;
   },
-  async reschedule(id: number, appointmentDate: string, slotTime: string, reason: string): Promise<AppointmentResponse> {
-    return (await apiClient.put<AppointmentResponse>(`/appointments/${id}/reschedule`, { appointmentDate, slotTime, reason })).data;
+  async reschedule(id: number, appointmentDate: string, slotTime: string, reason: string, expectedScheduleRevision?: string): Promise<AppointmentResponse> {
+    return (await apiClient.put<AppointmentResponse>(`/appointments/${id}/reschedule`, { appointmentDate, slotTime, reason, expectedScheduleRevision })).data;
   },
   async selfCancellationEligibility(id: number): Promise<SelfCancellationEligibility> {
     return (await apiClient.get<SelfCancellationEligibility>(`/appointments/${id}/cancellation-eligibility`)).data;
