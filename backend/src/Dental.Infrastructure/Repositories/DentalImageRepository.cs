@@ -19,6 +19,16 @@ public sealed class DentalImageRepository(DentalDbContext db, IDentalImageStorag
         await Actor(actor, role, ct) && await db.Patients.AnyAsync(x => x.PatientId == id && x.IsActive && (role != RoleCodes.Patient || x.UserId == actor), ct);
     private static bool CanRead(string role) => role is RoleCodes.Admin or RoleCodes.Dentist or RoleCodes.Receptionist or RoleCodes.Patient;
     private static bool CanUpload(string role) => role is RoleCodes.Admin or RoleCodes.Dentist or RoleCodes.Assistant;
+    public async Task<Result<ImageVisitContext>> VisitContextAsync(int visit, int actor, string role, CancellationToken ct)
+    {
+        if (!CanRead(role)) return Result<ImageVisitContext>.Failure(Error.Forbidden);
+        if (!await Actor(actor, role, ct)) return Result<ImageVisitContext>.Failure(Error.NotFound);
+        var context = await (from v in db.Visits.AsNoTracking()
+            join p in db.Patients on v.PatientId equals p.PatientId
+            where v.VisitId == visit && p.IsActive && (role != RoleCodes.Patient || p.UserId == actor)
+            select new ImageVisitContext(v.VisitId, p.PatientId)).SingleOrDefaultAsync(ct);
+        return context is null ? Result<ImageVisitContext>.Failure(Error.NotFound) : Result<ImageVisitContext>.Success(context);
+    }
     private IQueryable<Visit> Targets(int patient, int actor, string role) => db.Visits.Where(v => v.PatientId == patient && !v.IsLocked &&
         (v.Status == VisitStatuses.Created || v.Status == VisitStatuses.InProgress || v.Status == VisitStatuses.Correcting && role != RoleCodes.Assistant) &&
         (role != RoleCodes.Dentist || v.DentistId == actor) &&

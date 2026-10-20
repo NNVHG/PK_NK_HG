@@ -13,7 +13,12 @@
       <p v-if="!canEdit">Chỉ Admin hoặc nha sĩ phụ trách được ghi tình trạng khi lần khám đang diễn ra và chưa khóa.</p>
       <p>Chọn răng trên sơ đồ để tra cứu lịch sử qua các lần khám.</p>
       <FdiDentalChart v-model="selection" v-model:dentition-type="dentition" :latest-conditions="latestConditions" :multiple="false" :readonly="busy" @select="openHistory" @update:model-value="clearSuggestion" />
-      <ToothHistoryDrawer ref="history" :patient-id="visit.patientId" />
+      <ToothHistoryDrawer ref="history" :patient-id="visit.patientId">
+        <template #actions="{toothNumber,allJaw}">
+          <RouterLink v-if="toothNumber && ['ADMIN','DENTIST','RECEPTIONIST','PATIENT'].includes(auth.role)" :to="{name:'tooth-image-lookup',params:{visitId},query:{toothNumber:allJaw?undefined:toothNumber}}">{{ allJaw ? 'Xem ảnh hồ sơ bệnh nhân' : `Xem ảnh răng ${toothNumber}` }}</RouterLink>
+        </template>
+      </ToothHistoryDrawer>
+      <RouterLink v-if="selection[0] && ['ADMIN','DENTIST','RECEPTIONIST','PATIENT'].includes(auth.role)" :to="{name:'tooth-image-lookup',params:{visitId},query:{toothNumber:selection[0].toothNumber}}">Xem ảnh răng {{ selection[0].toothNumber }} qua các lần khám</RouterLink>
       <form v-if="canEdit" @submit.prevent="save">
         <p v-if="selection[0]">Răng {{ selection[0].toothNumber }} · {{ selection[0].surface ? SURFACE_METADATA[selection[0].surface].nameVi : 'Toàn răng' }}</p>
         <p v-else>Chọn một răng hoặc mặt răng trên sơ đồ.</p>

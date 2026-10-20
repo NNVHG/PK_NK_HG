@@ -11,6 +11,7 @@ public sealed record DentalImageDto(int Id, int PatientId, int? VisitId, int? To
 public sealed record StoredDentalImage(string StoragePath, string ContentType, long SizeBytes);
 public sealed record DentalImageContent(Stream Content, string ContentType);
 public sealed record ImageVisitTarget(int VisitId, string Status);
+public sealed record ImageVisitContext(int VisitId, int PatientId);
 public sealed record DentalImagePage(DentalImageDto[] Items, bool HasMore);
 public sealed class DentalImageRequestValidator : AbstractValidator<DentalImageRequest>
 {
@@ -29,6 +30,7 @@ public sealed class DentalImageRequestValidator : AbstractValidator<DentalImageR
 }
 public interface IDentalImageRepository
 {
+    Task<Result<ImageVisitContext>> VisitContextAsync(int visit, int actor, string role, CancellationToken ct);
     Task<Result<DentalImageDto>> UploadAsync(DentalImageRequest request, string name, string type, byte[] bytes, int width, int height, int actor, string role, string? ip, CancellationToken ct);
     Task<Result<DentalImagePage>> ListAsync(int patient, int? visit, int? tooth, int beforeId, int actor, string role, CancellationToken ct);
     Task<Result<ImageVisitTarget[]>> TargetsAsync(int patient, int actor, string role, CancellationToken ct);
@@ -43,6 +45,11 @@ public interface IDentalImageStorage
 }
 public sealed class DentalImageService(IDentalImageRepository repository, IDentalImageStorage storage)
 {
+    public Task<Result<ImageVisitContext>> VisitContextAsync(int visit, int actor, string role, CancellationToken ct = default)
+        => actor <= 0 || role is not (RoleCodes.Admin or RoleCodes.Dentist or RoleCodes.Receptionist or RoleCodes.Patient)
+            ? Task.FromResult(Result<ImageVisitContext>.Failure(Error.Forbidden))
+            : visit <= 0 ? Task.FromResult(Result<ImageVisitContext>.Failure(Error.Validation))
+            : repository.VisitContextAsync(visit, actor, role, ct);
     public async Task<Result<DentalImageContent>> FileAsync(int id, int actor, string role, CancellationToken ct = default)
     {
         if (actor <= 0 || role is not (RoleCodes.Admin or RoleCodes.Dentist or RoleCodes.Receptionist or RoleCodes.Patient)) return Result<DentalImageContent>.Failure(Error.Forbidden);

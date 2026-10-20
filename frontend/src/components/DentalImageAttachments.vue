@@ -24,6 +24,7 @@
     <p v-if="error" id="image-error" role="alert" class="error">{{ error }}</p>
     <p role="status" aria-live="polite">{{ success }}</p>
     <template v-if="canRead">
+      <p v-if="toothNumber != null" role="status">Đang xem ảnh răng {{ toothNumber }} qua các lần khám của bệnh nhân.</p>
       <button type="button" :disabled="store.loading || busy" @click="refresh">{{ store.loading ? 'Đang tải...' : 'Tải lại danh sách' }}</button>
       <p v-if="listError" role="alert" class="error">{{ listError }}</p>
       <p v-if="!store.loading && !listError && !store.items.length">Chưa có ảnh được lưu.</p>
@@ -61,7 +62,7 @@ import DentalImageThumbnail from './DentalImageThumbnail.vue';
 import DentalImageViewer from './DentalImageViewer.vue';
 import DentalImageDeletion from './DentalImageDeletion.vue';
 import type { ImageMetadataContext } from '@/services/imageMetadata';
-const props = defineProps<{ patientId: number }>();
+const props = defineProps<{ patientId: number; toothNumber?: number | null }>();
 const auth = useAuthStore(), store = useDentalImagesStore();
 const canUpload = computed(() => ['ADMIN', 'DENTIST', 'ASSISTANT'].includes(auth.role));
 const canRead = computed(() => ['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(auth.role));
@@ -91,10 +92,10 @@ async function loadTargets() {
   catch (e) { if (current === generation) { targets.value = []; visitId.value = null; targetError.value = problem(e); } }
   finally { if (current === generation) loadingTargets.value = false; }
 }
-async function refresh() { deletionRefreshKey.value++; if (!canRead.value) return; const current = generation; listError.value = ''; try { await store.load(props.patientId); } catch(e) { if(current === generation) listError.value = problem(e); } }
+async function refresh() { deletionRefreshKey.value++; if (!canRead.value) return; const current = generation; listError.value = ''; try { await store.load(props.patientId, false, props.toothNumber); } catch(e) { if(current === generation) listError.value = problem(e); } }
 function imageDeleted(id:number) { viewerImages.value=[]; comparisonIds.value=[]; store.clear(); error.value=''; success.value=`Đã xóa mềm ảnh #${id}. Tệp vật lý và lịch sử được giữ lại.`; void refresh(); }
-function metadataUpdated(value:ImageMetadataContext) { if(value.patientId!==props.patientId)return;viewerImages.value=viewerImages.value.map(i=>i.id===value.id?{...i,version:value.version,category:value.category,toothNumber:value.toothNumber,notes:value.notes}:i); }
-async function loadMore() { const current = generation; try { await store.load(props.patientId, true); } catch(e) { if(current === generation) listError.value = problem(e); } }
+function metadataUpdated(value:ImageMetadataContext) { if(value.patientId!==props.patientId)return;if(props.toothNumber!=null&&value.toothNumber!==props.toothNumber){viewerImages.value=[];comparisonIds.value=comparisonIds.value.filter(id=>id!==value.id);return;}viewerImages.value=viewerImages.value.map(i=>i.id===value.id?{...i,version:value.version,category:value.category,toothNumber:value.toothNumber,notes:value.notes}:i); }
+async function loadMore() { const current = generation; try { await store.load(props.patientId, true, props.toothNumber); } catch(e) { if(current === generation) listError.value = problem(e); } }
 async function upload() {
   if (busy.value || !canUpload.value) return;
   error.value = imageFileError(file.value);
@@ -118,7 +119,7 @@ async function attach(image: DentalImage) {
   catch (e) { if (current === generation) error.value = problem(e); }
   finally { if (current === generation) busy.value = false; }
 }
-watch(() => [props.patientId, auth.role, auth.user?.userId], () => { generation++; store.clear(); comparisonIds.value = []; viewerImages.value = []; file.value = null; notes.value = ''; toothText.value = ''; category.value = 'Intraoral'; validationTarget.value = ''; fileKey.value++; visitId.value = null; targets.value = []; attachTargets.value = {}; busy.value = false; loadingTargets.value = false; error.value = ''; success.value = ''; listError.value = ''; targetError.value = ''; void refresh(); void loadTargets(); }, { immediate: true });
+watch(() => [props.patientId, props.toothNumber, auth.role, auth.user?.userId], () => { generation++; store.clear(); comparisonIds.value = []; viewerImages.value = []; file.value = null; notes.value = ''; toothText.value = ''; category.value = 'Intraoral'; validationTarget.value = ''; fileKey.value++; visitId.value = null; targets.value = []; attachTargets.value = {}; busy.value = false; loadingTargets.value = false; error.value = ''; success.value = ''; listError.value = ''; targetError.value = ''; void refresh(); void loadTargets(); }, { immediate: true });
 onUnmounted(() => { generation++; viewerImages.value = []; comparisonIds.value = []; file.value = null; notes.value = ''; toothText.value = ''; store.clear(); });
 </script>
 
