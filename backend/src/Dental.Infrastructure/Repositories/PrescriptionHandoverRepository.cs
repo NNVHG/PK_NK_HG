@@ -1,6 +1,7 @@
 using System.Data;
 using System.Text.Json;
 using Dental.Application.Common;
+using Dental.Application.Features.MOD_RX;
 using Dental.Application.Features.MOD_RX.DTOs;
 using Dental.Application.Features.MOD_RX.Services;
 using Dental.Application.Interfaces;
@@ -8,6 +9,7 @@ using Dental.Domain.Constants;
 using Dental.Domain.Entities;
 using Dental.Domain.Enums;
 using Dental.Infrastructure.Data;
+using Dental.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 namespace Dental.Infrastructure.Repositories;
@@ -44,13 +46,15 @@ public sealed class PrescriptionHandoverRepository(DentalDbContext db, VietnamCl
         var settled = await SettledAsync(rx, ct);
         var ready = Active(rx) && rx.DispensedAt is null && settled && rx.Version < int.MaxValue;
         var authorized = PrescriptionHandoverService.CanWrite(role);
+        var stock = role == RoleCodes.Patient ? null : await new MedicineStockLedger(db, clock).InspectAsync(rx, ct);
+        var stockReady = stock?.CanFulfill != false;
         var name = rx.DispensedBy is int userId ? await db.Users.Where(u => u.UserId == userId).Select(u => u.FullName).SingleOrDefaultAsync(ct) : null;
         return new(rx.Id, rx.VisitId, rx.Version, rx.PrescriptionCode, patient.FullName, required, expires,
             rx.DispensedAt, name, rx.ReceivedByProxy, rx.ReceiverName, rx.ReceiverPhone,
-            ready && authorized && clock.UtcNow <= expires && rx.CreatedAt <= clock.UtcNow,
+            ready && stockReady && authorized && clock.UtcNow <= expires && rx.CreatedAt <= clock.UtcNow,
             MayUndo(rx, actorId, role) && rx.Version < int.MaxValue,
-            ready && role == RoleCodes.Admin && clock.UtcNow > expires,
-            !Active(rx) ? "Đơn hoặc lần khám đã hủy." : rx.DispensedAt is not null ? "Đơn đã giao thuốc." : !settled ? "Chỉ giao thuốc khi phần còn lại đã thanh toán đủ sau chiết khấu và toàn bộ thuốc cần giao chưa bị hoàn." : clock.UtcNow > expires ? "Đơn quá hạn cấp phát 5 ngày; chỉ Admin được xác nhận ngoại lệ có lý do." : !authorized ? "Bạn chỉ có quyền xem thông tin bàn giao." : null);
+            ready && stockReady && role == RoleCodes.Admin && clock.UtcNow > expires,
+            !Active(rx) ? "Đơn hoặc lần khám đã hủy." : rx.DispensedAt is not null ? "Đơn đã giao thuốc." : !settled ? "Chỉ giao thuốc khi phần còn lại đã thanh toán đủ sau chiết khấu và toàn bộ thuốc cần giao chưa bị hoàn." : !stockReady ? MedicineStockLedger.Insufficient.Message : clock.UtcNow > expires ? "Đơn quá hạn cấp phát 5 ngày; chỉ Admin được xác nhận ngoại lệ có lý do." : !authorized ? "Bạn chỉ có quyền xem thông tin bàn giao." : null, stock);
     }
     public async Task<Result<PrescriptionHandoverStatus>> ReadAsync(int id, int actorId, string role, CancellationToken ct)
     {
@@ -76,6 +80,8 @@ public sealed class PrescriptionHandoverRepository(DentalDbContext db, VietnamCl
             var expected = dispense?.ExpectedVersion ?? undo!.ExpectedVersion;
             if (rx.Version != expected || rx.Version == int.MaxValue) return Result<PrescriptionHandoverStatus>.Failure(Conflict);
             var status = await StatusAsync(rx, actorId, role, ct);
+            if (dispense is not null && status.Stock?.CanFulfill == false && Active(rx) && rx.DispensedAt is null && await SettledAsync(rx, ct))
+                return Result<PrescriptionHandoverStatus>.Failure(MedicineStockLedger.Insufficient);
             var action = undo is null ? "PRESCRIPTION_DISPENSED" : "PRESCRIPTION_DISPENSE_UNDONE";
             if (undo is not null && !status.CanUndo || dispense is not null && !(status.CanDispense || status.CanOverrideExpired && dispense.OverrideExpired))
                 return Result<PrescriptionHandoverStatus>.Failure(Locked);
@@ -91,6 +97,11 @@ public sealed class PrescriptionHandoverRepository(DentalDbContext db, VietnamCl
             };
             if (dispense is not null)
             {
+                var issued = await new MedicineStockLedger(db, clock).IssueAsync(rx, record, actorId, ct);
+                if (!issued.IsSuccess) return Result<PrescriptionHandoverStatus>.Failure(issued.Error);
+                if (status.Stock?.NeedsDeduction == true)
+                    db.AuditLogs.Add(new AuditLog { UserId = actorId, EntityType = "Prescription", EntityId = rx.Id, Action = "MOD_RX_STOCK_ISSUED", CreatedAt = clock.UtcNow,
+                        Detail = JsonSerializer.Serialize(new { previousVersion = expected, lines = status.Stock.Lines.Select(l => new { l.MedicineId, l.Quantity }) }) });
                 rx.DispensedAt = clock.UtcNow; rx.DispensedBy = actorId; rx.ReceivedByProxy = record.ReceivedByProxy;
                 rx.ReceiverName = string.IsNullOrWhiteSpace(record.ReceiverName) ? null : record.ReceiverName;
                 rx.ReceiverPhone = string.IsNullOrWhiteSpace(record.ReceiverPhone) ? null : record.ReceiverPhone;

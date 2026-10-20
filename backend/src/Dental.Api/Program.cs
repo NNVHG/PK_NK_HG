@@ -37,6 +37,8 @@ builder.Services.AddScoped<Dental.Application.Features.MOD_MST.Services.ISchedul
 builder.Services.AddScoped<Dental.Application.Features.MOD_MST.Services.SchedulingSettingsService>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_INV.IStockIssueRepository, StockIssueRepository>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_INV.StockIssueService>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_RX.IMedicineStockRepository, MedicineStockRepository>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_RX.MedicineStockService>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_INV.IStockReceiptRepository, StockReceiptRepository>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_INV.StockReceiptService>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_IMG.IDentalImageRepository, DentalImageRepository>();

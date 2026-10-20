@@ -6,4 +6,4 @@ public sealed record PrescriptionUndoDispenseRequest(int ExpectedVersion, bool C
 public sealed record PrescriptionHandoverStatus(int PrescriptionId, int VisitId, int Version, string PrescriptionCode,
     string PatientName, bool ReceiverRequired, DateTime ExpiresAt, DateTime? DispensedAt, string? DispensedByName,
     bool ReceivedByProxy, string? ReceiverName, string? ReceiverPhone,
-    bool CanDispense, bool CanUndo, bool CanOverrideExpired, string? BlockReason);
+    bool CanDispense, bool CanUndo, bool CanOverrideExpired, string? BlockReason, PrescriptionStockStatus? Stock = null);

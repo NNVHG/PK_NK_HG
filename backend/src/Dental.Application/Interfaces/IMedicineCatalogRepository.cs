@@ -8,4 +8,5 @@ public interface IMedicineCatalogRepository
     Task<Medicine?> FindAsync(int id, CancellationToken ct);
     Task<bool> CodeExistsAsync(string code, int? exceptId, CancellationToken ct);
     Task AddAsync(Medicine medicine, CancellationToken ct);
+    Task<bool> HasStockHistoryAsync(int id, CancellationToken ct);
 }

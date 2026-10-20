@@ -11,8 +11,18 @@
    <p v-else>Chưa giao thuốc · Hạn cấp phát: {{ date(status.expiresAt) }}</p>
    <p v-if="status.receivedByProxy">Người nhận thay: {{ status.receiverName || 'Chưa ghi nhận' }} · {{ status.receiverPhone || 'Chưa ghi nhận SĐT' }}</p>
    <p v-if="status.blockReason">{{ status.blockReason }}</p>
+   <section v-if="status.stock" aria-label="Tồn thuốc trước bàn giao">
+    <h3>Tồn thuốc trước bàn giao</h3>
+    <p v-if="status.stock.legacyHandover">Đơn đã có lịch sử bàn giao trước khi theo dõi tồn. Không trừ hồi tố hoặc tạo số dư từ lịch sử cũ.</p>
+    <p v-else-if="!status.stock.needsDeduction">Đơn đã ghi trừ kho. Ghi lại thông tin bàn giao sau hoàn tác không xuất thuốc thêm.</p>
+    <p v-else>Xác nhận giao sẽ kiểm lại và trừ tồn cùng giao dịch. Thiếu bất kỳ thuốc nào thì không ghi nhận giao.</p>
+    <ul><li v-for="line in status.stock.lines" :key="line.medicineId">{{ line.code }} · {{ line.name }}: cần {{ line.quantity }} {{ line.unit }}, còn {{ line.onHand }}.
+      <strong v-if="!line.unitMatches">Đơn vị trong đơn khác danh mục; cần đối chiếu, không tự quy đổi.</strong>
+      <strong v-else-if="status.stock.needsDeduction && line.onHand < line.quantity">Không đủ tồn để giao.</strong>
+    </li></ul>
+   </section>
    <form v-if="mayWrite && (status.canDispense || status.canOverrideExpired)" @submit.prevent="save(false)">
-    <p>Hóa đơn cần thanh toán đủ số tiền sau chiết khấu. Đối chiếu bệnh nhân, đơn đã lưu và số thuốc thực giao. Thao tác này chỉ ghi nhận bàn giao; không tự cập nhật kho.</p>
+    <p>Hóa đơn cần thanh toán đủ số tiền sau chiết khấu. Đối chiếu bệnh nhân, đơn đã lưu và số thuốc thực giao. Xác nhận giao đồng thời kiểm và trừ tồn thuốc theo đơn.</p>
     <label><input v-model="proxy" type="checkbox" :disabled="busy || blocked || needsReview || status.receiverRequired" /> Người nhà / Người giám hộ nhận thay</label>
     <p v-if="status.receiverRequired">Bệnh nhân dưới 15 tuổi: bắt buộc họ tên và SĐT người nhận thay.</p>
     <template v-if="proxy">

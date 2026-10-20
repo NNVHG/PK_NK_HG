@@ -28,5 +28,5 @@ public sealed class MedicinesController(MedicineCatalogService service, ICurrent
     [Authorize(Policy = AppPolicies.AdminOnly)]
     public async Task<IActionResult> Deactivate(int id, [FromQuery] int expectedVersion, CancellationToken ct)
     { if (actor.UserId is not int userId) return Unauthorized(); var result = await service.DeactivateAsync(id, expectedVersion, userId, actor.RoleCode, ct); return result.IsSuccess ? Ok(result.Value) : Failure(result.Error); }
-    private IActionResult Failure(Dental.Application.Common.Error error) => StatusCode(error.Code switch { "GEN_001" => 404, "GEN_002" => 403, "MST_081" or "MST_082" => 409, _ => 400 }, new { code = error.Code, message = error.Message });
+    private IActionResult Failure(Dental.Application.Common.Error error) => StatusCode(error.Code switch { "GEN_001" => 404, "GEN_002" => 403, "MST_081" or "MST_082" or "MST_083" => 409, _ => 400 }, new { code = error.Code, message = error.Message });
 }

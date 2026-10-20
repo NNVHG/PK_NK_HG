@@ -1,6 +1,6 @@
 namespace Dental.Domain.Entities;
 
-/// <summary>MOD_MST: master data only in Phase 1, no inventory quantities.</summary>
+/// <summary>MOD_MST master data; MOD_RX stores stock separately under DL-318.</summary>
 public sealed class Medicine
 {
     public int Id { get; set; }

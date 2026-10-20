@@ -17,6 +17,13 @@ public sealed class MedicineCatalogTests
     private readonly Medicine item = new() { Id = 7, Code = "TEST", Name = "Test drug", Unit = "Viên", UnitPrice = 1000, IsActive = true, Version = 1, CreatedAt = DateTime.UtcNow.AddDays(-1) };
     private MedicineCatalogService Service() => new(repo, uow, audit, new VietnamClock(TimeProvider.System));
     private static MedicineWriteRequest Input() => new("test", "Test drug", null, null, "Viên", 1000, IsActive: true, ExpectedVersion: 1);
+    [Fact] public async Task StockHistoryFreezesUnitButKeepsPriceAndNameEditable()
+    {
+        repo.HasStockHistoryAsync(7, Arg.Any<CancellationToken>()).Returns(true);
+        var blocked = await Service().SaveAsync(7, 99, RoleCodes.Admin, Input() with { Unit = "Hộp" });
+        Assert.Equal("MST_083", blocked.Error.Code); Assert.Equal("Viên", item.Unit); Assert.Equal(1, item.Version); Assert.Empty(audit.ReceivedCalls());
+        Assert.True((await Service().SaveAsync(7, 99, RoleCodes.Admin, Input() with { Name = "Updated", UnitPrice = 2000 })).IsSuccess);
+    }
     public MedicineCatalogTests()
     {
         repo.FindAsync(7, Arg.Any<CancellationToken>()).Returns(item);
