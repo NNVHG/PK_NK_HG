@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using Dental.Application.Common;
 using Dental.Application.Features.MOD_BIL.DTOs;
 using Dental.Application.Features.MOD_BIL.Services;
+using Dental.Application.Features.MOD_RX;
 using Dental.Application.Features.MOD_RX.DTOs;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
@@ -23,7 +24,13 @@ internal static class InvoiceRefundHttpSmoke
   }
   var admin=await Actor(RoleCodes.Admin);var otherAdmin=await Actor(RoleCodes.Admin);var doctor=await Actor(RoleCodes.Dentist);var assistant=await Actor(RoleCodes.Assistant);var patientUser=await Actor(RoleCodes.Patient);
   var patient=new Patient{FullName="Synthetic refund patient",Phone="0998880001",DateOfBirth=clock.Today.AddYears(-30),UserId=patientUser.UserId};db.Patients.Add(patient);
-  var med=new Medicine{Code="REFUND-SYNTHETIC",Name="Synthetic medicine",Unit="unit",UnitPrice=200000};db.Medicines.Add(med);await db.SaveChangesAsync();
+  var med=new Medicine{Code="REFUND-SYNTHETIC",Name="Synthetic medicine",Unit="unit",UnitPrice=200000,IsActive=true};db.Medicines.Add(med);await db.SaveChangesAsync();
+  // DL-318: fixture phải nhập thuốc có xác nhận trước khi kiểm tra bàn giao.
+  const int openingQuantity=10;
+  auth(RoleCodes.Admin,admin.UserId);
+  using(var received=await client.PostAsJsonAsync($"/api/medicine-stock/{med.Id}/receipts",new MedicineStockReceiptRequest(Guid.NewGuid(),openingQuantity,med.Version,"Nhà cung cấp kiểm thử",null,true)))
+   check(received.StatusCode==HttpStatusCode.Created,$"Admin xác nhận nhập thuốc cho fixture201 (HTTP {(int)received.StatusCode})");
+  check(await db.MedicineStockBalances.AsNoTracking().AnyAsync(b=>b.MedicineId==med.Id && b.OnHand==openingQuantity) && await db.MedicineStockReceipts.AnyAsync(r=>r.MedicineId==med.Id && r.Quantity==openingQuantity && r.ConfirmedByUserId==admin.UserId),"Tồn đầu fixture có phiếu nhập Admin xác nhận");
   async Task<(Invoice Invoice,Prescription? Rx)> Order(decimal? paid=null,string? discountType=null,decimal discount=0,bool medicine=false,double paidDays=0,int? collectionActor=null)
   {
    var visit=new Visit{PatientId=patient.PatientId,DentistId=doctor.UserId,CreatedByUserId=cashierId,Status=VisitStatuses.Completed,IsLocked=true};
@@ -95,16 +102,24 @@ internal static class InvoiceRefundHttpSmoke
   check(failed && !await db.InvoiceRefunds.AnyAsync(r=>r.InvoiceId==fault.Invoice.Id) && await db.Invoices.AnyAsync(i=>i.Id==fault.Invoice.Id && i.TotalAmount==1000000 && i.PaidAmount==1000000 && i.RefundRevision==0) && await db.PaymentTransactions.CountAsync(t=>t.InvoiceId==fault.Invoice.Id)==1,"Audit failure rolls back all financial and line mutations");
   var race=await Order();var raceRequest=await Request(race.Invoice.Id);async Task<bool> Race(){await using var ctx=new DentalDbContext(options);return(await new InvoiceRefundRepository(ctx,clock).RefundAsync(race.Invoice.Id,admin.UserId,raceRequest with{RequestId=Guid.NewGuid()},null,default)).IsSuccess;}
   check((await Task.WhenAll(Race(),Race())).Count(x=>x)==1 && await db.InvoiceRefunds.CountAsync(r=>r.InvoiceId==race.Invoice.Id)==1,"Concurrent refunds exactly one commit");
+  var stockBeforeServiceRefund=await db.MedicineStockBalances.AsNoTracking().Where(b=>b.MedicineId==med.Id).Select(b=>b.OnHand).SingleAsync();
   var service=await Order(medicine:true);await Apply(service.Invoice.Id,await Request(service.Invoice.Id));auth(RoleCodes.Assistant,assistant.UserId);
+  check(await db.MedicineStockBalances.AsNoTracking().AnyAsync(b=>b.MedicineId==med.Id && b.OnHand==stockBeforeServiceRefund),"Hoàn phần dịch vụ không thay đổi tồn thuốc");
   using(var r=await client.GetAsync($"/api/prescriptions/{service.Rx!.Id}/dispense")){var status=(await r.Content.ReadFromJsonAsync<PrescriptionHandoverStatus>())!;check(status.CanDispense,"Q322 service-only refund allows settled unrefunded medicine");}
   using(var r=await client.PostAsJsonAsync($"/api/prescriptions/{service.Rx!.Id}/dispense",new PrescriptionDispenseRequest(1,true)))check(r.StatusCode==HttpStatusCode.OK,"Assistant delivers on PartiallyRefunded200");
+  check(await db.MedicineStockBalances.AsNoTracking().AnyAsync(b=>b.MedicineId==med.Id && b.OnHand==stockBeforeServiceRefund-1) && await db.MedicineStockIssues.CountAsync(i=>i.PrescriptionId==service.Rx!.Id && i.Quantity==1)==1,"Giao thuốc sau hoàn dịch vụ trừ đúng một đơn vị và ghi một lần xuất");
   auth(RoleCodes.Admin,admin.UserId);var c=await Read(service.Invoice.Id);using(var r=await client.PostAsJsonAsync(Url(service.Invoice.Id)+"/preview",new InvoiceRefundPreviewRequest(c.Snapshot,[new(c.Items.Single(x=>x.ItemType=="Medicine").Id,1)],"Cash")))check(r.StatusCode==HttpStatusCode.Conflict,"Cannot refund dispensed medicine409");
   using(var r=await client.PostAsJsonAsync($"/api/prescriptions/{service.Rx!.Id}/undo-dispense",new PrescriptionUndoDispenseRequest(2,true,"Synthetic undo correction")))check(r.StatusCode==HttpStatusCode.OK,"Undo still allowed within30minutes after service refund");
+  check(await db.MedicineStockBalances.AsNoTracking().AnyAsync(b=>b.MedicineId==med.Id && b.OnHand==stockBeforeServiceRefund-1) && await db.MedicineStockIssues.CountAsync(i=>i.PrescriptionId==service.Rx!.Id)==1,"Hoàn tác bàn giao không cộng lại tồn hoặc xóa lần xuất thuốc");
   await Apply(service.Invoice.Id,await Request(service.Invoice.Id,med.Code));auth(RoleCodes.Assistant,assistant.UserId);using(var r=await client.GetAsync($"/api/prescriptions/{service.Rx.Id}/dispense")){var status=(await r.Content.ReadFromJsonAsync<PrescriptionHandoverStatus>())!;check(!status.CanDispense && !status.CanOverrideExpired,"Any refunded medicine prevents original whole prescription delivery");}
+  check(await db.MedicineStockBalances.AsNoTracking().AnyAsync(b=>b.MedicineId==med.Id && b.OnHand==stockBeforeServiceRefund-1),"Hoàn tiền thuốc không tự cộng lại tồn");
   using(var r=await client.PostAsJsonAsync($"/api/prescriptions/{service.Rx.Id}/dispense",new PrescriptionDispenseRequest(3,true)))check(r.StatusCode==HttpStatusCode.Conflict,"Refunded medicine delivery409");
   auth(RoleCodes.Admin,admin.UserId);var unpaid=await Order(paid:100000,medicine:true);await Apply(unpaid.Invoice.Id,await Request(unpaid.Invoice.Id));auth(RoleCodes.Assistant,assistant.UserId);using(var r=await client.GetAsync($"/api/prescriptions/{unpaid.Rx!.Id}/dispense")){var status=(await r.Content.ReadFromJsonAsync<PrescriptionHandoverStatus>())!;check(!status.CanDispense,"Refund status cannot waive remaining debt");}
+  var stockBeforeRace=await db.MedicineStockBalances.AsNoTracking().Where(b=>b.MedicineId==med.Id).Select(b=>b.OnHand).SingleAsync();
   auth(RoleCodes.Admin,admin.UserId);var concurrent=await Order(medicine:true);var cr=await Request(concurrent.Invoice.Id,med.Code);async Task<bool> Cancel(){await using var ctx=new DentalDbContext(options);return(await new InvoiceRefundRepository(ctx,clock).RefundAsync(concurrent.Invoice.Id,admin.UserId,cr,null,default)).IsSuccess;}async Task<bool> Deliver(){await using var ctx=new DentalDbContext(options);return(await new PrescriptionHandoverRepository(ctx,clock).DispenseAsync(concurrent.Rx!.Id,assistant.UserId,RoleCodes.Assistant,new(1,true),null,default)).IsSuccess;}
   check((await Task.WhenAll(Cancel(),Deliver())).Count(x=>x)==1,"Serializable medicine refund and delivery cannot both commit");
+  var raceIssued=await db.MedicineStockIssues.Where(i=>i.PrescriptionId==concurrent.Rx!.Id).SumAsync(i=>i.Quantity);
+  check(await db.MedicineStockBalances.AsNoTracking().AnyAsync(b=>b.MedicineId==med.Id && b.OnHand==stockBeforeRace-raceIssued),"Cạnh tranh hoàn tiền và bàn giao giữ tồn khớp lần xuất đã commit");
   var free=await Order(paid:0,discountType:"FixedAmount",discount:1000000);var fc=await Read(free.Invoice.Id);var all=fc.Items.Select(x=>new RefundSelection(x.Id,x.RemainingQuantity)).ToArray();using(var r=await client.PostAsJsonAsync(Url(free.Invoice.Id)+"/preview",new InvoiceRefundPreviewRequest(fc.Snapshot,all,"Cash"))){var v=(await r.Content.ReadFromJsonAsync<InvoiceRefundPreview>())!;check(r.StatusCode==HttpStatusCode.OK,"Free fully discounted cancellation preview200");var result=await Apply(free.Invoice.Id,new(fc.Snapshot,all,"Cash",v.Preview,Guid.NewGuid(),"OTHER","Synthetic free cancellation",true));check(result.PaymentId is null && !await db.PaymentTransactions.AnyAsync(t=>t.InvoiceId==free.Invoice.Id),"Free cancellation creates no fictitious payment");}
 
   auth(RoleCodes.Admin,admin.UserId);

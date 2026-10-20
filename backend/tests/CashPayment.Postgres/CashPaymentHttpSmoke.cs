@@ -111,6 +111,8 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddScoped<IDiagnosisCatalogRepository, DiagnosisCatalogRepository>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_MST.Services.DiagnosisCatalogService>();
         builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_RX.IMedicineStockRepository, MedicineStockRepository>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_RX.MedicineStockService>();
         builder.Services.AddScoped<IPostTreatmentNoteRepository, PostTreatmentNoteRepository>();
         builder.Services.AddScoped<Dental.Application.Features.Visits.Services.PostTreatmentNoteService>();
         builder.Services.AddScoped<Dental.Application.Features.Visits.Validators.CreatePostTreatmentNoteRequestValidator>();
