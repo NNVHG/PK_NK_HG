@@ -9,6 +9,7 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
     public void Configure(EntityTypeBuilder<User> builder)
     {
         builder.HasKey(u => u.UserId);
+        builder.Property(u => u.TokenVersion).HasDefaultValue(0).IsConcurrencyToken();
 
         builder.Property(u => u.Phone)
             .HasMaxLength(20)

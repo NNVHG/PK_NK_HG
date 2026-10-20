@@ -524,3 +524,18 @@ GET /api/services hiện hữu dùng keyword/isActive=true/page/pageSize20, phâ
 Kiểm chứng 2026-10-14:842/842unit,202/202Node,536/536PostgreSQL/HTTP fullPASS; backend/harnessbuild0warning/error và frontend201modules; EFkhôngpendingmodel. Đã kiểm tìm tên/mã/chữhoa-tiếngViệt/ký tự%literal, inactive/futureprice, phân trang lọc, search→chỉ định cho răng11/51 mặtB và giá thay đổi sau tra cứu.
 
 Nhánh codex/phase1-fdi-service-search kế thừae2f197d trongworktree riêng, chưa tích hợp main55a0a00. F_FDI_04 vẫnPARTIAL/chờGiaUAT/gợi ýdịchvụ và nhiều mặt; không xử lý mâu thuẫn độ dài Surfaces10(DL168)/20(DL201), không sửaDL/mởPhase2. Không thay logic lưu/snapshot/chuyển trạng thái, không thêm schema/package.
+
+### Khôi phục mật khẩu qua SMS (F_AUTH_04, demo_11)
+
+Từ trang đăng nhập chọn **Quên mật khẩu?**, nhập SĐT đã đăng ký, nhận OTP qua SMS rồi đặt mật khẩu mới. Mã 6 chữ số có hiệu lực 5 phút, tối đa 5 lần sai; xin mã mới cách ít nhất 60 giây. Reset thành công yêu cầu đăng nhập lại, thu hồi JWT cũ. Tài khoản Admin đã khóa vẫn bị khóa.
+
+Luồng mặc định tắt gửi SMS. Cấu hình phía máy chủ bằng user-secrets/biến môi trường:
+
+- PasswordRecovery:Sms:Enabled — true chỉ khi sẵn sàng gửi thật.
+- PasswordRecovery:Sms:AccountSid và PasswordRecovery:Sms:AuthToken — tài khoản provider.
+- PasswordRecovery:Sms:From — số gửi E.164 đã cấu hình tại provider.
+
+Adapter dùng [Twilio Messages REST API](https://www.twilio.com/docs/messaging/api/message-resource) qua HttpClient, không SDK. Thiếu cấu hình API trả 503 với thông báo liên hệ phòng khám. Không có OTP giả lập/endpoint đọc mã trong production. SMS gửi bởi worker với queue bounded trong tiến trình; restart cần xin mã khác. Chưa cấu hình/gửi SMS thật trong kiểm thử tự động.
+
+Migration 20261018184345_AddPasswordRecoveryTokenVersion thêm Users.TokenVersion; cần áp migration trước khi chạy bản mới. HTTP/PostgreSQL checks dùng mode --password-recovery-only trong harness backend/tests/CashPayment.Postgres với SMS test double chỉ ở tests. Fixture UI tổng hợp: frontend/tests/browser-password-recovery.html, không kết nối tài khoản thật.
+Migration tiếp nối 20261018185811_ProtectRecoveredCredentials chỉ cập nhật metadata concurrency trong model/snapshot, không đổi schema. Giữ nguyên migration thêm cột đã chạy trên DB kiểm thử.

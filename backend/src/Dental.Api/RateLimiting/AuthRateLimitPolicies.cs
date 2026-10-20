@@ -7,6 +7,8 @@ public static class AuthRateLimitPolicies
 {
     public const string Login = "AuthLogin";
     public const string Register = "AuthRegister";
+    public const string RecoveryRequest = "AuthRecoveryRequest";
+    public const string RecoveryReset = "AuthRecoveryReset";
 
     public static void Configure(RateLimiterOptions options, IConfiguration configuration)
     {
@@ -24,6 +26,8 @@ public static class AuthRateLimitPolicies
         };
 
         // [CẦN XÁC NHẬN] Sau reverse proxy, RemoteIpAddress có thể là IP proxy; không cấu hình forwarded headers ở đây.
+        AddIpPolicy(options, configuration, RecoveryRequest, "RateLimiting:Auth:RecoveryRequest:PermitLimit", "RateLimiting:Auth:RecoveryRequest:WindowSeconds", 5);
+        AddIpPolicy(options, configuration, RecoveryReset, "RateLimiting:Auth:RecoveryReset:PermitLimit", "RateLimiting:Auth:RecoveryReset:WindowSeconds", 10);
         AddIpPolicy(
             options,
             configuration,

@@ -16,6 +16,9 @@ public class User : BaseEntity
     /// <summary>BCrypt hash. Không log, không trả về client.</summary>
     public string PasswordHash { get; set; } = string.Empty;
 
+    /// <summary>Incremented after SMS recovery so previously issued access tokens no longer authorize requests.</summary>
+    public int TokenVersion { get; set; }
+
     public string FullName { get; set; } = string.Empty;
     public string? AcademicTitle { get; set; }
     public string? Email { get; set; }

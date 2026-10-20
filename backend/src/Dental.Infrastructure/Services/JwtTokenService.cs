@@ -34,6 +34,7 @@ public sealed class JwtTokenService : ITokenService
             new Claim(ClaimTypes.Role, user.Role.RoleCode),           // dùng RoleCode không dấu
             new Claim(JwtRegisteredClaimNames.Name, user.FullName),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new Claim("token_version", user.TokenVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)),
         };
 
         var token = new JwtSecurityToken(
