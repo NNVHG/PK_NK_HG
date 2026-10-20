@@ -45,7 +45,7 @@
         </li>
       </ul>
       <button v-if="store.hasMore" type="button" :disabled="store.loading || busy" @click="loadMore">Xem thêm ảnh</button>
-      <DentalImageViewer v-if="viewerImages.length" :images="viewerImages" @close="viewerImages = []" />
+      <DentalImageViewer v-if="viewerImages.length" :images="viewerImages" @close="viewerImages = []" @changed="refresh" />
     </template>
     <p v-else-if="canUpload">Phụ tá được tải lên theo quyền hiện hành. Danh sách ảnh đã lưu dành cho vai trò có quyền xem.</p>
   </section>

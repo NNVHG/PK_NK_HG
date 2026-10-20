@@ -268,6 +268,16 @@ namespace Dental.Infrastructure.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<string>("ClinicalNotes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ClinicalUpdatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<int?>("ClinicalUpdatedByUserId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("ContentType")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -275,6 +285,10 @@ namespace Dental.Infrastructure.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DoctorDiagnosis")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
 
                     b.Property<int>("Height")
                         .HasColumnType("integer");
@@ -320,6 +334,8 @@ namespace Dental.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ClinicalUpdatedByUserId");
+
                     b.HasIndex("StoragePath")
                         .IsUnique();
 
@@ -330,6 +346,56 @@ namespace Dental.Infrastructure.Migrations
                     b.HasIndex("PatientId", "VisitId", "CreatedAt");
 
                     b.ToTable("DentalImages", (string)null);
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.DentalImageClinicalAddendum", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AuthorName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("AuthorRole")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DentalImageId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ImageVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("RequestId")
+                        .IsUnique();
+
+                    b.HasIndex("DentalImageId", "Id");
+
+                    b.ToTable("DentalImageClinicalAddenda", (string)null);
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.DentalService", b =>
@@ -2552,6 +2618,11 @@ namespace Dental.Infrastructure.Migrations
 
             modelBuilder.Entity("Dental.Domain.Entities.DentalImage", b =>
                 {
+                    b.HasOne("Dental.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ClinicalUpdatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Dental.Domain.Entities.Patient", null)
                         .WithMany()
                         .HasForeignKey("PatientId")
@@ -2568,6 +2639,21 @@ namespace Dental.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("VisitId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.DentalImageClinicalAddendum", b =>
+                {
+                    b.HasOne("Dental.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.DentalImage", null)
+                        .WithMany()
+                        .HasForeignKey("DentalImageId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.DoctorSignature", b =>

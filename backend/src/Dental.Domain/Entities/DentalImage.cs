@@ -9,6 +9,10 @@ public sealed class DentalImage
     public int? ToothNumber { get; set; }
     public DentalImageCategory Category { get; set; } = DentalImageCategory.Intraoral;
     public string? Notes { get; set; }
+    public string? ClinicalNotes { get; set; }
+    public string? DoctorDiagnosis { get; set; }
+    public int? ClinicalUpdatedByUserId { get; set; }
+    public DateTime? ClinicalUpdatedAt { get; set; }
     public string OriginalFileName { get; set; } = "";
     public string StoragePath { get; set; } = "";
     public string ContentType { get; set; } = "";

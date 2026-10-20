@@ -1,9 +1,9 @@
 <!doctype html>
 <html lang="vi"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>Fixture xem ảnh</title>
 <style>body{font:16px system-ui;margin:0;padding:1.5rem;max-width:1100px}button,input,select,textarea{font:inherit}button{cursor:pointer}button:disabled{cursor:default}button:focus-visible,input:focus-visible{outline:3px solid #2563eb;outline-offset:2px}</style></head>
-<body><h1>Kiểm thử viewer — dữ liệu tổng hợp</h1><p>Fixture chỉ dùng trong tests; API giả lập trong trang này, không dùng tài khoản hoặc hồ sơ thật.</p><div id="app"></div>
+<body><h1>Kiểm thử viewer — dữ liệu tổng hợp</h1><p>Fixture chỉ dùng trong tests; API giả lập trong trang này, không dùng tài khoản hoặc hồ sơ thật.</p><button id="complete-visit" type="button">Fixture: hoàn tất ca</button><div id="app"></div>
 <script type="module">
-import { createApp } from 'vue';
+import { createApp, h } from 'vue';
 import { createPinia } from 'pinia';
 import DentalImageAttachments from '../src/components/DentalImageAttachments.vue';
 import { useAuthStore } from '../src/stores/auth';
@@ -11,6 +11,15 @@ import { apiClient } from '../src/services/api';
 async function sample(label,color){const canvas=document.createElement('canvas');canvas.width=640;canvas.height=480;const c=canvas.getContext('2d');c.fillStyle='#f8fafc';c.fillRect(0,0,640,480);c.strokeStyle='#94a3b8';for(let x=0;x<=640;x+=40){c.beginPath();c.moveTo(x,0);c.lineTo(x,480);c.stroke();}for(let y=0;y<=480;y+=40){c.beginPath();c.moveTo(0,y);c.lineTo(640,y);c.stroke();}c.fillStyle=color;c.fillRect(120,100,400,240);c.fillStyle='#fff';c.font='48px sans-serif';c.fillText(label,170,240);return await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));}
 const blobs=await Promise.all([sample('Ảnh A','#2563eb'),sample('Ảnh B','#16a34a')]);
 const images=blobs.map((blob,i)=>({id:i+1,patientId:7,visitId:i+10,toothNumber:46,category:'Intraoral',originalFileName:`Ảnh kiểm thử ${i+1}.png`,contentType:'image/png',sizeBytes:blob.size,width:640,height:480,createdAt:new Date().toISOString(),version:1,notes:'Ghi chú ảnh tổng hợp',uploadedByFullName:'Nhân viên kiểm thử'}));
-apiClient.defaults.adapter=async config=>{let data;if(config.url==='/dental-images')data={items:images,hasMore:false};else if(config.url==='/dental-images/targets')data=[];else if(config.url?.endsWith('/file'))data=blobs[Number(config.url.split('/').at(-2))-1];else throw new Error('Unexpected fixture request');return{data,status:200,statusText:'OK',headers:{'cache-control':'no-store'},config};};
-const pinia=createPinia(),app=createApp({components:{DentalImageAttachments},template:'<DentalImageAttachments :patient-id="7" />'});app.use(pinia);useAuthStore(pinia).user={userId:5,fullName:'Nhân viên kiểm thử',roleCode:'DENTIST',roleName:'Nha sĩ'};app.mount('#app');
+let completed=false;document.querySelector('#complete-visit').onclick=()=>{completed=true;};
+const clinical=images.map(i=>({imageId:i.id,patientId:7,visitId:i.visitId,version:1,clinicalNotes:'Ghi chú tổng hợp '+i.id,doctorDiagnosis:'Chẩn đoán ảnh tổng hợp',updatedByUserId:null,updatedByName:null,updatedAt:null,canReplace:true,canAppend:false})),addenda=[[],[]];
+apiClient.defaults.adapter=async config=>{let data;
+if(config.url?.includes('/clinical-notes')){
+ const index=Number(config.url.split('/')[2])-1,row=clinical[index],body=typeof config.data==='string'?JSON.parse(config.data):config.data;
+ if(config.method==='put'){Object.assign(row,{clinicalNotes:body.clinicalNotes,doctorDiagnosis:body.doctorDiagnosis,version:row.version+1,updatedByUserId:5,updatedByName:'Nha sĩ kiểm thử',updatedAt:new Date().toISOString()});data={...row};}
+ else if(config.method==='post'){row.version++;data={id:addenda[index].length+1,imageId:row.imageId,imageVersion:row.version,createdByUserId:5,authorName:'Nha sĩ kiểm thử',authorRole:'DENTIST',createdAt:new Date().toISOString(),note:body.note};addenda[index].unshift(data);}
+ else if(config.url.endsWith('/addenda'))data={items:addenda[index],totalCount:addenda[index].length,page:1,pageSize:20,totalPages:addenda[index].length?1:0,hasNextPage:false,hasPreviousPage:false};
+ else data={...row,canReplace:!completed,canAppend:completed};
+}else if(config.url==='/dental-images')data={items:images,hasMore:false};else if(config.url==='/dental-images/targets')data=[];else if(config.url?.endsWith('/file'))data=blobs[Number(config.url.split('/').at(-2))-1];else throw new Error('Unexpected fixture request');return{data,status:200,statusText:'OK',headers:{'cache-control':'no-store'},config};};
+const pinia=createPinia(),app=createApp({render:()=>h(DentalImageAttachments,{patientId:7})});app.use(pinia);useAuthStore(pinia).user={userId:5,fullName:'Nhân viên kiểm thử',roleCode:'DENTIST',roleName:'Nha sĩ'};app.mount('#app');
 </script></body></html>

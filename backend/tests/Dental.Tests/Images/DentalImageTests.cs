@@ -71,7 +71,8 @@ public sealed class DentalImageTests
         using var db = new DentalDbContext(new DbContextOptionsBuilder<DentalDbContext>().UseNpgsql("Host=localhost;Database=model_only").Options);
         var model = db.Model.FindEntityType(typeof(DentalImage))!;
         Assert.True(model.FindProperty(nameof(DentalImage.Version))!.IsConcurrencyToken);
-        Assert.Equal(3, model.GetForeignKeys().Count());
+        Assert.Equal(4, model.GetForeignKeys().Count());
+        Assert.Contains(model.GetForeignKeys(), x => x.Properties.Single().Name == nameof(DentalImage.ClinicalUpdatedByUserId));
         Assert.All(model.GetForeignKeys(), x => Assert.Equal(DeleteBehavior.Restrict, x.DeleteBehavior));
     }
     [Theory] [InlineData("../outside.png")] [InlineData("1/../../outside.png")] [InlineData("1/a.png")] [InlineData("0/11111111111111111111111111111111.png")] [InlineData("1/11111111111111111111111111111111.exe")]
