@@ -58,6 +58,8 @@ public sealed class DentalDbContext : DbContext
     public DbSet<StockBalance> StockBalances => Set<StockBalance>();
     public DbSet<StockReceipt> StockReceipts => Set<StockReceipt>();
     public DbSet<StockReceiptLine> StockReceiptLines => Set<StockReceiptLine>();
+    public DbSet<StockIssue> StockIssues => Set<StockIssue>();
+    public DbSet<StockIssueLine> StockIssueLines => Set<StockIssueLine>();
     public DbSet<DentalDiagnosis> DentalDiagnoses => Set<DentalDiagnosis>();
     public DbSet<PostTreatmentNote> PostTreatmentNotes => Set<PostTreatmentNote>();
 
@@ -74,6 +76,8 @@ public sealed class DentalDbContext : DbContext
         modelBuilder.ApplyConfiguration(new StockBalanceConfiguration());
         modelBuilder.ApplyConfiguration(new StockReceiptConfiguration());
         modelBuilder.ApplyConfiguration(new StockReceiptLineConfiguration());
+        modelBuilder.ApplyConfiguration(new StockIssueConfiguration());
+        modelBuilder.ApplyConfiguration(new StockIssueLineConfiguration());
         modelBuilder.ApplyConfiguration(new DentalDiagnosisConfiguration());
         modelBuilder.ApplyConfiguration(new PostTreatmentNoteConfiguration());
         modelBuilder.ApplyConfiguration(new PaymentTransactionConfiguration());
@@ -139,6 +143,11 @@ public sealed class DentalDbContext : DbContext
 
     private void GuardStockReceiptImmutability()
     {
+        if (ChangeTracker.Entries<StockIssue>().Any(e => e.State is EntityState.Modified or EntityState.Deleted) ||
+            ChangeTracker.Entries<StockIssueLine>().Any(e => e.State is EntityState.Modified or EntityState.Deleted ||
+                e.State == EntityState.Added && e.Entity.StockIssueId > 0 &&
+                !ChangeTracker.Entries<StockIssue>().Any(r => r.State == EntityState.Added && r.Entity.Id == e.Entity.StockIssueId)))
+            throw new InvalidOperationException("Phiếu xuất đã xác nhận là bất biến.");
         if (ChangeTracker.Entries<StockReceipt>().Any(e => e.State is EntityState.Modified or EntityState.Deleted) ||
             ChangeTracker.Entries<StockReceiptLine>().Any(e => e.State is EntityState.Modified or EntityState.Deleted ||
                 e.State == EntityState.Added && e.Entity.StockReceiptId > 0 &&
