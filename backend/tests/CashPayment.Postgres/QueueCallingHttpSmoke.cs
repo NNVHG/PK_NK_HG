@@ -48,10 +48,12 @@ internal static class QueueCallingHttpSmoke
         foreach (var role in new[] { RoleCodes.Receptionist, RoleCodes.Patient })
         {
             authenticate(role);
-            using (var r = await client.GetAsync(directory)) check(r.StatusCode == HttpStatusCode.Forbidden, $"Calling directory {role}403");
+            if (role == RoleCodes.Patient)
+                using (var r = await client.GetAsync(directory)) check(r.StatusCode == HttpStatusCode.Forbidden, $"Calling directory {role}403");
             using (var r = await client.PostAsJsonAsync(call, new { dentistId = doctor.UserId })) check(r.StatusCode == HttpStatusCode.Forbidden, $"Calling {role}403");
         }
-        foreach (var role in new[] { RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant })
+        // DL-319: Lễ tân đọc danh sách để chuyển ca; quyền gọi số vẫn bị chặn ở trên.
+        foreach (var role in new[] { RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant, RoleCodes.Receptionist })
         {
             authenticate(role); using var r = await client.GetAsync(directory); var items = await r.Content.ReadFromJsonAsync<JsonElement>();
             check(r.StatusCode == HttpStatusCode.OK && r.Headers.CacheControl?.NoStore == true, $"Calling directory {role}200/no-store");

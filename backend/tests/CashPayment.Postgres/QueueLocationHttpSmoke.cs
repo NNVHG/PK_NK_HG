@@ -44,7 +44,18 @@ internal static class QueueLocationHttpSmoke
         client.DefaultRequestHeaders.Authorization = null;
         using (var r = await client.GetAsync("/api/queue/call-dentists")) check(r.StatusCode == HttpStatusCode.Unauthorized, "Directory remains JWT-only401");
         authenticate(RoleCodes.Receptionist, actorId);
-        using (var r = await client.GetAsync("/api/queue/call-dentists")) check(r.StatusCode == HttpStatusCode.Forbidden, "Receptionist cannot read calling directory403");
+        using (var r = await client.GetAsync("/api/queue/call-dentists"))
+        {
+            check(r.StatusCode == HttpStatusCode.OK && r.Headers.CacheControl?.NoStore == true, "Lễ tân đọc danh sách nha sĩ để chuyển ca200/NoStore");
+            var json = await r.Content.ReadFromJsonAsync<JsonElement>();
+            check(json.EnumerateArray().All(x => x.EnumerateObject().Select(p => p.Name).Order().SequenceEqual(new[] { "chairNumber", "dentistId", "dentistName", "roomName" })),
+                "Danh sách cho Lễ tân chỉ có mã, tên, phòng và ghế nha sĩ");
+            var destination = json.EnumerateArray().Single(x => x.GetProperty("dentistId").GetInt32() == doctorB.UserId);
+            check(destination.GetProperty("roomName").GetString() == "Phòng 4" && destination.GetProperty("chairNumber").GetString() == chairB.ChairNumber,
+                "Lễ tân thấy đúng vị trí nha sĩ nhận ca");
+        }
+        using (var r = await client.PostAsJsonAsync("/api/queue/call-next", new { dentistId = doctorB.UserId }))
+            check(r.StatusCode == HttpStatusCode.Forbidden, "Quyền đọc danh sách không cấp quyền gọi số cho Lễ tân403");
         authenticate(RoleCodes.Assistant, assistant.UserId);
         using (var r = await client.GetAsync("/api/queue/call-dentists"))
         {
