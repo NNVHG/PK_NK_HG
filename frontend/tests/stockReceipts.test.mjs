@@ -1,0 +1,33 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import ts from 'typescript';
+import { parse, compileScript, compileTemplate } from '@vue/compiler-sfc';
+function execute(source, imports) { const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText; const module = { exports: {} }; new Function('require', 'module', 'exports', js)(name => imports[name] ?? {}, module, module.exports); return module.exports; }
+const storeSource = await readFile(new URL('../src/stores/stockReceipts.ts', import.meta.url), 'utf8');
+const serviceSource = await readFile(new URL('../src/services/stockReceipts.ts', import.meta.url), 'utf8');
+const viewSource = await readFile(new URL('../src/views/StockReceiptsView.vue', import.meta.url), 'utf8');
+const request = () => ({ requestId: 'stable-key', confirmed: true, supplierName: 'NCC', notes: null, lines: [{ medicalSupplyId: 1, quantity: 5, expectedSupplyVersion: 1 }] });
+function fixture() {
+  let watcher; const calls = [], responses = [];
+  const mod = execute(storeSource, { pinia: { defineStore: (_id, fn) => fn }, vue: { ref: value => ({ value }), watch: (_get, fn) => { watcher = fn; } }, axios: { isAxiosError: e => !!e.response }, '@/stores/auth': { useAuthStore: () => ({ user: { userId: 1 }, role: 'ADMIN' }) }, '@/services/stockReceipts': { stockReceiptsService: { confirm: async payload => { calls.push(structuredClone(payload)); if (responses.length) return await responses.shift()(); return { receipt: { id: 1, code: 'PN000001' }, replayed: false }; } } } });
+  return { s: mod.useStockReceiptsStore(), calls, responses, changeIdentity: () => watcher() };
+}
+test('receipt confirmation saves server code and clears pending', async () => { const f = fixture(); await f.s.submit(request()); assert.equal(f.s.saved.value.code, 'PN000001'); assert.equal(f.s.pending.value, null); assert.equal(f.s.busy.value, false); });
+test('unknown network result retains exact payload and key for retry', async () => { const f = fixture(); f.responses.push(() => { throw new Error('network'); }); const r = request(); await f.s.submit(r); r.lines[0].quantity = 999; assert.match(f.s.error.value, /Chưa xác định/); assert.equal(f.s.pending.value.lines[0].quantity, 5); await f.s.submit({ ...r, requestId: 'different' }); assert.deepEqual(f.calls[0], f.calls[1]); assert.equal(f.s.pending.value, null); });
+test('ambiguous concurrency conflict preserves key until replay', async () => { const f = fixture(); f.responses.push(() => { throw { response: { status: 409, data: { code: 'INV_409' } } }; }); await f.s.submit(request()); assert.equal(f.s.pending.value.requestId, 'stable-key'); });
+for (const [status, code] of [[400, 'INV_001'], [403, 'Forbidden'], [409, 'INV_STALE']]) test(`definitive rejection ${code} permits form correction`, async () => { const f = fixture(); f.responses.push(() => { throw { response: { status, data: { code } } }; }); await f.s.submit(request()); assert.equal(f.s.pending.value, null); assert.ok(f.s.error.value); });
+test('double submit while busy sends only one request', async () => { const f = fixture(); let resolve; f.responses.push(() => new Promise(r => { resolve = r; })); const first = f.s.submit(request()); await f.s.submit(request()); assert.equal(f.calls.length, 1); resolve({ receipt: { id: 1 }, replayed: false }); await first; });
+test('identity change clears pending and ignores old account response', async () => { const f = fixture(); let resolve; f.responses.push(() => new Promise(r => { resolve = r; })); const first = f.s.submit(request()); f.changeIdentity(); resolve({ receipt: { id: 1 }, replayed: false }); await first; assert.equal(f.s.saved.value, null); assert.equal(f.s.pending.value, null); assert.equal(f.s.busy.value, false); });
+test('stock SDK only uses authenticated inventory endpoints', async () => { const calls = []; const api = { get: async (...args) => { calls.push(args); return { data: 'read' }; }, post: async (...args) => { calls.push(args); return { data: 'saved' }; } }; const service = execute(serviceSource, { '@/services/api': { apiClient: api } }).stockReceiptsService; assert.equal(await service.stock('vat tu', 2), 'read'); await service.list(20); await service.confirm(request()); assert.deepEqual(calls.map(x => x[0]), ['/inventory/stock', '/inventory/receipts', '/inventory/receipts']); assert.equal(calls[0][1].params.page, 2); assert.equal(calls[1][1].params.beforeId, 20); assert.equal(calls[2][1].requestId, 'stable-key'); });
+test('Vue receipt template compiles and offers explicit confirmation and integer input', () => { const descriptor = parse(viewSource).descriptor; assert.equal(compileTemplate({ source: descriptor.template.content, filename: 'StockReceiptsView.vue', id: 'stock' }).errors.length, 0); assert.match(viewSource, /step="1"/); assert.match(viewSource, /Tôi đã kiểm tra vật tư/); assert.match(viewSource, /:disabled="locked"/); assert.match(viewSource, /v-if="canWrite"/); });
+const script = compileScript(parse(viewSource).descriptor, { id: 'stock' }).content;
+function viewFixture(role = 'ADMIN') {
+  const calls = [], store = { pending: null, busy: false, saved: null, submit: async r => calls.push(r) };
+  const vue = { defineComponent: x => x, ref: value => ({ value }), computed: fn => ({ get value() { return fn(); } }), watch() {}, onMounted() {}, onUnmounted() {} };
+  const mod = execute(script, { vue, '@/stores/auth': { useAuthStore: () => ({ role, user: { userId: 1 } }) }, '@/stores/stockReceipts': { useStockReceiptsStore: () => store }, '@/services/stockReceipts': { stockReceiptsService: {} } });
+  return { v: mod.default.setup({}, { expose() {} }), calls };
+}
+test('view prevents fractions, empty lines and missing confirmation before API', async () => { const { v, calls } = viewFixture(); v.supplier.value = 'NCC'; await v.submit(); assert.equal(calls.length, 0); v.lines.value = [{ medicalSupplyId: 1, quantity: .5 }]; v.confirmed.value = true; await v.submit(); assert.equal(calls.length, 0); assert.ok(v.formError.value); });
+test('selection cannot duplicate or add inactive materials', () => { const { v } = viewFixture(); const item = { medicalSupplyId: 1, isActive: true }; v.add(item); v.add(item); v.add({ medicalSupplyId: 2, isActive: false }); assert.equal(v.lines.value.length, 1); assert.equal(v.lines.value[0].quantity, 1); });
+test('dentist gets stock view without receipt writer UI', () => { assert.equal(viewFixture('DENTIST').v.canWrite.value, false); assert.equal(viewFixture('ASSISTANT').v.canWrite.value, true); });

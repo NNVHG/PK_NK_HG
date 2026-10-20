@@ -56,6 +56,8 @@ public sealed class MedicalSupplyCatalogService(
                     if (found is null) return Result<MedicalSupplyResponse>.Failure(Error.NotFound);
                     if (found.Version != cleaned.ExpectedVersion)
                         return Result<MedicalSupplyResponse>.Failure(new Error("MST_092", "Danh mục vật tư đã thay đổi. Vui lòng tải lại trước khi lưu."));
+                    if (found.Unit != cleaned.Unit && await repo.HasStockHistoryAsync(found.Id, token))
+                        return Result<MedicalSupplyResponse>.Failure(new Error("MST_093", "Không đổi đơn vị vật tư đã có chứng từ kho. Tạo vật tư mới với đơn vị phù hợp; hệ thống không tự quy đổi."));
                     oldValue = Snapshot(found);
                     item = found;
                     item.Version++;

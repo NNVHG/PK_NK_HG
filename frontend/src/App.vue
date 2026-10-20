@@ -21,6 +21,7 @@
         <router-link v-if="['ADMIN', 'DENTIST', 'ASSISTANT'].includes(authStore.role)" to="/staff/workspace">Vị trí nha sĩ/phụ tá</router-link>
         <router-link v-if="isAdmin" to="/admin/medicines">Danh mục thuốc</router-link>
         <router-link v-if="isAdmin" to="/admin/medical-supplies">Danh mục vật tư</router-link>
+        <router-link v-if="['ADMIN', 'ASSISTANT', 'DENTIST'].includes(authStore.role)" to="/inventory/receipts">Tồn kho & nhập kho</router-link>
         <router-link v-if="isAdmin" to="/admin/diagnoses">Danh mục chẩn đoán</router-link>
         <router-link v-if="isAdmin" to="/admin/chairs">Phòng & ghế nha khoa</router-link>
         <router-link v-if="isAdmin" to="/admin/services">Dịch vụ & bảng giá</router-link>
