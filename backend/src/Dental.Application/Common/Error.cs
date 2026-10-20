@@ -71,6 +71,7 @@ public record Error(string Code, string Message, object? Details = null)
     public static readonly Error QueueWaitingCancellationConcurrent = new("CHK_012", "Có thao tác đồng thời với lượt chờ. Tải lại hàng đợi trước khi xác nhận hủy lại.");
     public static readonly Error QueueAbsenceBlocked = new("CHK_014", "Chỉ đánh dấu vắng mặt lượt đang mời chưa bắt đầu khám, hoặc gọi lại lượt vắng mặt hôm nay. Tải lại để đối chiếu.");
     public static readonly Error QueueDentistAlreadyCalling = new("CHK_013", "Nha sĩ này còn lượt đang được mời vào phòng. Đối chiếu lượt đã gọi trước khi gọi tiếp.");
+    public static readonly Error QueueTransferBlocked = new("CHK_015", "Lượt khám đã thay đổi hoặc không đủ điều kiện chuyển nha sĩ. Tải lại hàng đợi và đối chiếu trước khi thử lại.");
 
 
 }

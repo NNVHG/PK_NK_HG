@@ -130,6 +130,7 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.CallNextRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.CancelWaitingRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.QueueAbsenceRequestValidator>();
+        builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.TransferDentistRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.QueueCleanupRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Queue.Services.QueueCleanupService>();
         builder.Services.AddScoped<IDentalChairRepository, DentalChairRepository>();

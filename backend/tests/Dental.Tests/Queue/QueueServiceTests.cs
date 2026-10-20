@@ -22,6 +22,7 @@ public sealed class QueueServiceTests
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly IAuditLogger _auditLogger = Substitute.For<IAuditLogger>();
     private readonly IInvoiceDraftGenerator _invoiceDraft = Substitute.For<IInvoiceDraftGenerator>();
+    private readonly IVisitChairCoordinator _visitChairs = TestVisitChairs.Create();
     private readonly FixedTimeProvider _timeProvider;
     private readonly VietnamClock _vietnamClock;
 
@@ -118,7 +119,63 @@ public sealed class QueueServiceTests
     }
 
     private QueueService CreateService()
-        => new(_queueRepository, _appointmentRepository, _patientRepository, _visitRepository, _invoiceRepository, _userRepository, _unitOfWork, _auditLogger, _vietnamClock, _invoiceDraft, Dental.Tests.Common.TestVisitChairs.Create());
+        => new(_queueRepository, _appointmentRepository, _patientRepository, _visitRepository, _invoiceRepository, _userRepository, _unitOfWork, _auditLogger, _vietnamClock, _invoiceDraft, _visitChairs);
+
+    [Fact]
+    public async Task TransferDentist_ActiveVisitMovesAssignmentAndChairInOneTransactionalFlow()
+    {
+        var now = _vietnamClock.UtcNow;
+        var visit = new Visit { VisitId = 8, DentistId = 5, ChairId = 3, Status = VisitStatuses.InProgress, StartedAt = now };
+        var entry = new QueueEntry { QueueEntryId = 8, VisitId = 8, DentistId = 5, QueueDate = _vietnamClock.Today,
+            Status = QueueStatus.InConsultation, Visit = visit };
+        _queueRepository.GetByIdAsync(8, Arg.Any<CancellationToken>()).Returns(entry);
+        _userRepository.FindByIdAsync(99, Arg.Any<CancellationToken>()).Returns(new User { UserId = 99, IsActive = true, Role = new() { RoleCode = RoleCodes.Receptionist } });
+        _userRepository.FindByIdAsync(6, Arg.Any<CancellationToken>()).Returns(new User { UserId = 6, IsActive = true, Role = new() { RoleCode = RoleCodes.Dentist } });
+        _visitChairs.TransferAsync(visit, 6, 99, Arg.Any<CancellationToken>()).Returns(_ => { visit.ChairId = 4; return Result.Success(); });
+
+        var result = await CreateService().TransferDentistAsync(8, 99, RoleCodes.Receptionist,
+            new TransferDentistRequest(6, true, "Hội chẩn", 5, 2), null);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(6, entry.DentistId); Assert.Equal(6, visit.DentistId); Assert.Equal(4, visit.ChairId);
+        await _visitChairs.Received(1).TransferAsync(visit, 6, 99, Arg.Any<CancellationToken>());
+        await _queueRepository.Received(1).AddStatusHistoryAsync(Arg.Is<QueueStatusHistory>(history =>
+            history.FromStatus == QueueStatus.InConsultation && history.ToStatus == QueueStatus.InConsultation && history.Reason == "Hội chẩn"), Arg.Any<CancellationToken>());
+        await _auditLogger.Received(1).LogRequiredAsync(AuditActions.QueueStatusChanged, "QueueEntry", 8, 99,
+            Arg.Is<string>(detail => detail.Contains("TransferDentist") && detail.Contains("fromChairId") && detail.Contains("toChairId")), null, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task TransferDentist_WaitingVisitChangesDentistWithoutTakingChair()
+    {
+        var visit = new Visit { VisitId = 8, Status = VisitStatuses.Created };
+        var entry = new QueueEntry { QueueEntryId = 8, VisitId = 8, DentistId = 5, QueueDate = _vietnamClock.Today,
+            Status = QueueStatus.Waiting, Visit = visit };
+        _queueRepository.GetByIdAsync(8, Arg.Any<CancellationToken>()).Returns(entry);
+        _userRepository.FindByIdAsync(99, Arg.Any<CancellationToken>()).Returns(new User { UserId = 99, IsActive = true, Role = new() { RoleCode = RoleCodes.Admin } });
+        _userRepository.FindByIdAsync(6, Arg.Any<CancellationToken>()).Returns(new User { UserId = 6, IsActive = true, Role = new() { RoleCode = RoleCodes.Dentist } });
+
+        var result = await CreateService().TransferDentistAsync(8, 99, RoleCodes.Admin, new(6, true, ExpectedDentistId: 5, ExpectedStatus: 1), null);
+
+        Assert.True(result.IsSuccess); Assert.Equal(6, entry.DentistId); Assert.Equal(6, visit.DentistId); Assert.Null(visit.ChairId);
+        await _visitChairs.DidNotReceive().TransferAsync(Arg.Any<Visit>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task TransferDentist_DentistCanOnlyTransferOwnAssignedVisit()
+    {
+        var visit = new Visit { VisitId = 8, DentistId = 5, Status = VisitStatuses.InProgress, ChairId = 3, StartedAt = _vietnamClock.UtcNow };
+        var entry = new QueueEntry { QueueEntryId = 8, VisitId = 8, DentistId = 5, QueueDate = _vietnamClock.Today,
+            Status = QueueStatus.InConsultation, Visit = visit };
+        _queueRepository.GetByIdAsync(8, Arg.Any<CancellationToken>()).Returns(entry);
+        _userRepository.FindByIdAsync(9, Arg.Any<CancellationToken>()).Returns(new User { UserId = 9, IsActive = true, Role = new() { RoleCode = RoleCodes.Dentist } });
+
+        var result = await CreateService().TransferDentistAsync(8, 9, RoleCodes.Dentist, new(6, true, ExpectedDentistId: 5, ExpectedStatus: 2), null);
+
+        Assert.Equal(Error.QueueTransitionForbidden, result.Error);
+        Assert.Equal(5, entry.DentistId); Assert.Equal(5, visit.DentistId);
+        Assert.Empty(_auditLogger.ReceivedCalls());
+    }
 
     [Fact]
     public async Task GetOutstandingDebtAsync_ReturnsTotalAndInvoiceCodesForActivePatient()

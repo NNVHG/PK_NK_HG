@@ -14,6 +14,7 @@ public sealed class VisitChairTests
     private readonly IVisitRepository visits = Substitute.For<IVisitRepository>();
     private readonly IUserRepository users = Substitute.For<IUserRepository>();
     private readonly DentalChair chair = new() { Id = 3, Status = DentalChairStatus.Available, IsActive = true };
+    private readonly DentalChair targetChair = new() { Id = 4, Status = DentalChairStatus.Available, IsActive = true };
     private readonly Visit visit = new() { VisitId = 7, Status = VisitStatuses.Created };
     private VisitChairService Service() => new(workspaces, chairs, visits, users, new(TimeProvider.System));
     public VisitChairTests()
@@ -21,6 +22,9 @@ public sealed class VisitChairTests
         users.FindByIdAsync(2, Arg.Any<CancellationToken>()).Returns(new User { UserId = 2, IsActive = true, Role = new() { RoleCode = RoleCodes.Dentist } });
         workspaces.FindAsync(2, Arg.Any<CancellationToken>()).Returns(new StaffWorkspace { UserId = 2, ChairId = 3 });
         chairs.FindAsync(3, Arg.Any<CancellationToken>()).Returns(chair);
+        users.FindByIdAsync(6, Arg.Any<CancellationToken>()).Returns(new User { UserId = 6, IsActive = true, Role = new() { RoleCode = RoleCodes.Dentist } });
+        workspaces.FindAsync(6, Arg.Any<CancellationToken>()).Returns(new StaffWorkspace { UserId = 6, ChairId = 4 });
+        chairs.FindAsync(4, Arg.Any<CancellationToken>()).Returns(targetChair);
     }
     [Fact] public async Task StartClaimsCurrentDentistChairAndAuditableVersion()
     {
@@ -102,6 +106,45 @@ public sealed class VisitChairTests
         visit.Status = VisitStatuses.InProgress; visit.ChairId = 3; chair.Status = DentalChairStatus.Occupied;
         visits.HasActiveVisitForChairAsync(3, 7, Arg.Any<CancellationToken>()).Returns(true);
         Assert.Equal(VisitChairService.Inconsistent, (await Service().ReleaseAsync(visit, 99)).Error); Assert.Equal(1, chair.Version);
+    }
+    [Fact] public async Task TransferMovesVisitAndBothChairStatesWithAuditableVersions()
+    {
+        visit.Status = VisitStatuses.InProgress; visit.ChairId = 3; chair.Status = DentalChairStatus.Occupied;
+
+        Assert.True((await Service().TransferAsync(visit, 6, 99)).IsSuccess);
+
+        Assert.Equal(4, visit.ChairId);
+        Assert.Equal(DentalChairStatus.Available, chair.Status); Assert.Equal(2, chair.Version); Assert.Equal(99, chair.UpdatedByUserId);
+        Assert.Equal(DentalChairStatus.Occupied, targetChair.Status); Assert.Equal(2, targetChair.Version); Assert.Equal(99, targetChair.UpdatedByUserId);
+        Assert.NotNull(chair.UpdatedAt); Assert.NotNull(targetChair.UpdatedAt);
+    }
+    [Theory]
+    [InlineData(DentalChairStatus.Occupied)] [InlineData(DentalChairStatus.Maintenance)] [InlineData(DentalChairStatus.Inactive)]
+    public async Task TransferToUnavailableChairDoesNotMutateSourceOrVisit(DentalChairStatus targetStatus)
+    {
+        visit.Status = VisitStatuses.InProgress; visit.ChairId = 3; chair.Status = DentalChairStatus.Occupied; targetChair.Status = targetStatus;
+
+        Assert.Equal(VisitChairService.Unavailable, (await Service().TransferAsync(visit, 6, 99)).Error);
+
+        Assert.Equal(3, visit.ChairId); Assert.Equal(DentalChairStatus.Occupied, chair.Status); Assert.Equal(1, chair.Version);
+        Assert.Equal(targetStatus, targetChair.Status); Assert.Equal(1, targetChair.Version);
+    }
+    [Fact] public async Task TransferRequiresTargetWorkspaceAndPreservesSourceOnMissingWorkspace()
+    {
+        visit.Status = VisitStatuses.InProgress; visit.ChairId = 3; chair.Status = DentalChairStatus.Occupied;
+        workspaces.FindAsync(6, Arg.Any<CancellationToken>()).Returns((StaffWorkspace?)null);
+
+        Assert.Equal(VisitChairService.Unavailable, (await Service().TransferAsync(visit, 6, 99)).Error);
+
+        Assert.Equal(3, visit.ChairId); Assert.Equal(DentalChairStatus.Occupied, chair.Status); Assert.Equal(DentalChairStatus.Available, targetChair.Status);
+    }
+    [Fact] public async Task TransferRefusesInconsistentSourceWithoutOccupyingTarget()
+    {
+        visit.Status = VisitStatuses.InProgress; visit.ChairId = 3; chair.Status = DentalChairStatus.Available;
+
+        Assert.Equal(VisitChairService.Inconsistent, (await Service().TransferAsync(visit, 6, 99)).Error);
+
+        Assert.Equal(3, visit.ChairId); Assert.Equal(DentalChairStatus.Available, chair.Status); Assert.Equal(DentalChairStatus.Available, targetChair.Status);
     }
     [Theory] [InlineData(RoleCodes.Admin, true)] [InlineData(RoleCodes.Dentist, true)]
     [InlineData(RoleCodes.Assistant, false)] [InlineData(RoleCodes.Receptionist, false)]

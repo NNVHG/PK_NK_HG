@@ -168,6 +168,7 @@ internal static class PhysicalChairHttpSmoke
         check(afterRace.Status == VisitStatuses.InProgress && afterRace.ChairId == currentChair.Id && currentChair.Status == DentalChairStatus.Occupied ||
             afterRace.Status == VisitStatuses.Created && afterRace.ChairId == null && currentChair.Id == destination.Id && currentChair.Status == DentalChairStatus.Available,
             "Move/start race never detaches active Visit from its dentist workspace");
+        await QueueTransferHttpSmoke.RunAsync(client, options, actorId, authenticate, check);
     }
     private sealed class FailQueueAudit : SaveChangesInterceptor
     {
