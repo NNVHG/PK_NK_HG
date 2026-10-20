@@ -9,6 +9,7 @@ namespace Dental.Api.Policies;
 /// </summary>
 public static class Policies
 {
+    public const string ChairStatusManage = "ChairStatusManage";
     public const string StockView = "StockView";
     public const string StockIssueWrite = "StockIssueWrite";
     public const string StockReceiptWrite = "StockReceiptWrite";
@@ -65,6 +66,7 @@ public static class Policies
         opts.AddPolicy(MedicineCatalogView, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist));
         opts.AddPolicy(MedicalSupplyCatalogView, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist));
         opts.AddPolicy(DentalChairView, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant));
+        opts.AddPolicy(ChairStatusManage, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Assistant));
         opts.AddPolicy(QueueSkip, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Receptionist));
         opts.AddPolicy(QueueCall, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant));
         opts.AddPolicy(InvoiceDiscountWrite, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Receptionist));
