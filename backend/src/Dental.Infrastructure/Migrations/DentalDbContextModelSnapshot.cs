@@ -247,6 +247,83 @@ namespace Dental.Infrastructure.Migrations
                     b.ToTable("DentalDiagnoses", (string)null);
                 });
 
+            modelBuilder.Entity("Dental.Domain.Entities.DentalImage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Height")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(180)
+                        .HasColumnType("character varying(180)");
+
+                    b.Property<int>("PatientId")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("StoragePath")
+                        .IsRequired()
+                        .HasMaxLength(180)
+                        .HasColumnType("character varying(180)");
+
+                    b.Property<int?>("ToothNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("UploadedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("VisitId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Width")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StoragePath")
+                        .IsUnique();
+
+                    b.HasIndex("UploadedByUserId");
+
+                    b.HasIndex("VisitId");
+
+                    b.HasIndex("PatientId", "VisitId", "CreatedAt");
+
+                    b.ToTable("DentalImages", (string)null);
+                });
+
             modelBuilder.Entity("Dental.Domain.Entities.DentalService", b =>
                 {
                     b.Property<int>("DentalServiceId")
@@ -2082,6 +2159,26 @@ namespace Dental.Infrastructure.Migrations
                     b.HasOne("Dental.Domain.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.DentalImage", b =>
+                {
+                    b.HasOne("Dental.Domain.Entities.Patient", null)
+                        .WithMany()
+                        .HasForeignKey("PatientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UploadedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.Visit", null)
+                        .WithMany()
+                        .HasForeignKey("VisitId")
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
