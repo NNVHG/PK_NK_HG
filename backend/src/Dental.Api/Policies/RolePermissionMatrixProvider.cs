@@ -28,6 +28,7 @@ public sealed class RolePermissionMatrixProvider(IAuthorizationPolicyProvider po
             [Policies.PrescriptionWrite] = ("Kê đơn thuốc", "MOD_RX", "Chỉ nha sĩ phụ trách; Admin và các role hỗ trợ chỉ đọc. Không sửa đơn đã thu tiền/cấp phát/hủy; thuốc active/giá đã thiết lập."),
             [Policies.AdminOnly] = ("Quản trị hệ thống", "MOD_AUTH", "Chỉ Admin; từng thao tác còn kiểm tra ràng buộc dữ liệu."),
             [Policies.StaffAny] = ("Truy cập nghiệp vụ nhân viên", "MOD_AUTH", "Các nghiệp vụ nội bộ; không áp dụng cho tài khoản bệnh nhân."),
+            [Policies.PatientAccountLink] = ("Liên kết tài khoản gia đình", "MOD_PAT", "Admin/Lễ tân đối soát tại quầy và xác nhận theo DL-325; không chuyển chủ hồ sơ."),
             [Policies.PatientManage] = ("Tạo hồ sơ hành chính bệnh nhân", "MOD_PAT", "Thông tin cá nhân do Lễ tân hoặc Admin quản lý."),
             [Policies.PatientEdit] = ("Sửa thông tin hành chính", "MOD_PAT", "Phụ tá không sửa tên, số điện thoại hoặc dữ liệu hành chính."),
             [Policies.PatientView] = ("Xem hồ sơ bệnh nhân", "MOD_PAT", "Bệnh nhân chỉ xem hồ sơ thuộc tài khoản của mình."),
