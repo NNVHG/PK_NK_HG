@@ -7,7 +7,9 @@ namespace Dental.Application.Features.MOD_IMG;
 public sealed record DentalImageRequest(int PatientId, int? VisitId, int? ToothNumber, string Category, string? Notes = null);
 public sealed record AttachDentalImageRequest(int VisitId, int ExpectedVersion);
 public sealed record DentalImageDto(int Id, int PatientId, int? VisitId, int? ToothNumber, string Category,
-    string OriginalFileName, string ContentType, long SizeBytes, int Width, int Height, DateTime CreatedAt, int Version, string? Notes = null);
+    string OriginalFileName, string ContentType, long SizeBytes, int Width, int Height, DateTime CreatedAt, int Version, string? Notes = null, string? UploadedByFullName = null);
+public sealed record StoredDentalImage(string StoragePath, string ContentType, long SizeBytes);
+public sealed record DentalImageContent(Stream Content, string ContentType);
 public sealed record ImageVisitTarget(int VisitId, string Status);
 public sealed record DentalImagePage(DentalImageDto[] Items, bool HasMore);
 public sealed class DentalImageRequestValidator : AbstractValidator<DentalImageRequest>
@@ -31,14 +33,32 @@ public interface IDentalImageRepository
     Task<Result<DentalImagePage>> ListAsync(int patient, int? visit, int? tooth, int beforeId, int actor, string role, CancellationToken ct);
     Task<Result<ImageVisitTarget[]>> TargetsAsync(int patient, int actor, string role, CancellationToken ct);
     Task<Result<DentalImageDto>> AttachAsync(int id, AttachDentalImageRequest request, int actor, string role, string? ip, CancellationToken ct);
+    Task<Result<StoredDentalImage>> FileAsync(int id, int actor, string role, CancellationToken ct);
 }
 public interface IDentalImageStorage
 {
     Task WriteAsync(string relativePath, byte[] bytes, CancellationToken ct);
     Task RemoveAsync(string relativePath);
+    Task<Stream> OpenReadAsync(string relativePath, CancellationToken ct);
 }
-public sealed class DentalImageService(IDentalImageRepository repository)
+public sealed class DentalImageService(IDentalImageRepository repository, IDentalImageStorage storage)
 {
+    public async Task<Result<DentalImageContent>> FileAsync(int id, int actor, string role, CancellationToken ct = default)
+    {
+        if (actor <= 0 || role is not (RoleCodes.Admin or RoleCodes.Dentist or RoleCodes.Receptionist or RoleCodes.Patient)) return Result<DentalImageContent>.Failure(Error.Forbidden);
+        if (id <= 0) return Result<DentalImageContent>.Failure(Error.NotFound);
+        var file = await repository.FileAsync(id, actor, role, ct);
+        if (file.IsFailure) return Result<DentalImageContent>.Failure(file.Error);
+        if (file.Value!.ContentType is not ("image/png" or "image/jpeg" or "image/webp") || file.Value.SizeBytes is < 12 or > DentalImageFile.MaxBytes)
+            return Result<DentalImageContent>.Failure(Error.ServerError);
+        try
+        {
+            var stream = await storage.OpenReadAsync(file.Value.StoragePath, ct);
+            if (stream.Length != file.Value.SizeBytes) { await stream.DisposeAsync(); return Result<DentalImageContent>.Failure(Error.ServerError); }
+            return Result<DentalImageContent>.Success(new(stream, file.Value.ContentType));
+        }
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException) { return Result<DentalImageContent>.Failure(Error.NotFound); }
+    }
     public Task<Result<DentalImageDto>> UploadAsync(DentalImageRequest request, string name, string type, byte[] bytes, int actor, string role, string? ip, CancellationToken ct = default)
     {
         if (actor <= 0 || role is not (RoleCodes.Admin or RoleCodes.Dentist or RoleCodes.Assistant)) return Task.FromResult(Result<DentalImageDto>.Failure(Error.Forbidden));

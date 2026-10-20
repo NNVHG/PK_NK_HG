@@ -27,8 +27,12 @@
       <button type="button" :disabled="store.loading || busy" @click="refresh">{{ store.loading ? 'Đang tải...' : 'Tải lại danh sách' }}</button>
       <p v-if="listError" role="alert" class="error">{{ listError }}</p>
       <p v-if="!store.loading && !listError && !store.items.length">Chưa có ảnh được lưu.</p>
+      <p id="comparison-help">Chọn tối đa 2 ảnh để so sánh; thứ tự chọn tương ứng Trước và Sau.</p>
+      <button type="button" :disabled="comparedImages.length !== 2" @click="showComparison">So sánh 2 ảnh đã chọn</button>
       <ul class="image-list">
         <li v-for="image in store.items" :key="image.id">
+          <DentalImageThumbnail :image="image" @open="showImage" />
+          <label :for="`compare-image-${image.id}`"><input :id="`compare-image-${image.id}`" type="checkbox" :checked="comparisonIds.includes(image.id)" :disabled="!comparisonIds.includes(image.id) && comparisonIds.length >= 2" aria-describedby="comparison-help" @change="toggleComparison(image)" /> So sánh {{ image.originalFileName }}</label>
           <strong>{{ image.originalFileName }}</strong>
           <p>{{ categories[image.category] ?? image.category }} · {{ image.width }} × {{ image.height }}px · {{ Math.ceil(image.sizeBytes / 1024) }}KB</p>
           <p>{{ image.visitId ? `Lần khám #${image.visitId}` : 'Ảnh lưu riêng theo bệnh nhân' }} · {{ image.toothNumber ? `Răng ${image.toothNumber}` : 'Không gắn răng' }}</p>
@@ -41,6 +45,7 @@
         </li>
       </ul>
       <button v-if="store.hasMore" type="button" :disabled="store.loading || busy" @click="loadMore">Xem thêm ảnh</button>
+      <DentalImageViewer v-if="viewerImages.length" :images="viewerImages" @close="viewerImages = []" />
     </template>
     <p v-else-if="canUpload">Phụ tá được tải lên theo quyền hiện hành. Danh sách ảnh đã lưu dành cho vai trò có quyền xem.</p>
   </section>
@@ -51,6 +56,8 @@ import { computed, onUnmounted, ref, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useDentalImagesStore } from '@/stores/dentalImages';
 import { dentalImagesService, imageFileError, validImageTooth, type DentalImage, type ImageVisitTarget } from '@/services/dentalImages';
+import DentalImageThumbnail from './DentalImageThumbnail.vue';
+import DentalImageViewer from './DentalImageViewer.vue';
 const props = defineProps<{ patientId: number }>();
 const auth = useAuthStore(), store = useDentalImagesStore();
 const canUpload = computed(() => ['ADMIN', 'DENTIST', 'ASSISTANT'].includes(auth.role));
@@ -62,6 +69,14 @@ const toothInput = ref<HTMLInputElement | null>(null), notesInput = ref<HTMLText
 const category = ref('Intraoral'), notes = ref(''), toothText = ref(''), visitId = ref<number | null>(null);
 const busy = ref(false), error = ref(''), success = ref(''), listError = ref(''), targetError = ref(''), loadingTargets = ref(false);
 const targets = ref<ImageVisitTarget[]>([]), attachTargets = ref<Record<number, number | undefined>>({});
+const comparisonIds = ref<number[]>([]), viewerImages = ref<DentalImage[]>([]);
+const comparedImages = computed(() => comparisonIds.value.map(id => store.items.find(image => image.id === id)).filter((image): image is DentalImage => !!image));
+function showImage(image: DentalImage) { if (canRead.value && image.patientId === props.patientId) viewerImages.value = [image]; }
+function toggleComparison(image: DentalImage) {
+  if (!canRead.value || image.patientId !== props.patientId) return;
+  comparisonIds.value = comparisonIds.value.includes(image.id) ? comparisonIds.value.filter(id => id !== image.id) : comparisonIds.value.length < 2 ? [...comparisonIds.value, image.id] : comparisonIds.value;
+}
+function showComparison() { if (canRead.value && comparedImages.value.length === 2 && comparedImages.value.every(image => image.patientId === props.patientId)) viewerImages.value = [...comparedImages.value]; }
 let generation = 0;
 function problem(e: unknown) { const p = e as { response?: { data?: { message?: string } } }; return p.response?.data?.message || 'Không xác định được kết quả. Tải lại danh sách để đối chiếu trước khi thử tiếp.'; }
 function selectFile(event: Event) { file.value = (event.target as HTMLInputElement).files?.[0] ?? null; error.value = imageFileError(file.value); validationTarget.value = error.value ? 'file' : ''; success.value = ''; }
@@ -97,8 +112,8 @@ async function attach(image: DentalImage) {
   catch (e) { if (current === generation) error.value = problem(e); }
   finally { if (current === generation) busy.value = false; }
 }
-watch(() => [props.patientId, auth.role, auth.user?.userId], () => { generation++; store.clear(); file.value = null; notes.value = ''; toothText.value = ''; category.value = 'Intraoral'; validationTarget.value = ''; fileKey.value++; visitId.value = null; targets.value = []; attachTargets.value = {}; busy.value = false; loadingTargets.value = false; error.value = ''; success.value = ''; listError.value = ''; targetError.value = ''; void refresh(); void loadTargets(); }, { immediate: true });
-onUnmounted(() => { generation++; file.value = null; notes.value = ''; toothText.value = ''; store.clear(); });
+watch(() => [props.patientId, auth.role, auth.user?.userId], () => { generation++; store.clear(); comparisonIds.value = []; viewerImages.value = []; file.value = null; notes.value = ''; toothText.value = ''; category.value = 'Intraoral'; validationTarget.value = ''; fileKey.value++; visitId.value = null; targets.value = []; attachTargets.value = {}; busy.value = false; loadingTargets.value = false; error.value = ''; success.value = ''; listError.value = ''; targetError.value = ''; void refresh(); void loadTargets(); }, { immediate: true });
+onUnmounted(() => { generation++; viewerImages.value = []; comparisonIds.value = []; file.value = null; notes.value = ''; toothText.value = ''; store.clear(); });
 </script>
 
 <style scoped>
@@ -106,7 +121,7 @@ onUnmounted(() => { generation++; file.value = null; notes.value = ''; toothText
 fieldset { display: grid; gap: .65rem; border: 1px solid #cbd5e1; border-radius: .5rem; padding: 1rem; max-width: 40rem; }
 input, select, button, textarea { font: inherit; padding: .6rem; min-width: 0; }
 .image-notes { white-space: pre-wrap; }
-.image-list { list-style: none; padding: 0; display: grid; gap: 1rem; }
+.image-list { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: 1rem; }
 .image-list li { border: 1px solid #cbd5e1; padding: 1rem; border-radius: .5rem; }
 .image-list select { max-width: 100%; }
 .error { color: #9f1239; }

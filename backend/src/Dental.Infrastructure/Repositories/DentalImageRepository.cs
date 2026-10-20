@@ -30,7 +30,17 @@ public sealed class DentalImageRepository(DentalDbContext db, IDentalImageStorag
         return await active.CountAsync(ct) < 20 && (tooth is null || await active.CountAsync(x => x.ToothNumber == tooth, ct) < 3) &&
             (await db.DentalImages.Where(x => x.VisitId == visit).SumAsync(x => (long?)x.SizeBytes, ct) ?? 0) + bytes <= 100L * 1024 * 1024;
     }
-    private static DentalImageDto Dto(DentalImage x) => new(x.Id, x.PatientId, x.VisitId, x.ToothNumber, x.Category.ToString(), x.OriginalFileName, x.ContentType, x.SizeBytes, x.Width, x.Height, x.CreatedAt, x.Version, x.Notes);
+    private static DentalImageDto Dto(DentalImage x, string? uploadedBy = null) => new(x.Id, x.PatientId, x.VisitId, x.ToothNumber, x.Category.ToString(), x.OriginalFileName, x.ContentType, x.SizeBytes, x.Width, x.Height, x.CreatedAt, x.Version, x.Notes, uploadedBy);
+    public async Task<Result<StoredDentalImage>> FileAsync(int id, int actor, string role, CancellationToken ct)
+    {
+        if (!CanRead(role)) return Result<StoredDentalImage>.Failure(Error.Forbidden);
+        if (!await Actor(actor, role, ct)) return Result<StoredDentalImage>.Failure(Error.NotFound);
+        var file = await (from image in db.DentalImages.AsNoTracking()
+            join patient in db.Patients on image.PatientId equals patient.PatientId
+            where image.Id == id && !image.IsDeleted && patient.IsActive && (role != RoleCodes.Patient || patient.UserId == actor)
+            select new StoredDentalImage(image.StoragePath, image.ContentType, image.SizeBytes)).SingleOrDefaultAsync(ct);
+        return file is null ? Result<StoredDentalImage>.Failure(Error.NotFound) : Result<StoredDentalImage>.Success(file);
+    }
     public async Task<Result<ImageVisitTarget[]>> TargetsAsync(int patient, int actor, string role, CancellationToken ct)
     {
         if (!CanUpload(role)) return Result<ImageVisitTarget[]>.Failure(Error.Forbidden);
@@ -43,8 +53,8 @@ public sealed class DentalImageRepository(DentalDbContext db, IDentalImageStorag
         if (!await Patient(patient, actor, role, ct)) return Result<DentalImagePage>.Failure(Error.NotFound);
         var rows = await db.DentalImages.AsNoTracking().Where(x => x.PatientId == patient && !x.IsDeleted &&
             (visit == null || x.VisitId == visit) && (tooth == null || x.ToothNumber == tooth) && (beforeId == 0 || x.Id < beforeId))
-            .OrderByDescending(x => x.Id).Take(21).ToArrayAsync(ct);
-        return Result<DentalImagePage>.Success(new(rows.Take(20).Select(Dto).ToArray(), rows.Length > 20));
+            .OrderByDescending(x => x.Id).Take(21).Select(image => new { Image = image, Name = db.Users.Where(u => u.UserId == image.UploadedByUserId).Select(u => u.FullName).FirstOrDefault() }).ToArrayAsync(ct);
+        return Result<DentalImagePage>.Success(new(rows.Take(20).Select(x => Dto(x.Image, x.Name)).ToArray(), rows.Length > 20));
     }
     public async Task<Result<DentalImageDto>> UploadAsync(DentalImageRequest request, string name, string type, byte[] bytes, int width, int height, int actor, string role, string? ip, CancellationToken ct)
     {

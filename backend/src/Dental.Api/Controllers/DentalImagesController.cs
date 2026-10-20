@@ -14,6 +14,18 @@ namespace Dental.Api.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class DentalImagesController(DentalImageService service, ICurrentUser actor) : ControllerBase
 {
+    [HttpGet("{id:int}/file")]
+    [Authorize(Policy = AppPolicies.DentalImageRead)]
+    public async Task<IActionResult> ImageFile(int id, CancellationToken ct)
+    {
+        if (actor.UserId is not int user) return Unauthorized();
+        var result = await service.FileAsync(id, user, actor.RoleCode!, ct);
+        if (result.IsFailure) return Failure(result.Error);
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        Response.Headers.ContentDisposition = "inline";
+        Response.RegisterForDispose(result.Value!.Content);
+        return File(result.Value.Content, result.Value.ContentType);
+    }
     public sealed class UploadForm
     {
         public int PatientId { get; set; }
@@ -68,5 +80,5 @@ public sealed class DentalImagesController(DentalImageService service, ICurrentU
         var r = await service.AttachAsync(id, request, user, actor.RoleCode!, HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
         return r.IsSuccess ? Ok(r.Value) : Failure(r.Error);
     }
-    private IActionResult Failure(Error error) => StatusCode(error.Code switch { "GEN_001" => 404, "GEN_002" => 403, "GEN_004" => 409, _ => 400 }, new { code = error.Code, message = error.Message });
+    private IActionResult Failure(Error error) => StatusCode(error.Code switch { "GEN_001" => 404, "GEN_002" => 403, "GEN_004" => 409, "GEN_500" => 500, _ => 400 }, new { code = error.Code, message = error.Message });
 }

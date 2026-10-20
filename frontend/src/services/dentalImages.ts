@@ -1,12 +1,13 @@
 import { apiClient } from './api';
 export interface DentalImage {
   id: number; patientId: number; visitId: number | null; toothNumber: number | null; category: string;
-  originalFileName: string; contentType: string; sizeBytes: number; width: number; height: number; createdAt: string; version: number; notes: string | null;
+  originalFileName: string; contentType: string; sizeBytes: number; width: number; height: number; createdAt: string; version: number; notes: string | null; uploadedByFullName?: string | null;
 }
 export interface ImageVisitTarget { visitId: number; status: string }
 export interface DentalImagePage { items: DentalImage[]; hasMore: boolean }
 export interface ImageMetadata { patientId: number; visitId: number | null; toothNumber: number | null; category: string; notes?: string }
 export const dentalImagesService = {
+  async file(id: number, signal?: AbortSignal) { return (await apiClient.get<Blob>(`/dental-images/${id}/file`, { responseType: 'blob', signal })).data; },
   async list(patientId: number, beforeId = 0) { return (await apiClient.get<DentalImagePage>('/dental-images', { params: { patientId, beforeId } })).data; },
   async targets(patientId: number) { return (await apiClient.get<ImageVisitTarget[]>('/dental-images/targets', { params: { patientId } })).data; },
   async upload(metadata: ImageMetadata, file: File) {

@@ -81,12 +81,27 @@ internal static class DentalImageHttpSmoke
             check(FileCount() == 1, "Physical image stored outside web root");
             check(File.ReadAllBytes(Directory.GetFiles(root,"*",SearchOption.AllDirectories).Single()).SequenceEqual(png), "Stored file bytes equal original multipart image");
             check(await db.AuditLogs.AnyAsync(x => x.EntityId == image.Id && x.Action == "MOD_IMG_UPLOADED"), "Upload audit committed");
+            As(null); using(var r=await client.GetAsync($"/api/dental-images/{image.Id}/file")) check(r.StatusCode==HttpStatusCode.Unauthorized,"Anonymous cannot stream image");
+            foreach(var role in new[]{RoleCodes.Admin,RoleCodes.Dentist,RoleCodes.Receptionist,RoleCodes.Patient})
+            {
+                As(role);using var r=await client.GetAsync($"/api/dental-images/{image.Id}/file");
+                check(r.StatusCode==HttpStatusCode.OK && (await r.Content.ReadAsByteArrayAsync()).SequenceEqual(png),role+" streams permitted file bytes");
+                check(r.Headers.CacheControl?.NoStore==true && r.Headers.TryGetValues("X-Content-Type-Options",out var values) && values.Single()=="nosniff" && r.Content.Headers.ContentType?.MediaType=="image/png" && r.Content.Headers.ContentDisposition?.DispositionType=="inline","Stream NoStore/nosniff, inline and fixed MIME");
+            }
+            As(RoleCodes.Assistant);using(var r=await client.GetAsync($"/api/dental-images/{image.Id}/file")) check(r.StatusCode==HttpStatusCode.Forbidden,"Upload role does not grant file stream");
+            As(RoleCodes.Patient);using(var r=await client.GetAsync($"/api/dental-images/{int.MaxValue}/file"))check(r.StatusCode==HttpStatusCode.NotFound,"Unknown image returns generic404");
+            As(RoleCodes.Dentist);
             using(var r = await client.GetAsync($"/api/dental-images?patientId={patient.PatientId}")) { check(r.StatusCode == HttpStatusCode.OK && r.Headers.CacheControl?.NoStore == true, "List protected NoStore"); var json = await r.Content.ReadAsStringAsync(); check(!json.Contains("storagePath", StringComparison.OrdinalIgnoreCase), "Storage path not exposed"); }
             foreach (var role in new[] { RoleCodes.Admin, RoleCodes.Receptionist, RoleCodes.Patient }) { As(role); using var r = await client.GetAsync($"/api/dental-images?patientId={patient.PatientId}"); check(r.StatusCode == HttpStatusCode.OK, role + " reads permitted metadata"); }
             As(RoleCodes.Patient); using(var r = await client.GetAsync($"/api/dental-images?patientId={other.PatientId}")) check(r.StatusCode == HttpStatusCode.NotFound, "Patient cannot read other ownership");
             As(RoleCodes.Assistant); var assisted = await Uploaded(visit.VisitId); using(var r = await client.GetAsync($"/api/dental-images?patientId={patient.PatientId}")) check(r.StatusCode == HttpStatusCode.Forbidden, "Assistant upload does not grant file/list read");
             using(var r = await client.PostAsJsonAsync($"/api/dental-images/{assisted.Id}/attach", new AttachDentalImageRequest(visit.VisitId, assisted.Version))) check(r.StatusCode == HttpStatusCode.Forbidden, "Assistant cannot edit metadata link");
             As(RoleCodes.Admin); var independent = await Uploaded();
+            var privateFile=await Uploaded();var privateRecord=await db.DentalImages.SingleAsync(x=>x.Id==privateFile.Id);privateRecord.PatientId=other.PatientId;await db.SaveChangesAsync();
+            As(RoleCodes.Patient);using(var r=await client.GetAsync($"/api/dental-images/{privateFile.Id}/file"))check(r.StatusCode==HttpStatusCode.NotFound,"File ownership checked from stored patient, not client request");
+            As(RoleCodes.Admin);privateRecord.IsDeleted=true;await db.SaveChangesAsync();using(var r=await client.GetAsync($"/api/dental-images/{privateFile.Id}/file"))check(r.StatusCode==HttpStatusCode.NotFound,"Deleted metadata cannot expose retained physical file");
+            privateRecord.IsDeleted=false;await db.SaveChangesAsync();
+            var list=await client.GetFromJsonAsync<DentalImagePage>($"/api/dental-images?patientId={patient.PatientId}");check(list!.Items.All(x=>x.UploadedByFullName=="Synthetic image account"),"Uploader metadata is read from stored staff account");
             foreach(var category in Enum.GetNames<DentalImageCategory>())
             { using var r = await Upload(category:category,notes:"Synthetic angle note"); var row=await r.Content.ReadFromJsonAsync<DentalImageDto>(); check(r.StatusCode==HttpStatusCode.Created && row?.Category==category && row.Notes=="Synthetic angle note", "Approved image category and note: "+category); }
             using(var r=await Upload(category:"Other")) check(r.StatusCode==HttpStatusCode.BadRequest,"Obsolete category is not silently remapped");
@@ -134,6 +149,8 @@ internal static class DentalImageHttpSmoke
             As(RoleCodes.Dentist); var someoneElseVisit = await Visit(dentist: users[RoleCodes.Admin].UserId); using(var r = await Upload(someoneElseVisit.VisitId)) check(r.StatusCode == HttpStatusCode.BadRequest, "Dentist cannot upload into another dentist visit");
             using(var r = await client.GetAsync($"/api/dental-images/targets?patientId={patient.PatientId}"))
             { var items = (await r.Content.ReadFromJsonAsync<ImageVisitTarget[]>())!; check(items.Any(x => x.VisitId == visit.VisitId) && items.All(x => x.VisitId != locked.VisitId && x.VisitId != someoneElseVisit.VisitId), "Targets exclude locked or other dentist cases"); }
+            users[RoleCodes.Dentist].IsActive=false;await db.SaveChangesAsync();As(RoleCodes.Dentist);using(var r=await client.GetAsync($"/api/dental-images/{image.Id}/file"))check(r.StatusCode==HttpStatusCode.NotFound,"Inactive reader cannot stream with an existing JWT");
+            As(RoleCodes.Admin);patient.IsActive=false;await db.SaveChangesAsync();using(var r=await client.GetAsync($"/api/dental-images/{image.Id}/file"))check(r.StatusCode==HttpStatusCode.NotFound,"Inactive patient file is not served");
         }
         finally
         {

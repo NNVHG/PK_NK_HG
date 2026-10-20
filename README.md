@@ -546,6 +546,14 @@ Mở hồ sơ bệnh nhân → **Ảnh hồ sơ** → chọn JPG/PNG/WebP, phân
 
 Backend kiểm tra MIME/đuôi/header, giới hạn 10MB/tệp, 4096px mỗi chiều, 20 ảnh/ca, 3 ảnh/răng và 100MB/ca. Tệp nằm ngoài web root ở uploads/images/{patientId}/{UUID}.{ext}, cần sao lưu cùng CSDL; không có URL tĩnh công khai. Giới hạn 4 upload đồng thời để khống chế bộ nhớ. Audit và metadata cùng transaction; lưu CSDL lỗi thì dọn tệp vừa tạo.
 
-Migration 20261018192034_AddDentalImageAttachments tạo DentalImages. Mode kiểm thử --dental-images-only dùng DB/container riêng, dữ liệu tổng hợp. Danh sách metadata dành cho Admin/Nha sĩ/Lễ tân hoặc bệnh nhân sở hữu hồ sơ theo Q-247; quyền tải lên của Phụ tá không tự cấp quyền xem. Xem tệp/thu phóng thuộc lát cắt F_IMG_04 tiếp theo; chưa nghiệm thu trình duyệt/Gia UAT.
+Migration 20261018192034_AddDentalImageAttachments tạo DentalImages. Mode kiểm thử --dental-images-only dùng DB/container riêng, dữ liệu tổng hợp. Danh sách metadata dành cho Admin/Nha sĩ/Lễ tân hoặc bệnh nhân sở hữu hồ sơ theo Q-247; quyền tải lên của Phụ tá không tự cấp quyền xem. Xem tệp/thu phóng đã có trong lát cắt F_IMG_04 bên dưới; chưa nghiệm thu trình duyệt/Gia UAT.
 
 Danh mục ảnh theo Q-274: Panorama, Periapical, Bitewing, Cephalometric, Intraoral; ghi chú tối đa500ký tự. Migration20261018193500_AddDentalImageNotes bổ sung Notes; enum lưu tên trong cột Category. Giữ nguyên migration đầu đã chạy ở DB kiểm thử.
+
+### Xem và so sánh ảnh (F_IMG_04, MVP demo_11)
+
+Trong tab **Ảnh hồ sơ**, bấm thumbnail để mở viewer. Có zoom50–500%, con lăn, xoay90°, đặt lại và di chuyển bằng kéo chuột hoặc nút/phím mũi tên. Chọn hai ảnh theo thứ tự Trước/Sau rồi bấm **So sánh 2 ảnh đã chọn**; mỗi ảnh có điều khiển riêng. Đóng bằng nút hoặc Escape của dialog native.
+
+GET /api/dental-images/{id}/file luôn kiểm JWT/role/ownership, trả stream NoStore/nosniff; ảnh không nằm trong thư mục static công khai. Frontend nhận Axios Blob và thu hồi URL khi đóng/đổi hồ sơ/unmount. Phụ tá giữ quyền upload, không tự có quyền đọc theo Q-247. Không thêm package hoặc migration cho viewer.
+
+Fixture tổng hợp tại frontend/tests/browser-dental-image-viewer.html; chỉ fixture dùng API giả trong tests. Chưa có kết quả browser/Gia UAT vì IAB không kết nối được localhost; các kiểm thử state/API và build đã chạy. Chưa thêm quản lý sửa/xóa ảnh hoặc ghi chú lâm sàng nối tiếp riêng trong lát cắt xem cơ bản.
