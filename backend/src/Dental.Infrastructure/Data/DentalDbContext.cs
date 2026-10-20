@@ -36,6 +36,7 @@ public sealed class DentalDbContext : DbContext
     public DbSet<VitalSignRecord> VitalSignRecords => Set<VitalSignRecord>();
     public DbSet<DentalService> DentalServices => Set<DentalService>();
     public DbSet<ServicePrice> ServicePrices => Set<ServicePrice>();
+    public DbSet<BookingRequest> BookingRequests => Set<BookingRequest>();
     public DbSet<Appointment> Appointments => Set<Appointment>();
     public DbSet<NotificationLog> NotificationLogs => Set<NotificationLog>();
     public DbSet<QueueEntry> QueueEntries => Set<QueueEntry>();
@@ -92,6 +93,7 @@ public sealed class DentalDbContext : DbContext
         modelBuilder.ApplyConfiguration(new SystemConfigConfiguration());
         modelBuilder.ApplyConfiguration(new VisitUnlockRecordConfiguration());
         // Áp dụng từng configuration riêng theo entity
+        modelBuilder.ApplyConfiguration(new BookingRequestConfiguration());
         modelBuilder.ApplyConfiguration(new StaffWorkspaceConfiguration());
         modelBuilder.ApplyConfiguration(new DentalChairConfiguration());
         modelBuilder.ApplyConfiguration(new RoleConfiguration());

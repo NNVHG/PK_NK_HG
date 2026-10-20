@@ -39,6 +39,7 @@
         </button>
       </form>
       <p class="register-link"><RouterLink to="/forgot-password">Quên mật khẩu?</RouterLink></p>
+      <p class="register-link"><RouterLink to="/book-appointment">Gửi yêu cầu đặt lịch trước khi có tài khoản</RouterLink></p>
       <p class="register-link">Chưa có tài khoản? <RouterLink to="/register">Đăng ký</RouterLink></p>
     </div>
   </div>

@@ -38,6 +38,9 @@ public sealed class CreateAppointmentRequestValidator : AbstractValidator<Create
             .When(x => !x.IsEmergency)
             .WithMessage("Chỉ xác nhận chen ngang cho lịch cấp cứu.");
 
+        RuleFor(x => x.ConfirmedDentistConflictRequestId).GreaterThan(0).When(x=>x.ConfirmedDentistConflictRequestId.HasValue);
+        RuleFor(x => x.ConfirmedDentistConflictRequestId).Null().When(x=>!x.IsEmergency);
+
         RuleFor(x => x.Notes)
             .MaximumLength(500)
             .WithMessage("Ghi chú không được vượt quá 500 ký tự.")

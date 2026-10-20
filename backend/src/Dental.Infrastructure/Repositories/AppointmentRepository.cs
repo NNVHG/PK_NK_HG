@@ -1,5 +1,6 @@
 using Dental.Application.Interfaces;
 using Dental.Domain.Constants;
+using Dental.Application.Features.MOD_APP;
 using Dental.Domain.Entities;
 using Dental.Domain.Services;
 using Dental.Infrastructure.Data;
@@ -35,17 +36,29 @@ public sealed class AppointmentRepository : IAppointmentRepository
             a.Status == AppointmentStatuses.Scheduled && (!excludedId.HasValue || a.AppointmentId != excludedId.Value));
     }
     public async Task<int> GetSlotBookingCountAsync(DateOnly date, TimeOnly slotTime, CancellationToken ct = default, int? excludedId = null, int? durationMinutes = null)
-        => BookingOccupancy.Peak(await Nearby(date, excludedId).ToArrayAsync(ct), date, slotTime, durationMinutes ?? 30);
+    {
+        var old=await Nearby(date,excludedId).ToArrayAsync(ct);
+        var pending=await BookingRequestReservations.Nearby(_db,date).ToArrayAsync(ct);
+        return BookingOccupancy.Peak(old.Concat(pending.Select(BookingRequestReservations.Period)),date,slotTime,durationMinutes??30);
+    }
 
-    public Task<bool> HasActiveAppointmentOnDateAsync(int patientId, DateOnly date, CancellationToken ct = default, int? excludedId = null)
-        => _db.Appointments
+    public async Task<bool> HasActiveAppointmentOnDateAsync(int patientId, DateOnly date, CancellationToken ct = default, int? excludedId = null)
+        => await _db.Appointments
             .AnyAsync(a => a.PatientId == patientId &&
                            a.AppointmentDate == date &&
-                           a.Status == AppointmentStatuses.Scheduled && (!excludedId.HasValue || a.AppointmentId != excludedId.Value), ct);
+                           a.Status == AppointmentStatuses.Scheduled && (!excludedId.HasValue || a.AppointmentId != excludedId.Value), ct) || await _db.BookingRequests.AnyAsync(x=>x.Status=="Pending"&&x.VerifiedPatientId==patientId&&x.AppointmentDate==date,ct);
 
     public async Task<bool> HasDentistBookingAsync(int dentistId, DateOnly date, TimeOnly slotTime, int excludedId, CancellationToken ct = default, int? durationMinutes = null)
-        => await GetDentistBookingConflictAsync(dentistId, date, slotTime, excludedId, ct, durationMinutes) is not null;
+        => await GetPendingDentistConflictAsync(dentistId,date,slotTime,durationMinutes??30,ct) is not null || await GetDentistBookingConflictAsync(dentistId, date, slotTime, excludedId, ct, durationMinutes) is not null;
 
+    public async Task<PendingDentistConflict?> GetPendingDentistConflictAsync(int dentistId,DateOnly date,TimeOnly time,int duration,CancellationToken ct=default)
+    {
+        var rows=await BookingRequestReservations.Nearby(_db,date).Where(x=>x.DentistId==dentistId).OrderBy(x=>x.Id).ToArrayAsync(ct);
+        var hit=rows.FirstOrDefault(x=>BookingOccupancy.Overlaps(BookingRequestReservations.Period(x),date,time,duration));
+        if(hit is null)return null;
+        var name=await _db.Users.Where(u=>u.UserId==dentistId).Select(u=>u.FullName).SingleAsync(ct);
+        return new(hit.Id,name,hit.AppointmentDate,hit.SlotTime);
+    }
     public async Task<Appointment?> GetDentistBookingConflictAsync(int dentistId, DateOnly date, TimeOnly slotTime, int excludedId, CancellationToken ct = default, int? durationMinutes = null)
         => (await Nearby(date, excludedId).Where(a => a.DentistId == dentistId)
             .Include(a => a.Patient)

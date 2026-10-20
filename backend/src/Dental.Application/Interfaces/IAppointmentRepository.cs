@@ -11,6 +11,7 @@ public interface IAppointmentRepository
     Task<int> GetSlotBookingCountAsync(DateOnly date, TimeOnly slotTime, CancellationToken ct = default, int? excludedId = null, int? durationMinutes = null);
     Task<bool> HasActiveAppointmentOnDateAsync(int patientId, DateOnly date, CancellationToken ct = default, int? excludedId = null);
     Task<bool> HasDentistBookingAsync(int dentistId, DateOnly date, TimeOnly slotTime, int excludedId, CancellationToken ct = default, int? durationMinutes = null);
+    Task<Dental.Application.Features.MOD_APP.PendingDentistConflict?> GetPendingDentistConflictAsync(int dentistId,DateOnly date,TimeOnly time,int duration,CancellationToken ct=default);
     Task<Appointment?> GetDentistBookingConflictAsync(int dentistId, DateOnly date, TimeOnly slotTime, int excludedId, CancellationToken ct = default, int? durationMinutes = null);
     Task<(IReadOnlyList<Appointment> Items, int TotalCount)> GetAppointmentsAsync(
         DateOnly? date,

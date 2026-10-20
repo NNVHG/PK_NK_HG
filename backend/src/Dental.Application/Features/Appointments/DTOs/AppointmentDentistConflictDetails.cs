@@ -5,4 +5,5 @@ public sealed record AppointmentDentistConflictDetails(
     string DentistName,
     string PatientName,
     DateOnly AppointmentDate,
-    TimeOnly SlotTime);
+    TimeOnly SlotTime,
+    int? ConflictRequestId = null);
