@@ -148,6 +148,9 @@ public sealed class AuthService
             return Result<LoginResponse>.Failure(Error.AccountLocked);
         }
 
+        if (user.RequiresPhoneActivation)
+            return Result<LoginResponse>.Failure(new Error("AUTH_ACTIVATION_REQUIRED", "Cần xác minh OTP lần đầu trước khi đăng nhập."));
+
         // Đăng nhập thành công
         var token = _tokenService.GenerateAccessToken(user);
 

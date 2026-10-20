@@ -2,7 +2,7 @@
  <main class="booking">
   <RouterLink to="/login">Đăng nhập</RouterLink><h1>Gửi yêu cầu đặt lịch</h1>
   <p>Yêu cầu hợp lệ giữ chỗ trong khi chờ Lễ tân xác nhận. Tài khoản mới được hướng dẫn sau khi lịch được xác nhận.</p>
-  <p role="status" aria-live="polite">{{receipt?(receipt.status==='Pending'?'Đã nhận yêu cầu và giữ chỗ. Vui lòng chờ Lễ tân xác nhận lịch.':'Yêu cầu đã bị từ chối và chỗ đã được nhả. Vui lòng liên hệ phòng khám.'):''}}</p>
+  <p role="status" aria-live="polite">{{receipt?(receipt.status==='Pending'?'Đã nhận yêu cầu và giữ chỗ. Vui lòng chờ Lễ tân xác nhận lịch.':receipt.status==='Approved'?'Lễ tân đã xác nhận lịch. Liên hệ phòng khám nếu cần đối chiếu thêm.':'Yêu cầu đã bị từ chối và chỗ đã được nhả. Vui lòng liên hệ phòng khám.'):''}}</p>
   <p v-if="error" role="alert">{{error}}</p>
   <button v-if="!catalog" type="button" :disabled="busy" @click="load">Tải lại khung hẹn</button>
   <p v-if="profilesError" role="alert">{{profilesError}}</p>
@@ -69,7 +69,7 @@ async function submit(){
  if(disposed||busy.value||receipt.value)return;
  if(!retryBody.value){if(!confirmed.value||!challenge.value||!snapshot||!/^\d{6}$/.test(code.value)){error.value='Nhập mã xác thực 6 số và xác nhận thông tin.';return;}retryBody.value={intent:snapshot,challengeId:challenge.value.challengeId,code:code.value,clientRequestId:crypto.randomUUID(),confirmed:true};}
  const body=retryBody.value,ticket=generation,owner=identity();busy.value=true;error.value='';code.value='';
- try{const data=await bookingRequestsService.submit(body);if(!alive(ticket,owner))return;if(data.requestId!==body.clientRequestId||!['Pending','Rejected'].includes(data.status))throw Error();receipt.value=data;retryBody.value=null;snapshot=null;challenge.value=null;confirmed.value=false;Object.assign(form,{fullName:'',phone:'',dateOfBirth:'',gender:'',email:'',notes:''});profiles.value=[];}
+ try{const data=await bookingRequestsService.submit(body);if(!alive(ticket,owner))return;if(data.requestId!==body.clientRequestId||!['Pending','Rejected','Approved'].includes(data.status))throw Error();receipt.value=data;retryBody.value=null;snapshot=null;challenge.value=null;confirmed.value=false;Object.assign(form,{fullName:'',phone:'',dateOfBirth:'',gender:'',email:'',notes:''});profiles.value=[];}
  catch(cause){if(alive(ticket,owner)){
   const status=isAxiosError(cause)?cause.response?.status:undefined;
   if(status&&[400,401,403,404,409].includes(status)){retryBody.value=null;challenge.value=null;snapshot=null;confirmed.value=false;catalog.value=null;error.value='Yêu cầu chưa được nhận: mã, thông tin hoặc chỗ hẹn không còn hợp lệ. Tải lại khung hẹn trước khi gửi yêu cầu mới.';}
