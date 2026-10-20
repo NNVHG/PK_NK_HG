@@ -5,7 +5,11 @@ using FluentValidation;
 namespace Dental.Application.Features.MOD_RX.Services;
 public sealed class PrescriptionCancellationValidator : AbstractValidator<PrescriptionCancellationRequest>
 {
-    public PrescriptionCancellationValidator() => RuleFor(x => x.ExpectedVersion).InclusiveBetween(1, int.MaxValue - 1);
+    public PrescriptionCancellationValidator()
+    {
+        RuleFor(x => x.ExpectedVersion).InclusiveBetween(1, int.MaxValue - 1);
+        RuleFor(x => x.Reason).MaximumLength(500);
+    }
 }
 public sealed partial class PrescriptionService
 {
