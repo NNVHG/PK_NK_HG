@@ -47,6 +47,8 @@ builder.Services.AddScoped<IDentalImageClinicalRepository, DentalImageClinicalRe
 builder.Services.AddScoped<Dental.Application.Features.MOD_IMG.DentalImageClinicalService>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_IMG.IDentalImageDeletionRepository, DentalImageDeletionRepository>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_IMG.DentalImageDeletionService>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_IMG.IDentalImageMetadataRepository, DentalImageMetadataRepository>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_IMG.DentalImageMetadataService>();
 builder.Services.AddSingleton<Dental.Application.Features.MOD_IMG.IDentalImageStorage>(new DentalImageStorage(builder.Environment.ContentRootPath));
 builder.Services.AddScoped<IPrescriptionRepository, PrescriptionRepository>();
 builder.Services.AddScoped<IPrescriptionHandoverRepository, PrescriptionHandoverRepository>();

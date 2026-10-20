@@ -45,7 +45,7 @@
         </li>
       </ul>
       <button v-if="store.hasMore" type="button" :disabled="store.loading || busy" @click="loadMore">Xem thêm ảnh</button>
-      <DentalImageViewer v-if="viewerImages.length" :images="viewerImages" @close="viewerImages = []" @changed="refresh" />
+      <DentalImageViewer v-if="viewerImages.length" :images="viewerImages" @close="viewerImages = []" @changed="refresh" @metadata-updated="metadataUpdated" />
     </template>
     <p v-else-if="canUpload">Phụ tá được tải lên theo quyền hiện hành. Danh sách ảnh đã lưu dành cho vai trò có quyền xem.</p>
     <DentalImageDeletion v-if="canUpload" :patient-id="patientId" :refresh-key="deletionRefreshKey" @deleted="imageDeleted" />
@@ -60,6 +60,7 @@ import { dentalImagesService, imageFileError, validImageTooth, type DentalImage,
 import DentalImageThumbnail from './DentalImageThumbnail.vue';
 import DentalImageViewer from './DentalImageViewer.vue';
 import DentalImageDeletion from './DentalImageDeletion.vue';
+import type { ImageMetadataContext } from '@/services/imageMetadata';
 const props = defineProps<{ patientId: number }>();
 const auth = useAuthStore(), store = useDentalImagesStore();
 const canUpload = computed(() => ['ADMIN', 'DENTIST', 'ASSISTANT'].includes(auth.role));
@@ -92,6 +93,7 @@ async function loadTargets() {
 }
 async function refresh() { deletionRefreshKey.value++; if (!canRead.value) return; const current = generation; listError.value = ''; try { await store.load(props.patientId); } catch(e) { if(current === generation) listError.value = problem(e); } }
 function imageDeleted(id:number) { viewerImages.value=[]; comparisonIds.value=[]; store.clear(); error.value=''; success.value=`Đã xóa mềm ảnh #${id}. Tệp vật lý và lịch sử được giữ lại.`; void refresh(); }
+function metadataUpdated(value:ImageMetadataContext) { if(value.patientId!==props.patientId)return;viewerImages.value=viewerImages.value.map(i=>i.id===value.id?{...i,version:value.version,category:value.category,toothNumber:value.toothNumber,notes:value.notes}:i); }
 async function loadMore() { const current = generation; try { await store.load(props.patientId, true); } catch(e) { if(current === generation) listError.value = problem(e); } }
 async function upload() {
   if (busy.value || !canUpload.value) return;

@@ -16,6 +16,11 @@ const clinical=images.map(i=>({imageId:i.id,patientId:7,visitId:i.visitId,versio
 apiClient.defaults.adapter=async config=>{let data,status=200;
 if(config.method==='delete') {const image=images.find(i=>i.id===Number(config.url.split('/').at(-1)));if(!image||completed)throw Error('Rejected fixture delete');image.deleted=true;data='';status=204;}
 else if(config.url==='/dental-images/deletion')data={items:images.filter(i=>!i.deleted).sort((a,b)=>b.id-a.id).map(i=>({id:i.id,patientId:i.patientId,visitId:i.visitId,version:clinical[i.id-1].version,originalFileName:i.originalFileName,category:i.category,toothNumber:i.toothNumber,createdAt:i.createdAt,canDelete:!completed,unavailableReason:completed?'Ca đã hoàn tất, không được xóa.':null})),hasMore:false};
+else if(config.url?.endsWith('/metadata')){
+ const index=Number(config.url.split('/')[2])-1,image=images[index],row=clinical[index],body=typeof config.data==='string'?JSON.parse(config.data):config.data;
+ if(config.method==='put'){if(completed||body.expectedVersion!==row.version)throw Error('Locked or stale fixture metadata');image.category=body.category;image.toothNumber=body.toothNumber;image.notes=body.notes.trim()||null;row.version++;image.version=row.version;}
+ data={id:image.id,patientId:image.patientId,visitId:image.visitId,version:row.version,originalFileName:image.originalFileName,category:image.category,toothNumber:image.toothNumber,notes:image.notes,canEdit:!completed};
+}
 else if(config.url?.includes('/clinical-notes')){
  const index=Number(config.url.split('/')[2])-1,row=clinical[index],body=typeof config.data==='string'?JSON.parse(config.data):config.data;
  if(config.method==='put'){Object.assign(row,{clinicalNotes:body.clinicalNotes,doctorDiagnosis:body.doctorDiagnosis,version:row.version+1,updatedByUserId:5,updatedByName:'Nha sĩ kiểm thử',updatedAt:new Date().toISOString()});data={...row};}
