@@ -11,6 +11,7 @@ public sealed class DentalDbContext : DbContext
 
     public DbSet<StaffWorkspace> StaffWorkspaces => Set<StaffWorkspace>();
     public DbSet<DentalImage> DentalImages => Set<DentalImage>();
+    public DbSet<DentalImageClinicalAddendum> DentalImageClinicalAddenda => Set<DentalImageClinicalAddendum>();
     public DbSet<DentalChair> DentalChairs => Set<DentalChair>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<User> Users => Set<User>();
@@ -69,6 +70,7 @@ public sealed class DentalDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new DentalImageConfiguration());
+        modelBuilder.ApplyConfiguration(new DentalImageClinicalAddendumConfiguration());
         modelBuilder.ApplyConfiguration(new PrescriptionConfiguration());
         modelBuilder.ApplyConfiguration(new PrescriptionDispenseEventConfiguration());
         modelBuilder.ApplyConfiguration(new DoctorSignatureConfiguration());
@@ -244,6 +246,8 @@ public sealed class DentalDbContext : DbContext
             throw new InvalidOperationException("VisitUnlockRecord là bất biến — không được phép cập nhật hoặc xóa.");
         if (ChangeTracker.Entries<PostTreatmentNote>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("PostTreatmentNote là ghi chú hậu điều trị chỉ thêm mới — không được sửa hoặc xóa.");
+        if (ChangeTracker.Entries<DentalImageClinicalAddendum>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Dental image clinical addenda are append-only.");
         var violatingEntries = ChangeTracker.Entries<AuditLog>()
             .Where(e => e.State is EntityState.Modified or EntityState.Deleted)
             .ToList();

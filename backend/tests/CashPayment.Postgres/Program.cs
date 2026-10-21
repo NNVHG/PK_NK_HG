@@ -81,6 +81,7 @@ try
     if (args.Length == 3 && args[2] == "--dental-images-only")
     {
         await DentalImageHttpSmoke.RunAsync(options, Check);
+        await DentalImageClinicalHttpSmoke.RunAsync(options, Check);
         Console.WriteLine($"PostgreSQL image upload checks: {checks}/{checks} PASS");
         return;
     }
