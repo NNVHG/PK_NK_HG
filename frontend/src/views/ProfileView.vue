@@ -10,6 +10,7 @@
       </div>
     </header>
 
+    <StaffPhoneChangeConfirmation v-if="['ADMIN', 'DENTIST', 'RECEPTIONIST', 'ASSISTANT'].includes(authStore.role)" />
     <div v-if="loadingProfile" class="state-message">Đang tải hồ sơ...</div>
     <div v-else class="profile-grid">
       <section class="panel">
@@ -108,6 +109,7 @@
 </template>
 
 <script setup lang="ts">
+import StaffPhoneChangeConfirmation from '@/components/StaffPhoneChangeConfirmation.vue';
 import { computed, onMounted, ref } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { apiClient } from '@/services/api';
