@@ -227,6 +227,20 @@ public sealed class AuthService
         string? ipAddress,
         CancellationToken ct = default)
     {
+        try
+        {
+            return await _unitOfWork.ExecuteSerializableTransactionAsync(
+                transactionCt => ChangePasswordCoreAsync(userId, request, ipAddress, transactionCt), ct);
+        }
+        catch (ConcurrentOperationException)
+        {
+            return Result<bool>.Failure(Error.Conflict);
+        }
+    }
+
+    private async Task<Result<bool>> ChangePasswordCoreAsync(
+        int userId, ChangePasswordRequest request, string? ipAddress, CancellationToken ct)
+    {
         var user = await _userRepo.FindByIdAsync(userId, ct);
         if (user is null)
             return Result<bool>.Failure(Error.NotFound);
@@ -252,13 +266,15 @@ public sealed class AuthService
             return Result<bool>.Failure(Error.SameNewPassword);
         }
 
+        // DL-336/Q351b: self-change keeps TokenVersion and existing JWT expiry; no token is issued here.
+        // Recovery and phone-change revocation remain independent.
         // Băm và lưu mật khẩu mới
         user.PasswordHash = _passwordHasher.Hash(request.NewPassword);
         user.UpdatedAt = DateTime.UtcNow;
 
         await _unitOfWork.SaveChangesAsync(ct);
 
-        await _auditLogger.LogAsync(
+        await _auditLogger.LogRequiredAsync(
             action: AuditActions.Update,
             entityType: "User",
             entityId: user.UserId,

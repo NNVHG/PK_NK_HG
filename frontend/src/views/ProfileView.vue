@@ -70,10 +70,11 @@
           <div>
             <h2>Đổi mật khẩu</h2>
             <p>Nhập mật khẩu hiện tại để đặt mật khẩu mới.</p>
+            <p id="password-session-policy">Các phiên đang đăng nhập giữ thời hạn cũ (tối đa 30 phút từ lúc đăng nhập), không được gia hạn khi đổi mật khẩu. Dùng mật khẩu mới cho lần đăng nhập sau.</p>
           </div>
         </div>
 
-        <form class="form" @submit.prevent="handleChangePassword">
+        <form class="form" aria-describedby="password-session-policy" @submit.prevent="handleChangePassword">
           <div class="field">
             <label for="oldPassword">Mật khẩu cũ</label>
             <input id="oldPassword" v-model="oldPassword" type="password" autocomplete="current-password" required />
@@ -210,7 +211,7 @@ async function handleChangePassword() {
       oldPassword: oldPassword.value,
       newPassword: newPassword.value
     });
-    passwordMessage.value = response.data?.message || 'Đổi mật khẩu thành công!';
+    passwordMessage.value = response.data?.message || 'Đổi mật khẩu thành công. Các phiên đang đăng nhập giữ nguyên thời hạn cũ, không được gia hạn. Dùng mật khẩu mới cho lần đăng nhập sau.';
     oldPassword.value = '';
     newPassword.value = '';
     confirmPassword.value = '';
