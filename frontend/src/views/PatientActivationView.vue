@@ -1,7 +1,7 @@
 <template>
   <main class="activation">
-    <h1>Kích hoạt tài khoản bệnh nhân</h1>
-    <p>Dành cho tài khoản mới được tạo sau khi Lễ tân xác nhận lịch. Tài khoản đã có tiếp tục đăng nhập như trước.</p>
+    <h1>Kích hoạt tài khoản mới</h1>
+    <p>Dành cho bệnh nhân mới sau khi Lễ tân xác nhận lịch và nhân viên mới do Admin tạo. Tài khoản cũ tiếp tục đăng nhập như trước.</p>
     <p role="status" aria-live="polite">{{ message }}</p>
     <p v-if="error" role="alert">{{ error }}</p>
     <form v-if="!challenge && !grant && !done && !uncertain" @submit.prevent="requestCode" novalidate>

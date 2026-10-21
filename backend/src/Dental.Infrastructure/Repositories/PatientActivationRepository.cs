@@ -13,9 +13,10 @@ namespace Dental.Infrastructure.Repositories;
 
 public sealed class PatientActivationRepository(DentalDbContext db, VietnamClock clock) : IPatientActivationRepository
 {
-    private IQueryable<User> Eligible() => db.Users.Include(u => u.Role).Where(u => u.IsActive && u.RequiresPhoneActivation && u.Role.RoleCode == RoleCodes.Patient &&
+    private IQueryable<User> Eligible() => db.Users.Include(u => u.Role).Where(u => u.IsActive && u.RequiresPhoneActivation &&
+        (RoleCodes.StaffRoles.Contains(u.Role.RoleCode) || u.Role.RoleCode == RoleCodes.Patient &&
         db.BookingRequests.Any(b => b.CreatedAccount && b.Status == "Approved" &&
-            db.Appointments.Any(a => a.AppointmentId == b.ApprovedAppointmentId && a.Patient.UserId == u.UserId && a.Patient.IsActive)));
+            db.Appointments.Any(a => a.AppointmentId == b.ApprovedAppointmentId && a.Patient.UserId == u.UserId && a.Patient.IsActive))));
     private static string Stamp(User u) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new {
         u.UserId, u.Phone, u.PasswordHash, u.TokenVersion, u.RoleId, u.Role.RoleCode, u.IsActive, u.RequiresPhoneActivation, u.UpdatedAt
     })));
@@ -38,9 +39,10 @@ public sealed class PatientActivationRepository(DentalDbContext db, VietnamClock
             if (user is null || user.TokenVersion == int.MaxValue || Stamp(user) != target.Stamp) return false;
             if (passwordHash is not null) user.PasswordHash = passwordHash;
             user.RequiresPhoneActivation = false; user.PhoneVerifiedAtUtc = clock.UtcNow; user.TokenVersion++; user.UpdatedAt = clock.UtcNow;
+            var staff = RoleCodes.StaffRoles.Contains(user.Role.RoleCode);
             db.AuditLogs.Add(new AuditLog { UserId = user.UserId, EntityType = "User", EntityId = user.UserId,
-                Action = "MOD_AUTH_PATIENT_ACTIVATED", CreatedAt = clock.UtcNow, IpAddress = ip,
-                Detail = JsonSerializer.Serialize(new { phoneVerified = true, changedPassword = passwordHash is not null, decision = "DL-330" }) });
+                Action = staff ? "MOD_AUTH_STAFF_ACTIVATED" : "MOD_AUTH_PATIENT_ACTIVATED", CreatedAt = clock.UtcNow, IpAddress = ip,
+                Detail = JsonSerializer.Serialize(new { phoneVerified = true, changedPassword = passwordHash is not null, decision = staff ? "DL-331" : "DL-330" }) });
             await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); committed = true; return true;
         }
         catch (Exception e) when (IsConflict(e)) { return false; }

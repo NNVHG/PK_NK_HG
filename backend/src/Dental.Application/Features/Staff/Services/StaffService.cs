@@ -58,6 +58,22 @@ public sealed class StaffService
         if (!IsStaffRole(roleCode))
             return Result<StaffAccountResponse>.Failure(Error.InvalidStaffRole);
 
+        if (!new Dental.Application.Features.Staff.Validators.CreateStaffRequestValidator().Validate(request).IsValid)
+            return Result<StaffAccountResponse>.Failure(Error.Validation);
+        try
+        {
+            return await _unitOfWork.ExecuteSerializableTransactionAsync(async transactionCt =>
+                await CreatePendingStaffAsync(actorUserId, request, roleCode, ipAddress, transactionCt), ct);
+        }
+        catch (ConcurrentOperationException) { return Result<StaffAccountResponse>.Failure(Error.Conflict); }
+    }
+
+    private async Task<Result<StaffAccountResponse>> CreatePendingStaffAsync(int actorUserId, CreateStaffRequest request,
+        string roleCode, string? ipAddress, CancellationToken ct)
+    {
+        var actor = await _userRepository.FindByIdAsync(actorUserId, ct);
+        if (actor is null || !actor.IsActive || actor.RequiresPhoneActivation || actor.Role.RoleCode != RoleCodes.Admin)
+            return Result<StaffAccountResponse>.Failure(Error.Forbidden);
         var phone = request.Phone.Trim();
         if (await _userRepository.PhoneExistsAsync(phone, ct: ct))
             return Result<StaffAccountResponse>.Failure(Error.StaffPhoneExists);
@@ -69,7 +85,8 @@ public sealed class StaffService
         var user = new User
         {
             Phone = phone,
-            PasswordHash = _passwordHasher.Hash(request.Password),
+            PasswordHash = _passwordHasher.Hash(phone),
+            RequiresPhoneActivation = true,
             FullName = request.FullName.Trim(),
             AcademicTitle = NormalizeOptional(request.AcademicTitle),
             Email = NormalizeOptional(request.Email),
@@ -95,7 +112,7 @@ public sealed class StaffService
             isActiveAfter: user.IsActive,
             changedFields: [nameof(User.AcademicTitle), nameof(User.FullName), nameof(User.Phone), nameof(User.Email), nameof(User.DateOfBirth), nameof(User.Gender), "RoleCode"],
             ipAddress,
-            ct);
+            ct, required: true);
 
         return Result<StaffAccountResponse>.Success(ToResponse(user));
     }
@@ -125,7 +142,7 @@ public sealed class StaffService
 
         var roleBefore = user.Role.RoleCode;
         var isActive = user.IsActive;
-        if (user.IsActive && roleBefore == RoleCodes.Admin && roleCode != RoleCodes.Admin &&
+        if (user.IsActive && !user.RequiresPhoneActivation && roleBefore == RoleCodes.Admin && roleCode != RoleCodes.Admin &&
             await _userRepository.CountActiveAdminsAsync(ct) <= 1)
         {
             return Result<StaffAccountResponse>.Failure(Error.LastActiveAdmin);
@@ -197,7 +214,7 @@ public sealed class StaffService
 
         var roleCode = user.Role.RoleCode;
         var isActiveBefore = user.IsActive;
-        if (!isActive && user.IsActive && roleCode == RoleCodes.Admin &&
+        if (!isActive && user.IsActive && !user.RequiresPhoneActivation && roleCode == RoleCodes.Admin &&
             await _userRepository.CountActiveAdminsAsync(ct) <= 1)
         {
             return Result<StaffAccountResponse>.Failure(Error.LastActiveAdmin);
@@ -238,7 +255,7 @@ public sealed class StaffService
         bool? isActiveAfter,
         IReadOnlyCollection<string> changedFields,
         string? ipAddress,
-        CancellationToken ct)
+        CancellationToken ct, bool required = false)
     {
         var detail = JsonSerializer.Serialize(new
         {
@@ -252,6 +269,7 @@ public sealed class StaffService
             changedFields,
         });
 
+        if (required) return _auditLogger.LogRequiredAsync(auditAction, "User", target.UserId, actorUserId, detail, ipAddress, ct);
         return _auditLogger.LogAsync(
             action: auditAction,
             entityType: "User",
@@ -273,7 +291,8 @@ public sealed class StaffService
             user.Role.RoleCode,
             user.Role.RoleName,
             user.IsActive,
-            user.AcademicTitle);
+            user.AcademicTitle,
+            user.RequiresPhoneActivation);
 
     private static string NormalizeRoleCode(string? roleCode)
         => roleCode?.Trim().ToUpperInvariant() ?? string.Empty;

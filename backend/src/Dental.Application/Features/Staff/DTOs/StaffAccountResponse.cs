@@ -10,4 +10,5 @@ public sealed record StaffAccountResponse(
     string RoleCode,
     string RoleName,
     bool IsActive,
-    string? AcademicTitle = null);
+    string? AcademicTitle = null,
+    bool RequiresPhoneActivation = false);

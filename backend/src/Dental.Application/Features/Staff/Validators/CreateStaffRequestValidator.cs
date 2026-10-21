@@ -16,13 +16,10 @@ public sealed class CreateStaffRequestValidator : AbstractValidator<CreateStaffR
             .MaximumLength(100).WithMessage("Họ tên không được vượt quá 100 ký tự.");
         RuleFor(x => x.Phone)
             .NotEmpty().WithMessage("Số điện thoại không được để trống.")
-            .Matches(@"^0\d{9}$").WithMessage("Số điện thoại không hợp lệ (định dạng: 0xxxxxxxxx).");
+            .Length(10).WithMessage("Số điện thoại cần đúng 10 chữ số.")
+            .Matches(@"^0[0-9]{9}$").WithMessage("Số điện thoại không hợp lệ (định dạng: 0xxxxxxxxx).");
         RuleFor(x => x.Password)
-            .NotEmpty().WithMessage("Mật khẩu ban đầu không được để trống.")
-            .MinimumLength(6).WithMessage("Mật khẩu phải có ít nhất 6 ký tự.")
-            .Matches("[A-Z]").WithMessage("Mật khẩu phải chứa ít nhất 1 chữ hoa.")
-            .Matches("[a-z]").WithMessage("Mật khẩu phải chứa ít nhất 1 chữ thường.")
-            .Matches("[0-9]").WithMessage("Mật khẩu phải chứa ít nhất 1 chữ số.");
+            .Empty().WithMessage("Mật khẩu mặc định do hệ thống tạo bằng SĐT; không nhập mật khẩu khi tạo nhân viên.");
         RuleFor(x => x.RoleCode)
             .Must(IsStaffRole)
             .WithMessage("Vai trò nhân viên không hợp lệ.");

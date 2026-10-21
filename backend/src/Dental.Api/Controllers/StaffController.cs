@@ -50,6 +50,8 @@ public sealed class StaffController : ControllerBase
     }
 
     [HttpPost]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [RequestSizeLimit(8192)]
     [ProducesResponseType(typeof(StaffAccountResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -148,6 +150,7 @@ public sealed class StaffController : ControllerBase
         {
             var code when code == Error.NotFound.Code => StatusCodes.Status404NotFound,
             var code when code == Error.CannotLockSelf.Code => StatusCodes.Status403Forbidden,
+            var code when code == Error.Forbidden.Code => StatusCodes.Status403Forbidden,
             var code when code == Error.Conflict.Code ||
                           code == Error.StaffPhoneExists.Code ||
                           code == Error.LastActiveAdmin.Code => StatusCodes.Status409Conflict,

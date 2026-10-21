@@ -1,10 +1,10 @@
 namespace Dental.Application.Features.Staff.DTOs;
 
-// [CẦN XÁC NHẬN] Chưa có cờ buộc đổi mật khẩu lần đầu trong User; Admin nhập mật khẩu thủ công.
+// DL030/331: Password is retained for a clear validation error for older clients; omit it for new requests.
 public sealed record CreateStaffRequest(
     string FullName,
     string Phone,
-    string Password,
+    string? Password,
     string RoleCode,
     string? Email,
     DateOnly? DateOfBirth,

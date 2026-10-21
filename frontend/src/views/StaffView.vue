@@ -73,6 +73,7 @@
                 <span class="status-badge" :class="staff.isActive ? 'status-active' : 'status-locked'">
                   {{ staff.isActive ? 'Đang hoạt động' : 'Đã khóa' }}
                 </span>
+                <small v-if="staff.requiresPhoneActivation">Chờ xác minh OTP lần đầu</small>
               </td>
               <td class="row-actions">
                 <RouterLink v-if="staff.roleCode === 'DENTIST' && staff.isActive" :to="'/staff/signatures/' + staff.userId">Ảnh chữ ký</RouterLink>
@@ -168,11 +169,7 @@
                 <option value="Other">Khác</option>
               </select>
             </label>
-            <label v-if="editingStaffId === null" class="field field-wide">
-              <span>Mật khẩu ban đầu <b>*</b></span>
-              <input v-model="form.password" type="password" autocomplete="new-password" />
-              <small>Ít nhất 6 ký tự, gồm chữ hoa, chữ thường và chữ số.</small>
-            </label>
+            <p v-if="editingStaffId === null" class="field field-wide">Mật khẩu mặc định là SĐT. Nhân viên mới cần xác minh OTP tại trang Kích hoạt tài khoản trước khi đăng nhập; sau đó có thể đổi hoặc giữ mật khẩu.</p>
           </div>
 
           <p v-if="formError" class="alert alert-error" role="alert">{{ formError }}</p>
@@ -228,6 +225,7 @@ interface StaffAccount {
   roleCode: string;
   roleName: string;
   isActive: boolean;
+  requiresPhoneActivation?: boolean;
 }
 
 interface StaffForm {
@@ -238,7 +236,6 @@ interface StaffForm {
   roleCode: string;
   dateOfBirth: string;
   gender: string;
-  password: string;
 }
 
 type StatusAction = 'lock' | 'unlock';
@@ -286,8 +283,7 @@ function emptyForm(): StaffForm {
     email: '',
     roleCode: '',
     dateOfBirth: '',
-    gender: '',
-    password: ''
+    gender: ''
   };
 }
 
@@ -358,8 +354,7 @@ function openEditForm(staff: StaffAccount) {
     email: staff.email ?? '',
     roleCode: staff.roleCode,
     dateOfBirth: staff.dateOfBirth ?? '',
-    gender: staff.gender ?? '',
-    password: ''
+    gender: staff.gender ?? ''
   });
   formError.value = '';
   formVisible.value = true;
@@ -380,16 +375,11 @@ function validateForm(): string | null {
     return 'Email không đúng định dạng.';
   }
   if (!roleOptions.some(role => role.code === form.roleCode)) return 'Vui lòng chọn vai trò nhân viên hợp lệ.';
-  if (editingStaffId.value === null) {
-    if (!form.password) return 'Mật khẩu ban đầu không được để trống.';
-    if (form.password.length < 6 || !/[A-Z]/.test(form.password) || !/[a-z]/.test(form.password) || !/[0-9]/.test(form.password)) {
-      return 'Mật khẩu cần có ít nhất 6 ký tự, gồm chữ hoa, chữ thường và chữ số.';
-    }
-  }
   return null;
 }
 
 async function saveStaff() {
+  if (saving.value) return;
   formError.value = '';
   const validationError = validateForm();
   if (validationError) {
@@ -410,8 +400,8 @@ async function saveStaff() {
     };
 
     if (editingStaffId.value === null) {
-      await apiClient.post('/staff', { ...commonPayload, password: form.password });
-      successMessage.value = 'Tạo tài khoản nhân viên thành công.';
+      await apiClient.post('/staff', commonPayload);
+      successMessage.value = 'Đã tạo tài khoản. Nhân viên dùng SĐT làm mật khẩu mặc định và xác minh OTP tại trang Kích hoạt tài khoản trước khi đăng nhập.';
     } else {
       await apiClient.put(`/staff/${editingStaffId.value}`, commonPayload);
       successMessage.value = 'Cập nhật tài khoản nhân viên thành công.';
