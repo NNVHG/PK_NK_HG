@@ -52,12 +52,14 @@
     </form>
     <p v-if="error" role="alert">{{ error }}</p>
     <p v-if="success" role="status"><strong v-if="success.isEmergency" class="emergency-badge">CẤP CỨU</strong> Đã đặt lịch #{{ success.appointmentId }} cho {{ success.patientName }} · {{ success.appointmentDate }} · {{ success.slotTime.slice(0, 5) }} · {{ success.dentistName || 'Chưa phân nha sĩ' }}.</p>
+    <CounterPatientPhoneRequest v-if="success" :key="success.appointmentId" :appointment-id="success.appointmentId" />
   </main>
 </template>
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue';
 import axios from 'axios';
+import CounterPatientPhoneRequest from '@/components/CounterPatientPhoneRequest.vue';
 import { patientsService, type PatientSummary } from '@/services/patients';
 import { appointmentsService, type AppointmentResponse, type BookingDentist } from '@/services/appointments';
 import { useBookingSchedule } from '@/composables/useBookingSchedule';

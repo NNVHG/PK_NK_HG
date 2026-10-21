@@ -1,0 +1,42 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import ts from 'typescript';
+import {parse,compileScript} from '@vue/compiler-sfc';
+const sources = {};
+for (const name of ['CounterPatientPhoneRequest','PatientCounterPhoneSuggestion']) sources[name] = await readFile(new URL('../src/components/'+name+'.vue',import.meta.url),'utf8');
+const service=await readFile(new URL('../src/services/counterPatientPhone.ts',import.meta.url),'utf8');
+const id='11111111-1111-4111-8111-111111111111', phone='0967000001';
+const suggestion=()=>({requestId:id,appointmentId:8,newPhone:phone,createdAtUtc:'2026-10-21T01:00:00Z'});
+function fixture(kind='CounterPatientPhoneRequest',role=kind==='CounterPatientPhoneRequest'?'RECEPTIONIST':'PATIENT') {
+ const calls=[],events=[],watchers=[],unmount=[],mount=[],control={};const auth={user:{userId:4},role},props={appointmentId:8,disabled:false};
+ const apiClient={post:async(path,data)=>{calls.push([path,structuredClone(data)]);if(control.error)throw control.error;return control.reply??{data:{requestId:id,requiresOwnerConfirmation:true}};},get:async(path)=>{calls.push([path]);if(control.error)throw control.error;return control.reply??{data:{request:suggestion()}};}};
+ const options={compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}},sm={exports:{}};
+ new Function('require','module','exports',ts.transpileModule(service,options).outputText)(()=>({apiClient}),sm,sm.exports);
+ const imports={vue:{defineComponent:x=>x,ref:value=>({value}),watch:(...args)=>watchers.push(args),onMounted:f=>mount.push(f),onUnmounted:f=>unmount.push(f)},'@/stores/auth':{useAuthStore:()=>auth},'@/services/counterPatientPhone':sm.exports};
+ const m={exports:{}};new Function('require','module','exports',ts.transpileModule(compileScript(parse(sources[kind]).descriptor,{id:kind}).content,options).outputText)(n=>imports[n]??{},m,m.exports);
+ const c=m.exports.default.setup(props,{expose(){},emit:(...args)=>events.push(args)});
+ return{c,calls,events,watchers,control,auth,props,valid:sm.exports.isCounterPhoneSuggestion,unmount:()=>unmount.forEach(f=>f())};
+}
+function ready(){const f=fixture();f.c.phone.value=phone;f.c.confirmed.value=true;return f;}
+test('counter sends only number and reconciliation consent against booking',async()=>{const f=ready();await f.c.submit();assert.deepEqual(f.calls,[[`/appointments/8/patient-phone-change`,{newPhone:phone,confirmedAtCounter:true}]]);assert.equal(f.c.sent.value,true);assert.equal(f.c.phone.value,'');assert.match(f.c.message.value,/không nhận hoặc nhập OTP/);});
+for(const role of ['ADMIN','RECEPTIONIST'])test('counter role allowed '+role,async()=>{const f=ready();f.auth.role=role;await f.c.submit();assert.equal(f.calls.length,1);});
+for(const role of ['PATIENT','DENTIST','ASSISTANT'])test('counter role denied '+role,async()=>{const f=ready();f.auth.role=role;await f.c.submit();assert.equal(f.calls.length,0);});
+for(const value of ['bad','0967000001\n','0１２３４５６７８９'])test('counter rejects malformed '+JSON.stringify(value),async()=>{const f=ready();f.c.phone.value=value;await f.c.submit();assert.equal(f.calls.length,0);assert.ok(f.c.error.value);});
+test('counter consent required',async()=>{const f=ready();f.c.confirmed.value=false;await f.c.submit();assert.equal(f.calls.length,0);});
+test('counter double submit writes once',async()=>{const f=ready();let resolve;f.control.reply=new Promise(r=>resolve=r);const first=f.c.submit();await f.c.submit();assert.equal(f.calls.length,1);resolve({data:{requestId:id,requiresOwnerConfirmation:true}});await first;});
+test('counter success cannot resend',async()=>{const f=ready();await f.c.submit();await f.c.submit();assert.equal(f.calls.length,1);});
+test('counter unknown result blocks retries',async()=>{const f=ready();f.control.reply={data:{requestId:id,requiresOwnerConfirmation:false}};await f.c.submit();assert.equal(f.c.uncertain.value,true);await f.c.submit();assert.equal(f.calls.length,1);});
+test('counter conflict can be reviewed without mutating booking',async()=>{const f=ready();f.control.error={response:{status:409,data:{message:'Already pending'}}};await f.c.submit();assert.equal(f.c.error.value,'Already pending');assert.equal(f.c.confirmed.value,false);assert.equal(f.c.sent.value,false);});
+test('counter late reply after context reset is ignored',async()=>{const f=ready();let resolve;f.control.reply=new Promise(r=>resolve=r);const first=f.c.submit();f.props.appointmentId=9;f.watchers[0][1]();resolve({data:{requestId:id,requiresOwnerConfirmation:true}});await first;assert.equal(f.c.sent.value,false);assert.equal(f.c.message.value,'');});
+test('counter late reply after unmount is ignored',async()=>{const f=ready();let resolve;f.control.reply=new Promise(r=>resolve=r);const first=f.c.submit();f.unmount();resolve({data:{requestId:id,requiresOwnerConfirmation:true}});await first;assert.equal(f.c.sent.value,false);assert.equal(f.c.phone.value,'');});
+test('counter identity change clears private fields',()=>{const f=ready();f.auth.user={userId:9};f.watchers[2][1]();assert.equal(f.c.phone.value,'');assert.equal(f.c.confirmed.value,false);});
+test('owner loads suggestion without sending OTP',async()=>{const f=fixture('PatientCounterPhoneSuggestion');await f.c.load();assert.deepEqual(f.calls,[['/auth/patient-phone-change/counter-request']]);assert.deepEqual(f.c.suggestion.value,suggestion());assert.deepEqual(f.events,[]);});
+test('owner explicitly selects proposed number',async()=>{const f=fixture('PatientCounterPhoneSuggestion');await f.c.load();f.c.useSuggestion();assert.deepEqual(f.events,[['select',phone]]);});
+test('no pending request is explicit',async()=>{const f=fixture('PatientCounterPhoneSuggestion');f.control.reply={data:{request:null}};await f.c.load();assert.equal(f.c.loaded.value,true);assert.equal(f.c.suggestion.value,null);});
+for(const data of [{},{request:{...suggestion(),newPhone:'bad'}},{request:{...suggestion(),appointmentId:0}},{request:{...suggestion(),requestId:'bad'}}])test('owner refuses malformed suggestion '+JSON.stringify(data),async()=>{const f=fixture('PatientCounterPhoneSuggestion');f.control.reply={data};await f.c.load();assert.equal(f.c.suggestion.value,null);assert.ok(f.c.error.value);});
+test('owner fetch failure is recoverable',async()=>{const f=fixture('PatientCounterPhoneSuggestion');f.control.error=new Error('network');await f.c.load();assert.ok(f.c.error.value);delete f.control.error;await f.c.load();assert.equal(f.c.loaded.value,true);});
+test('owner busy disables selection and duplicate loads',async()=>{const f=fixture('PatientCounterPhoneSuggestion');let resolve;f.control.reply=new Promise(r=>resolve=r);const first=f.c.load();await f.c.load();f.c.useSuggestion();assert.equal(f.calls.length,1);assert.equal(f.events.length,0);resolve({data:{request:suggestion()}});await first;});
+test('owner disabled control cannot switch OTP context',async()=>{const f=fixture('PatientCounterPhoneSuggestion');await f.c.load();f.props.disabled=true;f.c.useSuggestion();await f.c.load();assert.equal(f.events.length,0);assert.equal(f.calls.length,1);});
+for(const mode of ['unmount','identity'])test('owner drops late response on '+mode,async()=>{const f=fixture('PatientCounterPhoneSuggestion');let resolve;f.control.reply=new Promise(r=>resolve=r);const first=f.c.load();if(mode==='unmount')f.unmount();else{f.auth.user={userId:9};f.watchers[0][1]();}resolve({data:{request:suggestion()}});await first;assert.equal(f.c.suggestion.value,null);});
+test('counter UI does not contain an OTP input',()=>{assert.doesNotMatch(sources.CounterPatientPhoneRequest, /autocomplete="one-time-code"|v-model="code"/);});
