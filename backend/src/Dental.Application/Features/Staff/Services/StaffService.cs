@@ -133,6 +133,9 @@ public sealed class StaffService
             return Result<StaffAccountResponse>.Failure(Error.InvalidStaffRole);
 
         var phone = request.Phone.Trim();
+        if (user.PhoneVerifiedAtUtc.HasValue && user.Phone != phone)
+            return Result<StaffAccountResponse>.Failure(Dental.Application.Features.Staff.StaffPhoneChangeService.Required);
+
         if (await _userRepository.PhoneExistsAsync(phone, staffUserId, ct))
             return Result<StaffAccountResponse>.Failure(Error.StaffPhoneExists);
 
@@ -292,7 +295,7 @@ public sealed class StaffService
             user.Role.RoleName,
             user.IsActive,
             user.AcademicTitle,
-            user.RequiresPhoneActivation);
+            user.RequiresPhoneActivation, user.PhoneVerifiedAtUtc.HasValue);
 
     private static string NormalizeRoleCode(string? roleCode)
         => roleCode?.Trim().ToUpperInvariant() ?? string.Empty;

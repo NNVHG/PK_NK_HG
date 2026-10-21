@@ -175,6 +175,11 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<PatientActivationD
 builder.Services.AddHttpClient<Dental.Application.Features.MOD_AUTH.IPatientActivationSms, PatientActivationSms>(client => client.Timeout = TimeSpan.FromSeconds(10))
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false }).RemoveAllLoggers();
 builder.Services.AddScoped<AuditLogService>();
+builder.Services.AddScoped<Dental.Application.Features.Staff.IStaffPhoneChangeRepository, StaffPhoneChangeRepository>();
+builder.Services.AddScoped<Dental.Application.Features.Staff.StaffPhoneChangeService>();
+builder.Services.AddSingleton<Dental.Application.Features.Staff.IStaffPhoneChangeProofs, StaffPhoneChangeProofs>();
+builder.Services.AddHttpClient<Dental.Application.Features.Staff.IStaffPhoneChangeSms, StaffPhoneChangeSms>(client => client.Timeout = TimeSpan.FromSeconds(10))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false }).RemoveAllLoggers();
 builder.Services.AddScoped<StaffService>();
 builder.Services.AddScoped<PatientsService>();
 builder.Services.AddScoped<PatientTimelineService>();
@@ -265,7 +270,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization(opts => opts.AddApplicationPolicies());
 
 // [CẦN XÁC NHẬN] Ngưỡng mặc định là 10 lần/phút cho đăng nhập và 5 lần/phút cho đăng ký.
-builder.Services.AddRateLimiter(options => { AuthRateLimitPolicies.Configure(options, builder.Configuration); BookingRequestRateLimits.Configure(options); PatientActivationRateLimits.Configure(options); });
+builder.Services.AddRateLimiter(options => { AuthRateLimitPolicies.Configure(options, builder.Configuration); BookingRequestRateLimits.Configure(options); PatientActivationRateLimits.Configure(options); StaffPhoneChangeRateLimits.Configure(options); });
 builder.Services.AddRateLimiter(PublicPrescriptionRateLimits.Configure);
 builder.Services.AddRateLimiter(DentalImageRateLimits.Configure);
 

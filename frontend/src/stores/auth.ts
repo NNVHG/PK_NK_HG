@@ -64,6 +64,12 @@ export const useAuthStore = defineStore('auth', () => {
     return res.data;
   }
 
+  function clearSession() {
+    token.value = null;
+    user.value = null;
+    setAccessToken(null);
+  }
+
   async function logout() {
     try {
       if (token.value) {
@@ -72,9 +78,7 @@ export const useAuthStore = defineStore('auth', () => {
     } catch {
       // Ignored
     } finally {
-      token.value = null;
-      user.value = null;
-      setAccessToken(null);
+      clearSession();
     }
   }
 
@@ -86,6 +90,7 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     fetchMe,
     updateProfile,
-    logout
+    logout,
+    clearSession
   };
 });

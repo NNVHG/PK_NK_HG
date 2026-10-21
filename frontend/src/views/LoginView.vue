@@ -5,7 +5,8 @@
       <p class="subtitle">Phòng Khám Nha Khoa</p>
       <div v-if="registrationNotice" class="success-alert">{{ registrationNotice }}</div>
 
-      <form @submit.prevent="handleSubmit">
+      <p v-if="$route.query.phoneChanged === '1'" role="status">Đã xác minh và đổi SĐT. Đăng nhập bằng số mới và mật khẩu hiện tại.</p>
+        <form @submit.prevent="handleSubmit">
         <div class="form-group">
           <label for="phone">Số điện thoại</label>
           <input
