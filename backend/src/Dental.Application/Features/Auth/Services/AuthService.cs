@@ -151,7 +151,7 @@ public sealed class AuthService
         if (user is null)
             return Result<MeResponse>.Failure(Error.NotFound);
 
-        // [CẦN XÁC NHẬN] Tài liệu chưa nói rõ có cho đổi SĐT không; hiện không cho đổi vì SĐT là định danh đăng nhập.
+        // DL027/334: đổi số phải qua OTP và xác nhận phạm vi gia đình; profile PUT không được đi tắt.
         if (request.Phone != user.Phone)
             return Result<MeResponse>.Failure(Error.PhoneChangeNotAllowed);
 
