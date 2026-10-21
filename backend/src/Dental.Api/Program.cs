@@ -166,6 +166,14 @@ builder.Services.AddSingleton<Dental.Application.Features.MOD_AUTH.IPasswordReco
 builder.Services.AddHostedService(sp => sp.GetRequiredService<PasswordRecoveryDelivery>());
 builder.Services.AddHttpClient<Dental.Application.Features.MOD_AUTH.IPasswordRecoverySms, PasswordRecoverySms>(client => client.Timeout = TimeSpan.FromSeconds(10))
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false }).RemoveAllLoggers();
+builder.Services.AddScoped<Dental.Application.Features.MOD_AUTH.IPatientActivationRepository, PatientActivationRepository>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_AUTH.PatientActivationService>();
+builder.Services.AddSingleton<Dental.Application.Features.MOD_AUTH.IPatientActivationProofs, PatientActivationProofs>();
+builder.Services.AddSingleton<PatientActivationDelivery>();
+builder.Services.AddSingleton<Dental.Application.Features.MOD_AUTH.IPatientActivationDelivery>(sp => sp.GetRequiredService<PatientActivationDelivery>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<PatientActivationDelivery>());
+builder.Services.AddHttpClient<Dental.Application.Features.MOD_AUTH.IPatientActivationSms, PatientActivationSms>(client => client.Timeout = TimeSpan.FromSeconds(10))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false }).RemoveAllLoggers();
 builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddScoped<StaffService>();
 builder.Services.AddScoped<PatientsService>();
@@ -257,7 +265,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization(opts => opts.AddApplicationPolicies());
 
 // [CẦN XÁC NHẬN] Ngưỡng mặc định là 10 lần/phút cho đăng nhập và 5 lần/phút cho đăng ký.
-builder.Services.AddRateLimiter(options => { AuthRateLimitPolicies.Configure(options, builder.Configuration); BookingRequestRateLimits.Configure(options); });
+builder.Services.AddRateLimiter(options => { AuthRateLimitPolicies.Configure(options, builder.Configuration); BookingRequestRateLimits.Configure(options); PatientActivationRateLimits.Configure(options); });
 builder.Services.AddRateLimiter(PublicPrescriptionRateLimits.Configure);
 builder.Services.AddRateLimiter(DentalImageRateLimits.Configure);
 

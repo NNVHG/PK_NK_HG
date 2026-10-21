@@ -2450,6 +2450,9 @@ namespace Dental.Infrastructure.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<DateTime?>("PhoneVerifiedAtUtc")
+                        .HasColumnType("timestamptz");
+
                     b.Property<bool>("RequiresPhoneActivation")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAdd()

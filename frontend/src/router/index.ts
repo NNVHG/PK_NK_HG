@@ -59,10 +59,11 @@ const router = createRouter({
       component: () => import('@/views/FdiConditionView.vue'),
       meta: { requiresAuth: true, roles: ['ADMIN', 'DENTIST', 'RECEPTIONIST', 'ASSISTANT', 'PATIENT'] }
     },
+    { path: '/activate-account', name: 'patient-activation', component: () => import('@/views/PatientActivationView.vue'), meta: { guestOnly: true } },
     {
       path: '/register',
       name: 'register',
-      component: () => import('@/views/RegisterView.vue'),
+      redirect: { name: 'guest-booking' },
       meta: { guestOnly: true }
     },
     {
