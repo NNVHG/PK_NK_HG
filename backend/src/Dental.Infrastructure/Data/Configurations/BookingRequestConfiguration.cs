@@ -21,5 +21,7 @@ public sealed class BookingRequestConfiguration : IEntityTypeConfiguration<Booki
         b.HasOne<Patient>().WithMany().HasForeignKey(x=>x.VerifiedPatientId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<User>().WithMany().HasForeignKey(x=>x.SubmittedByUserId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<User>().WithMany().HasForeignKey(x=>x.ReviewedByUserId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Appointment>().WithMany().HasForeignKey(x=>x.ApprovedAppointmentId).OnDelete(DeleteBehavior.Restrict);
+        b.HasIndex(x=>x.ApprovedAppointmentId).IsUnique();
     }
 }

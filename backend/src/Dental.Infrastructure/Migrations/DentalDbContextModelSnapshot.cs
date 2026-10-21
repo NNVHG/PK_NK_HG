@@ -162,8 +162,14 @@ namespace Dental.Infrastructure.Migrations
                     b.Property<DateOnly>("AppointmentDate")
                         .HasColumnType("date");
 
+                    b.Property<int?>("ApprovedAppointmentId")
+                        .HasColumnType("integer");
+
                     b.Property<Guid>("ClientRequestId")
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("CreatedAccount")
+                        .HasColumnType("boolean");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -237,6 +243,9 @@ namespace Dental.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ApprovedAppointmentId")
+                        .IsUnique();
 
                     b.HasIndex("ClientRequestId")
                         .IsUnique();
@@ -2441,6 +2450,12 @@ namespace Dental.Infrastructure.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<bool>("RequiresPhoneActivation")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<int>("RoleId")
                         .HasColumnType("integer");
 
@@ -2724,6 +2739,11 @@ namespace Dental.Infrastructure.Migrations
 
             modelBuilder.Entity("Dental.Domain.Entities.BookingRequest", b =>
                 {
+                    b.HasOne("Dental.Domain.Entities.Appointment", null)
+                        .WithMany()
+                        .HasForeignKey("ApprovedAppointmentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Dental.Domain.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("DentistId")

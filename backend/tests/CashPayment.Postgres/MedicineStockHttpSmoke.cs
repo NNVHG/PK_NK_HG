@@ -64,8 +64,8 @@ internal static class MedicineStockHttpSmoke
         if (!db.Database.GetDbConnection().Database.StartsWith("dental_cash_test_", StringComparison.Ordinal)) throw new InvalidOperationException("Owned database required");
         var users = new Dictionary<string, User>();
         foreach (var role in new[] { RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant, RoleCodes.Receptionist, RoleCodes.Patient })
-        { var user = new User { Role = new Role { RoleCode = role, RoleName = role }, FullName = "Synthetic stock actor", Phone = "096000000" + users.Count, PasswordHash = "synthetic-not-used" }; db.Users.Add(user); users[role] = user; }
-        await db.SaveChangesAsync(); var admin = users[RoleCodes.Admin].UserId; var doctor = users[RoleCodes.Dentist].UserId;
+        { var user = new User { Role = new Role { RoleCode = role, RoleName = role }, FullName = "Synthetic stock actor", Phone = "096000000" + users.Count, PasswordHash = "synthetic-not-used" }; users[role] = user; }
+        await LegacyIdentitySeed.UsersAsync(db.Database.GetConnectionString()!, users.Values); var admin = users[RoleCodes.Admin].UserId; var doctor = users[RoleCodes.Dentist].UserId;
         var patient = new Patient { FullName = "Synthetic stock patient", Phone = "0960000008", UserId = users[RoleCodes.Patient].UserId, DateOfBirth = new DateOnly(1990, 1, 1) }; db.Patients.Add(patient);
         var medicine = new Medicine { Code = "M-STOCK", Name = "Synthetic medicine", Unit = "Viên", UnitPrice = 1000, IsActive = true, SearchText = "m stock synthetic medicine" };
         var second = new Medicine { Code = "M-SECOND", Name = "Synthetic second", Unit = "Viên", UnitPrice = 1000, IsActive = true, SearchText = "m second" };

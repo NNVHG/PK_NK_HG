@@ -55,8 +55,8 @@ internal static class SchedulingSettingsHttpSmoke
         var failure = new FailAudit(); var configured = new DbContextOptionsBuilder<DentalDbContext>(options).AddInterceptors(failure).Options;
         await using var db = new DentalDbContext(configured); var users = new Dictionary<string, User>();
         foreach (var role in new[] { RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant, RoleCodes.Receptionist, RoleCodes.Patient })
-        { var u = new User { Role = new Role { RoleCode = role, RoleName = "Schedule " + role }, FullName = "Synthetic schedule actor " + role, Phone = "093000000" + users.Count, PasswordHash = "synthetic-not-used" }; users[role] = u; db.Users.Add(u); }
-        await db.SaveChangesAsync();
+        { var u = new User { Role = new Role { RoleCode = role, RoleName = "Schedule " + role }, FullName = "Synthetic schedule actor " + role, Phone = "093000000" + users.Count, PasswordHash = "synthetic-not-used" }; users[role] = u; }
+        await LegacyIdentitySeed.UsersAsync(db.Database.GetConnectionString()!, users.Values);
         var patient = new Patient { FullName = "Synthetic schedule patient", DateOfBirth = new DateOnly(1990, 1, 1), Phone = "0930000008", UserId = users[RoleCodes.Patient].UserId }; db.Patients.Add(patient); await db.SaveChangesAsync();
         var day = new VietnamClock(TimeProvider.System).Today.AddDays(5);
         int legacyId;

@@ -113,6 +113,8 @@ builder.Services.AddScoped<IPatientRepository, PatientRepository>();
 builder.Services.AddScoped<IPatientCitizenIdRepository, PatientCitizenIdRepository>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_APP.IBookingRequestRepository, BookingRequestRepository>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_APP.BookingRequestService>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_APP.IBookingApprovalRepository, BookingApprovalRepository>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_APP.BookingApprovalService>();
 builder.Services.AddHttpClient<IBookingOtpDelivery, BookingOtpSms>(client => client.Timeout=TimeSpan.FromSeconds(10)).RemoveAllLoggers();
 builder.Services.AddSingleton<Dental.Application.Features.MOD_APP.IBookingOtp>(provider => new BookingOtp(provider.GetRequiredService<IBookingOtpDelivery>(),provider.GetRequiredService<TimeProvider>()));
 builder.Services.AddScoped<Dental.Application.Features.MOD_PAT.IPatientAccountLinkRepository, PatientAccountLinkRepository>();

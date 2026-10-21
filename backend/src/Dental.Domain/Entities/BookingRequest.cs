@@ -24,4 +24,6 @@ public sealed class BookingRequest : BaseEntity
     public int Version { get; set; } = 1;
     public int? ReviewedByUserId { get; set; }
     public string? RejectionReason { get; set; }
+    public int? ApprovedAppointmentId { get; set; }
+    public bool CreatedAccount { get; set; }
 }
