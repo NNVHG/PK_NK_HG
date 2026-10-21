@@ -83,9 +83,13 @@
               v-model="newPassword"
               type="password"
               autocomplete="new-password"
-              placeholder="Tối thiểu 6 ký tự: 1 hoa, 1 thường, 1 số"
+              placeholder="Tối thiểu 8 ký tự: 1 hoa, 1 thường, 1 số"
+              minlength="8"
+              maxlength="72"
+              aria-describedby="new-password-help"
               required
             />
+            <p id="new-password-help">Từ 8 ký tự, có chữ hoa, chữ thường và số; tối đa 72 byte UTF-8.</p>
           </div>
           <div class="field">
             <label for="confirmPassword">Xác nhận mật khẩu mới</label>
@@ -183,8 +187,14 @@ async function handleUpdateProfile() {
 }
 
 async function handleChangePassword() {
+  if (passwordSaving.value) return;
   passwordError.value = '';
   passwordMessage.value = '';
+  if (newPassword.value.length < 8 || !/[A-Z]/.test(newPassword.value) || !/[a-z]/.test(newPassword.value) ||
+      !/[0-9]/.test(newPassword.value) || newPassword.value.includes('\0') || new TextEncoder().encode(newPassword.value).length > 72) {
+    passwordError.value = 'Mật khẩu mới cần từ 8 ký tự, có chữ hoa, chữ thường và số; tối đa 72 byte UTF-8.';
+    return;
+  }
   if (newPassword.value !== confirmPassword.value) {
     passwordError.value = 'Mật khẩu mới và xác nhận mật khẩu không trùng khớp.';
     return;

@@ -112,6 +112,11 @@ internal static class PasswordRecoveryHttpSmoke
             using (var response = await client.GetAsync("/probe")) check(response.IsSuccessStatusCode, "Existing access token accepted before recovery");
             client.DefaultRequestHeaders.Authorization = null;
             var challenge = await Issue(user.Phone);
+            foreach(var password in new[]{"Aa1234","Aa12345"})
+            {
+                using var weak=await client.PostAsJsonAsync(root+"reset",new ResetPasswordRequest(challenge.ChallengeId,user.Phone,sms.Codes[user.Phone],password));
+                check(weak.StatusCode==HttpStatusCode.BadRequest,"Recovery rejects six/seven-character password before consuming correct OTP");
+            }
             using (var response = await client.PostAsJsonAsync(root + "request", new RecoveryRequest(user.Phone)))
                 check(response.StatusCode == HttpStatusCode.TooManyRequests, "Per-phone 60 second cooldown enforced");
             var results = await Task.WhenAll(Reset(challenge, user), Reset(challenge, user));

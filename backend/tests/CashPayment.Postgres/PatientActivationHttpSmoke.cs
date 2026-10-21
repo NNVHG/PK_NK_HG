@@ -58,7 +58,7 @@ internal static class PatientActivationHttpSmoke
         builder.Services.AddScoped(_=>new DentalDbContext(dbOptions));builder.Services.AddScoped<IPatientActivationRepository,PatientActivationRepository>();
         builder.Services.AddScoped<PatientActivationService>();builder.Services.AddScoped<IPasswordHasher,BCryptPasswordHasher>();
         builder.Services.AddScoped<IUserRepository,UserRepository>();builder.Services.AddScoped<IPatientRepository,PatientRepository>();builder.Services.AddScoped<IUnitOfWork,UnitOfWork>();
-        builder.Services.AddScoped<IAuditLogger,AuditLogger>();builder.Services.AddScoped<ITokenService,JwtTokenService>();builder.Services.AddScoped<AuthService>();builder.Services.AddScoped<LoginRequestValidator>();
+        builder.Services.AddScoped<IAuditLogger,AuditLogger>();builder.Services.AddScoped<ITokenService,JwtTokenService>();builder.Services.AddScoped<AuthService>();builder.Services.AddScoped<LoginRequestValidator>();builder.Services.AddScoped<ChangePasswordRequestValidator>();
         builder.Services.AddHttpContextAccessor();builder.Services.AddScoped<ICurrentUser,CurrentUser>();
         builder.Services.AddControllers().AddApplicationPart(typeof(PatientActivationController).Assembly);
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(jwt=>{
@@ -152,6 +152,16 @@ internal static class PatientActivationHttpSmoke
         check(await db.AuditLogs.CountAsync(x=>x.Action=="MOD_AUTH_PATIENT_ACTIVATED")==2,"Exactly one activation audit for each committed activation");
         check(await db.AuditLogs.Where(x=>x.Action=="MOD_AUTH_PATIENT_ACTIVATED").AllAsync(x=>x.Detail!=null&&!x.Detail.Contains("09671")&&!x.Detail.Contains("Strong123")&&!x.Detail.Contains("completionToken")),"Activation audit contains no phone, password or proof");
         await db.Entry(legacy).ReloadAsync();check(legacy.PhoneVerifiedAtUtc is null&&legacy.TokenVersion==0&&!legacy.RequiresPhoneActivation&&await Probe(legacyToken)==HttpStatusCode.OK,"Legacy account and session remain unchanged throughout new activation");
+        var oldCredential=new User{Role=roles[RoleCodes.Patient],FullName="Synthetic password boundary",Phone="0967300000",PasswordHash=hasher.Hash("Aa1234")};db.Users.Add(oldCredential);await db.SaveChangesAsync();
+        using(var r=await Login(oldCredential,"Aa1234"))check(r.StatusCode==HttpStatusCode.OK,"Existing six-character password still logs in under DL052");
+        var credentialToken=tokens.GenerateAccessToken(oldCredential);
+        using(var r=await Send("/api/auth/change-password",new ChangePasswordRequest("Aa1234","Aa123456")))check(r.StatusCode==HttpStatusCode.Unauthorized,"Password change still requires JWT");
+        async Task<HttpStatusCode> Change(string password){using var req=new HttpRequestMessage(HttpMethod.Post,"/api/auth/change-password"){Content=JsonContent.Create(new ChangePasswordRequest("Aa1234",password))};req.Headers.Authorization=new("Bearer",credentialToken);using var r=await client.SendAsync(req);return r.StatusCode;}
+        foreach(var password in new[]{"Aa1234","Aa12345","Strong1\0x","Aa1"+new string('Đ',35)})check(await Change(password)==HttpStatusCode.BadRequest,"HTTP password change rejects short or bcrypt-invalid selected credential");
+        await db.Entry(oldCredential).ReloadAsync();check(hasher.Verify("Aa1234",oldCredential.PasswordHash),"Rejected changes preserve legacy credential");
+        check(await Change("Aa123456")==HttpStatusCode.OK,"HTTP password change accepts eight-character policy boundary");
+        using(var r=await Login(oldCredential,"Aa123456"))check(r.StatusCode==HttpStatusCode.OK,"Password chosen at boundary logs in");
+        using(var r=await Login(oldCredential,"Aa1234"))check(r.StatusCode==HttpStatusCode.Unauthorized,"Replaced legacy password no longer logs in");
         var rateStatuses=new List<HttpStatusCode>();for(var n=0;n<11;n++){using var r=await Send(root+"request",new ActivationRequest("09679"+n.ToString("D5"),"Invalid123"),"10.99.99.99");rateStatuses.Add(r.StatusCode);}check(rateStatuses.Take(10).All(s=>s==HttpStatusCode.Accepted)&&rateStatuses[10]==HttpStatusCode.TooManyRequests,"Actual IP limiter rejects eleventh activation request across different numbers");
         await app.StopAsync();
     }
