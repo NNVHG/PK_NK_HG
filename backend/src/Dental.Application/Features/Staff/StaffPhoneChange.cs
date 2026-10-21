@@ -47,7 +47,7 @@ public sealed class StaffPhoneChangeConfirmationValidator : AbstractValidator<St
 }
 public sealed class StaffPhoneChangeService(IStaffPhoneChangeRepository repository, IStaffPhoneChangeProofs proofs, IStaffPhoneChangeSms sms)
 {
-    public static readonly Error Required = new("STAFF_PHONE_OTP_REQUIRED", "SĐT đã xác minh chỉ được đổi qua yêu cầu OTP số mới.");
+    public static readonly Error Required = new("STAFF_PHONE_OTP_REQUIRED", "SĐT đăng nhập của nhân viên chỉ được đổi qua yêu cầu OTP số mới.");
     public static readonly Error Invalid = new("STAFF_PHONE_OTP_INVALID", "Yêu cầu hoặc mã không hợp lệ, đã dùng, hết hạn hoặc tài khoản đã thay đổi. Nhờ Admin gửi yêu cầu mới.");
     public static readonly Error Unavailable = new("STAFF_PHONE_SMS_UNAVAILABLE", "Kênh SMS đổi SĐT chưa sẵn sàng. Số đăng nhập hiện tại được giữ nguyên.");
     public async Task<Result<StaffPhoneChangePending>> RequestAsync(int actorId, int userId, StaffPhoneChangeRequest request, string? ip, CancellationToken ct)

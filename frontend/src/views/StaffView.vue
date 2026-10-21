@@ -78,7 +78,7 @@
               <td class="row-actions">
                 <RouterLink v-if="staff.roleCode === 'DENTIST' && staff.isActive" :to="'/staff/signatures/' + staff.userId">Ảnh chữ ký</RouterLink>
                 <button class="text-button" type="button" @click="openEditForm(staff)">Sửa</button>
-                <button v-if="staff.hasVerifiedPhone && staff.isActive" type="button" @click="phoneChangeStaff = staff">Đổi SĐT qua OTP</button>
+                <button v-if="staff.isActive && !staff.requiresPhoneActivation" type="button" @click="phoneChangeStaff = staff">Đổi SĐT qua OTP</button>
                 <button
                   v-if="staff.isActive"
                   class="text-button text-danger"
@@ -144,7 +144,8 @@
             <label v-if="form.roleCode === 'DENTIST'" class="field field-wide"><span>Học hàm/học vị trên đơn thuốc</span><input v-model="form.academicTitle" maxlength="100" /><small>Nhập đúng hồ sơ bác sĩ; không tự mặc định học vị.</small></label>
             <label class="field">
               <span>Số điện thoại <b>*</b></span>
-              <input v-model="form.phone" :readonly="editingVerifiedPhone" type="tel" inputmode="numeric" maxlength="10" autocomplete="tel" />
+              <input v-model="form.phone" :readonly="editingPhoneRequiresOtp" type="tel" inputmode="numeric" maxlength="10" autocomplete="tel" />
+              <small v-if="editingPhoneRequiresOtp">Để đổi số, đóng biểu mẫu và chọn “Đổi SĐT qua OTP” trên dòng nhân viên.</small>
             </label>
             <label class="field">
               <span>Email</span>
@@ -253,7 +254,7 @@ const roleOptions = [
 
 const authStore = useAuthStore();
 const phoneChangeStaff = ref<StaffAccount | null>(null);
-const editingVerifiedPhone = ref(false);
+const editingPhoneRequiresOtp = ref(false);
 const staffItems = ref<StaffAccount[]>([]);
 const searchText = ref('');
 const roleFilter = ref('');
@@ -345,7 +346,7 @@ function changePage(nextPage: number) {
 }
 
 function openCreateForm() {
-  editingVerifiedPhone.value = false;
+  editingPhoneRequiresOtp.value = false;
   editingStaffId.value = null;
   Object.assign(form, emptyForm());
   formError.value = '';
@@ -353,7 +354,7 @@ function openCreateForm() {
 }
 
 function openEditForm(staff: StaffAccount) {
-  editingVerifiedPhone.value = staff.hasVerifiedPhone === true;
+  editingPhoneRequiresOtp.value = !staff.requiresPhoneActivation || staff.hasVerifiedPhone === true;
   editingStaffId.value = staff.userId;
   Object.assign(form, {
     academicTitle: staff.academicTitle ?? '',
