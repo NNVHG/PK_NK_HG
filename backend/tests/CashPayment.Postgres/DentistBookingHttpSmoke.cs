@@ -76,55 +76,28 @@ internal static class DentistBookingHttpSmoke
         check(await db.Appointments.CountAsync(a => a.AppointmentDate == target && a.DentistId == dentist.UserId && a.SlotTime == time) == 1, "Rejected duplicate requests leave one scheduled dentist booking");
 
         var emergencyDay = target.AddDays(20);
-        var conflictingBooking = request with { PatientId = patients[5].PatientId, AppointmentDate = emergencyDay };
+        var retired = request with { PatientId = patients[5].PatientId, AppointmentDate = emergencyDay,
+            IsEmergency = true, EmergencyReason = "Synthetic attention" };
+        foreach (var bookingRole in new[] { RoleCodes.Admin, RoleCodes.Receptionist, RoleCodes.Patient })
+        {
+            authenticate(bookingRole);
+            using var response = await client.PostAsJsonAsync("/api/appointments", retired);
+            check(response.StatusCode == HttpStatusCode.BadRequest, $"DL337 rejects retired emergency for {bookingRole}");
+        }
         authenticate(RoleCodes.Receptionist);
-        int conflictAppointmentId;
-        using (var response = await client.PostAsJsonAsync("/api/appointments", conflictingBooking))
+        foreach (var payload in new[] { retired with { ConfirmedDentistConflictAppointmentId = 42 },
+            retired with { IsEmergency = false, EmergencyReason = null, ConfirmedDentistConflictRequestId = 17 },
+            retired with { IsEmergency = false, EmergencyReason = null, SlotTime = new(23,45) } })
         {
-            var booking = await response.Content.ReadFromJsonAsync<AppointmentResponse>();
-            check(response.StatusCode == HttpStatusCode.Created && booking is not null, "Create standard appointment for emergency override test");
-            conflictAppointmentId = booking!.AppointmentId;
+            using var response = await client.PostAsJsonAsync("/api/appointments", payload);
+            check(response.StatusCode == HttpStatusCode.BadRequest, "Retired override and free-time payloads cannot write");
         }
-        var emergencyRequest = conflictingBooking with
+        check(!await db.Appointments.AnyAsync(a => a.AppointmentDate == emergencyDay), "Rejected retired payloads persist no appointment");
+        using (var response = await client.PostAsJsonAsync("/api/appointments", retired with { IsEmergency = false, EmergencyReason = null, Notes = "Synthetic attention" }))
         {
-            PatientId = patients[6].PatientId,
-            SlotTime = time,
-            IsEmergency = true,
-            EmergencyReason = "Synthetic emergency reason"
-        };
-        using (var response = await client.PostAsJsonAsync("/api/appointments", emergencyRequest))
-        {
-            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            var details = json.RootElement.GetProperty("details");
-            check(response.StatusCode == HttpStatusCode.Conflict && json.RootElement.GetProperty("code").GetString() == "APP_011" &&
-                details.GetProperty("conflictAppointmentId").GetInt32() == conflictAppointmentId &&
-                details.GetProperty("dentistName").GetString() == dentist.FullName &&
-                details.GetProperty("patientName").GetString() == patients[5].FullName &&
-                json.RootElement.GetProperty("message").GetString()!.Contains("09:00"), "Emergency conflict returns dentist, booked patient, time and exact appointment confirmation");
-        }
-        using (var response = await client.PostAsJsonAsync("/api/appointments", emergencyRequest with { ConfirmedDentistConflictAppointmentId = conflictAppointmentId }))
-        {
-            var booking = await response.Content.ReadFromJsonAsync<AppointmentResponse>();
-            check(response.StatusCode == HttpStatusCode.Created && booking?.IsEmergency == true && booking.EmergencyReason == emergencyRequest.EmergencyReason,
-                "Emergency dentist override succeeds only after matching conflict confirmation");
-            var audit = await db.AuditLogs.SingleAsync(a => a.EntityId == booking!.AppointmentId && a.Action == AuditActions.AppointmentCreated);
-            check(audit.Detail!.Contains("confirmedDentistConflictOverride\":true") && !audit.Detail.Contains(emergencyRequest.EmergencyReason!),
-                "Emergency override audit records confirmation without logging reason text");
-        }
-        authenticate(RoleCodes.Patient);
-        using (var response = await client.PostAsJsonAsync("/api/appointments", emergencyRequest with { PatientId = patients[7].PatientId, AppointmentDate = emergencyDay.AddDays(1), DentistId = null }))
-            check(response.StatusCode == HttpStatusCode.Forbidden, "Patient cannot create emergency booking");
-        authenticate(RoleCodes.Receptionist);
-        using (var response = await client.PostAsJsonAsync("/api/appointments", emergencyRequest with
-        {
-            PatientId = patients[8].PatientId,
-            AppointmentDate = emergencyDay.AddDays(2),
-            SlotTime = new(18, 10),
-            DentistId = null
-        }))
-        {
-            var booking = await response.Content.ReadFromJsonAsync<AppointmentResponse>();
-            check(response.StatusCode == HttpStatusCode.Created && booking?.SlotTime == new TimeOnly(18, 10), "Emergency booking accepts after-hours free time");
+            var normal = await response.Content.ReadFromJsonAsync<AppointmentResponse>();
+            check(response.StatusCode == HttpStatusCode.Created && normal?.Notes == "Synthetic attention" && !normal.IsEmergency,
+                "Normal booking stores attention note without emergency behavior");
         }
 
         var queuePatients = new[]
@@ -157,16 +130,18 @@ internal static class DentistBookingHttpSmoke
         db.Appointments.AddRange(queueNormal, queueEmergency);
         await db.SaveChangesAsync();
         db.QueueEntries.AddRange(
-            new QueueEntry { PatientId = queueNormal.PatientId, AppointmentId = queueNormal.AppointmentId, QueueDate = clock.Today, QueueNumber = 990001, IsPriority = true, CheckInTime = DateTime.UtcNow.AddMinutes(-2), Status = QueueStatus.Waiting, CreatedAt = DateTime.UtcNow },
-            new QueueEntry { PatientId = queueEmergency.PatientId, AppointmentId = queueEmergency.AppointmentId, QueueDate = clock.Today, QueueNumber = 990002, IsPriority = true, CheckInTime = DateTime.UtcNow.AddMinutes(-1), Status = QueueStatus.Waiting, CreatedAt = DateTime.UtcNow });
+            new QueueEntry { PatientId = queueNormal.PatientId, AppointmentId = queueNormal.AppointmentId, DentistId = dentist.UserId, QueueDate = clock.Today, QueueNumber = 990001, IsPriority = true, CheckInTime = DateTime.UtcNow.AddMinutes(-2), Status = QueueStatus.Waiting, CreatedAt = DateTime.UtcNow },
+            new QueueEntry { PatientId = queueEmergency.PatientId, AppointmentId = queueEmergency.AppointmentId, DentistId = dentist.UserId, QueueDate = clock.Today, QueueNumber = 990002, IsPriority = true, CheckInTime = DateTime.UtcNow.AddMinutes(-1), Status = QueueStatus.Waiting, CreatedAt = DateTime.UtcNow });
         await db.SaveChangesAsync();
         db.ChangeTracker.Clear();
         var queueRows = await new QueueRepository(db).GetTodayQueueAsync(clock.Today, QueueStatus.Waiting, null, 1, 100);
         var queueAppointmentIds = queueRows.Items.Where(q => q.AppointmentId == queueNormal.AppointmentId || q.AppointmentId == queueEmergency.AppointmentId)
             .Select(q => q.AppointmentId).ToList();
         check(queueAppointmentIds.IndexOf(queueEmergency.AppointmentId) >= 0 &&
-            queueAppointmentIds.IndexOf(queueEmergency.AppointmentId) < queueAppointmentIds.IndexOf(queueNormal.AppointmentId),
-            "Emergency check-in sorts ahead of regular appointment-priority queue entries");
+            queueAppointmentIds.IndexOf(queueEmergency.AppointmentId) > queueAppointmentIds.IndexOf(queueNormal.AppointmentId),
+            "Legacy emergency flag no longer overtakes earlier scheduled queue entry");
+        var nextWaiting = await new QueueRepository(db).GetNextWaitingEntryAsync(clock.Today, dentist.UserId, assignedOnly: true);
+        check(nextWaiting?.AppointmentId == queueNormal.AppointmentId, "Call-next also ignores legacy emergency flag");
 
         AppointmentService Service(DentalDbContext context, IAuditLogger? logger = null) => new(new AppointmentRepository(context), new PatientRepository(context), new UserRepository(context), new UnitOfWork(context), logger ?? new AuditLogger(context, NullLogger<AuditLogger>.Instance), clock);
         async Task<Result<AppointmentResponse>> CreateRace(DbContextOptions<DentalDbContext> raceOptions, int patientIndex, DateOnly day)

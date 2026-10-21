@@ -18,6 +18,7 @@ public sealed class Appointment : BaseEntity
     public string? Notes { get; set; }
     public int RescheduleCount { get; set; }
     public string? RescheduleReason { get; set; }
+    // Historical columns retained under DL337; new bookings cannot use emergency behavior.
     public bool IsEmergency { get; set; }
     public string? EmergencyReason { get; set; }
     public int CreatedByUserId { get; set; }

@@ -107,13 +107,10 @@ internal static class BookingRequestHttpSmoke
             var holderId=await Saved(heldReq.ClientRequestId);
             async Task<Result<AppointmentResponse>> Legacy(BookingIntent i,bool emergency=false,int? ack=null){await using var d=new DentalDbContext(dbOptions);var svc=new AppointmentService(new AppointmentRepository(d),new PatientRepository(d),new UserRepository(d),new UnitOfWork(d),new AuditLogger(d,Microsoft.Extensions.Logging.Abstractions.NullLogger<AuditLogger>.Instance),vn);return await svc.CreateAppointmentAsync(users[RoleCodes.Admin].UserId,RoleCodes.Admin,new CreateAppointmentRequest(returning.PatientId,i.AppointmentDate,i.SlotTime,i.DentistId,IsEmergency:emergency,EmergencyReason:emergency?"Synthetic urgent visit":null,ExpectedScheduleRevision:catalog.Revision,ConfirmedDentistConflictRequestId:ack),null);}
             check((await Legacy(held)).IsFailure,"Existing counter booking cannot take a Pending dentist slot");
-            var warning=await Legacy(held,true);check(warning.IsFailure&&warning.Error.Details is AppointmentDentistConflictDetails{ConflictAppointmentId:0} details&&details.ConflictRequestId==holderId,"Emergency gets an explicit Pending conflict without guest identity");
-            var emergency=await Legacy(held,true,holderId);check(emergency.IsSuccess,"Explicit staff confirmation preserves existing emergency exception");
-            var emergencyAudit=await db.AuditLogs.Where(a=>a.EntityType=="Appointment"&&a.EntityId==emergency.Value!.AppointmentId).OrderByDescending(a=>a.CreatedAt).FirstAsync();
-            using(var auditJson=JsonDocument.Parse(emergencyAudit.Detail!))check(auditJson.RootElement.GetProperty("confirmedDentistConflictOverride").GetBoolean()&&auditJson.RootElement.GetProperty("overriddenRequestId").GetInt32()==holderId,"Emergency audit records only the actual acknowledged Pending conflict ID");
-            check(await db.BookingRequests.AnyAsync(x=>x.Id==holderId&&x.Status=="Pending"),"Emergency overlap does not cancel or steal the Pending hold");
-            // End the synthetic emergency fixture before checking release of the independent Pending hold.
-            var emergencyRow=await db.Appointments.SingleAsync(x=>x.AppointmentId==emergency.Value!.AppointmentId);emergencyRow.Status=AppointmentStatuses.Cancelled;await db.SaveChangesAsync();
+            var rejected=await Legacy(held,true);check(rejected.IsFailure&&rejected.Error.Code==Error.Validation.Code,"Retired emergency cannot bypass Pending hold");
+            var acknowledged=await Legacy(held,true,holderId);check(acknowledged.IsFailure&&acknowledged.Error.Code==Error.Validation.Code,"Legacy acknowledgement cannot bypass Pending hold");
+            check(await db.BookingRequests.AnyAsync(x=>x.Id==holderId&&x.Status=="Pending"),"Rejected emergency preserves existing Pending hold");
+
 
             foreach(var role in new string?[]{null,RoleCodes.Patient,RoleCodes.Assistant,RoleCodes.Dentist}){using var res=await Send("POST",$"/api/appointment-requests/{holderId}/reject",new RejectBookingRequest(1,"Synthetic reason",true),role);check(res.StatusCode==(role is null?HttpStatusCode.Unauthorized:HttpStatusCode.Forbidden),"Reject policy "+(role??"anonymous"));}
             using(var res=await Send("POST",$"/api/appointment-requests/{holderId}/reject",new RejectBookingRequest(1,"Synthetic reason",false),RoleCodes.Admin))check(res.StatusCode==HttpStatusCode.BadRequest,"Reject requires explicit confirmation");

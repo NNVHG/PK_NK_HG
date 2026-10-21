@@ -24,10 +24,6 @@ export interface CreateAppointmentPayload {
   slotTime: string;
   notes: string | null;
   dentistId?: number | null;
-  isEmergency?: boolean;
-  emergencyReason?: string | null;
-  confirmedDentistConflictAppointmentId?: number | null;
-  confirmedDentistConflictRequestId?: number | null;
   expectedScheduleRevision?: string;
 }
 

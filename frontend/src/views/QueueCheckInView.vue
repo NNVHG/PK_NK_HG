@@ -57,15 +57,16 @@
         <label for="appointment">Lịch hẹn hôm nay</label>
         <select id="appointment" v-model.number="appointmentId">
           <option v-for="appointment in appointments" :key="appointment.appointmentId" :value="appointment.appointmentId">
-            {{ appointment.slotTime.slice(0, 5) }} · {{ appointment.status }}{{ appointment.isEmergency ? ' · CẤP CỨU' : '' }}
+            {{ appointment.slotTime.slice(0, 5) }} · {{ appointment.status }}
           </option>
         </select>
+        <p v-for="appointment in appointments.filter(a => a.appointmentId === appointmentId && a.notes)" :key="appointment.appointmentId">Ghi chú khi đặt lịch: {{ appointment.notes }}</p>
         <p class="hint">Check-in sẽ gắn lượt chờ với lịch đã chọn. Hệ thống tự xác định ưu tiên theo giờ đến.</p>
       </template>
       <p v-else class="hint">Không có lịch hẹn chờ hôm nay. Check-in sẽ được ghi nhận là khách vãng lai.</p>
 
       <label for="notes">Ghi chú tiếp đón (không bắt buộc)</label>
-      <textarea id="notes" v-model.trim="notes" rows="2" maxlength="500" placeholder="Ghi chú ngắn nếu cần" />
+      <textarea id="notes" v-model.trim="notes" rows="2" maxlength="500" placeholder="Ghi tình trạng bệnh nặng hoặc điều cần lưu ý" />
 
       <p v-if="checkInError" class="message error" role="alert">{{ checkInError }}</p>
       <button type="button" :disabled="checkingIn || loadingAppointments || appointmentLookupFailed || debtLoading" @click="submitCheckIn">
@@ -78,8 +79,7 @@
       <strong class="number">{{ ticket.queueNumber }}</strong>
       <h2>{{ ticket.patientName }}</h2>
       <p>{{ ticket.queueDate }} · {{ ticket.statusText }}</p>
-      <span v-if="ticket.isEmergency" class="emergency-badge">CẤP CỨU · ƯU TIÊN</span>
-      <span v-else class="priority" :class="{ normal: !ticket.isPriority }">
+      <span class="priority" :class="{ normal: !ticket.isPriority }">
         {{ ticket.isPriority ? 'Ưu tiên theo lịch hẹn' : 'Thứ tự chờ thông thường' }}
       </span>
       <button type="button" class="secondary" @click="resetForm">Check-in bệnh nhân khác</button>
@@ -268,7 +268,6 @@ button:disabled { cursor: wait; opacity: .6; }
 .ticket h2 { margin: .75rem 0 .3rem; }
 .priority { display: inline-block; margin-bottom: 1rem; padding: .35rem .7rem; border-radius: 999px; color: #176b45; background: #d9f0e2; }
 .priority.normal { color: #5d4b0e; background: #f7efcc; }
-.emergency-badge { display: inline-block; margin-bottom: 1rem; padding: .35rem .7rem; border-radius: 999px; color: #fff; background: #b91c1c; font-weight: 800; }
 .ticket button { display: block; margin: 0 auto; }
 @media (max-width: 520px) { .search-row { flex-direction: column; } }
 </style>

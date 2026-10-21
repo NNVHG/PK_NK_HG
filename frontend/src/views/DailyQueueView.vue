@@ -35,8 +35,8 @@
     <p v-if="!loading && !error">{{ total }} lượt · Trang {{ page }} · Cập nhật {{ updatedAt }}</p>
     <ol class="entries"><li v-for="row in rows" :key="row.queueEntryId" :class="{ priority: row.isPriority }">
       <strong>{{ numberLabel(row.queueNumber) }} · {{ row.patientName }}</strong>
-      <span v-if="row.isEmergency" class="emergency-badge">CẤP CỨU</span>
       <p>{{ row.patientCode }} · {{ row.statusText }} · {{ row.queueDate }}</p>
+      <p v-if="row.notes" class="care-note">Ghi chú cần lưu ý: {{ row.notes }}</p>
       <p>{{ row.isPriority ? 'Ưu tiên lịch hẹn đúng giờ' : 'Chờ thông thường' }} · {{ row.dentistName || 'Chưa phân nha sĩ' }} · {{ locationLabel(row) }}</p>
       <RouterLink v-if="row.status === 6 && ['ADMIN', 'DENTIST'].includes(authStore.role)" to="/clinical/diagnosis">Mở hồ sơ để bắt đầu khám</RouterLink>
       <button v-if="canCancelWaiting && row.status === 1 && row.canCancelConsultation !== true" :disabled="loading || writing || imagingRow !== null || absenceRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openCancellation(row)">Hủy lượt chưa khám</button>
@@ -373,7 +373,5 @@ button, select { font: inherit; padding: .5rem; }
 .transfer-panel form { display: grid; gap: .75rem; }
 .entries { list-style: none; padding: 0; } li { padding: 1rem; margin: .6rem 0; border: 1px solid #ddd; border-radius: 8px; }
 .priority { border-left: 5px solid #13795b; } [role=alert] { color: #b91c1c; }
-.emergency-badge { display: inline-block; margin-left: .5rem; padding: .2rem .55rem; border-radius: 999px; color: #fff; background: #b91c1c; font-size: .8rem; font-weight: 800; }
-@media (prefers-reduced-motion: no-preference) { .emergency-badge { animation: emergency-pulse 1.2s ease-in-out infinite alternate; } }
-@keyframes emergency-pulse { from { box-shadow: 0 0 0 0 #b91c1c33; } to { box-shadow: 0 0 0 5px #b91c1c55; } }
+.care-note { white-space: pre-wrap; overflow-wrap: anywhere; }
 </style>
