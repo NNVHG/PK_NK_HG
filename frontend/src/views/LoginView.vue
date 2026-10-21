@@ -40,7 +40,7 @@
       </form>
       <p class="register-link"><RouterLink to="/forgot-password">Quên mật khẩu?</RouterLink></p>
       <p class="register-link"><RouterLink to="/book-appointment">Gửi yêu cầu đặt lịch trước khi có tài khoản</RouterLink></p>
-      <p class="register-link">Chưa có tài khoản? <RouterLink to="/register">Đăng ký</RouterLink></p>
+      <p class="register-link"><RouterLink to="/activate-account">Kích hoạt tài khoản mới sau khi lịch được xác nhận</RouterLink></p>
     </div>
   </div>
 </template>

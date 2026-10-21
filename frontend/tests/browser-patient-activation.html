@@ -1,0 +1,14 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kiểm thử kích hoạt tài khoản</title><style>body{font:16px system-ui}input,button{font:inherit}</style></head>
+<body><p>KIỂM THỬ UI — dữ liệu tổng hợp, không gửi SMS. OTP mô phỏng: 123456.</p><div id="app"></div>
+<script type="module">
+import{createApp,h}from'vue';import{createPinia}from'pinia';import{createRouter,createMemoryHistory,RouterView}from'vue-router';
+import PatientActivationView from'/src/views/PatientActivationView.vue';import{apiClient}from'/src/services/api.ts';
+let verified=false,completed=false;
+apiClient.defaults.adapter=async config=>{const body=JSON.parse(config.data);let data;
+if(config.url==='/auth/activation/request')data={challengeId:'11111111-1111-4111-8111-111111111111',expiresInSeconds:300,resendAfterSeconds:60};
+else if(config.url==='/auth/activation/verify'&&body.code==='123456'){verified=true;data={completionToken:'A'.repeat(64),expiresInSeconds:300};}
+else if(config.url==='/auth/activation/complete'&&verified&&!completed&&body.completionToken==='A'.repeat(64)&&body.confirmed&&(body.keepDefaultPassword||body.newPassword==='Synthetic123')){completed=true;data={completed:true};}
+else throw{response:{data:{message:'Mã hoặc phiên kích hoạt không hợp lệ.'}}};return{data,status:200,statusText:'OK',headers:{'cache-control':'no-store'},config};};
+const router=createRouter({history:createMemoryHistory(),routes:[{path:'/',component:PatientActivationView},{path:'/login',component:{render:()=>h('h1','Trang đăng nhập kiểm thử')}},{path:'/book-appointment',component:{render:()=>h('h1','Đặt lịch kiểm thử')}}]});
+const app=createApp({render:()=>h(RouterView)});app.use(createPinia());app.use(router);await router.isReady();app.mount('#app');
+</script></body></html>

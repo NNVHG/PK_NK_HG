@@ -21,6 +21,7 @@ public class User : BaseEntity
 
     /// <summary>New accounts created after booking approval must complete first-login OTP before receiving a JWT.</summary>
     public bool RequiresPhoneActivation { get; set; }
+    public DateTime? PhoneVerifiedAtUtc { get; set; }
 
     public string FullName { get; set; } = string.Empty;
     public string? AcademicTitle { get; set; }

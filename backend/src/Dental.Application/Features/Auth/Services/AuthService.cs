@@ -15,7 +15,6 @@ public sealed class AuthService
     private readonly IPasswordHasher _passwordHasher;
     private readonly ITokenService _tokenService;
     private readonly IAuditLogger _auditLogger;
-    private readonly IPatientRepository _patientRepository;
 
     public AuthService(
         IUserRepository userRepo,
@@ -30,67 +29,11 @@ public sealed class AuthService
         _passwordHasher = passwordHasher;
         _tokenService = tokenService;
         _auditLogger = auditLogger;
-        _patientRepository = patientRepository;
     }
 
-    /// <summary>Đăng ký tài khoản bệnh nhân và tạo hồ sơ trong cùng một giao dịch.</summary>
-    public Task<Result<RegisterResponse>> RegisterAsync(
-        RegisterRequest request,
-        string? ipAddress,
-        CancellationToken ct = default)
-        => _unitOfWork.ExecuteInTransactionAsync(async transactionCt =>
-        {
-            var phone = request.Phone.Trim();
-            if (await _userRepo.PhoneExistsAsync(phone, ct: transactionCt))
-                return Result<RegisterResponse>.Failure(Error.RegistrationPhoneExists);
-
-            var role = await _userRepo.FindRoleByCodeAsync(RoleCodes.Patient, transactionCt);
-            if (role is null)
-                return Result<RegisterResponse>.Failure(Error.RegistrationRoleUnavailable);
-
-            var user = new User
-            {
-                Phone = phone,
-                PasswordHash = _passwordHasher.Hash(request.Password),
-                FullName = request.FullName.Trim(),
-                Email = NormalizeOptional(request.Email),
-                DateOfBirth = request.DateOfBirth,
-                Gender = request.Gender,
-                RoleId = role.RoleId,
-                Role = role,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-            };
-
-            await _userRepo.AddAsync(user, transactionCt);
-            await _unitOfWork.SaveChangesAsync(transactionCt);
-
-            var patient = new Dental.Domain.Entities.Patient
-            {
-                FullName = user.FullName,
-                DateOfBirth = request.DateOfBirth,
-                Gender = request.Gender,
-                Phone = user.Phone,
-                Email = user.Email,
-                UserId = user.UserId,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-            };
-
-            await _patientRepository.AddAsync(patient, transactionCt);
-            await _unitOfWork.SaveChangesAsync(transactionCt);
-
-            await _auditLogger.LogAsync(
-                action: AuditActions.UserRegistered,
-                entityType: "User",
-                entityId: user.UserId,
-                userId: user.UserId,
-                detail: JsonSerializer.Serialize(new { action = "patient_registration", userId = user.UserId }),
-                ipAddress: ipAddress,
-                ct: transactionCt);
-
-            return Result<RegisterResponse>.Success(new RegisterResponse(user.UserId, "Đăng ký tài khoản thành công."));
-        }, ct);
+    /// <summary>DL326: tài khoản chỉ được tạo sau duyệt lịch; giữ lỗi rõ ràng cho caller cũ.</summary>
+    public Task<Result<RegisterResponse>> RegisterAsync(RegisterRequest request, string? ipAddress, CancellationToken ct = default)
+        => Task.FromResult(Result<RegisterResponse>.Failure(Dental.Application.Features.MOD_AUTH.PatientActivationService.RegistrationDisabled));
 
     /// <summary>
     /// Đăng nhập bằng SĐT + mật khẩu.
