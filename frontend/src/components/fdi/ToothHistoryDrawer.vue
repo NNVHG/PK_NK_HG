@@ -4,6 +4,7 @@
       <button type="button" @click="close">Đóng</button></header>
     <label><input v-model="allJaw" type="checkbox" @change="load(1)" /> {{ allJaw ? 'Toàn bộ cung hàm' : 'Chỉ răng này · Bật để xem toàn bộ cung hàm' }}</label>
     <p>Lịch sử ghi nhận tình trạng và chỉ định dịch vụ. Chỉ định không xác nhận thủ thuật đã thực hiện.</p>
+    <slot name="actions" :tooth-number="tooth" :all-jaw="allJaw" />
     <button type="button" :disabled="loading" @click="load(page)">Tải lại</button>
     <p v-if="loading" role="status">Đang tải lịch sử…</p>
     <p v-if="error" role="alert" class="error">{{ error }}</p>

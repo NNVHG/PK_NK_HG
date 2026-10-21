@@ -14,6 +14,14 @@ namespace Dental.Api.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class DentalImagesController(DentalImageService service, ICurrentUser actor) : ControllerBase
 {
+    [HttpGet("visit-context/{visitId:int}")]
+    [Authorize(Policy = AppPolicies.DentalImageRead)]
+    public async Task<IActionResult> VisitContext(int visitId, CancellationToken ct)
+    {
+        if (actor.UserId is not int user) return Unauthorized();
+        var result = await service.VisitContextAsync(visitId, user, actor.RoleCode!, ct);
+        return result.IsSuccess ? Ok(result.Value) : Failure(result.Error);
+    }
     [HttpGet("{id:int}/file")]
     [Authorize(Policy = AppPolicies.DentalImageRead)]
     public async Task<IActionResult> ImageFile(int id, CancellationToken ct)
