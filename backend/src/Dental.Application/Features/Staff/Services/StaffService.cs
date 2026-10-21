@@ -133,7 +133,7 @@ public sealed class StaffService
             return Result<StaffAccountResponse>.Failure(Error.InvalidStaffRole);
 
         var phone = request.Phone.Trim();
-        if (user.PhoneVerifiedAtUtc.HasValue && user.Phone != phone)
+        if ((!user.RequiresPhoneActivation || user.PhoneVerifiedAtUtc.HasValue) && user.Phone != phone)
             return Result<StaffAccountResponse>.Failure(Dental.Application.Features.Staff.StaffPhoneChangeService.Required);
 
         if (await _userRepository.PhoneExistsAsync(phone, staffUserId, ct))

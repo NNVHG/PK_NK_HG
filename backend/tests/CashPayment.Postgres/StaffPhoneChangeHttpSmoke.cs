@@ -86,7 +86,29 @@ internal static class StaffPhoneChangeHttpSmoke
         foreach(var phone in new[]{"bad","0967000001\n","0１２３４５６７８９"}){using var r=await Send($"/api/staff/{target.UserId}/phone-change",new StaffPhoneChangeRequest(phone,true),adminToken);check(r.StatusCode==HttpStatusCode.BadRequest,"Malformed new phone rejected");}
         using(var r=await Send($"/api/staff/{target.UserId}/phone-change",new StaffPhoneChangeRequest(NewPhone(),false),adminToken))check(r.StatusCode==HttpStatusCode.BadRequest,"Admin consent required");
         var legacy=await Create(RoleCodes.Assistant,false);var pending=await Create(RoleCodes.Assistant,false,true);var locked=await Create();await db.Users.Where(u=>u.UserId==locked.UserId).ExecuteUpdateAsync(s=>s.SetProperty(u=>u.IsActive,false));
-        foreach(var u in new[]{legacy,pending,locked,patient}){using var r=await Send($"/api/staff/{u.UserId}/phone-change",new StaffPhoneChangeRequest(NewPhone(),true),adminToken);check(!r.IsSuccessStatusCode,"Not eligible for verified-staff change");}
+        foreach(var u in new[]{pending,locked,patient}){using var r=await Send($"/api/staff/{u.UserId}/phone-change",new StaffPhoneChangeRequest(NewPhone(),true),adminToken);check(!r.IsSuccessStatusCode,"Pending, locked or Patient cannot use staff phone change");}
+        foreach(var role in new[]{RoleCodes.Admin,RoleCodes.Receptionist,RoleCodes.Dentist,RoleCodes.Assistant})
+        {
+            var u=await Create(role,false);var oldPhone=u.Phone;var oldToken=tokens.GenerateAccessToken(u);
+            using(var r=await Send($"/api/staff/{u.UserId}",new UpdateStaffRequest(u.FullName,NewPhone(),null,null,null,role),adminToken,"PUT"))
+                check(r.StatusCode==HttpStatusCode.BadRequest&&(await r.Content.ReadAsStringAsync()).Contains("STAFF_PHONE_OTP_REQUIRED"),"Legacy "+role+" cannot bypass OTP through PUT");
+            var p=await Issue(u,NewPhone());await db.Entry(u).ReloadAsync();
+            check(u.Phone==oldPhone&&u.PhoneVerifiedAtUtc is null&&u.TokenVersion==0&&u.PasswordHash==hash,"Legacy pending preserves old phone, NULL proof, hash and version");
+            check(await Session(oldToken),"Legacy old session valid while awaiting OTP");
+            using(var r=await Send(own,token:oldToken,method:"GET"))check(r.IsSuccessStatusCode&&(await r.Content.ReadAsStringAsync()).Contains(p.NewPhone),"Legacy owner reads own new-phone request");
+            check(await Confirm(u,p,token:oldToken)==HttpStatusCode.OK,"Legacy "+role+" confirms only new phone OTP");
+            await db.Entry(u).ReloadAsync();check(u.Phone==p.NewPhone&&u.PhoneVerifiedAtUtc.HasValue&&u.TokenVersion==1&&u.PasswordHash==hash,"Only successful legacy change stores real verification and revokes version");
+            check(!await Session(oldToken),"Legacy prior sessions revoked after successful commit");
+            using(var r=await Send("/api/auth/login",new LoginRequest(u.Phone,"Legacy123")))check(r.IsSuccessStatusCode,"Legacy new number logs in with same password");
+            using(var r=await Send("/api/auth/login",new LoginRequest(oldPhone,"Legacy123")))check(r.StatusCode==HttpStatusCode.Unauthorized,"Legacy old number no longer logs in");
+            check(await db.AuditLogs.AnyAsync(a=>a.EntityId==u.UserId&&a.Action=="MOD_AUTH_STAFF_PHONE_CHANGED"&&a.Detail!.Contains("DL-333")),"Legacy change audit refers to approved DL333");
+        }
+        var legacyRollback=await Create(RoleCodes.Assistant,false);var legacyRollbackPhone=legacyRollback.Phone;var legacyRollbackToken=tokens.GenerateAccessToken(legacyRollback);var legacyRollbackProof=await Issue(legacyRollback,NewPhone());
+        failure.Enabled=true;check(await Confirm(legacyRollback,legacyRollbackProof,token:legacyRollbackToken)==HttpStatusCode.InternalServerError,"Legacy audit failure aborts number change");failure.Enabled=false;
+        await db.Entry(legacyRollback).ReloadAsync();check(legacyRollback.Phone==legacyRollbackPhone&&legacyRollback.PhoneVerifiedAtUtc is null&&legacyRollback.TokenVersion==0&&legacyRollback.PasswordHash==hash,"Legacy audit rollback leaves no fake verification or credential change");check(await Session(legacyRollbackToken),"Legacy original session survives failed transaction");
+        var legacyExpire=await Issue(legacyRollback,NewPhone());clock.Now+=TimeSpan.FromMinutes(5);check(await Confirm(legacyRollback,legacyExpire,token:legacyRollbackToken)==HttpStatusCode.BadRequest,"Legacy new-phone OTP expires without account change");
+        await db.Entry(legacyRollback).ReloadAsync();check(legacyRollback.PhoneVerifiedAtUtc is null&&legacyRollback.Phone==legacyRollbackPhone,"Legacy expiry leaves old phone unverified");
+        using(var r=await Send($"/api/staff/{legacy.UserId}",new UpdateStaffRequest("Synthetic profile update",legacy.Phone,null,null,null,RoleCodes.Assistant),adminToken,"PUT"))check(r.IsSuccessStatusCode,"Legacy profile update retaining phone requires no OTP");
         sms.IsConfigured=false;using(var r=await Send($"/api/staff/{target.UserId}/phone-change",new StaffPhoneChangeRequest(NewPhone(),true),adminToken))check(r.StatusCode==HttpStatusCode.ServiceUnavailable,"Missing SMS provider fails closed");sms.IsConfigured=true;
         sms.Delivered=false;using(var r=await Send($"/api/staff/{target.UserId}/phone-change",new StaffPhoneChangeRequest(NewPhone(),true),adminToken))check(r.StatusCode==HttpStatusCode.ServiceUnavailable,"Failed SMS delivery fails closed");sms.Delivered=true;
         var next=NewPhone();var proof=await Issue(target,next);

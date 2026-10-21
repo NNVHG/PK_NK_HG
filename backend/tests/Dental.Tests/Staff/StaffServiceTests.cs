@@ -26,6 +26,30 @@ public sealed class StaffServiceTests
     private StaffService CreateService()
         => new(_userRepository, _unitOfWork, _passwordHasher, _auditLogger);
 
+    [Theory]
+    [InlineData(RoleCodes.Admin, false)]
+    [InlineData(RoleCodes.Receptionist, false)]
+    [InlineData(RoleCodes.Dentist, false)]
+    [InlineData(RoleCodes.Assistant, false)]
+    [InlineData(RoleCodes.Admin, true)]
+    [InlineData(RoleCodes.Receptionist, true)]
+    [InlineData(RoleCodes.Dentist, true)]
+    [InlineData(RoleCodes.Assistant, true)]
+    public async Task UpdateStaffAsync_AllActivatedStaffRequireNewPhoneOtp(string role, bool verified)
+    {
+        var user = MakeUser(roleCode: role);
+        user.PhoneVerifiedAtUtc = verified ? DateTime.UtcNow : null;
+        _userRepository.FindByIdAsync(user.UserId, Arg.Any<CancellationToken>()).Returns(user);
+        var result = await CreateService().UpdateStaffAsync(7, user.UserId,
+            new UpdateStaffRequest(user.FullName, "0967000001", null, null, null, role), null);
+        Assert.Equal(Dental.Application.Features.Staff.StaffPhoneChangeService.Required, result.Error);
+        Assert.Equal("0912345678", user.Phone);
+        Assert.Equal("stored_hash", user.PasswordHash);
+        Assert.Equal(0, user.TokenVersion);
+        Assert.Equal(verified, user.PhoneVerifiedAtUtc.HasValue);
+        await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
     private static Role MakeRole(string roleCode = RoleCodes.Dentist, int roleId = 2)
         => new()
         {
