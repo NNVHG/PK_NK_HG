@@ -48,9 +48,9 @@ public sealed class ResetPasswordRequestValidator : AbstractValidator<ResetPassw
         RuleFor(x => x.ChallengeId).NotEmpty();
         RuleFor(x => x.Phone).NotEmpty().Matches(@"^0[0-9]{9}$");
         RuleFor(x => x.Code).NotEmpty().Matches(@"^[0-9]{6}$");
-        RuleFor(x => x.NewPassword).NotEmpty().MinimumLength(6).MaximumLength(72)
+        RuleFor(x => x.NewPassword).NotEmpty().MinimumLength(8).MaximumLength(72)
             .Matches("[A-Z]").Matches("[a-z]").Matches("[0-9]");
-        RuleFor(x => x.NewPassword).Must(x => x is not null && System.Text.Encoding.UTF8.GetByteCount(x) <= 72);
+        RuleFor(x => x.NewPassword).Must(x => x is not null && !x.Contains('\0') && System.Text.Encoding.UTF8.GetByteCount(x) <= 72);
     }
 }
 

@@ -23,6 +23,10 @@ function fixture() {
   return { c, calls, controls, store, cleanup: hooks.unmount };
 }
 async function ready(f) { f.c.phone.value = '0999999998'; await f.c.submit(); f.c.code.value = '123456'; f.c.password.value = f.c.confirmPassword.value = 'Newpass1'; }
+
+for (const password of ['Aa1234','Aa12345','Strong1\0x','Aa1'+'Đ'.repeat(35)]) test('recovery rejects policy-invalid password without sending OTP '+JSON.stringify(password),async()=>{
+  const f=fixture();await ready(f);f.c.password.value=f.c.confirmPassword.value=password;await f.c.submit();assert.equal(f.calls.length,1);assert.equal(f.c.code.value,'123456');assert.match(f.c.error.value,/8 ký tự/);
+});
 test('request sends registered phone and only stores transient challenge metadata', async () => {
   const f = fixture(); f.c.phone.value = '0999999998'; await f.c.submit();
   assert.deepEqual(f.calls, [['request','0999999998']]); assert.deepEqual(f.store.challenge, challenge);

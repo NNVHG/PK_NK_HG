@@ -15,7 +15,7 @@
         <label for="recovery-password">Mật khẩu mới</label>
         <input id="recovery-password" ref="passwordInput" v-model="password" name="new-password" type="password"
           autocomplete="new-password" maxlength="72" :disabled="busy" :aria-invalid="invalidField === 'password'" aria-describedby="password-help recovery-error" />
-        <p id="password-help">Từ 6 ký tự, gồm chữ hoa, chữ thường và chữ số; tối đa 72 byte UTF-8.</p>
+        <p id="password-help">Từ 8 ký tự, gồm chữ hoa, chữ thường và chữ số; tối đa 72 byte UTF-8.</p>
         <label for="recovery-confirm">Nhập lại mật khẩu mới</label>
         <input id="recovery-confirm" ref="confirmInput" v-model="confirmPassword" name="confirm-password" type="password"
           autocomplete="new-password" maxlength="72" :disabled="busy" :aria-invalid="invalidField === 'confirm'" aria-describedby="recovery-error" />
@@ -71,9 +71,9 @@ async function submit() {
   if (!store.challenge) { await requestCode(); return; }
   error.value = ''; invalidField.value = '';
   if (!/^[0-9]{6}$/.test(code.value)) return reject('code', 'Nhập mã OTP gồm đúng 6 chữ số từ SMS.');
-  if (password.value.length < 6 || new TextEncoder().encode(password.value).length > 72 ||
+  if (password.value.length < 8 || password.value.includes('\0') || new TextEncoder().encode(password.value).length > 72 ||
       !/[A-Z]/.test(password.value) || !/[a-z]/.test(password.value) || !/[0-9]/.test(password.value))
-    return reject('password', 'Mật khẩu cần từ 6 ký tự, gồm chữ hoa, chữ thường và chữ số; tối đa 72 byte UTF-8.');
+    return reject('password', 'Mật khẩu cần từ 8 ký tự, gồm chữ hoa, chữ thường và chữ số; tối đa 72 byte UTF-8.');
   if (password.value !== confirmPassword.value) return reject('confirm', 'Mật khẩu nhập lại chưa khớp.');
   busy.value = true;
   const version = ++requestVersion;
