@@ -35,7 +35,8 @@ public sealed class UserRepository : IUserRepository
         => _db.Users.AnyAsync(u => u.Phone == phone && (!exceptUserId.HasValue || u.UserId != exceptUserId.Value), ct);
 
     public Task<int> CountActiveAdminsAsync(CancellationToken ct = default)
-        => _db.Users.CountAsync(u => u.IsActive && u.Role.RoleCode == RoleCodes.Admin, ct);
+        // A pending first-login account cannot replace the last administrator who can actually sign in.
+        => _db.Users.CountAsync(u => u.IsActive && !u.RequiresPhoneActivation && u.Role.RoleCode == RoleCodes.Admin, ct);
 
     public async Task<(IReadOnlyList<User> Items, int TotalCount)> GetStaffPageAsync(
         string? roleCode,

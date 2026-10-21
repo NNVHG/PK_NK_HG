@@ -45,7 +45,7 @@ public sealed class PrescriptionPrintTests
     [Theory] [InlineData(null,true)] [InlineData("",true)] [InlineData("Synthetic approved title",true)] [InlineData("title\nInjected",false)]
     public void StaffAcademicTitleValidatedWithoutInventingDefault(string? title,bool valid)
     {
-        var create=new CreateStaffRequest("Synthetic doctor","0999999991","Synthetic1",RoleCodes.Dentist,null,null,null,title);
+        var create=new CreateStaffRequest("Synthetic doctor","0999999991",null,RoleCodes.Dentist,null,null,null,title);
         var update=new UpdateStaffRequest("Synthetic doctor","0999999991",null,null,null,RoleCodes.Dentist,title);
         Assert.Equal(valid,new CreateStaffRequestValidator().Validate(create).IsValid);Assert.Equal(valid,new UpdateStaffRequestValidator().Validate(update).IsValid);
     }

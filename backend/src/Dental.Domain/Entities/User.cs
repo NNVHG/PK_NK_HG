@@ -19,7 +19,7 @@ public class User : BaseEntity
     /// <summary>Incremented after SMS recovery so previously issued access tokens no longer authorize requests.</summary>
     public int TokenVersion { get; set; }
 
-    /// <summary>New accounts created after booking approval must complete first-login OTP before receiving a JWT.</summary>
+    /// <summary>New approved patients and newly created staff must complete first-login OTP before receiving a JWT.</summary>
     public bool RequiresPhoneActivation { get; set; }
     public DateTime? PhoneVerifiedAtUtc { get; set; }
 

@@ -16,6 +16,13 @@ public sealed class StaffServiceTests
     private readonly IPasswordHasher _passwordHasher = Substitute.For<IPasswordHasher>();
     private readonly IAuditLogger _auditLogger = Substitute.For<IAuditLogger>();
 
+    public StaffServiceTests()
+    {
+        _userRepository.FindByIdAsync(7, Arg.Any<CancellationToken>()).Returns(MakeUser(7, RoleCodes.Admin));
+        _unitOfWork.ExecuteSerializableTransactionAsync(Arg.Any<Func<CancellationToken,Task<Result<StaffAccountResponse>>>>(),Arg.Any<CancellationToken>())
+            .Returns(call=>call.Arg<Func<CancellationToken,Task<Result<StaffAccountResponse>>>>()(call.Arg<CancellationToken>()));
+    }
+
     private StaffService CreateService()
         => new(_userRepository, _unitOfWork, _passwordHasher, _auditLogger);
 
@@ -53,11 +60,11 @@ public sealed class StaffServiceTests
             call.Arg<User>().UserId = 22;
             return Task.CompletedTask;
         });
-        _passwordHasher.Hash("InitialPass1").Returns("hashed_initial_password");
+        _passwordHasher.Hash("0912345678").Returns("hashed_initial_password");
 
         var result = await CreateService().CreateStaffAsync(
             actorUserId: 7,
-            new CreateStaffRequest(" Nha sĩ A ", "0912345678", "InitialPass1", RoleCodes.Dentist, "a@example.com", null, null),
+            new CreateStaffRequest(" Nha sĩ A ", "0912345678", null, RoleCodes.Dentist, "a@example.com", null, null),
             ipAddress: "127.0.0.1");
 
         Assert.True(result.IsSuccess);
@@ -65,9 +72,11 @@ public sealed class StaffServiceTests
         Assert.Equal("Nha sĩ A", result.Value.FullName);
         Assert.Equal(RoleCodes.Dentist, result.Value.RoleCode);
         Assert.True(result.Value.IsActive);
-        _passwordHasher.Received(1).Hash("InitialPass1");
+        Assert.True(result.Value.RequiresPhoneActivation);
+        await _userRepository.Received(1).AddAsync(Arg.Is<User>(u=>u.RequiresPhoneActivation&&u.PhoneVerifiedAtUtc==null),Arg.Any<CancellationToken>());
+        _passwordHasher.Received(1).Hash("0912345678");
         await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
-        await _auditLogger.Received(1).LogAsync(
+        await _auditLogger.Received(1).LogRequiredAsync(
             action: AuditActions.Create,
             entityType: "User",
             entityId: 22,
@@ -88,7 +97,7 @@ public sealed class StaffServiceTests
 
         var result = await CreateService().CreateStaffAsync(
             7,
-            new CreateStaffRequest("Nha sĩ A", "0912345678", "InitialPass1", RoleCodes.Dentist, null, null, null),
+            new CreateStaffRequest("Nha sĩ A", "0912345678", null, RoleCodes.Dentist, null, null, null),
             null);
 
         Assert.True(result.IsFailure);
@@ -108,6 +117,26 @@ public sealed class StaffServiceTests
         Assert.True(result.IsFailure);
         Assert.Equal(Error.InvalidStaffRole, result.Error);
         await _userRepository.DidNotReceive().AddAsync(Arg.Any<User>(), Arg.Any<CancellationToken>());
+    }
+
+    [Theory][InlineData(RoleCodes.Dentist)][InlineData(RoleCodes.Receptionist)][InlineData(RoleCodes.Assistant)][InlineData(RoleCodes.Admin)]
+    public async Task NewStaffRolesAllRequireFirstOtp(string code)
+    {
+        _userRepository.FindRoleByCodeAsync(code,Arg.Any<CancellationToken>()).Returns(MakeRole(code));
+        var r=await CreateService().CreateStaffAsync(7,new("Synthetic staff","0967000000",null,code,null,null,null),null);
+        Assert.True(r.IsSuccess&&r.Value!.RequiresPhoneActivation);_passwordHasher.Received(1).Hash("0967000000");
+    }
+    [Theory][InlineData(false,RoleCodes.Admin)][InlineData(true,RoleCodes.Dentist)]
+    public async Task CreateRechecksActualActiveAdmin(bool active,string role)
+    {
+        _userRepository.FindByIdAsync(7,Arg.Any<CancellationToken>()).Returns(MakeUser(7,role,active));
+        var r=await CreateService().CreateStaffAsync(7,new("Synthetic staff","0967000000",null,RoleCodes.Dentist,null,null,null),null);
+        Assert.Equal(Error.Forbidden,r.Error);await _userRepository.DidNotReceive().AddAsync(Arg.Any<User>(),Arg.Any<CancellationToken>());
+    }
+    [Fact] public async Task SuppliedPasswordIsRejectedBeforeHashOrTransaction()
+    {
+        var r=await CreateService().CreateStaffAsync(7,new("Synthetic staff","0967000000","Chosen123",RoleCodes.Dentist,null,null,null),null);
+        Assert.Equal(Error.Validation,r.Error);Assert.Empty(_passwordHasher.ReceivedCalls());Assert.Empty(_unitOfWork.ReceivedCalls());
     }
 
     [Fact]

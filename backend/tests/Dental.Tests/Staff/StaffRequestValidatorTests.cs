@@ -7,6 +7,12 @@ namespace Dental.Tests.Staff;
 
 public sealed class StaffRequestValidatorTests
 {
+    [Theory][InlineData("0١٢٣٤٥٦٧٨٩")][InlineData("0967000000\n")]
+    public void NewStaffPhoneMustBeCompatibleWithActivation(string phone)
+    {
+        var result=new CreateStaffRequestValidator().Validate(new CreateStaffRequest("Synthetic staff",phone,null,RoleCodes.Dentist,null,null,null));
+        Assert.False(result.IsValid);
+    }
     [Fact]
     public async Task CreateStaffValidator_RejectsPatientRoleAndInvalidPassword()
     {
