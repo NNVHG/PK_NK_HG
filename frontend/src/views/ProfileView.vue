@@ -10,6 +10,7 @@
       </div>
     </header>
 
+    <PatientFamilyPhoneChange v-if="!loadingProfile && authStore.role === 'PATIENT'" />
     <StaffPhoneChangeConfirmation v-if="['ADMIN', 'DENTIST', 'RECEPTIONIST', 'ASSISTANT'].includes(authStore.role)" />
     <div v-if="loadingProfile" class="state-message">Đang tải hồ sơ...</div>
     <div v-else class="profile-grid">
@@ -18,7 +19,7 @@
           <div class="icon-badge" aria-hidden="true">●</div>
           <div>
             <h2>Thông tin cá nhân</h2>
-            <p>Số điện thoại dùng để đăng nhập và không thể thay đổi tại đây.</p>
+            <p>Số điện thoại dùng để đăng nhập; hãy dùng luồng OTP riêng ở trên khi cần đổi số.</p>
           </div>
         </div>
 
@@ -109,6 +110,7 @@
 </template>
 
 <script setup lang="ts">
+import PatientFamilyPhoneChange from '@/components/PatientFamilyPhoneChange.vue';
 import StaffPhoneChangeConfirmation from '@/components/StaffPhoneChangeConfirmation.vue';
 import { computed, onMounted, ref } from 'vue';
 import { useAuthStore } from '@/stores/auth';

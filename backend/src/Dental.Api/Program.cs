@@ -180,6 +180,11 @@ builder.Services.AddScoped<Dental.Application.Features.Staff.StaffPhoneChangeSer
 builder.Services.AddSingleton<Dental.Application.Features.Staff.IStaffPhoneChangeProofs, StaffPhoneChangeProofs>();
 builder.Services.AddHttpClient<Dental.Application.Features.Staff.IStaffPhoneChangeSms, StaffPhoneChangeSms>(client => client.Timeout = TimeSpan.FromSeconds(10))
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false }).RemoveAllLoggers();
+builder.Services.AddScoped<Dental.Application.Features.MOD_AUTH.IPatientPhoneChangeRepository, PatientPhoneChangeRepository>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_AUTH.PatientPhoneChangeService>();
+builder.Services.AddSingleton<Dental.Application.Features.MOD_AUTH.IPatientPhoneChangeProofs, PatientPhoneChangeProofs>();
+builder.Services.AddHttpClient<Dental.Application.Features.MOD_AUTH.IPatientPhoneChangeSms, PatientPhoneChangeSms>(client => client.Timeout = TimeSpan.FromSeconds(10))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false }).RemoveAllLoggers();
 builder.Services.AddScoped<StaffService>();
 builder.Services.AddScoped<PatientsService>();
 builder.Services.AddScoped<PatientTimelineService>();
@@ -270,7 +275,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization(opts => opts.AddApplicationPolicies());
 
 // [CẦN XÁC NHẬN] Ngưỡng mặc định là 10 lần/phút cho đăng nhập và 5 lần/phút cho đăng ký.
-builder.Services.AddRateLimiter(options => { AuthRateLimitPolicies.Configure(options, builder.Configuration); BookingRequestRateLimits.Configure(options); PatientActivationRateLimits.Configure(options); StaffPhoneChangeRateLimits.Configure(options); });
+builder.Services.AddRateLimiter(options => { AuthRateLimitPolicies.Configure(options, builder.Configuration); BookingRequestRateLimits.Configure(options); PatientActivationRateLimits.Configure(options); StaffPhoneChangeRateLimits.Configure(options); PatientPhoneChangeRateLimits.Configure(options); });
 builder.Services.AddRateLimiter(PublicPrescriptionRateLimits.Configure);
 builder.Services.AddRateLimiter(DentalImageRateLimits.Configure);
 

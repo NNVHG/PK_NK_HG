@@ -23,6 +23,7 @@ public static class Policies
     public const string MedicineCatalogView = "MedicineCatalogView";
     public const string MedicalSupplyCatalogView = "MedicalSupplyCatalogView";
     public const string AdminOnly  = "AdminOnly";
+    public const string PatientPhoneChange = "PatientPhoneChange";
     public const string StaffAny   = "StaffAny";    // Admin, Lễ tân, Nha sĩ, Phụ tá
     public const string AppointmentRequestReview = "AppointmentRequestReview";
     public const string PatientAccountLink = "PatientAccountLink";
@@ -82,6 +83,8 @@ public static class Policies
         opts.AddPolicy(InvoiceDraftView, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Receptionist, RoleCodes.Patient));
         opts.AddPolicy(AdminOnly, policy =>
             policy.RequireRole(RoleCodes.Admin));
+
+        opts.AddPolicy(PatientPhoneChange, p => p.RequireRole(RoleCodes.Patient));
 
         opts.AddPolicy(StaffAny, policy =>
             policy.RequireRole(RoleCodes.StaffRoles));
