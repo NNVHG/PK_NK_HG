@@ -2,6 +2,7 @@
   <section class="family-phone" aria-labelledby="family-phone-title">
     <h2 id="family-phone-title">Đổi SĐT tài khoản gia đình</h2>
     <p>OTP được gửi tới số mới. Sau khi xác nhận, số đăng nhập và các hồ sơ đang dùng chung số cũ sẽ được đổi cùng lúc. Mật khẩu được giữ nguyên; các phiên cũ sẽ bị thu hồi.</p>
+    <PatientCounterPhoneSuggestion :disabled="busy || uncertain" @select="acceptCounterPhone" />
     <form @submit.prevent="loadPreview">
       <label for="family-new-phone">SĐT mới</label>
       <input id="family-new-phone" v-model="newPhone" type="tel" inputmode="numeric" autocomplete="tel" maxlength="10" :disabled="busy || uncertain" required />
@@ -39,6 +40,7 @@
 </template>
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue';
+import PatientCounterPhoneSuggestion from './PatientCounterPhoneSuggestion.vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { patientPhoneChange, isPhoneScopePreview, type PhoneScopePreview, type PhoneChangePending } from '@/services/patientPhoneChange';
@@ -56,6 +58,13 @@ watch(code, () => { finalConfirmed.value = false; });
 watch(() => [auth.user?.userId, auth.role], () => { active = false; clearReview(); newPhone.value = ''; error.value = ''; });
 onUnmounted(() => { active = false; clearReview(); newPhone.value = ''; error.value = ''; });
 function problem(e: any, fallback: string) { return e.response?.data?.message || fallback; }
+async function acceptCounterPhone(phone: string) {
+  if (busy.value || uncertain.value || !current(revision)) return;
+  newPhone.value = phone;
+  // Watch flushes before rendering; the normal preview path still requires fresh scope consent.
+  await Promise.resolve();
+  await loadPreview();
+}
 async function loadPreview() {
   if (busy.value || uncertain.value || !current(revision)) return;
   clearReview(); error.value = '';

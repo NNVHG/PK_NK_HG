@@ -48,7 +48,7 @@ public sealed class RolePermissionMatrixProvider(IAuthorizationPolicyProvider po
             [Policies.ServiceCatalogView] = ("Xem danh mục dịch vụ", "MOD_MST", "Nha sĩ/Phụ tá được xem; tạo/sửa danh mục và bảng giá chỉ Admin."),
             [Policies.AppointmentCreate] = ("Đặt lịch khám", "MOD_APP", "Bệnh nhân chỉ đặt cho hồ sơ thuộc tài khoản của mình."),
             [Policies.AppointmentView] = ("Xem lịch hẹn", "MOD_APP", "Bệnh nhân chỉ xem lịch hẹn thuộc tài khoản của mình."),
-            [Policies.AppointmentManage] = ("Quản lý lịch hẹn tại quầy", "MOD_APP", "Còn kiểm tra trạng thái và thời gian của lịch hẹn."),
+            [Policies.AppointmentManage] = ("Quản lý lịch hẹn tại quầy", "MOD_APP", "Còn kiểm tra trạng thái và thời gian của lịch hẹn. DL-335: quầy chỉ khởi tạo yêu cầu đổi số theo lịch Scheduled; chủ tài khoản tự xác nhận OTP/phạm vi."),
             [Policies.AppointmentReschedule] = ("Đổi lịch hẹn", "MOD_APP", "Còn kiểm tra hồ sơ sở hữu, trạng thái và thời gian được đổi lịch."),
             [Policies.QueueCheckIn] = ("Tiếp đón, check-in và dọn lượt quá hạn", "MOD_CHK", "Lễ tân/Admin; dọn lượt chỉ Visit chưa bắt đầu, quá mốc 23:30 Việt Nam, có xác nhận (DL-260)."),
             [Policies.QueueView] = ("Xem hàng đợi nội bộ", "MOD_CHK", "Màn TV công khai là luồng đọc riêng với tên bệnh nhân đã che."),
