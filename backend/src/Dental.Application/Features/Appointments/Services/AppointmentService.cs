@@ -64,7 +64,7 @@ public sealed class AppointmentService
         var reason = request.EmergencyReason?.Trim();
         if (!validTime || request.Notes?.Length > 500 || request.DentistId <= 0 ||
             (request.IsEmergency && (reason is null || reason.Length is < 5 or > 255)) ||
-            (!request.IsEmergency && (request.EmergencyReason is not null || request.ConfirmedDentistConflictAppointmentId.HasValue)))
+            (!request.IsEmergency && (request.EmergencyReason is not null || request.ConfirmedDentistConflictAppointmentId.HasValue || request.ConfirmedDentistConflictRequestId.HasValue)))
             return Result<AppointmentResponse>.Failure(Error.Validation);
         var patient = await _patientRepository.GetByIdAsync(request.PatientId, ct);
         if (patient is null)
@@ -95,12 +95,24 @@ public sealed class AppointmentService
             return Result<AppointmentResponse>.Failure(Error.AppointmentSlotFull);
 
         var overriddenAppointmentId = (int?)null;
+        var overriddenRequestId = (int?)null;
         if (request.DentistId.HasValue)
         {
             var dentist = await _userRepository.FindByIdAsync(request.DentistId.Value, ct);
             if (dentist is null || !dentist.IsActive || dentist.Role?.RoleCode != RoleCodes.Dentist)
                 return Result<AppointmentResponse>.Failure(Error.Validation.Code, "Nha sĩ được chọn không hợp lệ hoặc không hoạt động.");
 
+            var pending = await _appointmentRepository.GetPendingDentistConflictAsync(request.DentistId.Value,request.AppointmentDate,request.SlotTime,snapshot.Schedule.DurationMinutes,ct);
+            if(pending is not null)
+            {
+                if(!request.IsEmergency)return Result<AppointmentResponse>.Failure(Error.Validation.Code,"Bác sĩ đã có yêu cầu Pending giữ chỗ trong khung giờ này.");
+                // Preserve the existing explicit emergency-override rule DL234, without cancelling the pending hold.
+                if(request.ConfirmedDentistConflictRequestId!=pending.RequestId)
+                    return Result<AppointmentResponse>.Failure(new Error(Error.AppointmentDentistConflict.Code,
+                        $"Nha sĩ {pending.DentistName} có yêu cầu đang chờ xác nhận lúc {pending.SlotTime:HH:mm}. Xác nhận chen lịch cấp cứu?",
+                        new AppointmentDentistConflictDetails(0,pending.DentistName,"Khách đang chờ xác nhận",pending.AppointmentDate,pending.SlotTime,pending.RequestId)));
+                overriddenRequestId=pending.RequestId;
+            }
             var conflict = await _appointmentRepository.GetDentistBookingConflictAsync(
                 request.DentistId.Value, request.AppointmentDate, request.SlotTime, 0, ct, snapshot.Schedule.DurationMinutes);
             if (conflict is not null)
@@ -170,8 +182,9 @@ public sealed class AppointmentService
                         nameof(Appointment.Status)
                     },
                 slotDurationMinutes = appointment.SlotDurationMinutes,
-                confirmedDentistConflictOverride = overriddenAppointmentId.HasValue,
-                overriddenAppointmentId
+                confirmedDentistConflictOverride = overriddenAppointmentId.HasValue || overriddenRequestId.HasValue,
+                overriddenAppointmentId,
+                overriddenRequestId
             }),
             ipAddress: ipAddress,
             ct: ct);

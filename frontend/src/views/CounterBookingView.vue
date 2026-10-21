@@ -64,7 +64,7 @@ import { useBookingSchedule } from '@/composables/useBookingSchedule';
 const keyword = ref(''), patients = ref<PatientSummary[]>([]), selected = ref<PatientSummary | null>(null);
 const day = ref(''), slot = ref(''), notes = ref(''), confirmed = ref(false);
 const isEmergency = ref(false), emergencyReason = ref(''), overrideConflictConfirmed = ref(false);
-const conflict = ref<{ conflictAppointmentId: number; dentistName: string; patientName: string; appointmentDate: string; slotTime: string } | null>(null);
+const conflict = ref<{ conflictAppointmentId: number; conflictRequestId?: number; dentistName: string; patientName: string; appointmentDate: string; slotTime: string } | null>(null);
 const dentists = ref<BookingDentist[]>([]), dentistId = ref(0), loadingDentists = ref(true), dentistError = ref('');
 const searching = ref(false), searched = ref(false), busy = ref(false), error = ref(''), success = ref<AppointmentResponse | null>(null);
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -96,7 +96,8 @@ function choose(patient: PatientSummary) {
   if (busy.value || searching.value || !patients.value.some(p => p.patientId === patient.patientId)) return;
   selected.value = patient; confirmed.value = false; notes.value = ''; success.value = null; error.value = ''; clearConflict();
 }
-function clearConflict() { conflict.value = null; overrideConflictConfirmed.value = false; }
+const acknowledgedPendingId = ref<number | null>(null);
+function clearConflict() { acknowledgedPendingId.value=null; conflict.value = null; overrideConflictConfirmed.value = false; }
 function bookingDetailsChanged() { confirmed.value = false; clearConflict(); }
 function toggleEmergency() { emergencyReason.value = ''; bookingDetailsChanged(); }
 async function book() {
@@ -109,11 +110,13 @@ async function book() {
   }
   const ticket = version; busy.value = true;
   try {
+    if(conflict.value?.conflictRequestId && overrideConflictConfirmed.value) acknowledgedPendingId.value=conflict.value.conflictRequestId;
     const result = await appointmentsService.create({
       patientId: selected.value.patientId, appointmentDate: day.value, slotTime: `${slot.value}:00`,
       dentistId: dentistId.value || null, notes: notes.value.trim() || null, isEmergency: isEmergency.value,
       emergencyReason: isEmergency.value ? emergencyReason.value.trim() : null,
-      confirmedDentistConflictAppointmentId: conflict.value && overrideConflictConfirmed.value ? conflict.value.conflictAppointmentId : null,
+      confirmedDentistConflictAppointmentId: conflict.value && overrideConflictConfirmed.value && !conflict.value.conflictRequestId ? conflict.value.conflictAppointmentId : null,
+      ...(acknowledgedPendingId.value || conflict.value?.conflictRequestId && overrideConflictConfirmed.value ? {confirmedDentistConflictRequestId:acknowledgedPendingId.value || conflict.value?.conflictRequestId} : {}),
       expectedScheduleRevision: scheduleRevision.value
     });
     if (ticket === version) { success.value = result; notes.value = ''; emergencyReason.value = ''; confirmed.value = false; clearConflict(); }

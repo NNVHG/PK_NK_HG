@@ -103,3 +103,11 @@ test('emergency free-time booking requires reason and confirms the exact dentist
   assert.equal(f.calls[1].confirmedDentistConflictAppointmentId, 88);
   assert.equal(f.c.success.value.appointmentId, 9);
 });
+
+test('emergency Pending conflict uses distinct request id and preserves acknowledgement across warnings', async()=>{
+ const pending={response:{data:{code:'APP_011',details:{conflictAppointmentId:0,conflictRequestId:17,dentistName:'Synthetic dentist',patientName:'Khách đang chờ xác nhận',appointmentDate:'2099-01-01',slotTime:'08:00:00'}}}};
+ const existing={response:{data:{code:'APP_011',details:{conflictAppointmentId:88,dentistName:'Synthetic dentist',patientName:'Synthetic existing',appointmentDate:'2099-01-01',slotTime:'08:00:00'}}}};
+ const f=fixture({failure:[pending,existing]});await ready(f);f.c.isEmergency.value=true;f.c.toggleEmergency();f.c.slot.value='17:15';f.c.emergencyReason.value='Synthetic urgent issue';f.c.dentistId.value=31;f.c.confirmed.value=true;
+ await f.c.book();f.c.overrideConflictConfirmed.value=true;await f.c.book();assert.equal(f.calls[1].confirmedDentistConflictRequestId,17);assert.equal(f.calls[1].confirmedDentistConflictAppointmentId,null);
+ f.c.overrideConflictConfirmed.value=true;await f.c.book();assert.equal(f.calls[2].confirmedDentistConflictRequestId,17);assert.equal(f.calls[2].confirmedDentistConflictAppointmentId,88);assert.ok(f.c.success.value);
+});

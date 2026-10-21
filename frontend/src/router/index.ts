@@ -4,6 +4,8 @@ import { useAuthStore } from '@/stores/auth';
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+    {path:'/book-appointment',name:'guest-booking',component:()=>import('@/views/GuestBookingView.vue'),meta:{requiresAuth:false}},
+    {path:'/appointments/requests',name:'booking-request-review',component:()=>import('@/views/BookingRequestReviewView.vue'),meta:{requiresAuth:true,roles:['ADMIN','RECEPTIONIST']}},
     { path: '/clinical/visits/:visitId/images', name: 'tooth-image-lookup', component: () => import('@/views/ToothImageLookupView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'] } },
     { path: '/admin/medicine-stock', name: 'medicine-stock', component: () => import('@/views/MedicineStockView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
     { path: '/staff/chair-status', name: 'chair-status', component: () => import('@/views/ChairStatusView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'ASSISTANT'] } },

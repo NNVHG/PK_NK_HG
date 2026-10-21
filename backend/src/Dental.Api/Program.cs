@@ -111,6 +111,10 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 builder.Services.AddScoped<IPatientRepository, PatientRepository>();
 builder.Services.AddScoped<IPatientCitizenIdRepository, PatientCitizenIdRepository>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_APP.IBookingRequestRepository, BookingRequestRepository>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_APP.BookingRequestService>();
+builder.Services.AddHttpClient<IBookingOtpDelivery, BookingOtpSms>(client => client.Timeout=TimeSpan.FromSeconds(10)).RemoveAllLoggers();
+builder.Services.AddSingleton<Dental.Application.Features.MOD_APP.IBookingOtp>(provider => new BookingOtp(provider.GetRequiredService<IBookingOtpDelivery>(),provider.GetRequiredService<TimeProvider>()));
 builder.Services.AddScoped<Dental.Application.Features.MOD_PAT.IPatientAccountLinkRepository, PatientAccountLinkRepository>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_PAT.PatientAccountLinkService>();
 builder.Services.AddScoped<IQrPatientIntakeRepository, QrPatientIntakeRepository>();
@@ -251,7 +255,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization(opts => opts.AddApplicationPolicies());
 
 // [CẦN XÁC NHẬN] Ngưỡng mặc định là 10 lần/phút cho đăng nhập và 5 lần/phút cho đăng ký.
-builder.Services.AddRateLimiter(options => AuthRateLimitPolicies.Configure(options, builder.Configuration));
+builder.Services.AddRateLimiter(options => { AuthRateLimitPolicies.Configure(options, builder.Configuration); BookingRequestRateLimits.Configure(options); });
 builder.Services.AddRateLimiter(PublicPrescriptionRateLimits.Configure);
 builder.Services.AddRateLimiter(DentalImageRateLimits.Configure);
 
