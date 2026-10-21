@@ -11,7 +11,7 @@ namespace Dental.Infrastructure.Services;
 /// <summary>
 /// Tạo JWT access token HS256, sống 30 phút.
 /// Secret key lấy từ user-secrets / biến môi trường (không nằm trong appsettings.json).
-/// [DL-P01/DL-P02 tạm chốt: HS256, 30 phút — cần xác nhận]
+/// DL-031: HS256, 30 phút, không refresh. DL-336: tự đổi mật khẩu không gia hạn JWT đã cấp.
 /// </summary>
 public sealed class JwtTokenService : ITokenService
 {

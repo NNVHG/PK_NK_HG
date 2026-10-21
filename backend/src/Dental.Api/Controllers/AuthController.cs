@@ -138,9 +138,12 @@ public sealed class AuthController : ControllerBase
 
     /// <summary>Đổi mật khẩu người dùng hiện tại.</summary>
     [HttpPost("change-password")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [RequestSizeLimit(8192)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> ChangePassword(
         [FromBody] ChangePasswordRequest request,
         [FromServices] ChangePasswordRequestValidator changePasswordValidator,
@@ -166,10 +169,12 @@ public sealed class AuthController : ControllerBase
 
         if (result.IsFailure)
         {
+            if (result.Error.Code == "GEN_004")
+                return Conflict(new { code = result.Error.Code, message = "Tài khoản vừa thay đổi đồng thời. Kiểm tra lại trước khi đổi mật khẩu tiếp." });
             return BadRequest(new { code = result.Error.Code, message = result.Error.Message });
         }
 
-        return Ok(new { message = "Đổi mật khẩu thành công." });
+        return Ok(new { message = "Đổi mật khẩu thành công. Các phiên đang đăng nhập giữ nguyên thời hạn cũ, không được gia hạn. Dùng mật khẩu mới cho lần đăng nhập sau.", sessionPolicy = "KeepUntilExpiry" });
     }
 
     /// <summary>Đăng xuất phiên làm việc hiện tại.</summary>

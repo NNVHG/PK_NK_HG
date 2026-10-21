@@ -18,8 +18,12 @@ public sealed class AuthServiceTests
     private readonly IAuditLogger _auditLogger = Substitute.For<IAuditLogger>();
     private readonly IPatientRepository _patientRepository = Substitute.For<IPatientRepository>();
 
-    private AuthService CreateService() =>
-        new(_userRepo, _unitOfWork, _passwordHasher, _tokenService, _auditLogger, _patientRepository);
+    private AuthService CreateService()
+    {
+        _unitOfWork.ExecuteSerializableTransactionAsync(Arg.Any<Func<CancellationToken, Task<Result<bool>>>>(), Arg.Any<CancellationToken>())
+            .Returns(call => call.ArgAt<Func<CancellationToken, Task<Result<bool>>>>(0)(call.ArgAt<CancellationToken>(1)));
+        return new(_userRepo, _unitOfWork, _passwordHasher, _tokenService, _auditLogger, _patientRepository);
+    }
 
 
     private static User MakeUser(bool isActive = true) => new()
@@ -249,7 +253,7 @@ public sealed class AuthServiceTests
         Assert.True(result.IsSuccess);
         Assert.Equal("newHashed", user.PasswordHash);
         await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
-        await _auditLogger.Received(1).LogAsync(
+        await _auditLogger.Received(1).LogRequiredAsync(
             action: AuditActions.Update,
             entityType: "User",
             entityId: 1,
@@ -262,6 +266,55 @@ public sealed class AuthServiceTests
                 !detail.Contains("signed.jwt.value")),
             ipAddress: Arg.Any<string?>(),
             ct: Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(RoleCodes.Admin)]
+    [InlineData(RoleCodes.Receptionist)]
+    [InlineData(RoleCodes.Dentist)]
+    [InlineData(RoleCodes.Assistant)]
+    [InlineData(RoleCodes.Patient)]
+    public async Task ChangePasswordAsync_Q351b_KeepsVersionAndDoesNotIssueJwt(string role)
+    {
+        var user = MakeUser(); user.Role.RoleCode = role; user.TokenVersion = 7;
+        user.PhoneVerifiedAtUtc = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
+        var verified = user.PhoneVerifiedAtUtc;
+        _userRepo.FindByIdAsync(1).Returns(user);
+        _passwordHasher.Verify("OldPass1", "hashed").Returns(true);
+        _passwordHasher.Hash("NewPass2").Returns("updated-hash");
+        var result = await CreateService().ChangePasswordAsync(1, new("OldPass1", "NewPass2"), null);
+        Assert.True(result.IsSuccess);
+        Assert.Equal("updated-hash", user.PasswordHash);
+        Assert.Equal(7, user.TokenVersion);
+        Assert.Equal(verified, user.PhoneVerifiedAtUtc);
+        Assert.False(user.RequiresPhoneActivation);
+        Assert.Equal(role, user.Role.RoleCode);
+        _tokenService.DidNotReceiveWithAnyArgs().GenerateAccessToken(default!);
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_RequiredAuditFailurePropagatesToTransaction()
+    {
+        var user = MakeUser(); _userRepo.FindByIdAsync(1).Returns(user);
+        _passwordHasher.Verify("OldPass1", "hashed").Returns(true);
+        _passwordHasher.Hash("NewPass2").Returns("new-hash");
+        _auditLogger.LogRequiredAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int?>(), Arg.Any<int?>(),
+            Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new InvalidOperationException("Synthetic audit failure")));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => CreateService().ChangePasswordAsync(1, new("OldPass1", "NewPass2"), null));
+        await _unitOfWork.Received(1).ExecuteSerializableTransactionAsync(Arg.Any<Func<CancellationToken, Task<Result<bool>>>>(), Arg.Any<CancellationToken>());
+        _tokenService.DidNotReceiveWithAnyArgs().GenerateAccessToken(default!);
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_ConcurrentWriteReturnsConflictWithoutJwt()
+    {
+        var service = CreateService();
+        _unitOfWork.ExecuteSerializableTransactionAsync(Arg.Any<Func<CancellationToken, Task<Result<bool>>>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<Result<bool>>(new ConcurrentOperationException()));
+        var result = await service.ChangePasswordAsync(1, new("OldPass1", "NewPass2"), null);
+        Assert.Equal(Error.Conflict, result.Error);
+        _tokenService.DidNotReceiveWithAnyArgs().GenerateAccessToken(default!);
     }
 
     [Fact]
