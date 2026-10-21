@@ -23,4 +23,7 @@ public sealed class DentalImage
     public DateTime CreatedAt { get; set; }
     public int Version { get; set; } = 1;
     public bool IsDeleted { get; set; }
+    public DateTime? DeletedAt { get; set; }
+    public int? DeletedByUserId { get; set; }
+    public string? DeleteReason { get; set; }
 }

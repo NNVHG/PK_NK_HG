@@ -1,0 +1,30 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import ts from 'typescript';
+import {parse,compileScript} from '@vue/compiler-sfc';
+const source=await readFile(new URL('../src/components/DentalImageDeletion.vue',import.meta.url),'utf8');
+const script=compileScript(parse(source).descriptor,{id:'image-deletion'}).content;
+const item=(id=7)=>({id,patientId:9,visitId:null,version:1,originalFileName:'synthetic.png',category:'Intraoral',toothNumber:46,createdAt:'2026-10-20T00:00:00Z',canDelete:true,unavailableReason:null});
+function fixture(role='ASSISTANT'){
+ const hooks={},calls=[],events=[],props={patientId:9,refreshKey:0},auth={role,user:{userId:3}};
+ let page={items:[item()],hasMore:false},response=204,failure=null;
+ const api={async list(...args){calls.push(['list',...args]);return typeof page==='function'?await page():page;},async remove(...args){calls.push(['remove',...args]);if(failure)throw failure;return response;}};
+ const vue={defineComponent:x=>x,ref:value=>({value}),computed:get=>({get value(){return get();}}),watch:(_get,fn)=>{hooks.watch=fn;},onUnmounted:fn=>{hooks.unmount=fn;}};
+ const js=ts.transpileModule(script,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,module={exports:{}};
+ new Function('require','module','exports',js)(name=>({vue,'@/stores/auth':{useAuthStore:()=>auth},'@/services/imageDeletion':{imageDeletionService:api}}[name]??{}),module,module.exports);
+ const c=module.exports.default.setup(props,{expose(){},emit:(...args)=>events.push(args)});
+ return{c,calls,events,auth,props,hooks,setPage:p=>{page=p;},setResponse:r=>{response=r;},setFailure:r=>{failure=r;}};
+}
+for(const role of ['ADMIN','DENTIST','ASSISTANT'])test(role+' loads minimal deletion metadata',async()=>{const f=fixture(role);await f.c.load();assert.deepEqual(f.calls,[['list',9,0]]);assert.equal(f.c.items.value.length,1);assert.equal(f.c.needsReview.value,false);});
+for(const role of ['PATIENT','RECEPTIONIST',''])test(role+' cannot load or delete',async()=>{const f=fixture(role);await f.c.load();f.c.confirmed.value=true;await f.c.remove();assert.equal(f.calls.length,0);});
+test('selection must come from current patient list and remain deletable',async()=>{const f=fixture();await f.c.load();f.c.choose(item());assert.equal(f.c.selected.value,null);const locked={...item(),canDelete:false};f.c.items.value=[locked];f.c.choose(locked);assert.equal(f.c.selected.value,null);});
+test('requires confirmation and reason before exact image/version delete',async()=>{const f=fixture();await f.c.load();f.c.choose(f.c.items.value[0]);await f.c.remove();f.c.reason.value='  duplicate image  ';await f.c.remove();assert.equal(f.calls.length,1);f.c.confirmed.value=true;await f.c.remove();assert.deepEqual(f.calls[1],['remove',7,1,'duplicate image']);assert.deepEqual(f.events,[['deleted',7]]);assert.equal(f.c.selected.value,null);assert.equal(f.c.items.value.length,0);assert.equal(f.c.needsReview.value,true);});
+for(const reason of ['  ','a'.repeat(501),'a\0b'])test('rejects invalid deletion reason '+reason.length,async()=>{const f=fixture();await f.c.load();f.c.choose(f.c.items.value[0]);f.c.reason.value=reason;f.c.confirmed.value=true;await f.c.remove();assert.equal(f.calls.length,1);assert.ok(f.c.error.value);});
+test('uncertain write clears sensitive draft and never auto retries',async()=>{const f=fixture();await f.c.load();f.c.choose(f.c.items.value[0]);f.c.reason.value='synthetic';f.c.confirmed.value=true;f.setFailure(Error('private'));await f.c.remove();assert.equal(f.c.reason.value,'');assert.equal(f.c.confirmed.value,false);assert.equal(f.c.needsReview.value,true);assert.ok(!f.c.error.value.includes('private'));f.c.choose(f.c.items.value[0]);await f.c.remove();assert.equal(f.calls.filter(x=>x[0]==='remove').length,1);assert.deepEqual(f.events,[]);});
+test('unexpected success code is not reported as deleted',async()=>{const f=fixture();await f.c.load();f.c.choose(f.c.items.value[0]);f.c.reason.value='synthetic';f.c.confirmed.value=true;f.setResponse(200);await f.c.remove();assert.deepEqual(f.events,[]);assert.equal(f.c.needsReview.value,true);});
+test('foreign or malformed list never enables delete',async()=>{const f=fixture();f.setPage({items:[{...item(),patientId:10}],hasMore:false});await f.c.load();assert.equal(f.c.items.value.length,0);assert.equal(f.c.needsReview.value,true);});
+test('pagination uses last image cursor and clears previous selection',async()=>{const f=fixture();f.setPage({items:Array.from({length:20},(_,i)=>item(30-i)),hasMore:true});await f.c.load();f.c.choose(f.c.items.value[0]);f.setPage({items:[item(10)],hasMore:false});await f.c.load(true);assert.deepEqual(f.calls[1],['list',9,11]);assert.equal(f.c.items.value.length,21);assert.equal(f.c.selected.value,null);});
+test('stale role, patient, refresh or unmount clears drafts and ignores old response',async()=>{const f=fixture();await f.c.load();f.c.choose(f.c.items.value[0]);f.c.reason.value='draft';f.auth.role='PATIENT';f.hooks.watch();assert.equal(f.c.selected.value,null);assert.equal(f.c.reason.value,'');assert.equal(f.c.items.value.length,0);const g=fixture();let resolve;g.setPage(()=>new Promise(r=>{resolve=r;}));const pending=g.c.load();g.hooks.unmount();resolve({items:[item()],hasMore:false});await pending;assert.equal(g.c.items.value.length,0);});
+test('native form has labels and explicit retention explanation without clinical data',()=>{assert.match(source,/<label>Lý do xóa/);assert.match(source,/Tệp vật lý và lịch sử được giữ lại/);assert.match(source,/role="alert"/);assert.ok(!/v-html|localStorage|console\.log|clinicalNotes|storagePath/.test(source));});
+test('service sends DELETE body with confirmation and expected version',async()=>{const text=await readFile(new URL('../src/services/imageDeletion.ts',import.meta.url),'utf8');assert.match(text,/apiClient\.delete/);assert.match(text,/data:\{expectedVersion,reason,confirmed:true\}/);assert.match(text,/\/dental-images\/deletion/);});

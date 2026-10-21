@@ -286,6 +286,16 @@ namespace Dental.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("DeleteReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<int?>("DeletedByUserId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("DoctorDiagnosis")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
@@ -335,6 +345,8 @@ namespace Dental.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ClinicalUpdatedByUserId");
+
+                    b.HasIndex("DeletedByUserId");
 
                     b.HasIndex("StoragePath")
                         .IsUnique();
@@ -2621,6 +2633,11 @@ namespace Dental.Infrastructure.Migrations
                     b.HasOne("Dental.Domain.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("ClinicalUpdatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Dental.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("DeletedByUserId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Dental.Domain.Entities.Patient", null)
