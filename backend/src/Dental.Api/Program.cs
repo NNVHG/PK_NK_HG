@@ -111,6 +111,8 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 builder.Services.AddScoped<IPatientRepository, PatientRepository>();
 builder.Services.AddScoped<IPatientCitizenIdRepository, PatientCitizenIdRepository>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_PAT.IPatientAccountLinkRepository, PatientAccountLinkRepository>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_PAT.PatientAccountLinkService>();
 builder.Services.AddScoped<IQrPatientIntakeRepository, QrPatientIntakeRepository>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_PAT.QrPatientIntakeService>();
 builder.Services.AddScoped<IClinicPrintSettingsRepository, ClinicPrintSettingsRepository>();

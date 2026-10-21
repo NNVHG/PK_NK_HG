@@ -46,6 +46,7 @@
           <div class="wide"><dt>Địa chỉ</dt><dd>{{ patient.address || 'Chưa cập nhật' }}</dd></div>
         </dl>
         <PatientCitizenId :patient-id="patient.patientId" />
+        <PatientAccountLink :patient-id="patient.patientId" />
       </section>
 
       <section v-else-if="activeTab === 'prescriptions'" class="panel content-panel">
@@ -247,6 +248,7 @@ import { useRoute } from 'vue-router';
 import SafetyAlertBanner from '@/components/SafetyAlertBanner.vue';
 import PatientPrescriptionHistory from '@/components/PatientPrescriptionHistory.vue';
 import PatientCitizenId from '@/components/PatientCitizenId.vue';
+import PatientAccountLink from '@/components/PatientAccountLink.vue';
 import DentalImageAttachments from '@/components/DentalImageAttachments.vue';
 import {
   patientsService,
