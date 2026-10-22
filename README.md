@@ -562,3 +562,14 @@ Fixture tổng hợp tại frontend/tests/browser-dental-image-viewer.html; ch�
 ### Phạm vi đặt lịch/tiếp đón theo DL337 (2026-10-22)
 
 Phòng khám không triển khai luồng cấp cứu, đặt giờ tự do hoặc chen lịch. Bệnh nặng cần lưu ý được ghi trong ghi chú đặt lịch/tiếp đón và hiển thị cho nhân viên nội bộ; ghi chú không tự đổi thứ tự khám. Mọi lịch mới tuân thủ khung giờ cấu hình và chặn trùng nha sĩ. Mốc dọn lượt23:30 cùng ưu tiên đúng hẹn/trở lại từ chụp ảnh giữ quy tắc riêng. Các nhắc đến cấp cứu trong nhật ký triển khai cũ phía trên là lịch sử trước DL337. Các cột/giá trị cấp cứu cũ được giữ để truy vết; API từ chối yêu cầu cấp cứu/chen lịch từ client cũ.
+
+
+## Xác nhận chuyển khoản thủ công — Q357a / DL338
+
+Trong màn hình hóa đơn, Admin/Lễ tân có thể đối soát tiền thực vào tài khoản phòng khám, nhập số tiền nguyên đồng và mã giao dịch ngân hàng6–20ký tự, rồi xác nhận đã kiểm tra đúng hóa đơn. Luồng này dùng được khi chưa cấu hình VietQR/webhook. Webhook là lựa chọn bổ sung; nút mô phỏng vẫn chỉ Development.
+
+`POST /api/invoices/{invoiceId}/bank-transfer/confirm` dùng JWT/CashPaymentWrite và kiểm tra tài khoản active/role thực trongDB. Body gồm `requestId`, `amount`, `transactionReference`, `expectedRemainingAmount`, `confirmed:true`. PaymentBankTransfer/sourceManual, công nợ và audit được ghi trong cùng Serializable transaction; giữ snapshot chiết khấu, thu nhiều đợt và quy tắc chuyển dư hiện hành. Không thay schema hoặc thêm package.
+
+Khi mất kết nối, UI giữ nguyên yêu cầu theo tài khoản/hóa đơn và chỉ thử lại khi người dùng xác nhận. Khi số dư thay đổi, phải tải lại/đối soát trước khi xác nhận mới. Một tham chiếu đúng hóa đơn/số tiền được đối chiếu với khoản thực đã lưu từ thủ công hoặc webhook, giữ nguồn/người ghi ban đầu; không chuyển khoản mô phỏng thành tiền thật. Nhập chính xác tham chiếu ngân hàng, phân biệt chữ hoa/thường theo ràng buộc hiện hữu.
+
+Kiểm chứng nhánh:2027.NET/1155Node;54HTTPPG riêng+616hồi quy đầy đủ+40giảmgiá+172hoàntiền+51báocáoPASS;Vue447modules,EF0pending/53migration. Browser Vue→API→PostgreSQL tổng hợp:30000+60000 trên hóa đơn sau giảm90000→Paid/còn0, lịch sử có hai khoản thủ công. Chưa Gia UAT/đối soát ngân hàng thật. Chi tiết cục bộ:`docs/testing/MANUAL_BANK_20261022_REPORT.md` tại thư mục gốc dự án.

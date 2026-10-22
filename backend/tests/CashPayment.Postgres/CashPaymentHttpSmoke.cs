@@ -28,7 +28,7 @@ using Microsoft.IdentityModel.Tokens;
 internal static class CashPaymentHttpSmoke
 {
     public static async Task RunAsync(DbContextOptions<DentalDbContext> options, int cashierId, int patientId, Action<bool, string> check,
-        bool queueCallNextOnly = false, bool invoiceDiscountsOnly = false, bool serviceCatalogOnly = false, bool queueImagingOnly = false, bool queueCallingOnly = false, bool queueAbsenceOnly = false, bool queueCleanupOnly = false, bool chairCatalogOnly = false, bool staffWorkspacesOnly = false, bool queueLocationsOnly = false, bool visitCorrectionsOnly = false, bool physicalChairsOnly = false, bool visitCancellationOnly = false, bool postTreatmentNotesOnly = false, bool diagnosisCatalogOnly = false, bool revenueReportOnly = false, bool medicineCatalogOnly = false, bool prescriptionOnly = false, bool invoiceRefundsOnly = false, bool invoiceDraftCancellationOnly = false, bool medicalSupplyCatalogOnly = false)
+        bool queueCallNextOnly = false, bool invoiceDiscountsOnly = false, bool serviceCatalogOnly = false, bool queueImagingOnly = false, bool queueCallingOnly = false, bool queueAbsenceOnly = false, bool queueCleanupOnly = false, bool chairCatalogOnly = false, bool staffWorkspacesOnly = false, bool queueLocationsOnly = false, bool visitCorrectionsOnly = false, bool physicalChairsOnly = false, bool visitCancellationOnly = false, bool postTreatmentNotesOnly = false, bool diagnosisCatalogOnly = false, bool revenueReportOnly = false, bool medicineCatalogOnly = false, bool prescriptionOnly = false, bool invoiceRefundsOnly = false, bool invoiceDraftCancellationOnly = false, bool medicalSupplyCatalogOnly = false, bool manualBankOnly = false)
     {
         // Dedicated test host validates ephemeral JWTs only. Never read clinic JWT keys/demo credentials.
         var signingKey = new SymmetricSecurityKey(RandomNumberGenerator.GetBytes(64));
@@ -164,6 +164,8 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddScoped<IBankTransferRepository, BankTransferRepository>();
         builder.Services.AddScoped<BankTransferWebhookService>();
         builder.Services.AddScoped<BankTransferRequestValidator>();
+        builder.Services.AddScoped<ManualBankTransferService>();
+        builder.Services.AddScoped<ManualBankTransferRequestValidator>();
         builder.Services.AddAuthentication().AddScheme<AuthenticationSchemeOptions, BankWebhookAuthenticationHandler>(BankWebhookAuthenticationHandler.SchemeName, _ => { });
         builder.Services.AddHttpContextAccessor(); builder.Services.AddScoped<ICurrentUser, CurrentUser>();
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(jwt =>
@@ -193,6 +195,12 @@ internal static class CashPaymentHttpSmoke
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", new JwtSecurityTokenHandler().WriteToken(token));
             }
             void Authenticate(string role) => AuthenticateActor(role, cashierId);
+            if (manualBankOnly)
+            {
+                app.Environment.EnvironmentName = "Production";
+                await ManualBankTransferHttpSmoke.RunAsync(client, options, cashierId, patientId, webhookKey, AuthenticateActor, check);
+                return;
+            }
             if (invoiceDraftCancellationOnly) { await InvoiceDraftCancellationHttpSmoke.RunAsync(client, options, cashierId, patientId, AuthenticateActor, check); return; }
             if (invoiceRefundsOnly) { await InvoiceRefundHttpSmoke.RunAsync(client,options,cashierId,AuthenticateActor,check); return; }
             if (prescriptionOnly)
@@ -368,6 +376,9 @@ internal static class CashPaymentHttpSmoke
             await DentistBookingHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await AppointmentReminderHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await AutomaticReminderHttpSmoke.RunAsync(client, options, cashierId, Authenticate, app.Services.GetRequiredService<AppointmentReminderWorkerStatus>(), check);
+            app.Environment.EnvironmentName = "Production";
+            await ManualBankTransferHttpSmoke.RunAsync(client, options, cashierId, patientId, webhookKey, AuthenticateActor, check);
+            app.Environment.EnvironmentName = "Development";
             await BankTransferHttpSmoke.RunAsync(client, options, cashierId, patientId, webhookKey, Authenticate, check);
         }
         finally { await app.StopAsync(); }

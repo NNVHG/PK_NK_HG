@@ -36,13 +36,22 @@ function fixture(role = 'DENTIST', initial = original, overrides = {}) {
         if (overrides.complete) return overrides.complete(id);
         current = { ...current, status: 'Completed', isLocked: true }; bill = { ...bill, status: 1 }; },
     } },
-    '@/components/InvoiceRefundPanel.vue': {}, '@/components/InvoiceRefundProposalPanel.vue': {}, '@/components/InvoiceCashPayment.vue': {}, '@/components/InvoiceBankTransfer.vue': {}, '@/components/InvoiceDiscountPanel.vue': {},
+    '@/components/InvoiceRefundPanel.vue': {}, '@/components/InvoiceRefundProposalPanel.vue': {}, '@/components/InvoiceCashPayment.vue': {}, '@/components/InvoiceBankTransfer.vue': {}, '@/components/InvoiceManualBankTransfer.vue': {}, '@/components/InvoiceDiscountPanel.vue': {},
   };
   const module = { exports: {} };
   new Function('require', 'module', 'exports', compiled)(name => { if (!(name in imports)) throw new Error('Unexpected import ' + name); return imports[name]; }, module, module.exports);
   const c = module.exports.default.setup({}, { expose() {} });
   return { c, calls, auth, route, cleanup: () => cleanup?.(), writes: name => calls.filter(c => c[0] === name) };
 }
+test('manual and webhook receipt messages never claim a simulation', async () => {
+  const f = fixture();
+  for (const source of ['Manual', 'Webhook', 'Simulation']) {
+    await f.c.onBankReceived({ id: 7, amount: 30, source, note: null });
+    assert.equal(f.c.success.value.includes('MÔ PHỎNG'), source === 'Simulation');
+  }
+  f.cleanup();
+});
+
 test('correction loads outside the queue with explicit controls', async () => {
   const f = fixture(); await f.c.load();
   assert.equal(f.c.isCorrection.value, true); assert.equal(f.c.canCorrect.value, true); assert.equal(f.c.canComplete.value, true);
