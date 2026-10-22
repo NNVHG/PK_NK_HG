@@ -151,10 +151,16 @@ const router = createRouter({
       meta: { requiresAuth: true, roles: ['ADMIN', 'DENTIST'] }
     },
     {
+      path: '/my-records',
+      name: 'my-patient-records',
+      component: () => import('@/views/MyPatientRecordsView.vue'),
+      meta: { requiresAuth: true, roles: ['PATIENT'] }
+    },
+    {
       path: '/patients/:id(\\d+)',
       name: 'patient-detail',
       component: () => import('@/views/PatientDetailView.vue'),
-      meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST', 'DENTIST', 'ASSISTANT'] }
+      meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST', 'DENTIST', 'ASSISTANT', 'PATIENT'] }
     },
     ...(import.meta.env.DEV
       ? [

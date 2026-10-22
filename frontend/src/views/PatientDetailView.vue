@@ -1,6 +1,6 @@
 <template>
   <main class="detail-page">
-    <div class="back-row"><router-link :to="{ name: 'patients' }">← Danh sách bệnh nhân</router-link></div>
+    <div class="back-row"><router-link :to="{ name: authStore.role === 'PATIENT' ? 'my-patient-records' : 'patients' }">{{ authStore.role === 'PATIENT' ? '← Hồ sơ điều trị gia đình' : '← Danh sách bệnh nhân' }}</router-link></div>
     <section v-if="loadingPatient" class="panel state-panel" role="status">Đang tải hồ sơ bệnh nhân...</section>
     <section v-else-if="pageError" class="panel state-panel" role="alert">
       <h1>{{ notFound ? 'Không tìm thấy bệnh nhân' : 'Không tải được hồ sơ' }}</h1>
@@ -23,7 +23,7 @@
         </button>
       </header>
 
-      <SafetyAlertBanner :patient-id="patient.patientId" :refresh-key="alertRefreshKey" />
+      <SafetyAlertBanner v-if="authStore.role !== 'PATIENT'" :patient-id="patient.patientId" :refresh-key="alertRefreshKey" />
       <p v-if="successMessage" class="notice success" role="status">{{ successMessage }}</p>
       <p v-if="visitError" class="notice error" role="alert">{{ visitError }}</p>
 
@@ -70,8 +70,8 @@
               <p>{{ visit.startedAt ? formatDateTime(visit.startedAt) : 'Chưa bắt đầu' }}<template v-if="visit.endedAt"> — {{ formatDateTime(visit.endedAt) }}</template></p>
               <p>Nha sĩ: {{ visit.dentistName || 'Chưa phân công' }}</p>
               <RouterLink :to="`/clinical/visits/${visit.visitId}/fdi`">Xem tình trạng răng của lần khám</RouterLink>
-              <RouterLink :to="`/clinical/visits/${visit.visitId}/prescription`">Xem / kê đơn thuốc</RouterLink>
-              <RouterLink v-if="['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(authStore.role)" :to="`/clinical/visits/${visit.visitId}/invoice-draft`">Xem hóa đơn nháp</RouterLink>
+              <RouterLink :to="`/clinical/visits/${visit.visitId}/prescription`">{{ authStore.role === 'PATIENT' ? 'Xem đơn thuốc' : 'Xem / kê đơn thuốc' }}</RouterLink>
+              <RouterLink v-if="['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(authStore.role)" :to="`/clinical/visits/${visit.visitId}/invoice-draft`">{{ authStore.role === 'PATIENT' ? 'Xem hóa đơn' : 'Xem hóa đơn nháp' }}</RouterLink>
               <div class="visit-flags"><span>{{ visit.hasMedicalHistory ? 'Có tiền sử' : 'Chưa ghi tiền sử' }}</span><span>{{ visit.hasVitalSigns ? 'Có sinh hiệu' : 'Chưa ghi sinh hiệu' }}</span></div>
               <div class="post-treatment-section">
                 <button class="button button-quiet" v-if="postTreatmentExpandedMap[visit.visitId]" :disabled="savingAddendumMap[visit.visitId] || postTreatmentLoadingMap[visit.visitId]" @click="loadPostTreatmentNotes(visit.visitId)">Tải lại ghi chú</button>

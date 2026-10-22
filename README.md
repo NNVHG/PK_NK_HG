@@ -573,3 +573,11 @@ Trong màn hình hóa đơn, Admin/Lễ tân có thể đối soát tiền thự
 Khi mất kết nối, UI giữ nguyên yêu cầu theo tài khoản/hóa đơn và chỉ thử lại khi người dùng xác nhận. Khi số dư thay đổi, phải tải lại/đối soát trước khi xác nhận mới. Một tham chiếu đúng hóa đơn/số tiền được đối chiếu với khoản thực đã lưu từ thủ công hoặc webhook, giữ nguồn/người ghi ban đầu; không chuyển khoản mô phỏng thành tiền thật. Nhập chính xác tham chiếu ngân hàng, phân biệt chữ hoa/thường theo ràng buộc hiện hữu.
 
 Kiểm chứng nhánh:2027.NET/1155Node;54HTTPPG riêng+616hồi quy đầy đủ+40giảmgiá+172hoàntiền+51báocáoPASS;Vue447modules,EF0pending/53migration. Browser Vue→API→PostgreSQL tổng hợp:30000+60000 trên hóa đơn sau giảm90000→Paid/còn0, lịch sử có hai khoản thủ công. Chưa Gia UAT/đối soát ngân hàng thật. Chi tiết cục bộ:`docs/testing/MANUAL_BANK_20261022_REPORT.md` tại thư mục gốc dự án.
+
+## Hồ sơ điều trị gia đình của bệnh nhân
+
+Bệnh nhân đăng nhập vào **Hồ sơ điều trị** (`/my-records`), chọn một hồ sơ đang hoạt động đã được phòng khám liên kết, rồi xem lịch sử và mở các màn hình đọc hiện có. Danh sách lấy từ `GET /api/patients/mine`; backend kiểm tra ownership cho từng hồ sơ/ca. Hồ sơ chưa liên kết không tự được nhận bằng số điện thoại, và hồ sơ tài khoản khác trả404. Việc liên kết tại quầy giữ quyền/quy trình DL325.
+
+Đây là lối vào UI cho quyền đọc đã có; không thêm quyền tạo/sửa, kê đơn hoặc thu tiền. Banner cảnh báo an toàn chuyên môn vẫn chỉ dành cho nhân viên. Thanh điều hướng và bộ lọc lịch hẹn đã điều chỉnh cho màn hình nhỏ theo DL062; kiểm tra viewport không thay thế nghiệm thu thiết bị thật.
+
+Kiểm chứng bản này:2030/2030.NET,1170/1170Node,build backend0lỗi/4cảnh báo Pkcs có sẵn,Vue450modules. Browser trên dữ liệu tổng hợp đã đi qua danh sách hồ sơ → hồ sơ của mình → hóa đơn chỉ đọc; truy cập hồ sơ khác bị404, không có nút thu tiền. Chưa nghiệm thu toàn bộ nội dung FDI/ảnh/đơn thuốc trong lượt portal này. Chi tiết cục bộ:`docs/testing/PATIENT_PORTAL_20261022_REPORT.md` tại thư mục gốc dự án.
