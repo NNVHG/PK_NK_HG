@@ -41,7 +41,7 @@ public sealed class PasswordRecoveryCodes(TimeProvider clock) : IPasswordRecover
         }
     }
 
-    public RecoveryAccount? Consume(Guid challengeId, string phone, string code)
+    public RecoveryAccount? Consume(Guid challengeId, string phone, string code, string? citizenIdHash)
     {
         lock (gate)
         {
@@ -50,7 +50,12 @@ public sealed class PasswordRecoveryCodes(TimeProvider clock) : IPasswordRecover
                 clock.GetUtcNow() - current.CreatedAt >= TimeSpan.FromMinutes(5)) return null;
             current.Attempts++;
             var candidate = Digest(challengeId.ToString("N") + code);
-            if (!CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(candidate), Encoding.ASCII.GetBytes(current.Digest))) return null;
+            var validCode = CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(candidate), Encoding.ASCII.GetBytes(current.Digest));
+            var expectedHash = current.Account?.CitizenIdHash;
+            var validIdentity = expectedHash is null
+                ? citizenIdHash is null
+                : citizenIdHash is not null && CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(expectedHash), Encoding.ASCII.GetBytes(citizenIdHash));
+            if (!validCode || !validIdentity) return null;
             current.Consumed = true;
             return current.Account;
         }

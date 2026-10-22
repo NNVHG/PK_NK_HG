@@ -1,12 +1,15 @@
 <template>
   <section class="recovery-card" aria-labelledby="recovery-title">
     <h1 id="recovery-title">Khôi phục mật khẩu</h1>
-    <p>Nhận mã xác minh qua số điện thoại đã đăng ký tại phòng khám.</p>
+    <p>Bệnh nhân nhập CCCD và số điện thoại đã đăng ký. Nhân viên chỉ cần số điện thoại. Mã xác minh được gửi qua SMS.</p>
     <p class="notice" role="status">{{ message }}</p>
     <form v-if="!done" @submit.prevent="submit" novalidate :aria-busy="busy">
       <label for="recovery-phone">Số điện thoại đã đăng ký</label>
       <input id="recovery-phone" ref="phoneInput" v-model="phone" type="tel" name="phone" inputmode="numeric"
         autocomplete="tel" maxlength="10" :disabled="busy || !!store.challenge" :aria-invalid="invalidField === 'phone'" aria-describedby="recovery-error" />
+      <label for="recovery-citizen-id">CCCD của bệnh nhân (nhân viên để trống)</label>
+      <input id="recovery-citizen-id" ref="citizenIdInput" v-model="citizenId" type="text" name="citizen-id" inputmode="numeric"
+        autocomplete="off" maxlength="12" :disabled="busy || !!store.challenge" :aria-invalid="invalidField === 'citizenId'" aria-describedby="recovery-error" />
       <template v-if="store.challenge">
         <p>Mã gồm 6 chữ số, có hiệu lực 5 phút và tối đa 5 lần nhập sai. Có thể yêu cầu mã mới sau 60 giây.</p>
         <label for="recovery-code">Mã OTP từ SMS</label>
@@ -24,7 +27,7 @@
       <button type="submit" :disabled="busy">{{ busy ? 'Đang xử lý…' : store.challenge ? 'Đặt mật khẩu mới' : 'Nhận mã qua SMS' }}</button>
       <div v-if="store.challenge" class="actions">
         <button type="button" :disabled="busy" @click="requestCode">Gửi lại mã</button>
-        <button type="button" :disabled="busy" @click="changePhone">Nhập số điện thoại khác</button>
+        <button type="button" :disabled="busy" @click="changeIdentity">Nhập thông tin khác</button>
       </div>
     </form>
     <RouterLink to="/login">Quay lại đăng nhập</RouterLink>
@@ -38,26 +41,28 @@ import { passwordRecoveryService } from '@/services/passwordRecovery';
 import { usePasswordRecoveryStore } from '@/stores/passwordRecovery';
 
 const store = usePasswordRecoveryStore();
-const phone = ref(''), code = ref(''), password = ref(''), confirmPassword = ref('');
+const phone = ref(''), citizenId = ref(''), code = ref(''), password = ref(''), confirmPassword = ref('');
 const error = ref(''), message = ref(''), invalidField = ref(''), busy = ref(false), done = ref(false);
 const phoneInput = ref<HTMLInputElement | null>(null), codeInput = ref<HTMLInputElement | null>(null);
+const citizenIdInput = ref<HTMLInputElement | null>(null);
 const passwordInput = ref<HTMLInputElement | null>(null), confirmInput = ref<HTMLInputElement | null>(null);
 let active = true, requestVersion = 0, resendAt = 0;
 
 function reject(field: string, text: string) {
   invalidField.value = field; error.value = text;
-  ({ phone: phoneInput, code: codeInput, password: passwordInput, confirm: confirmInput }[field])?.value?.focus();
+  ({ phone: phoneInput, citizenId: citizenIdInput, code: codeInput, password: passwordInput, confirm: confirmInput }[field])?.value?.focus();
 }
 function clearSecrets() { code.value = ''; password.value = ''; confirmPassword.value = ''; }
 async function requestCode() {
   if (busy.value || !active || done.value) return;
   error.value = ''; invalidField.value = '';
   if (!/^0[0-9]{9}$/.test(phone.value)) return reject('phone', 'Nhập số điện thoại gồm 10 chữ số, bắt đầu bằng 0.');
+  if (citizenId.value && !/^[0-9]{12}$/.test(citizenId.value)) return reject('citizenId', 'CCCD phải gồm đúng 12 chữ số.');
   if (Date.now() < resendAt) { error.value = 'Vui lòng chờ đủ 60 giây trước khi yêu cầu mã mới.'; return; }
   busy.value = true;
   const version = ++requestVersion;
   try {
-    const response = await passwordRecoveryService.request(phone.value);
+    const response = await passwordRecoveryService.request(phone.value, citizenId.value);
     if (!active || version !== requestVersion) return;
     store.set(response); clearSecrets(); resendAt = Date.now() + response.resendAfterSeconds * 1000;
     message.value = 'Nếu số điện thoại thuộc tài khoản đang hoạt động, bạn sẽ nhận được mã SMS. Nếu chưa nhận được, kiểm tra số điện thoại hoặc liên hệ phòng khám.';
@@ -78,22 +83,22 @@ async function submit() {
   busy.value = true;
   const version = ++requestVersion;
   try {
-    await passwordRecoveryService.reset(store.challenge.challengeId, phone.value, code.value, password.value);
+    await passwordRecoveryService.reset(store.challenge.challengeId, phone.value, code.value, password.value, citizenId.value);
     if (!active || version !== requestVersion) return;
-    store.clear(); phone.value = ''; clearSecrets(); done.value = true;
+    store.clear(); phone.value = ''; citizenId.value = ''; clearSecrets(); done.value = true;
     message.value = 'Đã đặt mật khẩu mới. Vui lòng đăng nhập lại bằng mật khẩu mới.';
   } catch (err: any) {
     if (active && version === requestVersion) { clearSecrets(); error.value = err.response?.data?.message || 'Chưa xác định được kết quả. Hãy thử đăng nhập bằng mật khẩu mới hoặc yêu cầu mã khác.'; }
   } finally { if (active && version === requestVersion) busy.value = false; }
 }
-function changePhone() {
+function changeIdentity() {
   if (busy.value) return;
-  ++requestVersion; store.clear(); clearSecrets(); phone.value = ''; error.value = ''; message.value = ''; invalidField.value = '';
+  ++requestVersion; store.clear(); clearSecrets(); phone.value = ''; citizenId.value = ''; error.value = ''; message.value = ''; invalidField.value = '';
   // Keep the local resend deadline; changing the form must not bypass the server cooldown.
   nextTick(() => phoneInput.value?.focus());
 }
 onMounted(() => { store.clear(); phoneInput.value?.focus(); });
-onUnmounted(() => { active = false; ++requestVersion; store.clear(); clearSecrets(); phone.value = ''; message.value = ''; });
+onUnmounted(() => { active = false; ++requestVersion; store.clear(); clearSecrets(); phone.value = ''; citizenId.value = ''; message.value = ''; });
 </script>
 
 <style scoped>
