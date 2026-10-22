@@ -104,6 +104,12 @@ const router = createRouter({
     },
     {
       path: '/',
+      name: 'public-home',
+      component: () => import('@/views/PublicHomeView.vue'),
+      meta: { requiresAuth: false }
+    },
+    {
+      path: '/dashboard',
       name: 'dashboard',
       component: () => import('@/views/DashboardView.vue'),
       meta: { requiresAuth: true }

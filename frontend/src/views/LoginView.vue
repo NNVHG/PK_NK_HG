@@ -68,7 +68,7 @@ async function handleSubmit() {
   loading.value = true;
   try {
     await authStore.login(phone.value, password.value);
-    const redirect = (route.query.redirect as string) || '/';
+    const redirect = (route.query.redirect as string) || '/dashboard';
     router.push(redirect);
   } catch (err: any) {
     errorMessage.value = err.response?.data?.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại.';

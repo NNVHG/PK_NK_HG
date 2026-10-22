@@ -17,11 +17,6 @@ public sealed class BookingRequestsController(BookingRequestService service,ICur
 {
     [HttpGet("catalog")][AllowAnonymous][EnableRateLimiting(BookingRequestRateLimits.Read)]
     public async Task<IActionResult> Catalog(CancellationToken ct)=>Ok(await service.CatalogAsync(ct));
-    [HttpPost("otp")][AllowAnonymous][EnableRateLimiting(BookingRequestRateLimits.Otp)]
-    public async Task<IActionResult> Otp(BookingOtpRequest request,CancellationToken ct)
-    {
-        var r=await service.RequestOtpAsync(request,actor.UserId,actor.RoleCode,ct);return r.IsSuccess?Accepted(r.Value):Failure(r.Error);
-    }
     [HttpPost][AllowAnonymous][EnableRateLimiting(BookingRequestRateLimits.Submit)]
     public async Task<IActionResult> Submit(SubmitBookingRequest request,CancellationToken ct)
     {

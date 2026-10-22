@@ -21,18 +21,18 @@ public sealed class BookingApprovalRepository(DentalDbContext db, VietnamClock c
 
     private async Task<BookingApprovalContext> Context(BookingRequest row, CancellationToken ct)
     {
-        var account = await db.Users.AsNoTracking().Include(u => u.Role).SingleOrDefaultAsync(u => u.Phone == row.Phone, ct);
+        var account = row.SubmittedByUserId.HasValue
+            ? await db.Users.AsNoTracking().Include(u => u.Role).SingleOrDefaultAsync(u => u.UserId == row.SubmittedByUserId && u.Role.RoleCode == RoleCodes.Patient, ct)
+            : null;
         var patients = await db.Patients.AsNoTracking().Where(p => p.Phone == row.Phone &&
             (p.FullName == row.FullName || p.DateOfBirth == row.DateOfBirth || p.PatientId == row.VerifiedPatientId))
             .OrderBy(p => p.PatientId).Take(21).ToArrayAsync(ct);
-        var counter = !row.VerifiedPatientId.HasValue && (account is not null || patients.Length > 0);
+        var counter = !row.VerifiedPatientId.HasValue && patients.Length > 0;
         string? blocked = null;
         if (row.Status != "Pending") blocked = "Yêu cầu không còn chờ xác nhận.";
         else if (row.AppointmentDate < clock.Today || row.AppointmentDate == clock.Today && row.SlotTime <= TimeOnly.FromDateTime(clock.Now))
             blocked = "Giờ hẹn đã qua. Từ chối yêu cầu và đối chiếu lịch mới với khách.";
-        else if (account is not null && (!account.IsActive || account.Role.RoleCode != RoleCodes.Patient))
-            blocked = "Tài khoản cùng SĐT không đủ điều kiện. Không tạo trùng hoặc mở khóa tài khoản.";
-        else if (row.SubmittedByUserId.HasValue && account?.UserId != row.SubmittedByUserId)
+        else if (row.SubmittedByUserId.HasValue && (account is null || !account.IsActive))
             blocked = "Tài khoản gửi yêu cầu đã thay đổi. Cần đối chiếu lại.";
         else if (patients.Length > 20) blocked = "Có quá nhiều hồ sơ tương đồng. Đối soát hồ sơ tại quầy trước khi xử lý.";
         var dentist = row.DentistId.HasValue ? await db.Users.AsNoTracking().Include(u => u.Role).SingleOrDefaultAsync(u => u.UserId == row.DentistId, ct) : null;
@@ -52,15 +52,13 @@ public sealed class BookingApprovalRepository(DentalDbContext db, VietnamClock c
         if (row.ApprovedAppointmentId.HasValue)
         {
             var a = await db.Appointments.AsNoTracking().SingleAsync(a => a.AppointmentId == row.ApprovedAppointmentId, ct);
-            var activationRequired = await db.Patients.Where(p => p.PatientId == a.PatientId)
-                .Select(p => p.User != null && p.User.RequiresPhoneActivation).SingleAsync(ct);
-            result = new(a.AppointmentId, a.PatientId, row.CreatedAccount, activationRequired);
+            result = new(a.AppointmentId, a.PatientId, false, false);
         }
         return new(row.Id, row.Version, row.Status, row.FullName, row.Phone, row.DateOfBirth, row.Gender,
             row.AppointmentDate, row.SlotTime, row.SlotDurationMinutes, dentist?.FullName, row.VerifiedPatientId,
             account is null ? null : new(account.UserId, account.FullName),
             patients.Take(20).Select(p => new BookingApprovalPatient(p.PatientId, p.FullName, p.DateOfBirth,
-                p.IsActive && (!p.UserId.HasValue || p.UserId == account?.UserId) &&
+                p.IsActive && (!row.VerifiedPatientId.HasValue || p.UserId == account?.UserId) &&
                 (!row.VerifiedPatientId.HasValue || p.PatientId == row.VerifiedPatientId))).ToArray(),
             counter, blocked, stamp, result);
     }
@@ -117,35 +115,20 @@ public sealed class BookingApprovalRepository(DentalDbContext db, VietnamClock c
                 if (otherHolds.Any(x => BookingOccupancy.Overlaps(BookingRequestReservations.Period(x), row.AppointmentDate, row.SlotTime, row.SlotDurationMinutes))
                     || otherBookings.Any(a => BookingOccupancy.Overlaps(a, row.AppointmentDate, row.SlotTime, row.SlotDurationMinutes))) return Conflict();
             }
-            var user = await db.Users.SingleOrDefaultAsync(u => u.Phone == row.Phone, ct);
-            var createdAccount = user is null;
-            if (user is null)
-            {
-                var patientRole = await db.Roles.SingleAsync(r => r.RoleCode == RoleCodes.Patient, ct);
-                user = new User { Phone = row.Phone, FullName = row.FullName, DateOfBirth = row.DateOfBirth,
-                    Gender = row.Gender, Email = row.Email, RoleId = patientRole.RoleId,
-                    PasswordHash = passwords.Hash(row.Phone), RequiresPhoneActivation = true, CreatedAt = clock.UtcNow };
-                db.Users.Add(user);
-                await db.SaveChangesAsync(ct);
-            }
-            if (patient.UserId.HasValue && patient.UserId != user.UserId) return Conflict();
-            var linkedExisting = request.PatientId.HasValue && !patient.UserId.HasValue;
-            patient.UserId = user.UserId;
-            patient.UpdatedAt = clock.UtcNow;
             var appointment = new Appointment { Patient = patient, AppointmentDate = row.AppointmentDate, SlotTime = row.SlotTime,
                 SlotDurationMinutes = row.SlotDurationMinutes, DentistId = row.DentistId, Notes = row.Notes,
                 CreatedByUserId = actor, CreatedAt = clock.UtcNow };
             db.Appointments.Add(appointment);
-            row.Status = "Approved"; row.Version++; row.ReviewedByUserId = actor; row.UpdatedAt = clock.UtcNow; row.CreatedAccount = createdAccount;
+            row.Status = "Approved"; row.Version++; row.ReviewedByUserId = actor; row.UpdatedAt = clock.UtcNow; row.CreatedAccount = false;
             await db.SaveChangesAsync(ct);
             row.ApprovedAppointmentId = appointment.AppointmentId;
             db.AuditLogs.Add(new AuditLog { UserId = actor, EntityType = "BookingRequest", EntityId = row.Id,
                 Action = "MOD_APP_REQUEST_APPROVED", IpAddress = ip, CreatedAt = clock.UtcNow,
                 Detail = JsonSerializer.Serialize(new { appointmentId = appointment.AppointmentId, patientId = patient.PatientId,
-                    accountUserId = user.UserId, createdAccount, linkedExisting, confirmedAtCounter = request.ConfirmedAtCounter,
+                    accountCreated = false, accountDeferredToCheckIn = true, confirmedAtCounter = request.ConfirmedAtCounter,
                     version = row.Version, decision = "DL-329" }) });
             await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); committed = true;
-            return Result<BookingApprovalResult>.Success(new(appointment.AppointmentId, patient.PatientId, createdAccount, user.RequiresPhoneActivation));
+            return Result<BookingApprovalResult>.Success(new(appointment.AppointmentId, patient.PatientId, false, false));
         }
         catch (Exception e) when (IsConflict(e)) { return Conflict(); }
         finally { if (!committed) db.ChangeTracker.Clear(); }

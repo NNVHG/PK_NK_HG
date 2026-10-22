@@ -54,7 +54,7 @@ public sealed class BookingRequestRepository(DentalDbContext db,VietnamClock clo
             var returning=i.PatientId.HasValue&&await db.Visits.AnyAsync(v=>v.PatientId==i.PatientId&&v.Status==VisitStatuses.Completed,ct);
             var row=new BookingRequest{ClientRequestId=request.ClientRequestId,IntentDigest=Digest(i,actor),FullName=i.FullName.Trim(),Phone=i.Phone,DateOfBirth=i.DateOfBirth,Gender=i.Gender,Email=string.IsNullOrWhiteSpace(i.Email)?null:i.Email.Trim(),Notes=string.IsNullOrWhiteSpace(i.Notes)?null:i.Notes.Trim(),AppointmentDate=i.AppointmentDate,SlotTime=i.SlotTime,SlotDurationMinutes=duration,DentistId=i.DentistId,VerifiedPatientId=i.PatientId,SubmittedByUserId=actor,IsReturning=returning,CreatedAt=clock.UtcNow};
             db.BookingRequests.Add(row);await db.SaveChangesAsync(ct);
-            db.AuditLogs.Add(new AuditLog{UserId=actor,EntityType="BookingRequest",EntityId=row.Id,Action="MOD_APP_REQUEST_SUBMITTED",IpAddress=ip,CreatedAt=clock.UtcNow,Detail=JsonSerializer.Serialize(new{version=1,phoneVerified=true,verifiedProfile=i.PatientId.HasValue})});
+            db.AuditLogs.Add(new AuditLog{UserId=actor,EntityType="BookingRequest",EntityId=row.Id,Action="MOD_APP_REQUEST_SUBMITTED",IpAddress=ip,CreatedAt=clock.UtcNow,Detail=JsonSerializer.Serialize(new{version=2,phoneVerified=false,verifiedProfile=i.PatientId.HasValue})});
             await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);committed=true;
             return Result<BookingReceipt>.Success(new(row.ClientRequestId,row.Status));
         }

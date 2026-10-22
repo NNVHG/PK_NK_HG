@@ -5,7 +5,7 @@
         <h2>Phòng Khám Nha Khoa</h2>
       </div>
       <nav class="nav-links">
-        <router-link to="/">Bảng điều khiển</router-link>
+        <router-link to="/dashboard">Bảng điều khiển</router-link>
         <router-link v-if="['ADMIN','RECEPTIONIST'].includes(authStore.role)" to="/appointments/requests">Yêu cầu đặt lịch</router-link>
         <router-link v-if="authStore.role === 'PATIENT'" to="/book-appointment">Gửi yêu cầu đặt lịch</router-link>
         <router-link v-if="authStore.role === 'PATIENT'" to="/appointments">Đặt lịch khám</router-link>

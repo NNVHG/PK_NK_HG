@@ -7,8 +7,7 @@
     <template v-if="context && !context.result">
       <p>{{ context.fullName }} · {{ context.dateOfBirth }} · {{ context.phone }}</p>
       <p>{{ context.appointmentDate }} {{ context.slotTime.slice(0, 5) }} · {{ context.slotDurationMinutes }} phút · {{ context.dentistName || 'Chưa phân công nha sĩ' }}</p>
-      <p v-if="context.account">Tài khoản gia đình: {{ context.account.fullName }}. Giữ nguyên mật khẩu và các hồ sơ đã có.</p>
-      <p v-else>Tạo tài khoản sau khi xác nhận lịch; phải xác minh OTP lần đầu trước khi đăng nhập.</p>
+      <p>Tài khoản bệnh nhân được tạo hoặc chuyển tại quầy sau khi lễ tân đối chiếu CCCD và số điện thoại lúc check-in.</p>
       <p v-if="context.blockReason" role="alert">{{ context.blockReason }}</p>
       <form v-else @submit.prevent="approve">
         <label>Hồ sơ nhận lịch
@@ -20,12 +19,12 @@
         </label>
         <p v-if="context.patients.length">Đã tìm thấy hồ sơ tương đồng. Đối chiếu từng người; không tạo trùng hoặc chuyển hồ sơ đã có chủ.</p>
         <label v-if="selection === 'new'"><input v-model="confirmedNew" type="checkbox" :disabled="busy || needsReview" /> Tôi đã đối chiếu hồ sơ tương đồng và xác nhận đây là người mới cần tạo hồ sơ</label>
-        <label v-if="context.requiresCounterConfirmation"><input v-model="counter" type="checkbox" :disabled="busy || needsReview" /> Khách/người đại diện đang tại quầy; tôi đã đối soát và xác nhận gắn đúng hồ sơ vào tài khoản gia đình</label>
+        <label v-if="context.requiresCounterConfirmation"><input v-model="counter" type="checkbox" :disabled="busy || needsReview" /> Khách/người đại diện đang tại quầy; tôi đã đối soát và xác nhận đúng hồ sơ bệnh nhân</label>
         <label><input v-model="confirmed" type="checkbox" :disabled="busy || needsReview" /> Tôi đã đối chiếu đúng người và giờ hẹn để xác nhận lịch</label>
         <button type="submit" :disabled="busy || needsReview">Xác nhận lịch đã hẹn</button>
       </form>
     </template>
-    <p v-if="context?.result">Lịch #{{ context.result.appointmentId }} đã được xác nhận. {{ context.result.requiresPhoneActivation ? 'Tài khoản cần xác minh OTP lần đầu trước khi đăng nhập.' : 'Tài khoản hiện có được giữ nguyên.' }}</p>
+    <p v-if="context?.result">Lịch #{{ context.result.appointmentId }} đã được xác nhận. Tài khoản được xử lý tại quầy khi khách check-in và đối chiếu CCCD/SĐT.</p>
   </section>
 </template>
 <script setup lang="ts">

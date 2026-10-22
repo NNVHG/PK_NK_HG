@@ -7,7 +7,14 @@ public sealed record BookingIntent(string FullName,string Phone,DateOnly DateOfB
     DateOnly AppointmentDate,TimeOnly SlotTime,int? DentistId,string? Notes,string ScheduleRevision,int? PatientId=null);
 public sealed record BookingOtpRequest(BookingIntent Intent);
 public sealed record BookingOtpResponse(Guid ChallengeId,int ExpiresInSeconds=300,int ResendAfterSeconds=60);
-public sealed record SubmitBookingRequest(BookingIntent Intent,Guid ChallengeId,string Code,Guid ClientRequestId,bool Confirmed);
+public sealed record SubmitBookingRequest(BookingIntent Intent,Guid ClientRequestId,bool Confirmed)
+{
+    // Compatibility constructor for existing internal callers; appointment submission no longer uses OTP.
+    public SubmitBookingRequest(BookingIntent intent,Guid challengeId,string code,Guid clientRequestId,bool confirmed)
+        :this(intent,clientRequestId,confirmed){ChallengeId=challengeId;Code=code;}
+    public Guid ChallengeId { get; init; }
+    public string Code { get; init; } = string.Empty;
+}
 public sealed record BookingReceipt(Guid RequestId,string Status);
 public sealed record PublicBookingDentist(int DentistId,string FullName);
 public sealed record PublicBookingCatalog(string Today,string[] Slots,int DurationMinutes,string Revision,PublicBookingDentist[] Dentists);
@@ -61,10 +68,9 @@ public sealed class BookingRequestService(IBookingRequestRepository repository,I
     }
     public async Task<Result<BookingReceipt>> SubmitAsync(SubmitBookingRequest request,int? actor,string? role,string? ip,CancellationToken ct=default)
     {
-        if(!Valid(request.Intent)||!request.Confirmed||request.ClientRequestId==Guid.Empty||request.ChallengeId==Guid.Empty||request.Code is null||request.Code.Length!=6||!System.Text.RegularExpressions.Regex.IsMatch(request.Code,"^[0-9]{6}$"))return Result<BookingReceipt>.Failure(Error.Validation);
+        if(!Valid(request.Intent)||!request.Confirmed||request.ClientRequestId==Guid.Empty)return Result<BookingReceipt>.Failure(Error.Validation);
         var replay=await repository.ReplayAsync(request,actor,ct);
         if(replay is not null)return Result<BookingReceipt>.Success(replay);
-        if(!otp.Consume(request,actor))return Result<BookingReceipt>.Failure(InvalidOtp);
         return await repository.SubmitAsync(request,actor,role,ip,ct);
     }
     public Task<Result<PagedResult<BookingRequestRow>>> ListAsync(int actor,string? role,int page,CancellationToken ct=default)
