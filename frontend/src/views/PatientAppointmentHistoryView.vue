@@ -63,6 +63,8 @@ onUnmounted(() => { version++; profileVersion++; rows.value = []; profiles.value
 </script>
 <style scoped>
 .page { max-width: 850px; margin: auto; padding: 1.5rem; } button, select { font: inherit; padding: .5rem; margin: .5rem; }
-ul { list-style: none; padding: 0; } li { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin: .7rem 0; }
+.page { min-width: 0; box-sizing: border-box; }
+select, button { max-width: 100%; box-sizing: border-box; margin-left: 0; margin-right: 0; }
+ul { list-style: none; padding: 0; } li { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin: .7rem 0; overflow-wrap: anywhere; }
 [role=alert] { color: #b91c1c; }
 </style>
