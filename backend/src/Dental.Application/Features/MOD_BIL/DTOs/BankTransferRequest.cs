@@ -7,6 +7,7 @@ public sealed record BankTransferRequest(string AddInfo, decimal Amount, string 
 public sealed record SePayWebhookRequest(long Id, string TransferType, decimal TransferAmount, string ReferenceCode,
     string Content, string AccountNumber);
 public sealed record BankTransferSimulationRequest(string InvoiceCode, decimal Amount, string TransactionReference);
+public sealed record ManualBankTransferConfirmationRequest(decimal Amount, string TransactionReference, bool Confirmed);
 public sealed record InvoicePaymentState(int Id, string InvoiceCode, InvoiceStatus Status, decimal PaidAmount, decimal RemainingAmount);
 public sealed record BankTransferResponse(int Id, int InvoiceId, decimal Amount, decimal BankReceivedAmount,
     decimal ChangeAmount, string TransactionReference, string Source, string? Note, DateTime PaidAt);

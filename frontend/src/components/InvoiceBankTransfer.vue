@@ -25,6 +25,14 @@
       <p v-else-if="qrFailed" role="alert">Không tải được ảnh VietQR. Kiểm tra kết nối trước khi chuyển tiền.</p>
       <button v-if="qrFailed && info.qrUrl" :disabled="busy || expired" @click="retryQrImage">Thử tải lại VietQR trực tuyến</button>
       <p v-if="info.accountName">Tài khoản phòng khám: {{ info.accountName }}</p>
+      <fieldset v-if="canConfirmManual" :disabled="busy || expired">
+        <legend>Xác nhận chuyển khoản thủ công</legend>
+        <p>Chỉ xác nhận sau khi đã đối soát tiền thật vào tài khoản phòng khám.</p>
+        <label>Số tiền thực nhận (VND)<input v-model="manualAmount" type="number" min="1" step="1" /></label>
+        <label>Mã giao dịch ngân hàng<input v-model.trim="manualReference" maxlength="20" autocomplete="off" /></label>
+        <label><input v-model="manualConfirmed" type="checkbox" /> Tôi xác nhận đã đối soát khoản tiền này</label>
+        <button :disabled="busy || !manualValid" @click="confirmManual">Ghi nhận chuyển khoản đã đối soát</button>
+      </fieldset>
       <button :disabled="busy || watching || expired" @click="startWatching">Theo dõi chuyển khoản</button>
       <button :disabled="busy || expired" @click="checkNow">Kiểm tra thanh toán</button>
       <button v-if="watching" @click="stopWatching">Dừng theo dõi</button>
@@ -54,9 +62,11 @@ import demoQrImage from '@/assets/images/vietqr-demo-fallback.svg';
 const props = defineProps<{ invoiceId: number }>();
 const emit = defineEmits<{ paid: [payment: BankTransferResponse | null] }>();
 const auth = useAuthStore(); const store = useBankTransfersStore();
+const canConfirmManual = computed(() => auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST');
 const key = computed(() => `${auth.user?.userId}:${props.invoiceId}`);
 const pending = computed(() => store.pending[key.value]);
 const info = ref<BankTransferInfo | null>(null); const amount = ref<number | string>('');
+const manualAmount = ref<number | string>(''); const manualReference = ref(''); const manualConfirmed = ref(false);
 const dialog = ref<HTMLDialogElement | null>(null);
 const busy = ref(false); const confirmed = ref(false); const error = ref(''); const qrFailed = ref(false); const watching = ref(false);
 const remainingSeconds = ref(0); const expired = ref(false);
@@ -67,6 +77,8 @@ const qrSession = MOD_BIL_createQrSession(seconds => { remainingSeconds.value = 
 const qrDisplay = computed(() => MOD_BIL_bankQrDisplay(info.value?.qrUrl ?? null, qrFailed.value, info.value?.simulationEnabled ?? false));
 function handleQrImageError() { qrFailed.value = true; }
 const valid = computed(() => Number.isSafeInteger(Number(amount.value)) && Number(amount.value) > 0);
+const manualValid = computed(() => Number.isSafeInteger(Number(manualAmount.value)) && Number(manualAmount.value) > 0 &&
+  /^[A-Za-z0-9_-]{6,20}$/.test(manualReference.value) && manualConfirmed.value);
 const money = (value: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
 let version = 0; let timer: ReturnType<typeof setInterval> | undefined; let polling = false;
 let checkCurrent: (() => Promise<void>) | undefined;
@@ -86,7 +98,7 @@ async function load() {
   try {
     const data = await bankTransfersApi.info(props.invoiceId);
     if (ticket !== version) return;
-    info.value = data; amount.value = pending.value?.amount ?? data.remainingAmount;
+    info.value = data; amount.value = pending.value?.amount ?? data.remainingAmount; manualAmount.value = data.remainingAmount;
   } catch (cause) {
     if (ticket !== version) return;
     if (axios.isAxiosError(cause) && cause.response?.status === 409) { closeModal(); emit('paid', null); }
@@ -133,6 +145,20 @@ async function simulate() {
   } catch (cause) {
     if (axios.isAxiosError(cause) && [400, 403, 404].includes(cause.response?.status ?? 0)) store.clear(requestKey);
     if (ticket === version) error.value = axios.isAxiosError(cause) ? cause.response?.data?.message || 'Chưa xác định kết quả. Thử lại cùng mã mô phỏng.' : 'Chưa xác định kết quả.';
+  } finally { if (ticket === version) busy.value = false; }
+}
+async function confirmManual() {
+  if (busy.value || !info.value || !manualValid.value) return;
+  const ticket = version; busy.value = true; error.value = '';
+  try {
+    const payment = await bankTransfersApi.confirmManual(props.invoiceId, {
+      amount: Number(manualAmount.value), transactionReference: manualReference.value, confirmed: true
+    });
+    if (ticket === version) { manualConfirmed.value = false; closeModal(); emit('paid', payment); }
+  } catch (cause) {
+    if (ticket === version) error.value = axios.isAxiosError(cause)
+      ? cause.response?.data?.message || 'Không thể ghi nhận chuyển khoản. Kiểm tra lịch sử giao dịch trước khi thử lại.'
+      : 'Chưa xác định kết quả. Kiểm tra lịch sử giao dịch trước khi thử lại.';
   } finally { if (ticket === version) busy.value = false; }
 }
 watch(() => props.invoiceId, load, { immediate: true });

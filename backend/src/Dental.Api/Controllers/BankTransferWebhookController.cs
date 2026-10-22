@@ -25,7 +25,7 @@ public sealed class BankTransferWebhookController(BankTransferWebhookService ser
         var settings = await repository.GetBankSettingsAsync(ct);
         if (!settings.TryGetValue("Payment:AccountNumber", out var account) || string.IsNullOrWhiteSpace(account) || account != request.AccountNumber)
             return BadRequest(new { success = false, message = "Tài khoản nhận không khớp cấu hình phòng khám." });
-        return await Record(new(request.Content, request.TransferAmount, request.ReferenceCode, request.Id), false, ct, true);
+        return await Record(new(request.Content, request.TransferAmount, request.ReferenceCode, request.Id), null, false, false, ct, true);
     }
 
     [HttpPost("api/webhooks/payment/bank-transfer/simulate")]
@@ -35,13 +35,29 @@ public sealed class BankTransferWebhookController(BankTransferWebhookService ser
         if (!environment.IsDevelopment()) return Task.FromResult<IActionResult>(NotFound());
         if (BankTransferRules.InvoiceCode($"PKNK {request.InvoiceCode}") != request.InvoiceCode)
             return Task.FromResult<IActionResult>(BadRequest(new { message = "Mã hóa đơn không hợp lệ." }));
-        return Record(new($"PKNK {request.InvoiceCode}", request.Amount, request.TransactionReference), true, ct);
+        return Record(new($"PKNK {request.InvoiceCode}", request.Amount, request.TransactionReference), user.RoleCode, true, false, ct);
     }
 
-    private async Task<IActionResult> Record(BankTransferRequest request, bool simulated, CancellationToken ct, bool providerResponse = false)
+    [HttpPost("api/invoices/{invoiceId:int}/bank-transfer/confirm")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = AppPolicies.CashPaymentWrite)]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
+    public async Task<IActionResult> ConfirmManual(int invoiceId, ManualBankTransferConfirmationRequest request, CancellationToken ct)
     {
         if (user.UserId is not int actorId) return Unauthorized();
-        var result = await service.ReceiveAsync(request, actorId, simulated, HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
+        var result = await service.ConfirmManualAsync(invoiceId, actorId, user.RoleCode, request,
+            HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
+        return result.IsSuccess ? Ok(result.Value) : StatusCode(result.Error.Code switch
+        {
+            "GEN_001" => 404, "GEN_002" => 403, "GEN_003" or "BIL_032" => 400, _ => 409
+        }, new { code = result.Error.Code, message = result.Error.Message });
+    }
+
+    private async Task<IActionResult> Record(BankTransferRequest request, string? actorRole, bool simulated,
+        bool manualConfirmation, CancellationToken ct, bool providerResponse = false)
+    {
+        if (user.UserId is not int actorId) return Unauthorized();
+        var result = await service.ReceiveAsync(request, actorId, actorRole, simulated, manualConfirmation,
+            HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
         if (result.IsSuccess) return providerResponse ? Ok(new { success = true, payment = result.Value }) : Ok(result.Value);
         return StatusCode(result.Error.Code switch { "GEN_001" => 404, "GEN_002" => 403, "GEN_003" or "BIL_032" => 400, _ => 409 },
             new { code = result.Error.Code, message = result.Error.Message });

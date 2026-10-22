@@ -9,5 +9,5 @@ public interface IBankTransferRepository
     Task<Invoice?> GetInvoiceAsync(int invoiceId, CancellationToken ct = default);
     Task<IReadOnlyDictionary<string, string>> GetBankSettingsAsync(CancellationToken ct = default);
     Task<Result<PaymentTransaction>> ReceiveAsync(BankTransferRequest request, string invoiceCode, int actorId,
-        bool simulated, string? ip, CancellationToken ct = default);
+        string? actorRole, bool simulated, bool manualConfirmation, string? ip, CancellationToken ct = default);
 }
