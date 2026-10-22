@@ -6,6 +6,8 @@ export interface CheckInPayload {
   appointmentId: number | null;
   dentistId: number | null;
   notes: string | null;
+  citizenId: string;
+  phone: string;
 }
 
 export interface QueueEntryResponse {

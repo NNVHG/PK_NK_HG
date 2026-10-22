@@ -16,6 +16,10 @@ public sealed class PatientRepository : IPatientRepository
     public Task<Patient?> GetByIdAsync(int patientId, CancellationToken ct = default)
         => _db.Patients.FirstOrDefaultAsync(patient => patient.PatientId == patientId, ct);
 
+    public Task<Patient?> FindByCitizenIdHashAsync(string citizenIdHash, int? exceptPatientId = null, CancellationToken ct = default)
+        => _db.Patients.FirstOrDefaultAsync(patient => patient.CitizenIdHash == citizenIdHash &&
+            (!exceptPatientId.HasValue || patient.PatientId != exceptPatientId.Value), ct);
+
     public Task<Patient?> GetByUserIdAsync(int userId, CancellationToken ct = default)
         => _db.Patients.FirstOrDefaultAsync(patient => patient.UserId == userId, ct);
 

@@ -2,7 +2,7 @@
   <main class="page">
     <header>
       <h1>Tiếp đón và check-in</h1>
-      <p>Tìm hồ sơ bệnh nhân, xác nhận khách đã đến và cấp số thứ tự. Lượt chưa khám được đóng sau 23:30 giờ Việt Nam; khi quay lại sẽ nhận lượt mới.</p>
+      <p>Tìm hồ sơ, đối chiếu CCCD và số điện thoại tại quầy, sau đó xác nhận khách đã đến. Lượt chưa khám được đóng sau 23:30 giờ Việt Nam; khi quay lại sẽ nhận lượt mới.</p>
     </header>
 
     <section class="card">
@@ -36,6 +36,12 @@
 
     <section v-if="selectedPatient" class="card checkin-card">
       <h2>{{ selectedPatient.fullName }} <small>{{ selectedPatient.patientCode }}</small></h2>
+
+      <label for="checkin-citizen-id">CCCD của người bệnh</label>
+      <input id="checkin-citizen-id" v-model="citizenId" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="Nhập CCCD 12 chữ số" />
+      <label for="checkin-phone">Số điện thoại trong hồ sơ</label>
+      <input id="checkin-phone" v-model="checkInPhone" inputmode="tel" autocomplete="tel" maxlength="10" placeholder="Nhập số điện thoại đã đăng ký" />
+      <p class="hint">Thông tin chỉ dùng để đối chiếu tại quầy. Hệ thống không lưu CCCD rõ.</p>
 
       <div v-if="debtLoading" class="hint" role="status">Đang kiểm tra công nợ cũ…</div>
       <div v-else-if="debtLookupFailed" class="message debt-error" role="alert">
@@ -100,6 +106,8 @@ const selectedPatient = ref<PatientSummary | null>(null);
 const appointments = ref<AppointmentResponse[]>([]);
 const appointmentId = ref<number | null>(null);
 const notes = ref('');
+const citizenId = ref('');
+const checkInPhone = ref('');
 const searching = ref(false);
 const searched = ref(false);
 const loadingAppointments = ref(false);
@@ -138,6 +146,8 @@ async function searchPatients() {
 
 async function selectPatient(patient: PatientSummary) {
   selectedPatient.value = patient;
+  citizenId.value = '';
+  checkInPhone.value = '';
   await Promise.all([loadAppointments(patient), loadOutstandingDebt(patient)]);
 }
 
@@ -191,7 +201,9 @@ async function submitCheckIn() {
       patientId: selectedPatient.value.patientId,
       appointmentId: appointmentId.value,
       dentistId: null,
-      notes: notes.value || null
+      notes: notes.value || null,
+      citizenId: citizenId.value.trim(),
+      phone: checkInPhone.value.trim()
     });
     notes.value = '';
   } catch (error) {
@@ -213,6 +225,8 @@ function resetForm() {
   appointmentId.value = null;
   appointmentLookupFailed.value = false;
   notes.value = '';
+  citizenId.value = '';
+  checkInPhone.value = '';
   searched.value = false;
   ticket.value = null;
   outstandingDebt.value = null;

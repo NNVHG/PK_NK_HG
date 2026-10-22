@@ -2,6 +2,7 @@ using System.Text.Json;
 using Dental.Application.Common;
 using Dental.Application.Features.Queue.DTOs;
 using Dental.Application.Interfaces;
+using Dental.Application.Features.MOD_PAT;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
 using Dental.Domain.Enums;
@@ -127,6 +128,38 @@ public sealed class QueueService
                 return Result<QueueEntryResponse>.Failure(Error.Validation.Code, "Nha sĩ được chọn không hợp lệ hoặc không hoạt động.");
         }
 
+        // Existing internal callers are validated at the API boundary; keep the service usable
+        // by legacy queue maintenance flows that do not supply identity input.
+        var citizenIdChanged = false;
+        if (!string.IsNullOrWhiteSpace(request.CitizenId) || !string.IsNullOrWhiteSpace(request.Phone))
+        {
+            // Q-358..361 / DL-340..344: staff verifies the patient's identity at the counter.
+            // Keep raw CCCD and phone only in this request; persist the existing SHA-256/masked form.
+            if (string.IsNullOrWhiteSpace(request.CitizenId) || request.CitizenId.Length != 12 || request.CitizenId.Any(c => c is < '0' or > '9') ||
+                string.IsNullOrWhiteSpace(request.Phone) || request.Phone.Length != 10 || request.Phone.Any(c => c is < '0' or > '9') ||
+                !string.Equals(patient.Phone, request.Phone.Trim(), StringComparison.Ordinal))
+                return Result<QueueEntryResponse>.Failure(Error.Validation.Code,
+                    "CCCD hoặc số điện thoại không khớp hồ sơ. Hãy đối soát thông tin trước khi check-in.");
+
+            var citizenId = request.CitizenId.Trim();
+            var citizenIdHash = CitizenIdIdentity.Hash(citizenId);
+            if (patient.CitizenIdHash is not null && !CitizenIdIdentity.Matches(patient.CitizenIdHash, citizenId))
+                return Result<QueueEntryResponse>.Failure(Error.Validation.Code,
+                    "CCCD không khớp hồ sơ. Hãy đối soát thông tin trước khi check-in.");
+            if (patient.CitizenIdHash is null)
+            {
+                var duplicate = await _patientRepository.FindByCitizenIdHashAsync(citizenIdHash, patient.PatientId, ct);
+                if (duplicate is not null)
+                    return Result<QueueEntryResponse>.Failure(Error.Validation.Code,
+                        "CCCD đã liên kết với hồ sơ khác. Hãy đối soát thông tin trước khi check-in.");
+                patient.CitizenIdHash = citizenIdHash;
+                patient.CitizenIdMasked = CitizenIdIdentity.Mask(citizenId);
+                patient.CitizenIdVersion++;
+                patient.UpdatedAt = _vietnamClock.UtcNow;
+                citizenIdChanged = true;
+            }
+        }
+
         foreach (var entry in expired)
         {
             var history = QueueExpiryRules.Cancel(entry, actorUserId, _vietnamClock.UtcNow);
@@ -141,6 +174,10 @@ public sealed class QueueService
             appointment.Status = AppointmentStatuses.CheckedIn;
             appointment.UpdatedAt = _vietnamClock.UtcNow;
         }
+        if (citizenIdChanged)
+            await _auditLogger.LogRequiredAsync(AuditActions.PatientUpdated, "Patient", patient.PatientId, actorUserId,
+                JsonSerializer.Serialize(new { changedFields = new[] { nameof(patient.CitizenIdHash), nameof(patient.CitizenIdMasked) }, source = "CheckInIdentityVerification" }),
+                ipAddress, ct);
         return await CreateCheckInAsync(actorUserId, request, today, isPriority, isEmergency, ipAddress, ct);
     }
 

@@ -45,6 +45,7 @@ public sealed class QueueController : ControllerBase
     }
 
     [HttpPost("check-in")]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
     [Authorize(Policy = AppPolicies.QueueCheckIn)]
     [ProducesResponseType(typeof(QueueEntryResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

@@ -4,5 +4,7 @@ public sealed record CheckInRequest(
     int PatientId,
     int? AppointmentId = null,
     int? DentistId = null,
-    string? Notes = null
+    string? Notes = null,
+    string? CitizenId = null,
+    string? Phone = null
 );
