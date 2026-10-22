@@ -37,7 +37,7 @@ public sealed class CounterPatientPhoneRepository(DentalDbContext db, VietnamClo
                 return Result<CounterPhoneReceipt>.Failure(Error.Conflict);
             var u = await db.Users.AsNoTracking().Include(x => x.Role).SingleOrDefaultAsync(x => x.UserId == appointment.Patient.UserId, ct);
             if (!OwnerEligible(u)) return Result<CounterPhoneReceipt>.Failure(Error.Conflict);
-            if (request.NewPhone == u!.Phone || await db.Users.AnyAsync(x => x.Phone == request.NewPhone, ct))
+            if (request.NewPhone == u!.Phone || !u.LoginByCitizenId && await db.Users.AnyAsync(x => !x.LoginByCitizenId && x.Phone == request.NewPhone && x.UserId != u.UserId, ct))
                 return Result<CounterPhoneReceipt>.Failure(PatientPhoneChangeService.NumberUnavailable);
             if (await db.PatientPhoneChangeRequests.AnyAsync(x => x.UserId == u.UserId && x.TokenVersion == u.TokenVersion && x.CompletedAtUtc == null, ct))
                 return Result<CounterPhoneReceipt>.Failure(new Error("PAT_PHONE_PENDING", "Tài khoản đã có yêu cầu hiện hành. Chủ tài khoản đăng nhập để kiểm tra; nhân viên không ghi đè yêu cầu."));

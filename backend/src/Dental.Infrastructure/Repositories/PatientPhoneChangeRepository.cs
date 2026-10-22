@@ -25,7 +25,7 @@ public sealed class PatientPhoneChangeRepository(DentalDbContext db, VietnamCloc
     {
         var user = await db.Users.AsNoTracking().Include(u => u.Role).SingleOrDefaultAsync(u => u.UserId == userId, ct);
         if (!Eligible(user)) return Result<PatientPhonePreview>.Failure(Error.Forbidden);
-        if (user!.Phone == newPhone || await db.Users.AnyAsync(u => u.Phone == newPhone, ct))
+        if (user!.Phone == newPhone || !user.LoginByCitizenId && await db.Users.AnyAsync(u => !u.LoginByCitizenId && u.Phone == newPhone && u.UserId != userId, ct))
             return Result<PatientPhonePreview>.Failure(PatientPhoneChangeService.NumberUnavailable);
         var profiles = await db.Patients.AsNoTracking().Where(p => p.UserId == userId).OrderBy(p => p.PatientId).ToListAsync(ct);
         return Result<PatientPhonePreview>.Success(new(user.Phone, newPhone, Stamp(user, newPhone, profiles),
@@ -53,7 +53,7 @@ public sealed class PatientPhoneChangeRepository(DentalDbContext db, VietnamCloc
             if (!Eligible(user)) return Result<PatientPhoneCompleted>.Failure(Error.Forbidden);
             var profiles = await db.Patients.Where(p => p.UserId == target.UserId).OrderBy(p => p.PatientId).ToListAsync(ct);
             if (Stamp(user!, target.NewPhone, profiles) != target.ReviewStamp) return Result<PatientPhoneCompleted>.Failure(PatientPhoneChangeService.Stale);
-            if (await db.Users.AnyAsync(u => u.Phone == target.NewPhone, ct))
+            if (!user!.LoginByCitizenId && await db.Users.AnyAsync(u => !u.LoginByCitizenId && u.Phone == target.NewPhone && u.UserId != target.UserId, ct))
                 return Result<PatientPhoneCompleted>.Failure(PatientPhoneChangeService.NumberUnavailable);
             var affected = profiles.Where(p => p.Phone == user!.Phone).ToList();
             var now = clock.UtcNow;

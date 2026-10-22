@@ -13,21 +13,30 @@ namespace Dental.Infrastructure.Repositories;
 
 public sealed class PatientActivationRepository(DentalDbContext db, VietnamClock clock) : IPatientActivationRepository
 {
-    private IQueryable<User> Eligible() => db.Users.Include(u => u.Role).Where(u => u.IsActive && u.RequiresPhoneActivation &&
-        (RoleCodes.StaffRoles.Contains(u.Role.RoleCode) || u.Role.RoleCode == RoleCodes.Patient &&
-        db.BookingRequests.Any(b => b.CreatedAccount && b.Status == "Approved" &&
-            db.Appointments.Any(a => a.AppointmentId == b.ApprovedAppointmentId && a.Patient.UserId == u.UserId && a.Patient.IsActive))));
+    private IQueryable<User> EligibleStaff() => db.Users.Include(u => u.Role).Where(u => u.IsActive && u.RequiresPhoneActivation &&
+        RoleCodes.StaffRoles.Contains(u.Role.RoleCode));
+    private IQueryable<User> EligiblePatient() => db.Users.Include(u => u.Role).Where(u => u.IsActive && u.RequiresPhoneActivation &&
+        u.LoginByCitizenId && u.Role.RoleCode == RoleCodes.Patient && db.Patients.Any(p => p.UserId == u.UserId && p.IsActive && p.CitizenIdHash != null));
     private static string Stamp(User u) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new {
-        u.UserId, u.Phone, u.PasswordHash, u.TokenVersion, u.RoleId, u.Role.RoleCode, u.IsActive, u.RequiresPhoneActivation, u.UpdatedAt
+        u.UserId, u.Phone, u.PasswordHash, u.TokenVersion, u.RoleId, u.Role.RoleCode, u.IsActive, u.RequiresPhoneActivation, u.LoginByCitizenId, u.UpdatedAt
     })));
-    public async Task<ActivationAccount?> FindPendingAsync(string phone, CancellationToken ct)
+    public async Task<ActivationAccount?> FindPendingAsync(string identifier, CancellationToken ct)
     {
-        var user = await Eligible().AsNoTracking().SingleOrDefaultAsync(u => u.Phone == phone, ct);
-        return user is null ? null : new(new(user.UserId, Stamp(user)), user.PasswordHash);
+        User? user;
+        var patient = identifier.Length == 12;
+        if (patient)
+        {
+            var hash = Dental.Application.Features.MOD_PAT.CitizenIdIdentity.Hash(identifier);
+            var matches = await EligiblePatient().AsNoTracking().Where(u => db.Patients.Any(p => p.UserId == u.UserId && p.CitizenIdHash == hash))
+                .Take(2).ToListAsync(ct);
+            user = matches.Count == 1 ? matches[0] : null;
+        }
+        else user = await EligibleStaff().AsNoTracking().SingleOrDefaultAsync(u => u.Phone == identifier, ct);
+        return user is null ? null : new(new(user.UserId, Stamp(user), patient), user.PasswordHash, user.Phone);
     }
     public async Task<bool> IsCurrentAsync(ActivationTarget target, CancellationToken ct)
     {
-        var user = await Eligible().AsNoTracking().SingleOrDefaultAsync(u => u.UserId == target.UserId, ct);
+        var user = await EligibleFor(target).AsNoTracking().SingleOrDefaultAsync(u => u.UserId == target.UserId, ct);
         return user is not null && Stamp(user) == target.Stamp;
     }
     public async Task<bool> CompleteAsync(ActivationTarget target, string? passwordHash, string? ip, CancellationToken ct)
@@ -35,7 +44,7 @@ public sealed class PatientActivationRepository(DentalDbContext db, VietnamClock
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct); var committed = false;
         try
         {
-            var user = await Eligible().SingleOrDefaultAsync(u => u.UserId == target.UserId, ct);
+            var user = await EligibleFor(target).SingleOrDefaultAsync(u => u.UserId == target.UserId, ct);
             if (user is null || user.TokenVersion == int.MaxValue || Stamp(user) != target.Stamp) return false;
             if (passwordHash is not null) user.PasswordHash = passwordHash;
             user.RequiresPhoneActivation = false; user.PhoneVerifiedAtUtc = clock.UtcNow; user.TokenVersion++; user.UpdatedAt = clock.UtcNow;
@@ -48,6 +57,7 @@ public sealed class PatientActivationRepository(DentalDbContext db, VietnamClock
         catch (Exception e) when (IsConflict(e)) { return false; }
         finally { if (!committed) db.ChangeTracker.Clear(); }
     }
+    private IQueryable<User> EligibleFor(ActivationTarget target) => target.MustChangePassword ? EligiblePatient() : EligibleStaff();
     private static bool IsConflict(Exception e)
     {
         for (Exception? x = e; x is not null; x = x.InnerException)

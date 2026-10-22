@@ -21,7 +21,15 @@ public sealed class UserRepository : IUserRepository
     public async Task<User?> FindByPhoneAsync(string phone, CancellationToken ct = default)
         => await _db.Users
             .Include(u => u.Role)
-            .FirstOrDefaultAsync(u => u.Phone == phone, ct);
+            .SingleOrDefaultAsync(u => u.Phone == phone && !u.LoginByCitizenId, ct);
+
+    public async Task<User?> FindByCitizenIdHashAsync(string citizenIdHash, CancellationToken ct = default)
+    {
+        var matches = await _db.Users.Include(u => u.Role).Where(u => u.LoginByCitizenId &&
+            u.Role.RoleCode == RoleCodes.Patient && _db.Patients.Any(p => p.UserId == u.UserId && p.CitizenIdHash == citizenIdHash && p.IsActive))
+            .Take(2).ToListAsync(ct);
+        return matches.Count == 1 ? matches[0] : null;
+    }
 
     public async Task<User?> FindByIdAsync(int userId, CancellationToken ct = default)
         => await _db.Users
@@ -32,7 +40,7 @@ public sealed class UserRepository : IUserRepository
         => await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == roleCode, ct);
 
     public Task<bool> PhoneExistsAsync(string phone, int? exceptUserId = null, CancellationToken ct = default)
-        => _db.Users.AnyAsync(u => u.Phone == phone && (!exceptUserId.HasValue || u.UserId != exceptUserId.Value), ct);
+        => _db.Users.AnyAsync(u => !u.LoginByCitizenId && u.Phone == phone && (!exceptUserId.HasValue || u.UserId != exceptUserId.Value), ct);
 
     public Task<int> CountActiveAdminsAsync(CancellationToken ct = default)
         // A pending first-login account cannot replace the last administrator who can actually sign in.

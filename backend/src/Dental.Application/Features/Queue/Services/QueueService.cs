@@ -22,6 +22,7 @@ public sealed class QueueService
     private readonly VietnamClock _vietnamClock;
     private readonly IInvoiceDraftGenerator _invoiceDraft;
     private readonly IVisitChairCoordinator _visitChairs;
+    private readonly IPasswordHasher? _passwordHasher;
 
     public QueueService(
         IQueueRepository queueRepository,
@@ -33,7 +34,7 @@ public sealed class QueueService
         IUnitOfWork unitOfWork,
         IAuditLogger auditLogger,
         VietnamClock vietnamClock,
-        IInvoiceDraftGenerator invoiceDraft, IVisitChairCoordinator visitChairs)
+        IInvoiceDraftGenerator invoiceDraft, IVisitChairCoordinator visitChairs, IPasswordHasher? passwordHasher = null)
     {
         _queueRepository = queueRepository;
         _appointmentRepository = appointmentRepository;
@@ -45,6 +46,7 @@ public sealed class QueueService
         _auditLogger = auditLogger;
         _vietnamClock = vietnamClock;
         _invoiceDraft = invoiceDraft; _visitChairs = visitChairs;
+        _passwordHasher = passwordHasher;
     }
 
     public async Task<Result<OutstandingDebtResponse>> GetOutstandingDebtAsync(int patientId, CancellationToken ct = default)
@@ -131,6 +133,7 @@ public sealed class QueueService
         // Existing internal callers are validated at the API boundary; keep the service usable
         // by legacy queue maintenance flows that do not supply identity input.
         var citizenIdChanged = false;
+          string? verifiedCitizenId = null;
         if (!string.IsNullOrWhiteSpace(request.CitizenId) || !string.IsNullOrWhiteSpace(request.Phone))
         {
             // Q-358..361 / DL-340..344: staff verifies the patient's identity at the counter.
@@ -142,6 +145,7 @@ public sealed class QueueService
                     "CCCD hoặc số điện thoại không khớp hồ sơ. Hãy đối soát thông tin trước khi check-in.");
 
             var citizenId = request.CitizenId.Trim();
+              verifiedCitizenId = citizenId;
             var citizenIdHash = CitizenIdIdentity.Hash(citizenId);
             if (patient.CitizenIdHash is not null && !CitizenIdIdentity.Matches(patient.CitizenIdHash, citizenId))
                 return Result<QueueEntryResponse>.Failure(Error.Validation.Code,
@@ -178,8 +182,68 @@ public sealed class QueueService
             await _auditLogger.LogRequiredAsync(AuditActions.PatientUpdated, "Patient", patient.PatientId, actorUserId,
                 JsonSerializer.Serialize(new { changedFields = new[] { nameof(patient.CitizenIdHash), nameof(patient.CitizenIdMasked) }, source = "CheckInIdentityVerification" }),
                 ipAddress, ct);
+          if (verifiedCitizenId is not null)
+          {
+              var accountResult = await EnsurePatientAccountAsync(patient, actorUserId, ipAddress, ct);
+              if (accountResult.IsFailure) return Result<QueueEntryResponse>.Failure(accountResult.Error);
+          }
         return await CreateCheckInAsync(actorUserId, request, today, isPriority, isEmergency, ipAddress, ct);
     }
+
+      private async Task<Result<bool>> EnsurePatientAccountAsync(Dental.Domain.Entities.Patient patient, int actorUserId, string? ipAddress, CancellationToken ct)
+      {
+          User? previousOwner = null;
+          var otherProfileCount = 0;
+          if (patient.UserId.HasValue)
+          {
+              previousOwner = await _userRepository.FindByIdAsync(patient.UserId!.Value, ct);
+              if (previousOwner is null) return Result<bool>.Failure(Error.Conflict);
+              otherProfileCount = await _patientRepository.CountOtherPatientsForUserAsync(patient.UserId.Value, patient.PatientId, ct);
+          }
+          var splitFamilyProfile = previousOwner is not null && (previousOwner.IsLegacyFamilyAccount || otherProfileCount > 0);
+          if (previousOwner is not null && !splitFamilyProfile) return Result<bool>.Success(true); // DL-344: preserve personal legacy login.
+
+          if (splitFamilyProfile)
+          {
+              if (previousOwner!.TokenVersion == int.MaxValue) return Result<bool>.Failure(Error.Conflict);
+              previousOwner.TokenVersion++;
+              if (otherProfileCount == 0) previousOwner.IsActive = false;
+              previousOwner.UpdatedAt = _vietnamClock.UtcNow;
+          }
+
+          var patientRole = await _userRepository.FindRoleByCodeAsync(RoleCodes.Patient, ct);
+          if (patientRole is null || _passwordHasher is null) return Result<bool>.Failure(Error.Conflict);
+          var now = _vietnamClock.UtcNow;
+          var account = new User
+          {
+              Phone = patient.Phone,
+              PasswordHash = _passwordHasher.Hash(patient.Phone),
+              LoginByCitizenId = true,
+              RequiresPhoneActivation = true,
+              FullName = patient.FullName,
+              Email = patient.Email,
+              DateOfBirth = patient.DateOfBirth,
+              Gender = patient.Gender,
+              RoleId = patientRole.RoleId,
+              IsActive = true,
+              CreatedAt = now,
+              UpdatedAt = now
+          };
+          await _userRepository.AddAsync(account, ct);
+          await _unitOfWork.SaveChangesAsync(ct);
+          patient.UserId = account.UserId;
+          patient.UpdatedAt = now;
+          await _unitOfWork.SaveChangesAsync(ct);
+
+          await _auditLogger.LogRequiredAsync("MOD_AUTH_PATIENT_ACCOUNT_CREATED", "User", account.UserId, actorUserId,
+              JsonSerializer.Serialize(new { patientId = patient.PatientId, activationRequired = true, loginIdentifier = "CitizenId", splitFamilyProfile }),
+              ipAddress, ct);
+          if (previousOwner is not null)
+              await _auditLogger.LogRequiredAsync("MOD_AUTH_FAMILY_PROFILE_SPLIT", "Patient", patient.PatientId, actorUserId,
+                  JsonSerializer.Serialize(new { previousOwnerId = previousOwner.UserId, newOwnerId = account.UserId, previousSessionsRevoked = true, previousOwnerDisabled = otherProfileCount == 0 }),
+                  ipAddress, ct);
+          return Result<bool>.Success(true);
+      }
 
     private async Task<Result<QueueEntryResponse>> CreateCheckInAsync(
         int actorUserId,

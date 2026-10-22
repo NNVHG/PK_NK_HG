@@ -20,6 +20,9 @@ public sealed class PatientRepository : IPatientRepository
         => _db.Patients.FirstOrDefaultAsync(patient => patient.CitizenIdHash == citizenIdHash &&
             (!exceptPatientId.HasValue || patient.PatientId != exceptPatientId.Value), ct);
 
+    public Task<int> CountOtherPatientsForUserAsync(int userId, int exceptPatientId, CancellationToken ct = default)
+        => _db.Patients.CountAsync(patient => patient.UserId == userId && patient.PatientId != exceptPatientId, ct);
+
     public Task<Patient?> GetByUserIdAsync(int userId, CancellationToken ct = default)
         => _db.Patients.FirstOrDefaultAsync(patient => patient.UserId == userId, ct);
 

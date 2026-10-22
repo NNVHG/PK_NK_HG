@@ -8,12 +8,12 @@
       <p v-if="$route.query.phoneChanged === '1'" role="status">Đã xác minh và đổi SĐT. Đăng nhập bằng số mới và mật khẩu hiện tại.</p>
         <form @submit.prevent="handleSubmit">
         <div class="form-group">
-          <label for="phone">Số điện thoại</label>
+          <label for="phone">SĐT (nhân viên/tài khoản cũ) hoặc CCCD (bệnh nhân mới)</label>
           <input
             id="phone"
             v-model="phone"
             type="text"
-            placeholder="0912345678"
+            placeholder="Số điện thoại hoặc CCCD"
             required
             autocomplete="username"
           />

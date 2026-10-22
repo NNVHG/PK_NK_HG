@@ -16,7 +16,7 @@ public sealed class Patient : BaseEntity
     public DateOnly DateOfBirth { get; set; }
     public string? Gender { get; set; }
 
-    // [CẦN XÁC NHẬN] Cho phép hồ sơ người nhà dùng chung số điện thoại; không áp unique cho Phone.
+    // DL-340: nhiều tài khoản Patient có thể dùng chung số liên hệ; tài khoản mới đăng nhập bằng CCCD.
     public string Phone { get; set; } = string.Empty;
 
     public string? Email { get; set; }

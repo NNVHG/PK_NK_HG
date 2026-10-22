@@ -46,7 +46,10 @@ public sealed class AuthService
         string? ipAddress,
         CancellationToken ct = default)
     {
-        var user = await _userRepo.FindByPhoneAsync(request.Phone, ct);
+        var identifier = request.Phone ?? string.Empty;
+        var user = identifier.Length == 12
+            ? await _userRepo.FindByCitizenIdHashAsync(Dental.Application.Features.MOD_PAT.CitizenIdIdentity.Hash(identifier), ct)
+            : await _userRepo.FindByPhoneAsync(identifier, ct);
 
         // Không tìm thấy SĐT → trả lỗi chung (không tiết lộ SĐT không tồn tại)
         if (user is null)

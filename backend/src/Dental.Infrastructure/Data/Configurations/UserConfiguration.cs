@@ -43,9 +43,13 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.UpdatedAt)
             .HasColumnType("timestamptz");
 
-        // Phone unique — định danh đăng nhập
+        builder.Property(u => u.LoginByCitizenId).HasDefaultValue(false);
+        builder.Property(u => u.IsLegacyFamilyAccount).HasDefaultValue(false);
+
+        // Legacy/staff phone logins remain unique. New Patient accounts may share a contact phone and log in by CCCD.
         builder.HasIndex(u => u.Phone)
             .IsUnique()
+            .HasFilter("\"LoginByCitizenId\" = false")
             .HasDatabaseName("IX_Users_Phone");
 
         // Quan hệ N:1 với Role

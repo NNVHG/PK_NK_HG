@@ -294,6 +294,16 @@ namespace Dental.Infrastructure.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("LoginByCitizenId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsLegacyFamilyAccount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("RoomName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -2522,6 +2532,7 @@ namespace Dental.Infrastructure.Migrations
 
                     b.HasIndex("Phone")
                         .IsUnique()
+                        .HasFilter("\"LoginByCitizenId\" = false")
                         .HasDatabaseName("IX_Users_Phone");
 
                     b.HasIndex("RoleId");
