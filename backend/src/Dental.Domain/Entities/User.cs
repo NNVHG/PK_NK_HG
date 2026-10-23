@@ -13,9 +13,9 @@ public class User : BaseEntity
     /// <summary>SĐT liên hệ; có thể dùng chung bởi tài khoản đăng nhập CCCD.</summary>
     public string Phone { get; set; } = string.Empty;
 
-    /// <summary>Patient accounts created under DL-340 authenticate with the linked Patient's CCCD hash.</summary>
+    /// <summary>Tài khoản Patient theo DL-340 đăng nhập bằng hash CCCD của hồ sơ được gắn.</summary>
     public bool LoginByCitizenId { get; set; }
-    /// <summary>Marks a legacy login account that still needs conversion to an individual Patient account.</summary>
+    /// <summary>Đánh dấu tài khoản cũ cần chuyển sang tài khoản Patient riêng.</summary>
     public bool RequiresIndividualIdentityConversion { get; set; }
 
     /// <summary>BCrypt hash. Không log, không trả về client.</summary>
@@ -43,5 +43,4 @@ public class User : BaseEntity
     public Role Role { get; set; } = null!;
     public Patient? Patient { get; set; }
     public ICollection<AuditLog> AuditLogs { get; set; } = [];
-    public Patient? Patient { get; set; }
 }
