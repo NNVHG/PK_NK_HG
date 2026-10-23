@@ -1,13 +1,10 @@
 using Dental.Infrastructure.Data;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
 namespace Dental.Infrastructure.Migrations;
 
-[DbContext(typeof(DentalDbContext))]
-[Migration("20261023070000_EnableCitizenIdPatientLoginAfterBaseline")]
 public partial class EnableCitizenIdPatientLoginAfterBaseline : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
