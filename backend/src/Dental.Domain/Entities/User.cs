@@ -37,4 +37,5 @@ public class User : BaseEntity
     // Navigation
     public Role Role { get; set; } = null!;
     public ICollection<AuditLog> AuditLogs { get; set; } = [];
+    public Patient? Patient { get; set; }
 }

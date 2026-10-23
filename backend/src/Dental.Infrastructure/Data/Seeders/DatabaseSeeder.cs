@@ -8,8 +8,8 @@ using Microsoft.Extensions.Logging;
 namespace Dental.Infrastructure.Data.Seeders;
 
 /// <summary>
-/// Seed dữ liệu khởi tạo: 5 vai trò + 1 tài khoản Admin (từ user-secrets).
-/// Development only: thêm 4 tài khoản demo nếu Seed:DemoUsers = true.
+/// Seed dữ liệu khởi tạo: vai trò + tài khoản Admin + danh mục chuẩn (ghế, dịch vụ, vật tư, mẫu giảm giá, cấu hình).
+/// Development only: thêm tài khoản demo và kịch bản vận hành lâm sàng nếu Seed:DemoUsers = true.
 /// </summary>
 public static class DatabaseSeeder
 {
@@ -28,10 +28,13 @@ public static class DatabaseSeeder
         ILogger logger,
         bool isDevelopment)
     {
+        // 1. Danh mục hệ thống độc lập
         await DentalDiagnosesSeeder.SeedAsync(db);
         await MedicinesSeeder.SeedAsync(db);
+        await SystemConfigsSeeder.SeedAsync(db);
+        await DiscountPresetsSeeder.SeedAsync(db);
 
-        // --- Seed roles ---
+        // 2. Vai trò người dùng
         foreach (var (code, name, desc) in RoleDefs)
         {
             if (!await db.Roles.AnyAsync(r => r.RoleCode == code))
@@ -42,10 +45,9 @@ public static class DatabaseSeeder
         }
         await db.SaveChangesAsync();
 
-        // --- Lấy roleId sau khi đã seed ---
         var roleMap = await db.Roles.ToDictionaryAsync(r => r.RoleCode, r => r.RoleId);
 
-        // --- Seed Admin account (bắt buộc) ---
+        // 3. Tài khoản Admin khởi tạo (bắt buộc)
         var adminPhone    = config["Seed:AdminPhone"];
         var adminPassword = config["Seed:AdminPassword"];
 
@@ -58,18 +60,25 @@ public static class DatabaseSeeder
             var hash = BCrypt.Net.BCrypt.HashPassword(adminPassword, 12);
             db.Users.Add(new User
             {
-                Phone        = adminPhone,
-                PasswordHash = hash,
-                FullName     = "Quản trị viên",
-                RoleId       = roleMap[RoleCodes.Admin],
-                IsActive     = true,
-                CreatedAt    = DateTime.UtcNow,
+                Phone                   = adminPhone,
+                PasswordHash            = hash,
+                FullName                = "Quản trị viên",
+                RoleId                  = roleMap[RoleCodes.Admin],
+                IsActive                = true,
+                RequiresPhoneActivation = false,
+                PhoneVerifiedAtUtc      = DateTime.UtcNow,
+                CreatedAt               = DateTime.UtcNow,
             });
             logger.LogInformation("Seed: tạo tài khoản Admin (SĐT che: {Masked})", MaskPhone(adminPhone));
             await db.SaveChangesAsync();
         }
 
-        // --- Seed demo users (Development only) ---
+        // 4. Danh mục phụ thuộc tài khoản Admin (CreatedByUserId)
+        await DentalChairsSeeder.SeedAsync(db);
+        await DentalServicesSeeder.SeedAsync(db);
+        await MedicalSuppliesSeeder.SeedAsync(db);
+
+        // 5. Tài khoản demo & kịch bản lâm sàng (Development only)
         if (!isDevelopment) return;
 
         var demoEnabled  = config.GetValue<bool>("Seed:DemoUsers");
@@ -83,32 +92,43 @@ public static class DatabaseSeeder
 
         var demoHash = BCrypt.Net.BCrypt.HashPassword(demoPassword, 12);
 
-        (string Phone, string Name, string Role)[] demos =
+        (string Phone, string Name, string Role, string? AcademicTitle)[] demos =
         [
-            ("0900000002", "Lễ tân Demo",  RoleCodes.Receptionist),
-            ("0900000003", "Nha sĩ Demo",  RoleCodes.Dentist),
-            ("0900000004", "Phụ tá Demo",  RoleCodes.Assistant),
-            ("0900000005", "Bệnh nhân Demo", RoleCodes.Patient),
+            ("0900000002", "Lễ tân Demo",             RoleCodes.Receptionist, null),
+            ("0900000012", "Lễ tân Mai Trang",        RoleCodes.Receptionist, null),
+            ("0900000003", "Nha sĩ Demo",             RoleCodes.Dentist,      "BS. CKI"),
+            ("0900000013", "BS. CKI Lê Hoàng Gia",   RoleCodes.Dentist,      "BS. CKI"),
+            ("0900000004", "Phụ tá Demo",             RoleCodes.Assistant,    null),
+            ("0900000014", "Phụ tá Thu Hà",           RoleCodes.Assistant,    null),
+            ("0900000005", "Bệnh nhân Nguyễn Văn An", RoleCodes.Patient,      null),
+            ("0900000021", "Bệnh nhân Trần Thị Bích", RoleCodes.Patient,      null),
+            ("0900000023", "Bệnh nhân Phạm Đức Huy",  RoleCodes.Patient,      null),
         ];
 
-        foreach (var (phone, name, roleCode) in demos)
+        foreach (var (phone, name, roleCode, title) in demos)
         {
             if (!await db.Users.AnyAsync(u => u.Phone == phone))
             {
                 db.Users.Add(new User
                 {
-                    Phone        = phone,
-                    PasswordHash = demoHash,
-                    FullName     = name,
-                    RoleId       = roleMap[roleCode],
-                    IsActive     = true,
-                    CreatedAt    = DateTime.UtcNow,
+                    Phone                   = phone,
+                    PasswordHash            = demoHash,
+                    FullName                = name,
+                    AcademicTitle           = title,
+                    RoleId                  = roleMap[roleCode],
+                    IsActive                = true,
+                    RequiresPhoneActivation = false,
+                    PhoneVerifiedAtUtc      = DateTime.UtcNow,
+                    CreatedAt               = DateTime.UtcNow,
                 });
                 logger.LogInformation("Seed demo: tạo {Name} ({RoleCode})", name, roleCode);
             }
         }
 
         await db.SaveChangesAsync();
+
+        // 6. Kịch bản lâm sàng mẫu (Patients, Visits, FDI, Prescriptions, Invoices, Stock)
+        await ClinicalDemoDataSeeder.SeedAsync(db, logger);
     }
 
     private static string MaskPhone(string phone)

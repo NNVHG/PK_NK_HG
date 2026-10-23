@@ -1,7 +1,7 @@
 <template>
   <section class="family-phone" aria-labelledby="family-phone-title">
-    <h2 id="family-phone-title">Đổi SĐT tài khoản gia đình</h2>
-    <p>OTP được gửi tới số mới. Sau khi xác nhận, số đăng nhập và các hồ sơ đang dùng chung số cũ sẽ được đổi cùng lúc. Mật khẩu được giữ nguyên; các phiên cũ sẽ bị thu hồi.</p>
+    <h2 id="family-phone-title">Đổi SĐT tài khoản bệnh nhân</h2>
+    <p>OTP được gửi tới số mới. Sau khi xác nhận, số đăng nhập và hồ sơ đang dùng chung số cũ sẽ được đổi cùng lúc. Mật khẩu được giữ nguyên; các phiên cũ sẽ bị thu hồi.</p>
     <PatientCounterPhoneSuggestion :disabled="busy || uncertain" @select="acceptCounterPhone" />
     <form @submit.prevent="loadPreview">
       <label for="family-new-phone">SĐT mới</label>

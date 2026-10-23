@@ -7,7 +7,7 @@
     <template v-if="context && !context.result">
       <p>{{ context.fullName }} · {{ context.dateOfBirth }} · {{ context.phone }}</p>
       <p>{{ context.appointmentDate }} {{ context.slotTime.slice(0, 5) }} · {{ context.slotDurationMinutes }} phút · {{ context.dentistName || 'Chưa phân công nha sĩ' }}</p>
-      <p v-if="context.account">Tài khoản gia đình: {{ context.account.fullName }}. Giữ nguyên mật khẩu và các hồ sơ đã có.</p>
+      <p v-if="context.account">Tài khoản bệnh nhân: {{ context.account.fullName }}. Giữ nguyên mật khẩu và hồ sơ hiện có.</p>
       <p v-else>Tạo tài khoản sau khi xác nhận lịch; phải xác minh OTP lần đầu trước khi đăng nhập.</p>
       <p v-if="context.blockReason" role="alert">{{ context.blockReason }}</p>
       <form v-else @submit.prevent="approve">
@@ -20,7 +20,7 @@
         </label>
         <p v-if="context.patients.length">Đã tìm thấy hồ sơ tương đồng. Đối chiếu từng người; không tạo trùng hoặc chuyển hồ sơ đã có chủ.</p>
         <label v-if="selection === 'new'"><input v-model="confirmedNew" type="checkbox" :disabled="busy || needsReview" /> Tôi đã đối chiếu hồ sơ tương đồng và xác nhận đây là người mới cần tạo hồ sơ</label>
-        <label v-if="context.requiresCounterConfirmation"><input v-model="counter" type="checkbox" :disabled="busy || needsReview" /> Khách/người đại diện đang tại quầy; tôi đã đối soát và xác nhận gắn đúng hồ sơ vào tài khoản gia đình</label>
+        <label v-if="context.requiresCounterConfirmation"><input v-model="counter" type="checkbox" :disabled="busy || needsReview" /> Khách/người đại diện đang tại quầy; tôi đã đối soát và xác nhận gắn đúng hồ sơ vào tài khoản</label>
         <label><input v-model="confirmed" type="checkbox" :disabled="busy || needsReview" /> Tôi đã đối chiếu đúng người và giờ hẹn để xác nhận lịch</label>
         <button type="submit" :disabled="busy || needsReview">Xác nhận lịch đã hẹn</button>
       </form>

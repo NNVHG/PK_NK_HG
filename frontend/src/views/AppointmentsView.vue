@@ -6,7 +6,7 @@
     </header>
 
     <form class="booking-card" @submit.prevent="submit">
-      <label for="patient">Hồ sơ bệnh nhân trong tài khoản gia đình</label>
+      <label for="patient">Hồ sơ bệnh nhân</label>
       <select id="patient" v-model.number="patientId" required :disabled="submitting || loadingProfiles || profiles.length === 0">
         <option :value="0" disabled>Chọn hồ sơ</option>
         <option v-for="profile in profiles" :key="profile.patientId" :value="profile.patientId">

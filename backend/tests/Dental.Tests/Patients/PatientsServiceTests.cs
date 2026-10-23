@@ -27,8 +27,8 @@ public sealed class PatientsServiceTests
     {
         var profiles = new[]
         {
-            new Patient { PatientId = 4, PatientNumber = 40, FullName = "An", DateOfBirth = new DateOnly(1990, 1, 1), Phone = "0900000000" },
-            new Patient { PatientId = 5, PatientNumber = 50, FullName = "Bình", DateOfBirth = new DateOnly(2010, 2, 2), Phone = "0900000000" },
+            new Patient { PatientId = 4, PatientNumber = 40, FullName = "An", DateOfBirth = new DateOnly(1990, 1, 1), Phone = "0900000001" },
+            new Patient { PatientId = 5, PatientNumber = 50, FullName = "Bình", DateOfBirth = new DateOnly(2010, 2, 2), Phone = "0900000002" },
         };
         _patientRepository.GetActiveByUserIdAsync(22, Arg.Any<CancellationToken>()).Returns(profiles);
 

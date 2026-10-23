@@ -32,6 +32,8 @@ public sealed class PatientAccountLinkRepository(DentalDbContext db) : IPatientA
         var p = await db.Patients.AsNoTracking().SingleOrDefaultAsync(p => p.PatientId == patientId && p.IsActive, ct);
         if (p is null) return Result<PatientAccountLinkContext>.Failure(Error.NotFound);
         var u = p.UserId is null ? await Account(p.Phone, ct) : null;
+        if (u is not null && await db.Patients.AnyAsync(other => other.UserId == u.UserId, ct))
+            u = null;
         return Result<PatientAccountLinkContext>.Success(new(p.PatientId, p.FullName, p.DateOfBirth, p.Phone, p.UserId.HasValue,
             u is null ? null : new(u.UserId, u.FullName, u.Phone, u.DateOfBirth), u is null ? null : Stamp(p, u)));
     }
@@ -47,6 +49,7 @@ public sealed class PatientAccountLinkRepository(DentalDbContext db) : IPatientA
             if (p.UserId.HasValue) return Conflict();
             var u = await Account(p.Phone, ct);
             if (u is null || u.UserId != request.AccountUserId || Stamp(p, u) != request.ReviewStamp) return Conflict();
+            if (await db.Patients.AnyAsync(other => other.UserId == u.UserId && other.PatientId != patientId, ct)) return Conflict();
             p.UserId = u.UserId;
             p.UpdatedAt = DateTime.UtcNow;
             db.AuditLogs.Add(new AuditLog { UserId = actor, EntityType = "Patient", EntityId = p.PatientId,

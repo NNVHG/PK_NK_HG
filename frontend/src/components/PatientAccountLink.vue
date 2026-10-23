@@ -1,17 +1,17 @@
 <template>
-  <section v-if="allowed" aria-label="Liên kết tài khoản gia đình">
-    <h3>Liên kết tài khoản gia đình</h3>
+  <section v-if="allowed" aria-label="Liên kết tài khoản bệnh nhân">
+    <h3>Liên kết tài khoản bệnh nhân</h3>
     <p>Đối soát trực tiếp tại quầy trước khi xác nhận. Tài khoản được liên kết sẽ xem được lịch sử và ảnh của hồ sơ này.</p>
     <button type="button" :disabled="busy" @click="load">{{ busy ? 'Đang xử lý…' : 'Tải lại để đối soát' }}</button>
     <p role="status" aria-live="polite">{{ message }}</p>
     <p v-if="error" role="alert">{{ error }}</p>
     <template v-if="context">
       <p v-if="context.isLinked">Hồ sơ đã liên kết tài khoản. Không thể chuyển sang tài khoản khác tại đây.</p>
-      <p v-else-if="!context.account">Không có tài khoản bệnh nhân đang hoạt động cùng SĐT. Chưa thể liên kết hồ sơ.</p>
+      <p v-else-if="!context.account">Không có tài khoản bệnh nhân đang hoạt động cùng SĐT hoặc tài khoản đã có hồ sơ liên kết. Chưa thể liên kết hồ sơ.</p>
       <form v-else @submit.prevent="save">
         <dl>
           <div><dt>Hồ sơ sẽ được truy cập</dt><dd>{{ context.patientName }} · {{ context.dateOfBirth }} · {{ context.phone }}</dd></div>
-          <div><dt>Tài khoản gia đình</dt><dd>{{ context.account.fullName }} · {{ context.account.dateOfBirth || 'Chưa có ngày sinh' }} · {{ context.account.phone }}</dd></div>
+          <div><dt>Tài khoản bệnh nhân</dt><dd>{{ context.account.fullName }} · {{ context.account.dateOfBirth || 'Chưa có ngày sinh' }} · {{ context.account.phone }}</dd></div>
         </dl>
         <label><input v-model="confirmed" type="checkbox" :disabled="busy || needsReview" /> Tôi đã đối soát tại quầy và xác nhận đúng hồ sơ, đúng tài khoản được phép truy cập</label>
         <button type="submit" :disabled="busy || needsReview || !confirmed">Xác nhận liên kết</button>
@@ -48,7 +48,7 @@ async function save(){
   busy.value=true;confirmed.value=false;error.value='';message.value='';
   try{const result=await patientAccountLinkService.link(patientId,accountId,stamp);if(!alive(ticket,owner))return;
     if(result.patientId!==patientId||result.accountUserId!==accountId)throw Error();
-    context.value=null;needsReview.value=true;message.value='Đã liên kết hồ sơ. Tài khoản gia đình có thể chọn hồ sơ này khi tải lại danh sách hồ sơ.';
+    context.value=null;needsReview.value=true;message.value='Đã liên kết hồ sơ. Tài khoản có thể truy cập hồ sơ này khi tải lại danh sách hồ sơ.';
   }catch{if(alive(ticket,owner)){needsReview.value=true;error.value='Chưa xác minh kết quả hoặc dữ liệu vừa thay đổi. Tải lại để đối soát trước khi gửi tiếp.';}}
   finally{if(alive(ticket,owner))busy.value=false;}
 }

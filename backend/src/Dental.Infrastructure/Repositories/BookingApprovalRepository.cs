@@ -129,6 +129,7 @@ public sealed class BookingApprovalRepository(DentalDbContext db, VietnamClock c
                 await db.SaveChangesAsync(ct);
             }
             if (patient.UserId.HasValue && patient.UserId != user.UserId) return Conflict();
+            if (await db.Patients.AnyAsync(p => p.UserId == user.UserId && p.PatientId != patient.PatientId, ct)) return Conflict();
             var linkedExisting = request.PatientId.HasValue && !patient.UserId.HasValue;
             patient.UserId = user.UserId;
             patient.UpdatedAt = clock.UtcNow;

@@ -1535,9 +1535,11 @@ namespace Dental.Infrastructure.Migrations
                         .HasDatabaseName("IX_Patients_PatientNumber");
 
                     b.HasIndex("Phone")
+                        .IsUnique()
                         .HasDatabaseName("IX_Patients_Phone");
 
                     b.HasIndex("UserId")
+                        .IsUnique()
                         .HasDatabaseName("IX_Patients_UserId");
 
                     b.ToTable("Patients");
@@ -3147,8 +3149,8 @@ namespace Dental.Infrastructure.Migrations
             modelBuilder.Entity("Dental.Domain.Entities.Patient", b =>
                 {
                     b.HasOne("Dental.Domain.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
+                        .WithOne("Patient")
+                        .HasForeignKey("Dental.Domain.Entities.Patient", "UserId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("User");
@@ -3647,6 +3649,8 @@ namespace Dental.Infrastructure.Migrations
             modelBuilder.Entity("Dental.Domain.Entities.User", b =>
                 {
                     b.Navigation("AuditLogs");
+
+                    b.Navigation("Patient");
                 });
 #pragma warning restore 612, 618
         }
