@@ -15,6 +15,11 @@ internal static class QueueWaitingCancellationHttpSmoke
         await using var db = new DentalDbContext(options);
         if (!db.Database.GetDbConnection().Database.StartsWith("dental_cash_test_", StringComparison.Ordinal))
             throw new InvalidOperationException("Cancellation fixtures require the owned isolated database.");
+        if (!await db.Roles.AnyAsync(role => role.RoleCode == RoleCodes.Patient))
+        {
+            db.Roles.Add(new Role { RoleCode = RoleCodes.Patient, RoleName = "Bệnh nhân" });
+            await db.SaveChangesAsync();
+        }
         string Path(int id) => $"/api/queue/{id}/cancel-waiting";
         client.DefaultRequestHeaders.Authorization = null;
         using (var response = await client.PostAsJsonAsync(Path(1), new { confirmed = true })) check(response.StatusCode == HttpStatusCode.Unauthorized, "Cancel waiting anonymous401");
@@ -54,7 +59,9 @@ internal static class QueueWaitingCancellationHttpSmoke
                 check(response.StatusCode == HttpStatusCode.Conflict, "Cancel waiting repeated request409");
             check(await db.QueueStatusHistories.CountAsync(h => h.QueueEntryId == entry.QueueEntryId) == 1,
                 "Cancel waiting repeat adds no history");
-            using (var response = await client.PostAsJsonAsync("/api/queue/check-in", new { patientId = patient.PatientId }))
+            var citizenId = "9" + patient.PatientId.ToString("D11");
+            using (var response = await client.PostAsJsonAsync("/api/queue/check-in",
+                new { patientId = patient.PatientId, citizenId, phone = patient.Phone }))
                 check(response.StatusCode == HttpStatusCode.Created, "Cancel waiting releases open Visit so patient can check in again");
         }
         var doctorRole = await db.Roles.SingleAsync(r => r.RoleCode == RoleCodes.Dentist);
