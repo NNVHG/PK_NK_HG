@@ -88,7 +88,6 @@ public static class DatabaseSeeder
             ("0900000002", "Lễ tân Demo",  RoleCodes.Receptionist),
             ("0900000003", "Nha sĩ Demo",  RoleCodes.Dentist),
             ("0900000004", "Phụ tá Demo",  RoleCodes.Assistant),
-            ("0900000005", "Bệnh nhân Demo", RoleCodes.Patient),
         ];
 
         foreach (var (phone, name, roleCode) in demos)
@@ -109,6 +108,8 @@ public static class DatabaseSeeder
         }
 
         await db.SaveChangesAsync();
+        if (config.GetValue<bool>("Seed:Phase1"))
+            await Phase1DemoSeeder.SeedAsync(db);
     }
 
     private static string MaskPhone(string phone)

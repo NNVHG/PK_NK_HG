@@ -1,0 +1,154 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Rà soát V1–V7 · Phase 1</title><style>body{margin:0;background:#f3f5f8;color:#182738;font:16px/1.65 system-ui,sans-serif}main{max-width:1100px;margin:auto;padding:28px 20px 64px}h1,h2,h3{line-height:1.25}h1{font-size:1.9rem}h2{margin-top:2.2rem;color:#155a47}h3{margin-top:1.6rem}p,li{overflow-wrap:anywhere}code{background:#e5eaf0;padding:.12em .3em;border-radius:4px;overflow-wrap:anywhere}pre{padding:16px;background:#e5eaf0;white-space:pre-wrap;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse;font-size:.92rem;table-layout:fixed}th,td{border:1px solid #c9d3de;padding:10px;vertical-align:top;overflow-wrap:anywhere}th{background:#dcebe5;text-align:left}a{color:#146750}footer{margin-top:2rem;color:#536273}@media(max-width:700px){main{padding:18px 12px}table,thead,tbody,tr,th,td{display:block;width:auto}thead{display:none}tr{margin:16px 0}td:first-child{font-weight:bold;background:#dcebe5}td{border-top:0}td:first-child{border-top:1px solid #c9d3de}}@media print{body{background:white}main{max-width:none;padding:0}h2,h3{break-after:avoid}tr{break-inside:avoid}}</style></head><body><main><section class="latest-update"><h1>Cập nhật kết quả V4–V6 — 2026-10-24 00:55 (Asia/Ho_Chi_Minh)</h1>
+<p>Nhánh <code>codex/individual-accounts-demo-prep</code>. Lượt này hoàn tất V4–V6; chưa triển khai V1/V2/V3/V7. Q-364–Q-367 đã có câu trả lời, DL-349–351 đã ghi.</p>
+<table><thead><tr><th>Lát cắt</th><th>Kết quả</th><th>Giới hạn</th></tr></thead><tbody>
+<tr><td>V4 — Seed demo</td><td>Sáu Patient tổng hợp cá nhân dùng chung số liên hệ; lịch ở bốn trạng thái; một Visit đang khám; ba lượt hàng đợi; tiền sử/dị ứng, sinh hiệu và FDI sâu răng răng 16. Có harness kiểm tra idempotent.</td><td>Harness chưa chạy trên PostgreSQL; không ghi database nào.</td></tr>
+<tr><td>V5 — Tiếp đón</td><td>Tự tải lịch hôm nay/hàng đợi; phân trang riêng; tìm tên, SĐT, mã hồ sơ; CCCD băm trước khi gọi API; debounce, lỗi/rỗng/loading và chặn phản hồi cũ; Admin/Lễ tân.</td><td>Dùng API hiện có; chưa browser UAT.</td></tr>
+<tr><td>V6 — Ghi chú</td><td>Ghi chú trống được nhận; tối đa 500 ký tự; lỗi CCCD/SĐT hiện theo trường.</td><td>Chưa browser UAT.</td></tr>
+</tbody></table>
+<h2>Kiểm chứng</h2><ul>
+<li>Node riêng V5/V6: 19/19 đạt.</li><li><code>npm run build</code>: đạt, 445 modules.</li>
+<li>Backend Infrastructure build: 0 lỗi, 3 cảnh báo; PostgreSQL harness build: 0 lỗi, 4 cảnh báo với BuildProjectReferences=false.</li>
+<li>Nhóm .NET Queue/Patients/Auth đã đạt 714/714 sau Q-367a; lượt chạy lại hiện tại treo sau discovery, không có kết quả mới.</li>
+<li>Toàn Node suite: 1.128 tổng, 1.099 đạt, 29 lỗi thuộc đặt lịch, xác nhận lịch, công nợ, khôi phục/kích hoạt và QR. Chưa có baseline trước thay đổi để quy nguyên nhân.</li>
+<li>Docker Desktop API từ chối quyền kết nối; không chạy PostgreSQL smoke, không áp dụng seed vào database. Chưa chạy browser/loa/UAT Gia.</li>
+</ul>
+<p><strong>Git:</strong> Commit mã V4–V6 <code>15f6c2b6</code> trên nhánh riêng; không push/merge.</p><p><strong>Đang dừng tại Q-368:</strong> Gia có cho phép xử lý 29 lỗi Node ngoài V4–V6 trước khi chuyển lát cắt khác không? Xem <code>docs/OPEN_QUESTIONS.md</code>. Chưa mở Phase 2.</p></section><hr><h2>Phân tích ban đầu trước khi Gia trả lời Q-364–Q-367</h2><h2>Bản phân tích ban đầu V1–V7 — 24/10/2026 00:22</h2>
+<p>Giai đoạn: sửa lỗi phát hiện khi Gia chạy thử Phase 1. Chưa nghiệm thu và chưa mở Phase 2.</p>
+<p>Đã đọc AGENTS.md tại thư mục gốc, PROJECT_STATUS.md, HISTORY_LOG.md, FUNCTION_STATUS.md, ROLE_PERMISSION_MATRIX.md, OPEN_QUESTIONS.md, DECISION_LOG.md và đối chiếu mã thật ở cả hai thư mục. Bản đang tiếp tục là <code>docs/worktrees/individual-accounts-demo-prep</code>, nhánh <code>codex/individual-accounts-demo-prep</code>, commit nền <code>8ab0ecd6</code>, có thay đổi chưa commit từ lượt trước. Thư mục gốc ở <code>main</code>, commit <code>14c8a13</code>, chứa mã khác bản demo; các kết quả lịch sử ở đó không chứng minh bản demo đã đạt.</p>
+<p>Ảnh chụp trước Q-367a: kiểm thử nền có hai lỗi; Gia sau đó cho phép xử lý chúng. Kết quả mới ở đầu báo cáo.</p>
+<h2 id="bang-v1v7">1. Bảng V1–V7</h2>
+<table>
+<thead>
+<tr>
+<th>Vấn đề</th>
+<th>Trạng thái</th>
+<th>Nguyên nhân / bằng chứng</th>
+<th>File sửa trong lượt</th>
+<th>Kiểm thử hồi quy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>V1 — Trang chủ công khai</td>
+<td>Chưa xác minh trên trình duyệt; có quyết định</td>
+<td><code>main/frontend/src/router/index.ts:106</code> đặt <code>/</code> là dashboard và yêu cầu đăng nhập. Bản demo có <code>/</code> công khai, <code>/book-appointment</code> và API công khai có giới hạn tần suất. Có khác biệt phiên bản; chưa kết luận Gia đang chạy bản nào.</td>
+<td>Không</td>
+<td>Chưa chạy kiểm thử trang công khai lượt này</td>
+</tr>
+<tr>
+<td>V2 — SĐT nhân viên, CCCD Patient</td>
+<td>Chờ Gia quyết phần tài khoản cũ/thiếu CCCD</td>
+<td><code>AuthService.LoginAsync</code> bản demo chọn tra hash nếu 12 số, còn <code>UserRepository.FindByPhoneAsync</code> vẫn cho User cũ chưa có <code>LoginByCitizenId</code> đăng nhập SĐT theo DL-344. <code>main</code> vẫn tra SĐT. Yêu cầu mọi Patient dùng CCCD cần hòa giải ngoại lệ cũ.</td>
+<td>Không</td>
+<td>Nhóm xác thực/bệnh nhân/hàng đợi: 710 đạt, 2 lỗi có sẵn</td>
+</tr>
+<tr>
+<td>V3 — Đăng nhập rồi OTP lần đầu</td>
+<td>Chờ Gia quyết</td>
+<td><code>AuthService.cs:94</code> trả <code>AUTH_ACTIVATION_REQUIRED</code>; <code>LoginView.vue</code> chỉ hiện lỗi, không chuyển liền sang OTP. DL-342 chốt chưa cấp JWT (mã phiên đăng nhập) trước OTP và đổi mật khẩu.</td>
+<td>Không</td>
+<td>Hai kiểm thử kích hoạt hiện đỏ, xem mục 3</td>
+</tr>
+<tr>
+<td>V4 — Dữ liệu thử TV/FDI</td>
+<td>Chưa sửa, dừng vì kiểm thử nền đỏ</td>
+<td><code>Phase1DemoSeeder.cs</code> chỉ thêm hai hồ sơ, ghế, dịch vụ, vật tư; không tạo Visit, lịch hẹn, hàng đợi, tiền sử, dị ứng hoặc FDI. Có bộ seed khác trên main nhưng không được gọi ở bản demo này.</td>
+<td>Không</td>
+<td>Chưa chạy dữ liệu mẫu hoặc kiểm chứng âm thanh</td>
+</tr>
+<tr>
+<td>V5 — Tự tải danh sách/tìm nhanh</td>
+<td>Chưa sửa, dừng vì kiểm thử nền đỏ</td>
+<td><code>QueueCheckInView.vue</code> không có tải dữ liệu khi mở; hàm tìm cố định trang 1/20, không trễ gõ và không điều khiển phân trang. <code>PatientRepository.SearchAsync</code> chỉ tìm mã hồ sơ/tên/SĐT, không CCCD.</td>
+<td>Không</td>
+<td>Chưa thêm kiểm thử hồi quy V5</td>
+</tr>
+<tr>
+<td>V6 — Ghi chú trống báo lỗi</td>
+<td>Chưa sửa; xác định lỗi hiển thị qua mã</td>
+<td><code>CheckInRequestValidator.cs</code> cho Notes null/rỗng và giới hạn 500; giao diện gửi <code>notes || null</code>. CCCD/SĐT là bắt buộc. <code>QueueController.ToValidationProblem</code> trả lỗi theo trường nhưng giao diện ưu tiên <code>response.message</code> chung trước <code>errors</code>. Chưa có bằng chứng Notes trống là trường gây lỗi của Gia.</td>
+<td>Không</td>
+<td>Chưa thêm ca null/rỗng/khoảng trắng/501 ký tự; kiểm thử nền hàng đợi nằm trong 712 ca đã chạy</td>
+</tr>
+<tr>
+<td>V7 — Quét/nhập CCCD</td>
+<td>Chưa xác minh thiết bị; đã có DL cho USB/camera</td>
+<td><code>QrPatientIntake.vue</code> chỉ gắn ở <code>PatientsView.vue</code>, chưa ở màn tiếp đón. <code>decodeCitizenQr</code> đòi chuỗi QR đủ 7 trường, nên nhập riêng 12 chữ số vào ô quét sẽ bị từ chối. Camera phụ thuộc <code>BarcodeDetector</code> và quyền camera của trình duyệt; chưa thử trên thiết bị Gia.</td>
+<td>Không</td>
+<td>Chưa chạy thiết bị USB hoặc camera</td>
+</tr>
+</tbody>
+</table>
+<h2 id="oi-chieu-quyet-inh-va-phuong-an">2. Đối chiếu quyết định và phương án</h2>
+<h3 id="v1">V1</h3>
+<p>DL-339/340/343/348 và AGENTS §2.8/§6.2 đã cho phép trang chủ/đặt lịch công khai không OTP. Nhận định trong prompt rằng chỉ login và TV được ẩn danh đã lỗi thời so với AGENTS hiện tại. Không cần hỏi lại quyền này.</p>
+<ul>
+<li>Phương án A: chạy và kiểm chứng đúng bản demo đã có luồng công khai; xác định địa chỉ/cổng và phiên bản đang phục vụ.</li>
+<li>Phương án B: chuyển phần đã duyệt sang nhánh sửa lỗi dựa trên main rồi kiểm chứng lại toàn bộ phụ thuộc.</li>
+<li>Chọn A để tránh lẫn hai mô hình migration; chỉ sửa lỗi thật còn tái hiện trên bản demo. Không tự merge main.</li>
+</ul>
+<p>API <code>BookingRequestsController</code> đã có <code>AllowAnonymous</code>, <code>NoStore</code> và giới hạn tần suất: catalog 120/60 giây; gửi lịch 30/60 giây theo IP. Không thêm OTP/CAPTCHA hoặc package trái quyết định hiện tại. DTO (cấu trúc dữ liệu truyền API) công khai cần được kiểm lại bằng HTTP trước kết luận nghiệm thu.</p>
+<h3 id="v2">V2</h3>
+<p>DL-240 chốt SHA-256; DL-340 chốt nhiều Patient dùng chung SĐT, CCCD làm định danh; DL-344 giữ tài khoản cũ đơn hồ sơ. Kiểm tra định dạng 12 chữ số đã có. <code>UserRepository</code> tra tối đa hai tài khoản theo hash và chỉ trả đúng một kết quả, không chọn tùy ý khi mơ hồ. Sai mật khẩu/không có tài khoản dùng lỗi chung. DL-032 đã chốt khóa sau 5 lần sai, DL-033 có giới hạn 10 lần/60 giây theo IP; <code>AuthService</code> đang đọc chưa có bộ đếm khóa theo tài khoản, cần xử lý trong phạm vi V2 sau khi được tiếp tục, không coi giới hạn IP là đã thực hiện DL-032.</p>
+<ul>
+<li>A: giữ ngoại lệ tài khoản cũ như DL-344; Patient mới dùng CCCD.</li>
+<li>B: chuyển Patient cũ có định danh hợp lệ sang CCCD, giữ mật khẩu; thiếu/mơ hồ thì chưa chuyển, đối soát tại quầy.</li>
+<li>Đề xuất B để đáp ứng yêu cầu V2, chờ Q-364 về thu hồi phiên và thời điểm chuyển. Với người chưa có CCCD/số định danh, hỏi riêng Q-365, không tự tạo số thay thế hay dùng hồ sơ người khác.</li>
+</ul>
+<h3 id="v3">V3</h3>
+<p>DL-330/331: chỉ tài khoản mới bắt OTP, tài khoản cũ giữ chính sách; DL-342: Patient bắt đổi mật khẩu trước portal (khu vực cá nhân). DL-076: OTP 6 số, 5 phút, tối đa 5 lần sai, gửi lại sau 60 giây. DL-345 cho mã hỗ trợ trên giao diện Development (môi trường phát triển) của luồng kích hoạt; môi trường thật dùng SMS đã cấu hình, không ghi mã vào log. Các quy tắc này không cần hỏi lại.</p>
+<ul>
+<li>A: mật khẩu đúng dẫn ngay tới màn OTP, không hiện lỗi yêu cầu kích hoạt; chỉ cấp JWT đầy đủ sau OTP và đổi mật khẩu. Trước đó chỉ xem trang công khai và màn kích hoạt.</li>
+<li>B: cấp phiên tạm có trạng thái chưa xác minh, chỉ được gọi xác minh/đăng xuất; mọi API nội bộ từ chối phiên tạm; đổi sang phiên đầy đủ sau OTP và mật khẩu.</li>
+<li>Đề xuất A, chờ Q-366 để làm rõ ý “đăng nhập trước”. Không tự cấp quyền xem hồ sơ khi chưa OTP. Nhân viên mới/cũ theo DL-331; Q này không ép nhân viên cũ OTP lại.</li>
+</ul>
+<h3 id="v4">V4</h3>
+<p>AGENTS §2.6 cho dữ liệu giả ở seed; yêu cầu mới cho bổ sung hồ sơ, lịch, tiền sử/FDI, hàng đợi. TV giữ DTO tối thiểu, che tên theo DL-090/132; không mở rộng dữ liệu công khai.</p>
+<ul>
+<li>A: mở rộng Phase1DemoSeeder với các ca tổng hợp cố định, chỉ Development và khi bật cấu hình demo.</li>
+<li>B: nạp bằng script gọi các API nội bộ với vai trò phù hợp.</li>
+<li>Chọn A; dùng khóa định danh tình huống và ngày để chạy lại không nhân bản hoặc ghi đè ca đã thao tác. Tạo đủ ca đang khám/chờ/gọi, lịch nhiều trạng thái, tiền sử/dị ứng và lịch sử FDI. Không đặt sẵn phác đồ kê đơn hoặc ghi dữ liệu phòng khám thật.</li>
+</ul>
+<p><code>QueueDisplayView.vue</code> dùng Web Speech API (giao diện đọc văn bản của trình duyệt), <code>SpeechSynthesisUtterance.lang = vi-VN</code>, thêm âm báo bằng Web Audio (âm thanh trình duyệt), lấy <code>maskedPatientName</code> từ API. TV hỏi dữ liệu mỗi 3 giây; nút “Gọi số tiếp theo” ở màn nhân viên đổi trạng thái Calling, TV nhận trạng thái mới rồi đọc. Cần bấm bật âm thanh trên chính tab TV trước khi thử gọi; giọng Việt phụ thuộc giọng đã có trong trình duyệt/hệ điều hành. Không bảo đảm nghe được chỉ bằng kiểm thử tự động; cần Gia thử loa và giọng thực tế. Không thêm dịch vụ đọc văn bản bên ngoài.</p>
+<h3 id="v5">V5</h3>
+<p>RBAC (phân quyền theo vai trò): QueueCheckIn và lịch tại quầy dành cho Admin/Lễ tân; Patient không xem hàng đợi. DL-240/335 và ma trận đã cho Admin/Lễ tân đối soát CCCD.</p>
+<ul>
+<li>A: tái dùng API lịch trong ngày/hàng đợi đã phân trang; giao diện tự tải, chọn hồ sơ từ danh sách, tìm trễ 300 ms, chống kết quả cũ ghi đè, có trạng thái đang tải/rỗng/lỗi.</li>
+<li>B: thêm API tổng hợp riêng cho màn tiếp đón.</li>
+<li>Chọn A. CCCD băm ở trình duyệt và gửi POST tới API đối soát hiện hữu; không đưa CCCD rõ vào URL/tham số tìm kiếm. Tên/SĐT/mã hồ sơ dùng tìm kiếm hiện tại; phân trang độc lập và kiểm quyền phía backend.</li>
+</ul>
+<h3 id="v6">V6</h3>
+<p>Không có DL buộc ghi chú tiếp đón. Chọn cách sửa dựa vào nguyên nhân thực tế, không bỏ kiểm tra CCCD/SĐT đã chốt.</p>
+<ul>
+<li>A: nới validator ghi chú; không chọn vì validator hiện đã cho trống.</li>
+<li>B: hiển thị toàn bộ lỗi theo trường trước thông báo chung, kiểm CCCD/SĐT ở biểu mẫu, chuẩn hóa ghi chú toàn khoảng trắng thành null; giữ giới hạn 500.</li>
+<li>Chọn B. Kiểm thử cần chứng minh null/rỗng/khoảng trắng hợp lệ, quá 500 bị chặn; thiếu CCCD/SĐT chỉ rõ trường, không bị gán nhầm cho ghi chú. Cần tái hiện HTTP với payload (nội dung gửi API) tổng hợp trước khi chốt nguyên nhân thao tác cụ thể của Gia.</li>
+</ul>
+<h3 id="v7">V7</h3>
+<p>DL-067/069/075 cho điền trước từ QR và USB HID (máy quét hoạt động như bàn phím); DL-240 chỉ lưu hash/giá trị che; DL-321/Q-335 giới hạn Admin/Lễ tân. API <code>/patients/check-cccd</code>, <code>/patients/qr-intake</code> đã có quyền và xác nhận thủ công. Không cần hỏi lại USB; chưa thêm OCR (nhận dạng chữ từ ảnh), NFC (đọc chip) hay package.</p>
+<ul>
+<li>A: đưa điểm vào quét ở tiếp đón; tách rõ nhập 12 số để tìm với đọc chuỗi QR đầy đủ để điền trước biểu mẫu, tái dùng API đã có.</li>
+<li>B: chỉ hướng dẫn đi qua trang Bệnh nhân và ô quét hiện tại.</li>
+<li>Chọn A sau khi gỡ chặn nền. Camera giữ tính năng sẵn có trên trình duyệt hỗ trợ <code>BarcodeDetector</code>; cần HTTPS hoặc localhost và quyền camera. Nếu Gia cần hỗ trợ camera ở trình duyệt chưa có API này, phải lập đề xuất package/giấy phép riêng trước khi thêm; hiện chưa xác định nhu cầu đó. Không lưu ảnh CCCD hoặc chuỗi QR thô.</li>
+</ul>
+<h2 id="ket-qua-kiem-chung-thuc-te">3. Kết quả kiểm chứng thực tế</h2>
+<p>Chạy trước mọi chỉnh sửa mã của lượt này:</p>
+<pre><code class="language-text">dotnet test backend/tests/Dental.Tests/Dental.Tests.csproj --no-build --no-restore
+  --filter &quot;FullyQualifiedName~Queue|FullyQualifiedName~Patients|FullyQualifiedName~Auth&quot;
+  --logger &quot;console;verbosity=minimal&quot;
+</code></pre>
+<p>Kết quả: <strong>712 tổng / 710 đạt / 2 lỗi / 0 bỏ qua</strong>, khoảng 3 giây thực thi kiểm thử. Lần trước trong sandbox (môi trường hạn chế) bị quá hạn khởi động tiến trình kiểm thử; lần chạy ngoài sandbox cho số liệu trên.</p>
+<ol>
+<li><code>PatientActivationTests.WrongPasswordNeverDispatchesOrBindsARealTarget</code>: <code>NullReferenceException</code> tại <code>PatientActivation.cs:83</code>. Đối chiếu fixture (dữ liệu dựng kiểm thử) cho thấy <code>ActivationAccount</code> không được truyền Phone nên nhận mặc định chuỗi rỗng; cấu hình đối tượng giả của <code>proofs.Issue</code> chỉ khớp số nhập ban đầu, không khớp chuỗi rỗng mà service truyền vào. Chưa kết luận đây là lỗi xảy ra với repository thật; cần sửa fixture theo hợp đồng hiện tại và bổ sung ca thật giữ điều kiện sai mật khẩu không gửi OTP/không gắn tài khoản.</li>
+<li><code>PatientActivationTests.PublicDtosContainNoAccountIdentityOrCredentials</code>: danh sách thuộc tính cũ không có <code>DevelopmentCode</code>; hợp đồng hiện tại thêm trường này theo DL-345 và <code>MustChangePassword</code> theo DL-342. Phải kiểm chứng giá trị luôn rỗng ngoài Development và khi mật khẩu sai, thay vì bỏ yêu cầu bảo mật để làm test xanh.</li>
+</ol>
+<p>Bước biên dịch trong lệnh kiểm thử: 0 lỗi biên dịch, 4 cảnh báo NU1902/NU1903 dependency Pkcs 9.0.0 hiện hữu; tác vụ tổng thể vẫn báo thất bại do tiến trình kiểm thử sandbox. Không ghi nhận một lượt build toàn solution thành công riêng hôm nay. Không chạy lại frontend build hoặc kiểm thử Node sau khi phát hiện kiểm thử nền đỏ. Chưa chạy HTTP/PostgreSQL, trình duyệt/di động, máy quét hoặc loa trong lượt này; không ghi dữ liệu database.</p>
+<h2 id="cau-hoi-va-phan-viec-tiep-theo">4. Câu hỏi và phần việc tiếp theo</h2>
+<p>Q-364: chuyển định danh đăng nhập của Patient cũ theo V2 hay giữ ngoại lệ DL-344.</p>
+<p>Q-365: phạm vi tiếp đón/cấp tài khoản cho người chưa có CCCD hoặc số định danh 12 chữ số.</p>
+<p>Q-366: mật khẩu đúng chuyển ngay sang OTP hay cần phiên đăng nhập tạm có quyền hạn chế.</p>
+<p>Q-367: cho phép xử lý hai kiểm thử nền đỏ của kích hoạt theo các DL đã có rồi tiếp tục V4–V6 hay dừng toàn bộ. Đây là bước hỏi bắt buộc bởi AGENTS §11.</p>
+<p>Không hỏi lại quyền trang chủ công khai, OTP Development, USB HID, dùng chung SĐT hoặc định dạng/băm CCCD đã có quyết định. Câu hỏi được nối tiếp sau Q-363 ở bản demo; bản tài liệu tại gốc mới tới Q-357 được thêm ghi chú chỉ dẫn tới quyết định mới trong worktree.</p>
+<p>Ngoài phạm vi: main có migration baseline thay chuỗi cũ và unique Patient.Phone, khác AGENTS hiện hành; chỉ ghi nhận, không sửa trong lượt này. Các thay đổi chưa commit của lượt chuẩn bị demo vẫn được giữ nguyên. Chưa đưa bản demo vào main và chưa áp dụng chuyển đổi database thật.</p>
+<p>Sau khi Gia trả lời Q-367, nếu được tiếp tục: xử lý kiểm thử nền có bằng chứng, chạy lại nhóm bị ảnh hưởng; sửa V6 → V5 → V4, mỗi phần có kiểm thử hồi quy, rồi dừng báo cáo. V2/V3 đợi Q-364–366; V1/V7 theo quyết định đã có, không tự thêm công nghệ.</p>
+<footer>Chưa sửa mã trong lượt này. Không thay thế nghiệm thu trực tiếp của Gia.</footer></main></body></html>
