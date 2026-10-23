@@ -28,12 +28,12 @@
     <label>SĐT (nhập tay)<input ref="phoneInput" v-model="form.phone" type="tel" required pattern="0[0-9]{9}" maxlength="10" autocomplete="off" :disabled="busy || needsReview" @input="invalidate" /></label>
     <label>Địa chỉ<textarea v-model="form.address" maxlength="500" :disabled="busy || needsReview" @input="invalidate" /></label>
     <div v-if="duplicates.length">
-     <p>SĐT đã được dùng bởi các hồ sơ sau. Đối chiếu trước khi xác nhận người khác hoặc thành viên gia đình.</p>
+     <p>Đã có hồ sơ trùng SĐT và thông tin nhận dạng. Đối chiếu CCCD để tránh tạo trùng hồ sơ.</p>
      <ul><li v-for="item in duplicates" :key="item.patientCode">{{ item.patientCode }} · {{ item.fullName }} · {{ item.dateOfBirth }}</li></ul>
-     <label><input v-model="sharedPhoneConfirmed" type="checkbox" :disabled="busy || needsReview" /> Đây là người khác/thành viên gia đình dùng chung SĐT; tạo hồ sơ độc lập</label>
+     <label><input v-model="duplicateIdentityConfirmed" type="checkbox" :disabled="busy || needsReview" /> Đã đối chiếu CCCD và xác nhận đây là bệnh nhân khác</label>
     </div>
     <label><input v-model="confirmed" type="checkbox" :disabled="busy || needsReview" /> Tôi đã đối chiếu thông tin với bệnh nhân</label>
-    <button :disabled="busy || needsReview || !confirmed || (duplicates.length>0 && !sharedPhoneConfirmed)">Tạo hồ sơ</button>
+    <button :disabled="busy || needsReview || !confirmed || (duplicates.length>0 && !duplicateIdentityConfirmed)">Tạo hồ sơ</button>
     <p v-if="needsReview">Chưa xác minh kết quả. Quét lại để đối soát; không gửi tạo mới lần nữa.</p>
    </form>
   </div>
@@ -46,15 +46,15 @@ import { decodeCitizenQr,validQrBirthDate,qrPatientIntakeService,type ScannedIde
 import type { PatientDuplicateInfo } from '@/services/patients';
 const emit=defineEmits<{created:[]}>(),auth=useAuthStore();
 const allowed=computed(()=>['ADMIN','RECEPTIONIST'].includes(auth.role));
-const opened=ref(false),raw=ref(''),busy=ref(false),error=ref(''),message=ref(''),confirmed=ref(false),sharedPhoneConfirmed=ref(false),needsReview=ref(false);
+const opened=ref(false),raw=ref(''),busy=ref(false),error=ref(''),message=ref(''),confirmed=ref(false),duplicateIdentityConfirmed=ref(false),needsReview=ref(false);
 const identity=ref<ScannedIdentity|null>(null),existing=ref<QrExistingPatient|null>(null),duplicates=ref<PatientDuplicateInfo[]>([]);
 const scanInput=ref<HTMLInputElement|null>(null),phoneInput=ref<HTMLInputElement|null>(null),video=ref<HTMLVideoElement|null>(null),cameraOn=ref(false);
 const form=reactive({fullName:'',dateOfBirth:'',gender:'Male',phone:'',address:''});
 let generation=0,disposed=false,stream:MediaStream|null=null,cameraGeneration=0,timer:ReturnType<typeof setTimeout>|undefined;
 const actor=()=>auth.user?.userId+'/'+auth.role;
 function alive(ticket:number,owner:string) {return !disposed&&opened.value&&allowed.value&&generation===ticket&&actor()===owner;}
-function clear() {raw.value='';identity.value=null;existing.value=null;duplicates.value=[];confirmed.value=false;sharedPhoneConfirmed.value=false;needsReview.value=false;error.value='';message.value='';Object.assign(form,{fullName:'',dateOfBirth:'',gender:'Male',phone:'',address:''});}
-function invalidate() {confirmed.value=false;sharedPhoneConfirmed.value=false;duplicates.value=[];}
+function clear() {raw.value='';identity.value=null;existing.value=null;duplicates.value=[];confirmed.value=false;duplicateIdentityConfirmed.value=false;needsReview.value=false;error.value='';message.value='';Object.assign(form,{fullName:'',dateOfBirth:'',gender:'Male',phone:'',address:''});}
+function invalidate() {confirmed.value=false;duplicateIdentityConfirmed.value=false;duplicates.value=[];}
 function stopCamera() {cameraGeneration++;if(timer!==undefined)clearTimeout(timer);timer=undefined;stream?.getTracks().forEach(t=>t.stop());stream=null;if(video.value)video.value.srcObject=null;cameraOn.value=false;}
 function close() {generation++;stopCamera();opened.value=false;busy.value=false;clear();}
 async function toggle() {if(opened.value)close();else {opened.value=true;clear();await nextTick();scanInput.value?.focus();}}
@@ -71,11 +71,11 @@ async function scan(value?:string) {
  finally {if(alive(ticket,owner))busy.value=false;}
 }
 async function save() {
- if(disposed||busy.value||needsReview.value||!opened.value||!allowed.value||!identity.value||existing.value||!confirmed.value||duplicates.value.length&&!sharedPhoneConfirmed.value)return;
+ if(disposed||busy.value||needsReview.value||!opened.value||!allowed.value||!identity.value||existing.value||!confirmed.value||duplicates.value.length&&!duplicateIdentityConfirmed.value)return;
  if(!form.fullName.trim()||form.fullName.length>100||!/^0[0-9]{9}$/.test(form.phone)||form.phone.length!==10||!validQrBirthDate(form.dateOfBirth)||!['Male','Female'].includes(form.gender)||form.address.length>500){error.value='Kiểm tra họ tên, ngày sinh, SĐT 10 số và địa chỉ.';return;}
  const ticket=++generation,owner=actor(),id=identity.value;busy.value=true;error.value='';
  try {
-  const result=await qrPatientIntakeService.create(id,{...form,gender:form.gender,email:null,confirmNotDuplicate:sharedPhoneConfirmed.value});
+  const result=await qrPatientIntakeService.create(id,{...form,gender:form.gender,email:null,confirmNotDuplicate:duplicateIdentityConfirmed.value});
   if(!alive(ticket,owner))return;
   if(!Number.isSafeInteger(result.patientId)||result.patientId<=0||!/^BN\d+$/.test(result.patientCode))throw Error();
   clear();existing.value={patientId:result.patientId,patientCode:result.patientCode,fullName:result.fullName,masked:id.citizenIdMasked,isActive:result.isActive};message.value='Đã tạo hồ sơ. Mở hồ sơ để tiếp đón theo luồng hiện có.';emit('created');
@@ -83,7 +83,7 @@ async function save() {
   if(!alive(ticket,owner))return;
   const data=(failure as {response?:{data?:{code?:string;duplicates?:PatientDuplicateInfo[]}}})?.response?.data;
   confirmed.value=false;
-  if(data?.code==='PATIENT_POSSIBLE_DUPLICATE'&&Array.isArray(data.duplicates)&&data.duplicates.length>0&&data.duplicates.length<=20){duplicates.value=data.duplicates;sharedPhoneConfirmed.value=false;error.value='Đối chiếu hồ sơ dùng chung SĐT trước khi tiếp tục.';}
+  if(data?.code==='PATIENT_POSSIBLE_DUPLICATE'&&Array.isArray(data.duplicates)&&data.duplicates.length>0&&data.duplicates.length<=20){duplicates.value=data.duplicates;duplicateIdentityConfirmed.value=false;error.value='Đối chiếu danh sách hồ sơ trùng trước khi tiếp tục.';}
   else {needsReview.value=true;error.value='Trạng thái có thể đã đổi hoặc chưa xác minh kết quả. Quét lại để đối soát trước khi tạo hồ sơ.';}
  } finally {if(alive(ticket,owner))busy.value=false;}
 }

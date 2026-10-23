@@ -15,11 +15,11 @@ public sealed class PatientPhoneChangeRepository(DentalDbContext db, VietnamCloc
 {
     private static bool Eligible(User? user) => user is { IsActive: true, RequiresPhoneActivation: false } &&
         user.Role.RoleCode == RoleCodes.Patient && user.TokenVersion < int.MaxValue;
-    private static string Stamp(User user, string newPhone, IReadOnlyList<Patient> profiles) => Convert.ToHexString(SHA256.HashData(
+    private static string Stamp(User user, string newPhone, Patient patient) => Convert.ToHexString(SHA256.HashData(
         JsonSerializer.SerializeToUtf8Bytes(new {
             user.UserId, user.Phone, user.PasswordHash, user.RoleId, user.Role.RoleCode, user.IsActive,
             user.RequiresPhoneActivation, user.PhoneVerifiedAtUtc, user.TokenVersion, user.UpdatedAt, newPhone,
-            profiles = profiles.Select(p => new { p.PatientId, p.UserId, p.Phone, p.FullName, p.DateOfBirth, p.IsActive, p.UpdatedAt })
+            patient = new { patient.PatientId, patient.UserId, patient.Phone, patient.FullName, patient.DateOfBirth, patient.IsActive, patient.UpdatedAt }
         })));
     public async Task<Result<PatientPhonePreview>> PreviewAsync(int userId, string newPhone, CancellationToken ct)
     {
@@ -27,9 +27,10 @@ public sealed class PatientPhoneChangeRepository(DentalDbContext db, VietnamCloc
         if (!Eligible(user)) return Result<PatientPhonePreview>.Failure(Error.Forbidden);
         if (user!.Phone == newPhone || !user.LoginByCitizenId && await db.Users.AnyAsync(u => !u.LoginByCitizenId && u.Phone == newPhone && u.UserId != userId, ct))
             return Result<PatientPhonePreview>.Failure(PatientPhoneChangeService.NumberUnavailable);
-        var profiles = await db.Patients.AsNoTracking().Where(p => p.UserId == userId).OrderBy(p => p.PatientId).ToListAsync(ct);
-        return Result<PatientPhonePreview>.Success(new(user.Phone, newPhone, Stamp(user, newPhone, profiles),
-            profiles.Select(p => new PatientPhoneScopeItem(p.PatientId, p.FullName, p.DateOfBirth, p.IsActive, p.Phone == user.Phone)).ToList()));
+        var patient = await db.Patients.AsNoTracking().SingleOrDefaultAsync(p => p.UserId == userId && p.IsActive, ct);
+        if (patient is null) return Result<PatientPhonePreview>.Failure(Error.Forbidden);
+        return Result<PatientPhonePreview>.Success(new(patient.PatientId, patient.FullName, user.Phone, newPhone,
+            patient.Phone == user.Phone, Stamp(user, newPhone, patient)));
     }
     public async Task<Result<PatientPhoneTarget>> PrepareAsync(int userId, PatientPhoneRequest request, string? ip, CancellationToken ct)
     {
@@ -38,8 +39,8 @@ public sealed class PatientPhoneChangeRepository(DentalDbContext db, VietnamCloc
         if (preview.Value!.ReviewStamp != request.ReviewStamp) return Result<PatientPhoneTarget>.Failure(PatientPhoneChangeService.Stale);
         db.AuditLogs.Add(new AuditLog { UserId = userId, EntityType = "User", EntityId = userId,
             Action = "MOD_AUTH_PATIENT_PHONE_REQUESTED", CreatedAt = clock.UtcNow, IpAddress = ip,
-            Detail = JsonSerializer.Serialize(new { decision = "DL-334", confirmedScope = true,
-                patientIds = preview.Value.Profiles.Where(p => p.WillUpdate).Select(p => p.PatientId) }) });
+            Detail = JsonSerializer.Serialize(new { decision = "DL-334/DL-348", patientId = preview.Value.PatientId,
+                patientContactWillUpdate = preview.Value.ContactWillUpdate }) });
         await db.SaveChangesAsync(ct);
         return Result<PatientPhoneTarget>.Success(new(userId, request.NewPhone, request.ReviewStamp));
     }
@@ -51,19 +52,19 @@ public sealed class PatientPhoneChangeRepository(DentalDbContext db, VietnamCloc
         {
             var user = await db.Users.Include(u => u.Role).SingleOrDefaultAsync(u => u.UserId == target.UserId, ct);
             if (!Eligible(user)) return Result<PatientPhoneCompleted>.Failure(Error.Forbidden);
-            var profiles = await db.Patients.Where(p => p.UserId == target.UserId).OrderBy(p => p.PatientId).ToListAsync(ct);
-            if (Stamp(user!, target.NewPhone, profiles) != target.ReviewStamp) return Result<PatientPhoneCompleted>.Failure(PatientPhoneChangeService.Stale);
+            var patient = await db.Patients.SingleOrDefaultAsync(p => p.UserId == target.UserId && p.IsActive, ct);
+            if (patient is null || Stamp(user!, target.NewPhone, patient) != target.ReviewStamp) return Result<PatientPhoneCompleted>.Failure(PatientPhoneChangeService.Stale);
             if (!user!.LoginByCitizenId && await db.Users.AnyAsync(u => !u.LoginByCitizenId && u.Phone == target.NewPhone && u.UserId != target.UserId, ct))
                 return Result<PatientPhoneCompleted>.Failure(PatientPhoneChangeService.NumberUnavailable);
-            var affected = profiles.Where(p => p.Phone == user!.Phone).ToList();
             var now = clock.UtcNow;
-            foreach (var profile in affected)
+            var updatePatientContact = patient.Phone == user!.Phone;
+            if (updatePatientContact)
             {
-                profile.Phone = target.NewPhone;
-                profile.UpdatedAt = now;
-                db.AuditLogs.Add(new AuditLog { UserId = target.UserId, EntityType = "Patient", EntityId = profile.PatientId,
+                patient.Phone = target.NewPhone;
+                patient.UpdatedAt = now;
+                db.AuditLogs.Add(new AuditLog { UserId = target.UserId, EntityType = "Patient", EntityId = patient.PatientId,
                     Action = "MOD_PAT_CONTACT_PHONE_SYNCED", CreatedAt = now, IpAddress = ip,
-                    Detail = JsonSerializer.Serialize(new { decision = "DL-334", confirmedByAccountOwner = true }) });
+                    Detail = JsonSerializer.Serialize(new { decision = "DL-334/DL-348", confirmedByAccountOwner = true }) });
             }
             var counterRequest = await db.PatientPhoneChangeRequests.SingleOrDefaultAsync(x =>
                 x.UserId == target.UserId && x.TokenVersion == user!.TokenVersion && x.CurrentPhone == user.Phone &&
@@ -83,11 +84,11 @@ public sealed class PatientPhoneChangeRepository(DentalDbContext db, VietnamCloc
             user.UpdatedAt = now;
             db.AuditLogs.Add(new AuditLog { UserId = user.UserId, EntityType = "User", EntityId = user.UserId,
                 Action = "MOD_AUTH_PATIENT_PHONE_CHANGED", CreatedAt = now, IpAddress = ip,
-                Detail = JsonSerializer.Serialize(new { decision = "DL-334", sessionsRevoked = true, passwordChanged = false,
-                    confirmedScope = true, patientIds = affected.Select(p => p.PatientId) }) });
+                Detail = JsonSerializer.Serialize(new { decision = "DL-334/DL-348", sessionsRevoked = true, passwordChanged = false,
+                    patientId = patient.PatientId, patientContactUpdated = updatePatientContact }) });
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct); committed = true;
-            return Result<PatientPhoneCompleted>.Success(new(true, affected.Count));
+            return Result<PatientPhoneCompleted>.Success(new(true, updatePatientContact));
         }
         catch (Exception e) when (IsConflict(e)) { return Result<PatientPhoneCompleted>.Failure(Error.Conflict); }
         finally { if (!committed) db.ChangeTracker.Clear(); }

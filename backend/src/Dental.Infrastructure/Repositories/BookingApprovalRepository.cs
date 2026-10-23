@@ -107,10 +107,10 @@ public sealed class BookingApprovalRepository(DentalDbContext db, VietnamClock c
             if (row.DentistId.HasValue)
             {
                 var otherHolds = await BookingRequestReservations.Nearby(db, row.AppointmentDate).Where(x => x.Id != row.Id && x.DentistId == row.DentistId).ToArrayAsync(ct);
-                // An explicitly acknowledged emergency overlap does not remove or invalidate the original hold (DL234).
+                // DL337: legacy emergency flags no longer exempt a booking from collision checks.
                 var first = DateOnly.FromDayNumber(Math.Max(DateOnly.MinValue.DayNumber, row.AppointmentDate.DayNumber - 1));
                 var last = DateOnly.FromDayNumber(Math.Min(DateOnly.MaxValue.DayNumber, row.AppointmentDate.DayNumber + 1));
-                var otherBookings = await db.Appointments.AsNoTracking().Where(a => a.DentistId == row.DentistId && a.Status == AppointmentStatuses.Scheduled && !a.IsEmergency
+                var otherBookings = await db.Appointments.AsNoTracking().Where(a => a.DentistId == row.DentistId && a.Status == AppointmentStatuses.Scheduled
                     && a.AppointmentDate >= first && a.AppointmentDate <= last).ToArrayAsync(ct);
                 if (otherHolds.Any(x => BookingOccupancy.Overlaps(BookingRequestReservations.Period(x), row.AppointmentDate, row.SlotTime, row.SlotDurationMinutes))
                     || otherBookings.Any(a => BookingOccupancy.Overlaps(a, row.AppointmentDate, row.SlotTime, row.SlotDurationMinutes))) return Conflict();

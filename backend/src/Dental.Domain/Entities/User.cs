@@ -15,8 +15,8 @@ public class User : BaseEntity
 
     /// <summary>Patient accounts created under DL-340 authenticate with the linked Patient's CCCD hash.</summary>
     public bool LoginByCitizenId { get; set; }
-    /// <summary>Marks pre-DL-340 family accounts so their last remaining Patient is still split at the counter.</summary>
-    public bool IsLegacyFamilyAccount { get; set; }
+    /// <summary>Marks a legacy login account that still needs conversion to an individual Patient account.</summary>
+    public bool RequiresIndividualIdentityConversion { get; set; }
 
     /// <summary>BCrypt hash. Không log, không trả về client.</summary>
     public string PasswordHash { get; set; } = string.Empty;
@@ -41,5 +41,6 @@ public class User : BaseEntity
 
     // Navigation
     public Role Role { get; set; } = null!;
+    public Patient? Patient { get; set; }
     public ICollection<AuditLog> AuditLogs { get; set; } = [];
 }

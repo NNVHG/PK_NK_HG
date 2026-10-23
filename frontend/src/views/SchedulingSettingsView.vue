@@ -28,7 +28,7 @@ onUnmounted(() => { confirmed.value = false; Object.assign(form, { workStartTime
       <label>Kết thúc nghỉ trưa<input v-model="form.lunchEndTime" type="time" step="60" required @input="confirmed = false" /></label>
       <label>Giờ đóng cửa<input v-model="form.workEndTime" type="time" step="60" required @input="confirmed = false" /></label>
       <label>Thời lượng mỗi slot (phút)<input v-model.number="form.slotDurationMinutes" type="number" min="1" max="1440" step="1" required @input="confirmed = false" /></label>
-      <p>Slot phải nằm trọn trong một buổi. Trần 100 chỗ đồng thời và quyền xử lý lịch cấp cứu giữ theo quy định hiện hành.</p>
+      <p>Slot phải nằm trọn trong một buổi. Trần 100 chỗ đồng thời và kiểm tra trùng lịch nha sĩ vẫn được áp dụng.</p>
       <label class="confirm"><input v-model="confirmed" type="checkbox" required /> Tôi đã kiểm tra giờ, thời lượng và xác nhận áp dụng cho lần đặt/đổi lịch mới.</label>
       <button type="submit" :disabled="!confirmed">Lưu cấu hình</button>
     </fieldset></form>

@@ -5,7 +5,7 @@
       <p class="subtitle">Phòng Khám Nha Khoa</p>
       <div v-if="registrationNotice" class="success-alert">{{ registrationNotice }}</div>
 
-      <p v-if="$route.query.phoneChanged === '1'" role="status">Đã xác minh và đổi SĐT. Đăng nhập bằng số mới và mật khẩu hiện tại.</p>
+      <p v-if="$route.query.phoneChanged === '1'" role="status">Đã xác minh và đổi SĐT. Nhân viên đăng nhập bằng số mới; bệnh nhân tiếp tục đăng nhập bằng CCCD. Mật khẩu được giữ nguyên.</p>
         <form @submit.prevent="handleSubmit">
         <div class="form-group">
           <label for="phone">SĐT (nhân viên/tài khoản cũ) hoặc CCCD (bệnh nhân mới)</label>

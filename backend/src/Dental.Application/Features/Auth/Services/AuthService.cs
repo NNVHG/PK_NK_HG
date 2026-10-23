@@ -154,7 +154,7 @@ public sealed class AuthService
         if (user is null)
             return Result<MeResponse>.Failure(Error.NotFound);
 
-        // DL027/334: đổi số phải qua OTP và xác nhận phạm vi gia đình; profile PUT không được đi tắt.
+        // DL-334/335: đổi số phải qua OTP và xác nhận chính chủ; profile PUT không được đi tắt.
         if (request.Phone != user.Phone)
             return Result<MeResponse>.Failure(Error.PhoneChangeNotAllowed);
 

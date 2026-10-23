@@ -10,13 +10,13 @@ using Microsoft.Extensions.Logging;
 namespace Dental.Infrastructure.Data;
 
 /// <summary>
-/// One-time, all-or-nothing conversion of pre-DL-340 family accounts to individual Patient accounts.
+/// One-time, all-or-nothing conversion of legacy accounts with multiple Patient links to individual Patient accounts.
 /// Kept separate from EF schema migrations because BCrypt must be computed from the stored Patient phone.
 /// </summary>
-public sealed class LegacyFamilyAccountConversion(
+public sealed class LegacyPatientAccountConversion(
     DentalDbContext db,
     IPasswordHasher passwordHasher,
-    ILogger<LegacyFamilyAccountConversion> logger)
+    ILogger<LegacyPatientAccountConversion> logger)
 {
     private static readonly Regex CitizenIdHashPattern = new("^[A-Fa-f0-9]{64}$", RegexOptions.Compiled);
     private static readonly Regex PhonePattern = new("^0[0-9]{9}$", RegexOptions.Compiled);
@@ -26,10 +26,11 @@ public sealed class LegacyFamilyAccountConversion(
         await using var transaction = await db.Database.BeginTransactionAsync(
             IsolationLevel.Serializable, cancellationToken);
 
-        var sourceUsers = await db.Users
+        // Read detached: the new 1:1 model must not fix up old multiple links before conversion.
+        var sourceUsers = await db.Users.AsNoTracking()
             .Include(user => user.Role)
             .Where(user =>
-                (user.IsLegacyFamilyAccount &&
+                (user.RequiresIndividualIdentityConversion &&
                     (user.IsActive || db.Patients.Any(patient => patient.UserId == user.UserId))) ||
                 db.Patients.Count(patient => patient.UserId == user.UserId) > 1)
             .OrderBy(user => user.UserId)
@@ -42,7 +43,7 @@ public sealed class LegacyFamilyAccountConversion(
         }
 
         var sourceUserIds = sourceUsers.Select(user => user.UserId).ToArray();
-        var patients = await db.Patients
+        var patients = await db.Patients.AsNoTracking()
             .Where(patient => patient.UserId.HasValue && sourceUserIds.Contains(patient.UserId.Value))
             .OrderBy(patient => patient.PatientId)
             .ToListAsync(cancellationToken);
@@ -85,7 +86,7 @@ public sealed class LegacyFamilyAccountConversion(
             {
                 Phone = phone,
                 LoginByCitizenId = true,
-                IsLegacyFamilyAccount = false,
+                RequiresIndividualIdentityConversion = false,
                 PasswordHash = passwordHasher.Hash(phone),
                 RequiresPhoneActivation = true,
                 PhoneVerifiedAtUtc = null,
@@ -119,10 +120,11 @@ public sealed class LegacyFamilyAccountConversion(
             var newUser = newUsersByPatient[patient.PatientId];
             patient.UserId = newUser.UserId;
             patient.UpdatedAt = createdAt;
+            db.Patients.Update(patient);
             db.AuditLogs.Add(new AuditLog
             {
                 UserId = null,
-                Action = "MOD_AUTH_FAMILY_ACCOUNT_BULK_SPLIT",
+                Action = "MOD_AUTH_LEGACY_PATIENT_CONVERSION",
                 EntityType = "Patient",
                 EntityId = patient.PatientId,
                 Detail = JsonSerializer.Serialize(new
@@ -137,14 +139,16 @@ public sealed class LegacyFamilyAccountConversion(
 
         foreach (var sourceUser in sourceUsers)
         {
+            // Attach the scalar account only; detached Role instances may share the same key.
+            db.Entry(sourceUser).State = EntityState.Unchanged;
             sourceUser.IsActive = false;
-            sourceUser.IsLegacyFamilyAccount = true;
+            sourceUser.RequiresIndividualIdentityConversion = true;
             sourceUser.TokenVersion++;
             sourceUser.UpdatedAt = createdAt;
             db.AuditLogs.Add(new AuditLog
             {
                 UserId = null,
-                Action = "MOD_AUTH_FAMILY_ACCOUNT_DISABLED",
+                Action = "MOD_AUTH_LEGACY_LOGIN_DISABLED",
                 EntityType = "User",
                 EntityId = sourceUser.UserId,
                 Detail = JsonSerializer.Serialize(new { migration = "DL-347", sessionsRevoked = true }),
@@ -156,7 +160,7 @@ public sealed class LegacyFamilyAccountConversion(
         await transaction.CommitAsync(cancellationToken);
 
         logger.LogInformation(
-            "Bulk legacy Patient account conversion completed. ConvertedProfiles={ConvertedProfiles}, DisabledFamilyAccounts={DisabledFamilyAccounts}.",
+            "Bulk legacy Patient account conversion completed. ConvertedProfiles={ConvertedProfiles}, DisabledLegacyAccounts={DisabledLegacyAccounts}.",
             patients.Count, sourceUsers.Count);
         return patients.Count;
     }

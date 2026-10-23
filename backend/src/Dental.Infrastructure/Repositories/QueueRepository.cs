@@ -93,8 +93,7 @@ public sealed class QueueRepository : IQueueRepository
 
         // DL-046/054: đúng hẹn theo giờ hẹn; thường/trễ hẹn theo giờ check-in.
         var items = await query
-            .OrderByDescending(q => q.Appointment != null && q.Appointment.IsEmergency)
-            .ThenByDescending(q => q.Status == QueueStatus.Waiting && q.StatusHistories.Any(h =>
+            .OrderByDescending(q => q.Status == QueueStatus.Waiting && q.StatusHistories.Any(h =>
                 h.FromStatus == QueueStatus.InImaging && h.ToStatus == QueueStatus.Waiting))
             .ThenByDescending(q => q.Status == QueueStatus.Waiting && q.StatusHistories.Any(h =>
                 h.FromStatus == QueueStatus.Skipped && h.ToStatus == QueueStatus.Waiting))
@@ -129,8 +128,7 @@ public sealed class QueueRepository : IQueueRepository
         }
 
         return await query
-            .OrderByDescending(q => q.Appointment != null && q.Appointment.IsEmergency)
-            .ThenByDescending(q => q.StatusHistories.Any(h =>
+            .OrderByDescending(q => q.StatusHistories.Any(h =>
                 h.FromStatus == QueueStatus.InImaging && h.ToStatus == QueueStatus.Waiting))
             .ThenByDescending(q => q.Status == QueueStatus.Waiting && q.StatusHistories.Any(h =>
                 h.FromStatus == QueueStatus.Skipped && h.ToStatus == QueueStatus.Waiting))

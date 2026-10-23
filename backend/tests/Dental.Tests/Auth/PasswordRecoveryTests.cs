@@ -23,7 +23,7 @@ public sealed class PasswordRecoveryTests
     private readonly IPasswordRecoveryDelivery sms = Substitute.For<IPasswordRecoveryDelivery>();
     private readonly IPasswordHasher passwords = Substitute.For<IPasswordHasher>();
     private readonly Clock clock = new();
-    private static RecoveryAccount Account => new(7, "stored-hash", Phone);
+    private static RecoveryAccount Account => new(7, "stored-hash", Phone, null);
     private sealed class Clock : TimeProvider
     {
         public DateTimeOffset Now { get; set; } = new(2026, 10, 19, 0, 0, 0, TimeSpan.Zero);
@@ -52,7 +52,7 @@ public sealed class PasswordRecoveryTests
     public async Task ActiveAndUnknownAccountsHaveSamePublicShapeWithoutOtpOrPhone()
     {
         sms.IsConfigured.Returns(true); sms.Enqueue(Phone, Arg.Any<RecoveryCode>()).Returns(true);
-        repository.FindActiveAsync(Phone, Arg.Any<CancellationToken>()).Returns(Account);
+        repository.FindActiveAsync(Phone, null, Arg.Any<CancellationToken>()).Returns(Account);
         using var codes = new PasswordRecoveryCodes(clock);
         var known = await Service(codes).RequestAsync(new(Phone));
         var unknown = await Service(codes).RequestAsync(new("0999999997"));
@@ -69,12 +69,12 @@ public sealed class PasswordRecoveryTests
     public async Task DeliveryFailureRevokesCodeAndPreservesGenericResponse()
     {
         sms.IsConfigured.Returns(true);
-        repository.FindActiveAsync(Phone, Arg.Any<CancellationToken>()).Returns(Account);
+        repository.FindActiveAsync(Phone, null, Arg.Any<CancellationToken>()).Returns(Account);
         using var codes = new PasswordRecoveryCodes(clock);
         var response = await Service(codes).RequestAsync(new(Phone));
         var code = (RecoveryCode)sms.ReceivedCalls().Single(x => x.GetMethodInfo().Name == "Enqueue").GetArguments()[1]!;
         Assert.True(response.IsSuccess);
-        Assert.Null(codes.Consume(response.Value!.ChallengeId, Phone, code.Code));
+        Assert.Null(codes.Consume(response.Value!.ChallengeId, Phone, code.Code, null));
     }
 
     [Fact]
@@ -82,10 +82,10 @@ public sealed class PasswordRecoveryTests
     {
         using var codes = new PasswordRecoveryCodes(clock);
         var issued = codes.Issue(Phone, Account).Value!;
-        Assert.Null(codes.Consume(Guid.NewGuid(), Phone, issued.Code));
-        Assert.Null(codes.Consume(issued.ChallengeId, "0999999997", issued.Code));
-        Assert.Equal(Account, codes.Consume(issued.ChallengeId, Phone, issued.Code));
-        Assert.Null(codes.Consume(issued.ChallengeId, Phone, issued.Code));
+        Assert.Null(codes.Consume(Guid.NewGuid(), Phone, issued.Code, null));
+        Assert.Null(codes.Consume(issued.ChallengeId, "0999999997", issued.Code, null));
+        Assert.Equal(Account, codes.Consume(issued.ChallengeId, Phone, issued.Code, null));
+        Assert.Null(codes.Consume(issued.ChallengeId, Phone, issued.Code, null));
     }
 
     [Theory] [InlineData(299, true)] [InlineData(300, false)] [InlineData(301, false)]
@@ -93,7 +93,7 @@ public sealed class PasswordRecoveryTests
     {
         using var codes = new PasswordRecoveryCodes(clock);
         var issued = codes.Issue(Phone, Account).Value!; clock.Now = clock.Now.AddSeconds(seconds);
-        Assert.Equal(valid, codes.Consume(issued.ChallengeId, Phone, issued.Code) is not null);
+        Assert.Equal(valid, codes.Consume(issued.ChallengeId, Phone, issued.Code, null) is not null);
     }
 
     [Fact]
@@ -102,12 +102,12 @@ public sealed class PasswordRecoveryTests
         using var codes = new PasswordRecoveryCodes(clock);
         var issued = codes.Issue(Phone, Account).Value!;
         var wrong = issued.Code == "000000" ? "000001" : "000000";
-        for (var i = 0; i < 5; i++) Assert.Null(codes.Consume(issued.ChallengeId, Phone, wrong));
-        Assert.Null(codes.Consume(issued.ChallengeId, Phone, issued.Code));
+        for (var i = 0; i < 5; i++) Assert.Null(codes.Consume(issued.ChallengeId, Phone, wrong, null));
+        Assert.Null(codes.Consume(issued.ChallengeId, Phone, issued.Code, null));
         Assert.Equal("AUTH_062", codes.Issue(Phone, Account).Error.Code);
         clock.Now = clock.Now.AddSeconds(60);
         var next = codes.Issue(Phone, Account).Value!;
-        Assert.Equal(Account, codes.Consume(next.ChallengeId, Phone, next.Code));
+        Assert.Equal(Account, codes.Consume(next.ChallengeId, Phone, next.Code, null));
     }
 
     [Fact]
@@ -117,8 +117,8 @@ public sealed class PasswordRecoveryTests
         var old = codes.Issue(Phone, Account).Value!;
         clock.Now = clock.Now.AddSeconds(59); Assert.True(codes.Issue(Phone, Account).IsFailure);
         clock.Now = clock.Now.AddSeconds(1); var next = codes.Issue(Phone, Account).Value!;
-        Assert.Null(codes.Consume(old.ChallengeId, Phone, old.Code));
-        Assert.Equal(Account, codes.Consume(next.ChallengeId, Phone, next.Code));
+        Assert.Null(codes.Consume(old.ChallengeId, Phone, old.Code, null));
+        Assert.Equal(Account, codes.Consume(next.ChallengeId, Phone, next.Code, null));
     }
 
     [Fact]
@@ -126,7 +126,7 @@ public sealed class PasswordRecoveryTests
     {
         using var codes = new PasswordRecoveryCodes(clock);
         var issued = codes.Issue(Phone, Account).Value!;
-        var results = await Task.WhenAll(Enumerable.Range(0, 20).Select(_ => Task.Run(() => codes.Consume(issued.ChallengeId, Phone, issued.Code))));
+        var results = await Task.WhenAll(Enumerable.Range(0, 20).Select(_ => Task.Run(() => codes.Consume(issued.ChallengeId, Phone, issued.Code, null))));
         Assert.Single(results, x => x is not null);
     }
 

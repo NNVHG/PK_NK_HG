@@ -20,9 +20,9 @@ namespace Dental.Tests.Patients;
 public sealed class PatientsControllerTests
 {
     [Fact]
-    public void GetMyProfiles_RequiresPatientViewPolicy()
+    public void GetMyPatient_RequiresPatientViewPolicy()
     {
-        var method = typeof(PatientsController).GetMethod(nameof(PatientsController.GetMyProfiles));
+        var method = typeof(PatientsController).GetMethod(nameof(PatientsController.GetMyPatient));
 
         Assert.NotNull(method);
         var authorize = Assert.Single(method!.GetCustomAttributes<AuthorizeAttribute>());
@@ -30,11 +30,11 @@ public sealed class PatientsControllerTests
     }
 
     [Fact]
-    public async Task GetMyProfiles_WhenCalledByPatient_ReturnsProfilesForCurrentAccount()
+    public async Task GetMyPatient_WhenCalledByPatient_ReturnsProfilesForCurrentAccount()
     {
         var repository = Substitute.For<IPatientRepository>();
-        repository.GetActiveByUserIdAsync(11, Arg.Any<CancellationToken>())
-            .Returns(new[] { new Patient { PatientId = 31, PatientNumber = 31, UserId = 11, FullName = "An" } });
+        repository.GetByUserIdAsync(11, Arg.Any<CancellationToken>())
+            .Returns(new Patient { PatientId = 31, PatientNumber = 31, UserId = 11, FullName = "An" });
         var currentUser = Substitute.For<ICurrentUser>();
         currentUser.UserId.Returns(11);
         currentUser.RoleCode.Returns(RoleCodes.Patient);
@@ -47,17 +47,16 @@ public sealed class PatientsControllerTests
             new PatientQueryRequestValidator(),
             new UpdatePatientRequestValidator(new VietnamClock(TimeProvider.System))) { ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() } };
 
-        var result = await controller.GetMyProfiles(CancellationToken.None);
+        var result = await controller.GetMyPatient(CancellationToken.None);
 
         var response = Assert.IsType<OkObjectResult>(result);
-        var profiles = Assert.IsAssignableFrom<IReadOnlyList<PatientListItemResponse>>(response.Value);
-        Assert.Single(profiles);
-        Assert.Equal(31, profiles[0].PatientId);
-        await repository.Received(1).GetActiveByUserIdAsync(11, Arg.Any<CancellationToken>());
+        var profile = Assert.IsType<PatientListItemResponse>(response.Value);
+        Assert.Equal(31, profile.PatientId);
+        await repository.Received(1).GetByUserIdAsync(11, Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task GetMyProfiles_WhenCalledByStaff_ReturnsForbidden()
+    public async Task GetMyPatient_WhenCalledByStaff_ReturnsForbidden()
     {
         var currentUser = Substitute.For<ICurrentUser>();
         currentUser.RoleCode.Returns(RoleCodes.Receptionist);
@@ -69,7 +68,7 @@ public sealed class PatientsControllerTests
             new PatientQueryRequestValidator(),
             new UpdatePatientRequestValidator(new VietnamClock(TimeProvider.System))) { ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() } };
 
-        var result = await controller.GetMyProfiles(CancellationToken.None);
+        var result = await controller.GetMyPatient(CancellationToken.None);
 
         Assert.IsType<ForbidResult>(result);
     }

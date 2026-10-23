@@ -353,7 +353,6 @@ internal static class CashPaymentHttpSmoke
             await FdiServiceDeletionHttpSmoke.RunAsync(client, options, cashierId, patientId, Authenticate, check);
             await ToothHistoryHttpSmoke.RunAsync(client, options, cashierId, patientId, Authenticate, check);
             await ToothClinicalNoteHttpSmoke.RunAsync(client, options, cashierId, patientId, Authenticate, check);
-            await FamilyBookingHttpSmoke.RunAsync(client, options, cashierId, patientId, Authenticate, check);
             await CounterBookingHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await DailyQueueHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await QueueCallNextHttpSmoke.RunAsync(client, options, cashierId, Authenticate, AuthenticateActor, check);

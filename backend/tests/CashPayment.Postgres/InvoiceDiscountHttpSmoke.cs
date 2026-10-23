@@ -98,7 +98,7 @@ internal static class InvoiceDiscountHttpSmoke
         await using (var db = new DentalDbContext(options))
         {
             var result = await new BankTransferRepository(db).ReceiveAsync(new BankTransferRequest("PKNK " + bankInvoice.InvoiceCode, 300006, "SYN-DISCOUNT"),
-                bankInvoice.InvoiceCode, actorId, true, null);
+                bankInvoice.InvoiceCode, actorId, RoleCodes.Admin, true, false, null);
             check(result.IsSuccess && result.Value!.Amount == 250003 && result.Value.ChangeAmount == 50003, "Bank credits final balance; old gross excess flagged");
         }
         var unpaid = await Create("REMOVE", 100006, 0);

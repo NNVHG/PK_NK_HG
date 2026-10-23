@@ -44,7 +44,7 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
             .HasColumnType("timestamptz");
 
         builder.Property(u => u.LoginByCitizenId).HasDefaultValue(false);
-        builder.Property(u => u.IsLegacyFamilyAccount).HasDefaultValue(false);
+        builder.Property(u => u.RequiresIndividualIdentityConversion).HasDefaultValue(false);
 
         // Legacy/staff phone logins remain unique. New Patient accounts may share a contact phone and log in by CCCD.
         builder.HasIndex(u => u.Phone)

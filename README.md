@@ -1,5 +1,15 @@
 # Hệ thống Quản Lý Phòng Khám Nha Khoa Hoàng Gia (PK_NK_HG)
 
+## Bản demo Phase 1 hiện hành — 23/10/2026
+
+Chạy trên nhánh `codex/individual-accounts-demo-prep`. Mỗi tài khoản Patient chỉ có một hồ sơ; nhiều tài khoản có thể dùng cùng SĐT. Đặt lịch công khai không OTP, cấp tài khoản CCCD sau check-in đã đối soát; OTP và đổi mật khẩu ở lần đăng nhập đầu.
+
+- [Hướng dẫn demo](demo/phase1/README.md) · [Bản HTML](demo/phase1/index.html)
+- [Phiếu nghiệm thu](demo/phase1/UAT.md) · [52 chức năng](demo/phase1/FUNCTIONS.csv) · [Báo cáo build](demo/phase1/BUILD_REPORT.md)
+- Chạy `demo/phase1/Prepare.ps1`, sau đó `demo/phase1/Start.ps1` bằng PowerShell 7; dùng database demo riêng cổng 55432.
+- Các checkpoint/số kiểm thử lịch sử bên dưới không thay kết quả nghiệm thu của bản này. Chưa Gia UAT, chưa mở Phase 2.
+
+
 > **Đồ án tốt nghiệp ngành Công nghệ Thông tin**  
 > **Trường Đại học Thủ Dầu Một — Viện Công nghệ số**  
 > **Sinh viên thực hiện:** Nguyễn Ngô Vũ Hoàng Gia — **MSSV:** 2224802010628 — **Lớp:** D22CNTT02  
@@ -14,7 +24,7 @@ Hệ thống cung cấp giải pháp chuyển đổi số toàn diện cho **ph�
 - **Chuẩn hóa hồ sơ răng:** Ứng dụng tiêu chuẩn FDI quốc tế (32 răng người lớn: 11–48; 20 răng trẻ em: 51–85) với chi tiết 5 mặt răng (`MOD_FDI`).
 - **Phân quyền chặt chẽ (RBAC):** Kiểm soát truy cập nghiêm ngặt giữa 5 vai trò: `Admin`, `Lễ tân/Thu ngân`, `Nha sĩ`, `Phụ tá`, `Bệnh nhân` (`MOD_AUTH`).
 - **Minh bạch tài chính & trả nhiều đợt:** Hỗ trợ thu tiền một lần hoặc **thu thành nhiều đợt (trả góp theo tiến độ các dịch vụ điều trị dài ngày)**, theo dõi số tiền đã đóng (`PaidAmount`), dư nợ còn lại (`RemainingAmount`) và cảnh báo tổng công nợ khi tái khám (`F_BIL_03`, `F_CHK_01`).
-- **Quản lý kho an toàn:** Hỗ trợ nhập kho (`F_INV_03`) và gợi ý vật tư tiêu hao khi hoàn tất dịch vụ, bắt buộc Phụ tá/Admin xác nhận thủ công trước khi trừ tồn kho (`F_INV_06`).
+- **Quản lý kho an toàn:** Hỗ trợ nhập kho (`F_INV_03`) và ghi nhận tiêu hao thực tế sau điều trị, bắt buộc Phụ tá/Admin xác nhận thủ công trước khi trừ tồn kho (`F_INV_06`).
 - **Phạm vi loại trừ:** Không tích hợp BHYT; không xử lý chuẩn DICOM gốc (lưu trữ tệp hình ảnh X-quang JPG/PNG thông thường); không quản lý ca làm việc/lịch trực nhân sự (`MOD_ROS`).
 
 ---
@@ -366,22 +376,20 @@ Thu tiền mặt nhận diện PostgreSQL 40001/40P01/23505 trong chuỗi ngoạ
 
 Kiểm chứng bằng backend unit, CashPayment.Postgres với --isolated-config, frontend Node tests và build theo lệnh hiện có. Fault injection trong transaction PostgreSQL riêng chứng minh rollback tiền thu/công nợ/audit và retry một receipt. Chưa UAT browser; chưa gộp bản sửa vào integrate.
 
-## Đặt lịch cho tài khoản gia đình (F_APP_01, DL-079)
+## Đặt lịch bệnh nhân cá nhân (F_APP_01)
 
-Tại màn hình đặt lịch, Patient chọn hồ sơ bằng họ tên/ngày sinh/mã rồi ngày và slot. Một User có nhiều Patient đã liên kết; chỉ hồ sơ hoạt động thuộc tài khoản được đặt lịch. Lịch trùng kiểm theo từng thành viên. Chưa có UI tạo/liên kết thành viên trong phạm vi lượt sửa này; không tạo dữ liệu mẫu trong production.
-
-Migration `20261011133134_AllowFamilyPatientProfiles` chuyển index `Patients.UserId` sang không unique, giữ `Users.Phone` unique. Đã áp dụng local; không chạy Down khi còn nhiều hồ sơ cùng User. API mine trả no-store. Kiểm thử cùng các lệnh hiện có: backend unit, CashPayment.Postgres cô lập và frontend Node/build. Gia cần nghiệm thu UI gia đình có đăng nhập.
+Trang chủ và đặt lịch trực tuyến được truy cập công khai, không cần đăng nhập hoặc OTP khi gửi lịch. Patient đã đăng nhập chỉ đặt lịch cho hồ sơ cá nhân thuộc tài khoản mình. Lễ tân đối chiếu CCCD và số điện thoại tại quầy trước khi xác nhận tiếp đón và cấp tài khoản cá nhân mới. Mỗi tài khoản Patient gắn với một hồ sơ; số điện thoại liên hệ có thể dùng chung giữa các tài khoản cá nhân.
 
 ## Kiểm chứng tích hợp đầy đủ — 2026-10-11
 
-Đã kiểm chứng chuỗi VietQR TTL, biên lai K80, xóa chỉ định, lịch sử răng, ghi chú răng và đặt lịch gia đình; bổ sung bản sửa `8600381` nhận diện ngoại lệ thu tiền đồng thời lồng nhau, giữ rollback/BIL_006 và request idempotency.
+Đã kiểm chứng chuỗi VietQR TTL, biên lai K80, xóa chỉ định, lịch sử răng, ghi chú răng và đặt lịch trực tuyến; bổ sung bản sửa `8600381` nhận diện ngoại lệ thu tiền đồng thời lồng nhau, giữ rollback/BIL_006 và request idempotency.
 
 - Backend build: 0 cảnh báo, 0 lỗi; 584/584 unit test đạt, không fail/skip; EF không pending model changes.
 - PostgreSQL 16 Docker Compose riêng: 18 migration từ CSDL trống và seeder Development đạt; 175/175 kiểm tra PostgreSQL/HTTP và 113/113 API trên 5 vai trò đạt.
 - Frontend vue-tsc/Vite build: 176 modules; 74/74 Node test đạt; 16 route imports đều có file tương ứng.
 - Backup: `backup/main-20261011-2054`. Lịch sử merge được giữ; không xóa/sửa migration cũ hoặc thêm package. Chưa push trong lượt tích hợp này.
 
-Các chức năng PARTIAL vẫn chờ nghiệm thu tương ứng: ngân hàng live, máy in K80, UI gia đình và nhiều mặt răng. Bộ chạy ban đầu tạo dữ liệu tổng hợp trong CSDL Development Windows trước khi được sửa để dùng đúng Docker; dữ liệu đó được giữ nguyên, sự cố được ghi trong báo cáo local `docs/testing/MAIN_INTEGRATION_20261011_REPORT.md` và HISTORY_LOG, không che kết quả lỗi trước đó.
+Các chức năng PARTIAL vẫn chờ nghiệm thu tương ứng: ngân hàng live, máy in K80, giao diện đặt lịch và nhiều mặt răng. Bộ chạy ban đầu tạo dữ liệu tổng hợp trong CSDL Development Windows trước khi được sửa để dùng đúng Docker; dữ liệu đó được giữ nguyên, sự cố được ghi trong báo cáo local `docs/testing/MAIN_INTEGRATION_20261011_REPORT.md` và HISTORY_LOG, không che kết quả lỗi trước đó.
 
 ## Đặt lịch tại quầy (F_APP_02)
 Lễ tân/Admin mở Đặt lịch tại quầy ở /appointments/counter, tìm hồ sơ theo tên/SĐT/mã, đối chiếu họ tên/ngày sinh/mã, chọn ngày/slot, notes tùy chọn rồi xác nhận với khách. Tối đa20 kết quả; thu hẹp từ khóa nếu chưa thấy hồ sơ. Hồ sơ không tài khoản vẫn đặt được.
@@ -399,13 +407,11 @@ Lý do được nối vào ghi chú hiện có, tổng tối đa500ký tự; for
 
 GET /api/appointments/desk chỉ Admin/Receptionist và no-store. Backend hủy Patient kiểm ownership và mốc120phút DL-082; sát giờ liên hệ lễ tân, lễ tân/Admin vẫn hỗ trợ được. Lượt này chưa có UI đổi lịch hoặc tra cứu/hủy Patient; chờ Gia UAT trước khi đánh dấu toàn luồng hoàn thành.
 
-## Lịch hẹn của gia đình (F_APP_03)
+## Lịch hẹn cá nhân của bệnh nhân
 
-Patient mở Lịch hẹn gia đình tại /appointments/mine. Mặc định hiển thị mọi lịch của các hồ sơ liên kết với tài khoản,20dòng/trang và thời gian tăng dần; có thể chọn hồ sơ hoạt động bằng họ tên/ngày sinh/mã và lọc trạng thái. Tải lại, Trang trước/Trang sau chỉ thực hiện thao tác đọc.
+Patient mở `/appointments/mine` để xem lịch của hồ sơ cá nhân thuộc tài khoản đăng nhập; danh sách 20 dòng/trang và có thể lọc trạng thái. Tải lại, Trang trước/Trang sau chỉ đọc dữ liệu.
 
-API GET /api/appointments và GET /api/appointments/{id} kiểm ownership bằng JWT UserId; lọc trước đếm/phân trang và no-store, hồ sơ/lịch của tài khoản khác trả404. Không lấy owner từ tham số do client gửi. Lỗi bộ chọn hồ sơ không làm mất quyền lọc trên backend.
-
-Lượt này chỉ tra cứu, chưa có UI tự hủy hoặc tự đổi lịch; liên hệ lễ tân nếu cần hỗ trợ. Chờ Gia nghiệm thu UI có đăng nhập.
+API kiểm tra ownership theo JWT UserId; hồ sơ/lịch của tài khoản khác trả404. Không lấy owner từ tham số do client gửi.
 
 ## Patient tự hủy lịch (F_APP_03, DL-082)
 
@@ -427,7 +433,7 @@ Giới hạn: chưa cột AppointmentCode riêng. Kiểm trùng nha sĩ khi tạ
 
 ## Bệnh nhân tự đổi lịch (F_APP_03)
 
-Patient đăng nhập, mở /appointments/mine và chọn Đổi lịch trên lịch Scheduled của hồ sơ gia đình. Dialog tải trạng thái mới nhất, số lần còn lại và điều kiện từ server; chỉ cho đổi khi còn ít nhất 120 phút trước giờ hẹn hiện tại và RescheduleCount < 2 theo câu trả lời Q-238. Bộ đếm tính tổng lần đổi trên cùng lịch, kể cả lần đổi tại quầy. Khi hết lượt hoặc sát giờ, liên hệ Lễ tân để được hỗ trợ.
+Patient đăng nhập, mở /appointments/mine và chọn Đổi lịch trên lịch Scheduled của hồ sơ cá nhân. Dialog tải trạng thái mới nhất, số lần còn lại và điều kiện từ server; chỉ cho đổi khi còn ít nhất 120 phút trước giờ hẹn hiện tại và RescheduleCount < 2 theo câu trả lời Q-238. Bộ đếm tính tổng lần đổi trên cùng lịch, kể cả lần đổi tại quầy. Khi hết lượt hoặc sát giờ, liên hệ Lễ tân để được hỗ trợ.
 
 Chọn ngày/slot mới, nhập lý do bắt buộc tối đa 500 ký tự, tích xác nhận rồi gửi. Giữ ID, hồ sơ, nha sĩ đang gán và Notes của nhân viên. Thành công tải lại danh sách; Quay lại/ESC trước gửi giữ lịch cũ. Khi lỗi, giữ bản nháp, đọc lại điều kiện và yêu cầu xác nhận lại; không tự gửi lại mutation.
 
@@ -439,7 +445,7 @@ Lượt này không thay schema, dùng migration metadata có sẵn. Kiểm ch�
 
 Admin/Lễ tân mở /appointments/counter, tìm hồ sơ theo tên/SĐT/mã, chọn đúng bệnh nhân, chọn nha sĩ hoạt động hoặc “Chưa phân nha sĩ”, ngày và slot chuẩn 30 phút. Đối chiếu thông tin với khách, tích xác nhận rồi đặt. Tải lại nha sĩ nếu danh sách cũ; nha sĩ bị ngừng hoạt động sau khi tải vẫn bị backend từ chối lúc ghi.
 
-GET /api/appointments/booking-dentists chỉ Admin/Receptionist, no-store, trả dentistId/dentistName của nha sĩ hoạt động. POST appointments giữ DentistId tùy chọn; có nha sĩ thì chặn trùng lịch Scheduled cùng ngày/slot với thông báo 400 “Bác sĩ đã có lịch hẹn trong khung giờ này”. Kiểm tra này áp dụng cho cả request của Patient, vẫn kiểm ownership hồ sơ gia đình.
+GET /api/appointments/booking-dentists chỉ Admin/Receptionist, no-store, trả dentistId/dentistName của nha sĩ hoạt động. POST appointments giữ DentistId tùy chọn; có nha sĩ thì chặn trùng lịch Scheduled cùng ngày/slot với thông báo 400 “Bác sĩ đã có lịch hẹn trong khung giờ này”. Kiểm tra này áp dụng cho cả request của Patient, vẫn kiểm ownership hồ sơ cá nhân.
 
 Tạo lịch và đổi lịch đều dùng Serializable: khi hai thao tác ghi cùng slot nha sĩ, API trả APP_009/409 cho bên xung đột. UI giữ bản nháp, bỏ xác nhận và yêu cầu đối chiếu lịch trước khi thử tiếp; không tự gửi lại. Đặt thành công chỉ tạo Appointment, khách vào hàng đợi khi check-in. Không thay schema/package trong lượt này.
 

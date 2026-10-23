@@ -24,10 +24,6 @@ export interface CreateAppointmentPayload {
   slotTime: string;
   notes: string | null;
   dentistId?: number | null;
-  isEmergency?: boolean;
-  emergencyReason?: string | null;
-  confirmedDentistConflictAppointmentId?: number | null;
-  confirmedDentistConflictRequestId?: number | null;
   expectedScheduleRevision?: string;
 }
 
@@ -76,8 +72,8 @@ export const appointmentsService = {
   async selfCancellationEligibility(id: number): Promise<SelfCancellationEligibility> {
     return (await apiClient.get<SelfCancellationEligibility>(`/appointments/${id}/cancellation-eligibility`)).data;
   },
-  async getMine(page = 1, patientId?: number, status?: string): Promise<AppointmentPage> {
-    return (await apiClient.get<AppointmentPage>('/appointments', { params: { page, pageSize: 20, patientId, status } })).data;
+  async getMine(page = 1, status?: string): Promise<AppointmentPage> {
+    return (await apiClient.get<AppointmentPage>('/appointments', { params: { page, pageSize: 20, status } })).data;
   },
   async getForDesk(date: string, page = 1, status?: string): Promise<AppointmentPage> {
     return (await apiClient.get<AppointmentPage>('/appointments/desk', { params: { date, page, pageSize: 20, status } })).data;

@@ -42,8 +42,11 @@ public sealed class AppointmentService
     {
         if (actorRoleCode is not (RoleCodes.Admin or RoleCodes.Receptionist or RoleCodes.Patient))
             return Result<AppointmentResponse>.Failure(Error.Forbidden);
-        if (request.IsEmergency && actorRoleCode is not (RoleCodes.Admin or RoleCodes.Receptionist))
-            return Result<AppointmentResponse>.Failure(Error.Forbidden);
+        // DL337: retain the legacy request fields only to reject old clients explicitly.
+        if (request.IsEmergency || request.EmergencyReason is not null ||
+            request.ConfirmedDentistConflictAppointmentId.HasValue || request.ConfirmedDentistConflictRequestId.HasValue)
+            return Result<AppointmentResponse>.Failure(Error.Validation.Code,
+                "Phòng khám không tiếp nhận cấp cứu hoặc chen lịch. Chọn khung giờ khám và ghi điều cần lưu ý vào ghi chú.");
         try
         {
             return await _unitOfWork.ExecuteSerializableTransactionAsync(
@@ -58,13 +61,7 @@ public sealed class AppointmentService
         var snapshot = await _appointmentRepository.GetScheduleAsync(ct) ?? new ScheduleSnapshot(ClinicSchedule.Default, "", true);
         if (request.ExpectedScheduleRevision is not null && request.ExpectedScheduleRevision != snapshot.Revision)
             return Result<AppointmentResponse>.Failure(new Error("APP_SCHEDULE", "Cấu hình giờ khám đã đổi. Tải lại và chọn lại khung giờ trước khi gửi."));
-        var validTime = request.IsEmergency
-            ? request.SlotTime.Ticks % TimeSpan.TicksPerMinute == 0
-            : snapshot.Schedule.IsValidSlot(request.SlotTime);
-        var reason = request.EmergencyReason?.Trim();
-        if (!validTime || request.Notes?.Length > 500 || request.DentistId <= 0 ||
-            (request.IsEmergency && (reason is null || reason.Length is < 5 or > 255)) ||
-            (!request.IsEmergency && (request.EmergencyReason is not null || request.ConfirmedDentistConflictAppointmentId.HasValue || request.ConfirmedDentistConflictRequestId.HasValue)))
+        if (!snapshot.Schedule.IsValidSlot(request.SlotTime) || request.Notes?.Length > 500 || request.DentistId <= 0)
             return Result<AppointmentResponse>.Failure(Error.Validation);
         var patient = await _patientRepository.GetByIdAsync(request.PatientId, ct);
         if (patient is null)
@@ -78,8 +75,7 @@ public sealed class AppointmentService
         if (request.AppointmentDate < today)
             return Result<AppointmentResponse>.Failure(Error.AppointmentDateInPast);
 
-        // DL-229 permits a staff-entered emergency appointment to start immediately, including the current minute.
-        if (request.AppointmentDate == today && !request.IsEmergency)
+        if (request.AppointmentDate == today)
         {
             var nowVietnamTime = TimeOnly.FromDateTime(_vietnamClock.Now);
             if (request.SlotTime <= nowVietnamTime)
@@ -94,8 +90,6 @@ public sealed class AppointmentService
         if (currentSlotCount >= AppointmentSlots.MaxBookingsPerSlot)
             return Result<AppointmentResponse>.Failure(Error.AppointmentSlotFull);
 
-        var overriddenAppointmentId = (int?)null;
-        var overriddenRequestId = (int?)null;
         if (request.DentistId.HasValue)
         {
             var dentist = await _userRepository.FindByIdAsync(request.DentistId.Value, ct);
@@ -105,33 +99,13 @@ public sealed class AppointmentService
             var pending = await _appointmentRepository.GetPendingDentistConflictAsync(request.DentistId.Value,request.AppointmentDate,request.SlotTime,snapshot.Schedule.DurationMinutes,ct);
             if(pending is not null)
             {
-                if(!request.IsEmergency)return Result<AppointmentResponse>.Failure(Error.Validation.Code,"Bác sĩ đã có yêu cầu Pending giữ chỗ trong khung giờ này.");
-                // Preserve the existing explicit emergency-override rule DL234, without cancelling the pending hold.
-                if(request.ConfirmedDentistConflictRequestId!=pending.RequestId)
-                    return Result<AppointmentResponse>.Failure(new Error(Error.AppointmentDentistConflict.Code,
-                        $"Nha sĩ {pending.DentistName} có yêu cầu đang chờ xác nhận lúc {pending.SlotTime:HH:mm}. Xác nhận chen lịch cấp cứu?",
-                        new AppointmentDentistConflictDetails(0,pending.DentistName,"Khách đang chờ xác nhận",pending.AppointmentDate,pending.SlotTime,pending.RequestId)));
-                overriddenRequestId=pending.RequestId;
+                return Result<AppointmentResponse>.Failure(Error.Validation.Code,"Bác sĩ đã có yêu cầu Pending giữ chỗ trong khung giờ này.");
             }
             var conflict = await _appointmentRepository.GetDentistBookingConflictAsync(
                 request.DentistId.Value, request.AppointmentDate, request.SlotTime, 0, ct, snapshot.Schedule.DurationMinutes);
             if (conflict is not null)
             {
-                if (!request.IsEmergency)
-                    return Result<AppointmentResponse>.Failure(Error.Validation.Code, "Bác sĩ đã có lịch hẹn trong khung giờ này.");
-
-                if (request.ConfirmedDentistConflictAppointmentId != conflict.AppointmentId)
-                {
-                    var dentistName = conflict.Dentist?.FullName ?? dentist.FullName;
-                    var patientName = conflict.Patient?.FullName ?? "Bệnh nhân";
-                    var warning = $"Nha sĩ {dentistName} đã có lịch với bệnh nhân {patientName} lúc {conflict.SlotTime:HH:mm}. Bạn có chắc chắn muốn xếp chen ngang ca cấp cứu này không?";
-                    var details = new AppointmentDentistConflictDetails(
-                        conflict.AppointmentId, dentistName, patientName, conflict.AppointmentDate, conflict.SlotTime);
-                    return Result<AppointmentResponse>.Failure(new Error(
-                        Error.AppointmentDentistConflict.Code, warning, details));
-                }
-
-                overriddenAppointmentId = conflict.AppointmentId;
+                return Result<AppointmentResponse>.Failure(Error.Validation.Code, "Bác sĩ đã có lịch hẹn trong khung giờ này.");
             }
         }
 
@@ -144,8 +118,6 @@ public sealed class AppointmentService
             DentistId = request.DentistId,
             Status = AppointmentStatuses.Scheduled,
             Notes = request.Notes?.Trim(),
-            IsEmergency = request.IsEmergency,
-            EmergencyReason = request.IsEmergency ? reason : null,
             CreatedByUserId = actorUserId,
             CreatedAt = DateTime.UtcNow
         };
@@ -160,19 +132,7 @@ public sealed class AppointmentService
             userId: actorUserId,
             detail: JsonSerializer.Serialize(new
             {
-                changedFields = request.IsEmergency
-                    ? new[]
-                    {
-                        nameof(Appointment.PatientId),
-                        nameof(Appointment.AppointmentDate),
-                        nameof(Appointment.SlotTime),
-                        nameof(Appointment.SlotDurationMinutes),
-                        nameof(Appointment.DentistId),
-                        nameof(Appointment.Status),
-                        nameof(Appointment.IsEmergency),
-                        nameof(Appointment.EmergencyReason)
-                    }
-                    : new[]
+                changedFields = new[]
                     {
                         nameof(Appointment.PatientId),
                         nameof(Appointment.AppointmentDate),
@@ -181,10 +141,7 @@ public sealed class AppointmentService
                         nameof(Appointment.DentistId),
                         nameof(Appointment.Status)
                     },
-                slotDurationMinutes = appointment.SlotDurationMinutes,
-                confirmedDentistConflictOverride = overriddenAppointmentId.HasValue || overriddenRequestId.HasValue,
-                overriddenAppointmentId,
-                overriddenRequestId
+                slotDurationMinutes = appointment.SlotDurationMinutes
             }),
             ipAddress: ipAddress,
             ct: ct);

@@ -101,7 +101,6 @@ public sealed class QueueService
 
         // Xử lý lịch hẹn và tính độ ưu tiên (DL-046 & DL-054)
         var isPriority = false;
-        var isEmergency = false;
         Appointment? appointment = null;
         if (request.AppointmentId.HasValue)
         {
@@ -115,11 +114,10 @@ public sealed class QueueService
             if (appointment.Status != AppointmentStatuses.Scheduled)
                 return Result<QueueEntryResponse>.Failure(Error.AppointmentCannotCheckIn);
 
-            isEmergency = appointment.IsEmergency;
             var scheduledDateTime = appointment.AppointmentDate.ToDateTime(appointment.SlotTime);
             var nowVietnam = _vietnamClock.Now;
-            isPriority = isEmergency || (nowVietnam >= scheduledDateTime.AddMinutes(-30) &&
-                                         nowVietnam <= scheduledDateTime.AddMinutes(15));
+            isPriority = nowVietnam >= scheduledDateTime.AddMinutes(-30) &&
+                         nowVietnam <= scheduledDateTime.AddMinutes(15);
 
         }
 
@@ -187,28 +185,16 @@ public sealed class QueueService
               var accountResult = await EnsurePatientAccountAsync(patient, actorUserId, ipAddress, ct);
               if (accountResult.IsFailure) return Result<QueueEntryResponse>.Failure(accountResult.Error);
           }
-        return await CreateCheckInAsync(actorUserId, request, today, isPriority, isEmergency, ipAddress, ct);
+        return await CreateCheckInAsync(actorUserId, request, today, isPriority, ipAddress, ct);
     }
 
       private async Task<Result<bool>> EnsurePatientAccountAsync(Dental.Domain.Entities.Patient patient, int actorUserId, string? ipAddress, CancellationToken ct)
       {
-          User? previousOwner = null;
-          var otherProfileCount = 0;
           if (patient.UserId.HasValue)
           {
-              previousOwner = await _userRepository.FindByIdAsync(patient.UserId!.Value, ct);
-              if (previousOwner is null) return Result<bool>.Failure(Error.Conflict);
-              otherProfileCount = await _patientRepository.CountOtherPatientsForUserAsync(patient.UserId.Value, patient.PatientId, ct);
-          }
-          var splitFamilyProfile = previousOwner is not null && (previousOwner.IsLegacyFamilyAccount || otherProfileCount > 0);
-          if (previousOwner is not null && !splitFamilyProfile) return Result<bool>.Success(true); // DL-344: preserve personal legacy login.
-
-          if (splitFamilyProfile)
-          {
-              if (previousOwner!.TokenVersion == int.MaxValue) return Result<bool>.Failure(Error.Conflict);
-              previousOwner.TokenVersion++;
-              if (otherProfileCount == 0) previousOwner.IsActive = false;
-              previousOwner.UpdatedAt = _vietnamClock.UtcNow;
+              var owner = await _userRepository.FindByIdAsync(patient.UserId.Value, ct);
+              if (owner is null || !owner.IsActive) return Result<bool>.Failure(Error.Conflict);
+              return Result<bool>.Success(true); // An individually owned legacy account remains attached to this Patient.
           }
 
           var patientRole = await _userRepository.FindRoleByCodeAsync(RoleCodes.Patient, ct);
@@ -236,12 +222,8 @@ public sealed class QueueService
           await _unitOfWork.SaveChangesAsync(ct);
 
           await _auditLogger.LogRequiredAsync("MOD_AUTH_PATIENT_ACCOUNT_CREATED", "User", account.UserId, actorUserId,
-              JsonSerializer.Serialize(new { patientId = patient.PatientId, activationRequired = true, loginIdentifier = "CitizenId", splitFamilyProfile }),
+              JsonSerializer.Serialize(new { patientId = patient.PatientId, activationRequired = true, loginIdentifier = "CitizenId" }),
               ipAddress, ct);
-          if (previousOwner is not null)
-              await _auditLogger.LogRequiredAsync("MOD_AUTH_FAMILY_PROFILE_SPLIT", "Patient", patient.PatientId, actorUserId,
-                  JsonSerializer.Serialize(new { previousOwnerId = previousOwner.UserId, newOwnerId = account.UserId, previousSessionsRevoked = true, previousOwnerDisabled = otherProfileCount == 0 }),
-                  ipAddress, ct);
           return Result<bool>.Success(true);
       }
 
@@ -250,7 +232,6 @@ public sealed class QueueService
         CheckInRequest request,
         DateOnly today,
         bool isPriority,
-        bool isEmergency,
         string? ipAddress,
         CancellationToken ct)
     {
@@ -283,8 +264,7 @@ public sealed class QueueService
             ToStatus = QueueStatus.Waiting,
             ChangedByUserId = actorUserId,
             ChangedAt = _vietnamClock.UtcNow,
-            Reason = isEmergency ? "Tiếp đón check-in (Lịch cấp cứu)"
-                : isPriority ? "Tiếp đón check-in (Ưu tiên đúng giờ)" : "Tiếp đón check-in"
+            Reason = isPriority ? "Tiếp đón check-in (Ưu tiên đúng giờ)" : "Tiếp đón check-in"
         };
 
         await _queueRepository.AddStatusHistoryAsync(history, ct);
