@@ -28,8 +28,10 @@ public sealed class LegacyFamilyAccountConversion(
 
         var sourceUsers = await db.Users
             .Include(user => user.Role)
-            .Where(user => user.IsLegacyFamilyAccount &&
-                (user.IsActive || db.Patients.Any(patient => patient.UserId == user.UserId)))
+            .Where(user =>
+                (user.IsLegacyFamilyAccount &&
+                    (user.IsActive || db.Patients.Any(patient => patient.UserId == user.UserId))) ||
+                db.Patients.Count(patient => patient.UserId == user.UserId) > 1)
             .OrderBy(user => user.UserId)
             .ToListAsync(cancellationToken);
 
@@ -136,6 +138,7 @@ public sealed class LegacyFamilyAccountConversion(
         foreach (var sourceUser in sourceUsers)
         {
             sourceUser.IsActive = false;
+            sourceUser.IsLegacyFamilyAccount = true;
             sourceUser.TokenVersion++;
             sourceUser.UpdatedAt = createdAt;
             db.AuditLogs.Add(new AuditLog
