@@ -364,7 +364,7 @@ internal static class CashPaymentHttpSmoke
             await PatientSelfCancellationHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await DeskReschedulingHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await PatientSelfReschedulingHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
-            await DentistBookingHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
+            await DentistBookingHttpSmoke.RunAsync(client, options, cashierId, Authenticate, AuthenticateActor, check);
             await AppointmentReminderHttpSmoke.RunAsync(client, options, cashierId, Authenticate, check);
             await AutomaticReminderHttpSmoke.RunAsync(client, options, cashierId, Authenticate, app.Services.GetRequiredService<AppointmentReminderWorkerStatus>(), check);
             await BankTransferHttpSmoke.RunAsync(client, options, cashierId, patientId, webhookKey, Authenticate, check);

@@ -17,17 +17,31 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 internal static class DentistBookingHttpSmoke
 {
-    public static async Task RunAsync(HttpClient client, DbContextOptions<DentalDbContext> options, int actorId, Action<string> authenticate, Action<bool, string> check)
+    public static async Task RunAsync(HttpClient client, DbContextOptions<DentalDbContext> options, int actorId, Action<string> authenticate, Action<string, int> authenticateActor, Action<bool, string> check)
     {
         await using var db = new DentalDbContext(options);
         var role = await db.Roles.SingleAsync(r => r.RoleCode == RoleCodes.Dentist);
+        var patientRole = await db.Roles.SingleOrDefaultAsync(r => r.RoleCode == RoleCodes.Patient);
+        if (patientRole is null)
+        {
+            patientRole = new Role { RoleCode = RoleCodes.Patient, RoleName = "Bệnh nhân" };
+            db.Roles.Add(patientRole);
+            await db.SaveChangesAsync();
+        }
         User Dentist(string name, string phone, bool active = true) => new()
         { RoleId = role.RoleId, FullName = name, Phone = phone, IsActive = active, PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()) };
         var dentist = Dentist("Synthetic counter dentist", "0999999951");
         var secondDentist = Dentist("Synthetic second counter dentist", "0999999952");
         var inactive = Dentist("Synthetic inactive dentist", "0999999953", false);
-        db.Users.AddRange(dentist, secondDentist, inactive);
-        var patients = Enumerable.Range(0, 12).Select(n => new Patient { FullName = $"Synthetic booking patient {n}", Phone = "0999999954", DateOfBirth = new(1990, 1, 1), UserId = actorId }).ToArray();
+        var conflictOwner = new User { RoleId = patientRole.RoleId, FullName = "Synthetic booking patient owner", Phone = "0999999965", IsActive = true,
+            LoginByCitizenId = true, RequiresPhoneActivation = true, PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()) };
+        var emergencyOwner = new User { RoleId = patientRole.RoleId, FullName = "Synthetic emergency booking owner", Phone = "0999999966", IsActive = true,
+            LoginByCitizenId = true, RequiresPhoneActivation = true, PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()) };
+        db.Users.AddRange(dentist, secondDentist, inactive, conflictOwner, emergencyOwner);
+        await db.SaveChangesAsync();
+        var patients = Enumerable.Range(0, 12).Select(n => new Patient { FullName = $"Synthetic booking patient {n}", Phone = "0999999954", DateOfBirth = new(1990, 1, 1) }).ToArray();
+        patients[1].UserId = conflictOwner.UserId;
+        patients[5].UserId = emergencyOwner.UserId;
         db.Patients.AddRange(patients); await db.SaveChangesAsync();
         var clock = new VietnamClock(SmokeTestTimeProvider.Instance); var target = clock.Today.AddDays(120); var time = new TimeOnly(9, 0);
         var checkedIn = new Appointment { PatientId = patients[5].PatientId, DentistId = dentist.UserId, AppointmentDate = target.AddDays(4), SlotTime = time, Status = AppointmentStatuses.CheckedIn, CreatedByUserId = actorId };
@@ -62,7 +76,9 @@ internal static class DentistBookingHttpSmoke
         var conflict = request with { PatientId = patients[1].PatientId };
         foreach (var actorRole in new[] { RoleCodes.Receptionist, RoleCodes.Patient })
         {
-            authenticate(actorRole); using var response = await client.PostAsJsonAsync("/api/appointments", conflict);
+            if (actorRole == RoleCodes.Patient) authenticateActor(actorRole, conflictOwner.UserId);
+            else authenticate(actorRole);
+            using var response = await client.PostAsJsonAsync("/api/appointments", conflict);
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             check(response.StatusCode == HttpStatusCode.BadRequest && json.RootElement.GetProperty("message").GetString()!.Contains("Bác sĩ đã có lịch"), $"Booking dentist conflict {actorRole} 400");
         }
@@ -80,7 +96,8 @@ internal static class DentistBookingHttpSmoke
             IsEmergency = true, EmergencyReason = "Synthetic attention" };
         foreach (var bookingRole in new[] { RoleCodes.Admin, RoleCodes.Receptionist, RoleCodes.Patient })
         {
-            authenticate(bookingRole);
+            if (bookingRole == RoleCodes.Patient) authenticateActor(bookingRole, emergencyOwner.UserId);
+            else authenticate(bookingRole);
             using var response = await client.PostAsJsonAsync("/api/appointments", retired);
             check(response.StatusCode == HttpStatusCode.BadRequest, $"DL337 rejects retired emergency for {bookingRole}");
         }
@@ -102,8 +119,8 @@ internal static class DentistBookingHttpSmoke
 
         var queuePatients = new[]
         {
-            new Patient { FullName = "Synthetic regular queue patient", Phone = "0999999954", DateOfBirth = new(1990, 1, 1), UserId = actorId },
-            new Patient { FullName = "Synthetic emergency queue patient", Phone = "0999999954", DateOfBirth = new(1990, 1, 1), UserId = actorId }
+            new Patient { FullName = "Synthetic regular queue patient", Phone = "0999999954", DateOfBirth = new(1990, 1, 1) },
+            new Patient { FullName = "Synthetic emergency queue patient", Phone = "0999999954", DateOfBirth = new(1990, 1, 1) }
         };
         db.Patients.AddRange(queuePatients);
         await db.SaveChangesAsync();
