@@ -59,6 +59,7 @@ public sealed class RolePermissionMatrixProvider(IAuthorizationPolicyProvider po
             [Policies.FdiConditionWrite] = ("Ghi tình trạng răng", "MOD_FDI", "Chỉ Admin hoặc nha sĩ phụ trách; lần khám đang mở, chưa khóa."),
             [Policies.FdiServiceAssign] = ("Chỉ định dịch vụ điều trị", "MOD_FDI", "Chỉ Admin hoặc nha sĩ phụ trách; còn kiểm tra lần khám và dịch vụ đang dùng."),
             [Policies.InvoiceDraftView] = ("Xem hóa đơn theo lần khám", "MOD_BIL", "Bệnh nhân chỉ xem hóa đơn thuộc hồ sơ của mình."),
+            [Policies.InvoicePortalRead] = ("Xem hóa đơn của tôi", "MOD_BIL", "Chỉ Patient xem hóa đơn, dòng dịch vụ và khoản thu của đúng hồ sơ duy nhất gắn với tài khoản; kiểm tra ownership ở backend."),
             [Policies.CashPaymentWrite] = ("Thu tiền và xem giao dịch", "MOD_BIL", "Khám đã hoàn tất; hóa đơn còn nợ; không thu vượt số còn phải trả."),
             [Policies.InvoiceDiscountWrite] = ("Áp dụng giảm giá", "MOD_BIL", "Lễ tân chỉ dùng mẫu trong hạn mức; giảm tùy chỉnh dành cho Admin; hóa đơn chưa thu tiền.")
         };
