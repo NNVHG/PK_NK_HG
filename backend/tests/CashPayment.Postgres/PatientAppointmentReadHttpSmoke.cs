@@ -15,7 +15,11 @@ internal static class PatientAppointmentReadHttpSmoke
         var other = new Patient { FullName = "Synthetic other owner", DateOfBirth = new(1990, 1, 1), Phone = "0999999931" };
         db.Patients.Add(other); await db.SaveChangesAsync();
         var date = new VietnamClock(SmokeTestTimeProvider.Instance).Today.AddDays(10);
-        var owned = profiles.Select((p, i) => new Appointment { PatientId = p.PatientId, AppointmentDate = date, SlotTime = new(8 + i, 0), CreatedByUserId = actorId, Status = i == 0 ? AppointmentStatuses.Scheduled : AppointmentStatuses.Cancelled }).ToArray();
+        var owned = new[]
+        {
+            new Appointment { PatientId = profiles[0].PatientId, AppointmentDate = date, SlotTime = new(8, 0), CreatedByUserId = actorId, Status = AppointmentStatuses.Scheduled },
+            new Appointment { PatientId = profiles[0].PatientId, AppointmentDate = date, SlotTime = new(9, 0), CreatedByUserId = actorId, Status = AppointmentStatuses.Cancelled }
+        };
         var unowned = new Appointment { PatientId = other.PatientId, AppointmentDate = date, SlotTime = new(8, 0), CreatedByUserId = actorId, Status = AppointmentStatuses.Scheduled };
         db.Appointments.AddRange(owned.Append(unowned)); await db.SaveChangesAsync();
         var auditCount = await db.AuditLogs.CountAsync(); var rowCount = await db.Appointments.CountAsync();
@@ -35,7 +39,7 @@ internal static class PatientAppointmentReadHttpSmoke
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             ids.Add(json.RootElement.GetProperty("items")[0].GetProperty("appointmentId").GetInt32());
         }
-        check(ids.SequenceEqual(owned.Select(a => a.AppointmentId)), "Patient pagination includes own profile and excludes other account");
+        check(ids.SequenceEqual(owned.Select(a => a.AppointmentId)), "Patient pagination includes own appointments and excludes another profile");
         using (var response = await client.GetAsync($"/api/appointments?date={date:yyyy-MM-dd}&ownerUserId=2147483647"))
         {
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -45,10 +49,10 @@ internal static class PatientAppointmentReadHttpSmoke
         using (var response = await client.GetAsync($"/api/appointments/{unowned.AppointmentId}")) check(response.StatusCode == HttpStatusCode.NotFound, "Patient unrelated appointment detail 404");
         using (var response = await client.GetAsync($"/api/appointments/{owned[0].AppointmentId}")) check(response.StatusCode == HttpStatusCode.OK && response.Headers.CacheControl?.NoStore == true, "Patient owned detail 200/no-store");
         using (var response = await client.GetAsync("/api/appointments/2147483647")) check(response.StatusCode == HttpStatusCode.NotFound, "Patient missing appointment detail 404");
-        using (var response = await client.GetAsync($"/api/appointments?date={date:yyyy-MM-dd}&status=Cancelled&patientId={profiles[1].PatientId}"))
+        using (var response = await client.GetAsync($"/api/appointments?date={date:yyyy-MM-dd}&status=Cancelled&patientId={profiles[0].PatientId}"))
         {
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            check(response.StatusCode == HttpStatusCode.OK && json.RootElement.GetProperty("totalCount").GetInt32() == 1, "Patient status and patient filter intersect owner scope");
+            check(response.StatusCode == HttpStatusCode.OK && json.RootElement.GetProperty("totalCount").GetInt32() == 1, "Patient status and own profile filter intersect owner scope");
         }
         foreach (var role in new[] { RoleCodes.Admin, RoleCodes.Receptionist, RoleCodes.Dentist, RoleCodes.Assistant })
         {
