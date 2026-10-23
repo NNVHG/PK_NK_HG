@@ -30,8 +30,7 @@ public static partial class ClinicalDemoDataSeeder
             VisitId = v1.VisitId, DoctorId = dentist1.UserId, PrescriptionCode = $"RX-{today:yyyyMMdd}-0001",
             Diagnosis = "Viêm nướu sau lấy vôi răng, ê buốt nhẹ sau trám R36",
             DoctorAdvice = "Súc miệng đều đặn, không nhai đồ cứng tại răng 36 trong 24 giờ đầu",
-            RevisitDate = today.AddDays(7), IsCancelled = false, DispensedAt = now.Date.AddHours(9).AddMinutes(20),
-            DispensedBy = assistant1.UserId, ReceivedByProxy = false, DispenseNote = "Đã dặn dò liều lượng chi tiết",
+            RevisitDate = today.AddDays(7), IsCancelled = false,
             CreatedAt = now.Date.AddHours(9).AddMinutes(10), CreatedByUserId = dentist1.UserId, Version = 1,
             Items =
             [
@@ -52,20 +51,13 @@ public static partial class ClinicalDemoDataSeeder
         db.Prescriptions.Add(rx1);
         await db.SaveChangesAsync(ct);
 
-        db.PrescriptionDispenseEvents.Add(new PrescriptionDispenseEvent
-        {
-            PrescriptionId = rx1.Id, PrescriptionVersion = 1, Action = "Dispense",
-            PerformedAt = now.Date.AddHours(9).AddMinutes(20), PerformedBy = assistant1.UserId, ReceivedByProxy = false,
-        });
-        await db.SaveChangesAsync(ct);
-
         var presetFix50 = await db.DiscountPresets.FirstOrDefaultAsync(p => p.Code == "FIX50", ct);
         var rxItems = rx1.Items.ToList();
 
         var invoice1 = new Invoice
         {
-            VisitId = v1.VisitId, InvoiceCode = $"HD-{today:yyyyMMdd}-0001", Status = InvoiceStatus.Paid,
-            TotalAmount = 635000m, PaidAmount = 585000m, DiscountAmount = 50000m, DiscountType = "FixedAmount",
+            VisitId = v1.VisitId, InvoiceCode = $"HD-{today:yyyyMMdd}-0001", Status = InvoiceStatus.PendingPayment,
+            TotalAmount = 635000m, PaidAmount = 0m, DiscountAmount = 50000m, DiscountType = "FixedAmount",
             DiscountValue = 50000m, DiscountPresetId = presetFix50?.Id, DiscountReason = "Áp dụng mẫu ưu đãi FIX50 cho khách hàng",
             CreatedByUserId = receptionist1.UserId, CreatedAt = now.Date.AddHours(9).AddMinutes(16),
             Items =
@@ -80,6 +72,24 @@ public static partial class ClinicalDemoDataSeeder
         await db.SaveChangesAsync(ct);
 
         rx1.InvoiceId = invoice1.Id;
+        await db.SaveChangesAsync(ct);
+
+        var dispensedAt = now.Date.AddHours(9).AddMinutes(20);
+        rx1.DispensedAt = dispensedAt;
+        rx1.DispensedBy = assistant1.UserId;
+        rx1.ReceivedByProxy = false;
+        rx1.DispenseNote = "Đã dặn dò liều lượng chi tiết";
+        rx1.UpdatedAt = dispensedAt;
+        rx1.Version++;
+        db.PrescriptionDispenseEvents.Add(new PrescriptionDispenseEvent
+        {
+            PrescriptionId = rx1.Id, PrescriptionVersion = rx1.Version, Action = "Dispense",
+            PerformedAt = dispensedAt, PerformedBy = assistant1.UserId, ReceivedByProxy = false,
+        });
+        await db.SavePrescriptionHandoverAsync(ct);
+
+        invoice1.Status = InvoiceStatus.Paid;
+        invoice1.PaidAmount = 585000m;
         await db.SaveChangesAsync(ct);
 
         var paymentTx1 = new PaymentTransaction
