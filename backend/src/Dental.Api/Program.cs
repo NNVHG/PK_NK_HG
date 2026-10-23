@@ -149,6 +149,7 @@ builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // ===== 3. Infrastructure Services =====
 builder.Services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
+builder.Services.AddScoped<LegacyFamilyAccountConversion>();
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuditLogger, AuditLogger>();
 builder.Services.AddHttpContextAccessor();
@@ -370,6 +371,9 @@ using (var scope = app.Services.CreateScope())
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
     await db.Database.MigrateAsync();
+
+    await scope.ServiceProvider.GetRequiredService<LegacyFamilyAccountConversion>()
+        .RunAsync();
 
     await DatabaseSeeder.SeedAsync(
         db,
