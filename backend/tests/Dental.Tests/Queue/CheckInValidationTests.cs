@@ -22,7 +22,7 @@ public sealed class CheckInValidationTests
 
     [Fact] public void BlankNotesDoNotHideMissingIdentityFields()
     {
-        var result = new CheckInRequestValidator().Validate(new(1, Notes: ""));
+        var result = new CheckInRequestValidator().Validate(new CheckInRequest(1, Notes: ""));
         Assert.Equal(new[] { "CitizenId", "Phone" }, result.Errors.Select(e => e.PropertyName));
         Assert.All(result.Errors, e => Assert.StartsWith("Vui lòng nhập", e.ErrorMessage));
     }
