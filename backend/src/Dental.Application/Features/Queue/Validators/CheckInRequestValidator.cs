@@ -17,13 +17,15 @@ public sealed class CheckInRequestValidator : AbstractValidator<CheckInRequest>
             .When(x => !string.IsNullOrEmpty(x.Notes));
 
         RuleFor(x => x.CitizenId)
+            .Cascade(CascadeMode.Stop)
             .NotEmpty().WithMessage("Vui lòng nhập CCCD để đối chiếu tại quầy.")
-            .Length(12).Matches("^[0-9]{12}$")
+            .Matches("\\A[0-9]{12}\\z")
             .WithMessage("CCCD phải gồm 12 chữ số.");
 
         RuleFor(x => x.Phone)
+            .Cascade(CascadeMode.Stop)
             .NotEmpty().WithMessage("Vui lòng nhập số điện thoại để đối chiếu tại quầy.")
-            .Length(10).Matches("^0[0-9]{9}$")
+            .Matches("\\A0[0-9]{9}\\z")
             .WithMessage("Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0.");
     }
 }
