@@ -26,7 +26,6 @@ public static class Policies
     public const string PatientPhoneChange = "PatientPhoneChange";
     public const string StaffAny   = "StaffAny";    // Admin, Lễ tân, Nha sĩ, Phụ tá
     public const string AppointmentRequestReview = "AppointmentRequestReview";
-    public const string PatientAccountLink = "PatientAccountLink";
     public const string PatientManage = "PatientManage";
     public const string PatientView = "PatientView";
     public const string PatientEdit = "PatientEdit";
@@ -91,7 +90,6 @@ public static class Policies
 
         // DL-023: chỉ Admin và Lễ tân được tạo thông tin cá nhân bệnh nhân.
         opts.AddPolicy(AppointmentRequestReview, p => p.RequireRole(RoleCodes.Admin, RoleCodes.Receptionist));
-        opts.AddPolicy(PatientAccountLink, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Receptionist));
         opts.AddPolicy(PatientManage, policy =>
             policy.RequireRole(RoleCodes.Receptionist, RoleCodes.Admin));
 

@@ -126,9 +126,10 @@ public static class DatabaseSeeder
         }
 
         await db.SaveChangesAsync();
-
         // 6. Kịch bản lâm sàng mẫu (Patients, Visits, FDI, Prescriptions, Invoices, Stock)
         await ClinicalDemoDataSeeder.SeedAsync(db, logger);
+        if (config.GetValue<bool>("Seed:Phase1"))
+            await Phase1DemoSeeder.SeedAsync(db);
     }
 
     private static string MaskPhone(string phone)

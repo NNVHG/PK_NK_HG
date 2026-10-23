@@ -139,8 +139,8 @@ export interface VisitDetails {
 }
 
 export const patientsService = {
-  async getMyProfiles(): Promise<PatientSummary[]> {
-    const response = await apiClient.get<PatientSummary[]>('/patients/mine');
+  async getMyPatient(): Promise<PatientSummary> {
+    const response = await apiClient.get<PatientSummary>('/patients/me');
     return response.data;
   },
 

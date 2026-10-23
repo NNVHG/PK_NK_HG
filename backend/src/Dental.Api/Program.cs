@@ -117,8 +117,6 @@ builder.Services.AddScoped<Dental.Application.Features.MOD_APP.IBookingApprovalR
 builder.Services.AddScoped<Dental.Application.Features.MOD_APP.BookingApprovalService>();
 builder.Services.AddHttpClient<IBookingOtpDelivery, BookingOtpSms>(client => client.Timeout=TimeSpan.FromSeconds(10)).RemoveAllLoggers();
 builder.Services.AddSingleton<Dental.Application.Features.MOD_APP.IBookingOtp>(provider => new BookingOtp(provider.GetRequiredService<IBookingOtpDelivery>(),provider.GetRequiredService<TimeProvider>()));
-builder.Services.AddScoped<Dental.Application.Features.MOD_PAT.IPatientAccountLinkRepository, PatientAccountLinkRepository>();
-builder.Services.AddScoped<Dental.Application.Features.MOD_PAT.PatientAccountLinkService>();
 builder.Services.AddScoped<IQrPatientIntakeRepository, QrPatientIntakeRepository>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_PAT.QrPatientIntakeService>();
 builder.Services.AddScoped<IClinicPrintSettingsRepository, ClinicPrintSettingsRepository>();
@@ -149,6 +147,7 @@ builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // ===== 3. Infrastructure Services =====
 builder.Services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
+builder.Services.AddScoped<LegacyPatientAccountConversion>();
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuditLogger, AuditLogger>();
 builder.Services.AddHttpContextAccessor();
@@ -369,6 +368,15 @@ using (var scope = app.Services.CreateScope())
     var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
+    // Apply legacy-compatible migrations first, convert existing one-to-many ownership atomically,
+    // then apply the final unique Patient.UserId constraint.
+    var appliedMigrations = await db.Database.GetAppliedMigrationsAsync();
+    if (!appliedMigrations.Contains("20261023150000_EnforceIndividualPatientOwnership"))
+    {
+        await db.Database.MigrateAsync("20261023145000_RenameLegacyAccountConversionMarker");
+        await scope.ServiceProvider.GetRequiredService<LegacyPatientAccountConversion>()
+            .RunAsync();
+    }
     await db.Database.MigrateAsync();
 
     await DatabaseSeeder.SeedAsync(

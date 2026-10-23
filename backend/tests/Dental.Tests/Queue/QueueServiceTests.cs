@@ -277,7 +277,7 @@ public sealed class QueueServiceTests
     }
 
     [Fact]
-    public async Task CheckInAsync_EmergencyAppointmentIsPriorityOutsideNormalArrivalWindow()
+    public async Task CheckInAsync_LegacyEmergencyFlagDoesNotGrantPriorityOutsideArrivalWindow()
     {
         var appointment = new Appointment
         {
@@ -307,10 +307,10 @@ public sealed class QueueServiceTests
         var result = await CreateService().CheckInAsync(3, new CheckInRequest(PatientId: 1, AppointmentId: 28), null);
 
         Assert.True(result.IsSuccess);
-        Assert.True(capturedEntry!.IsPriority);
+        Assert.False(capturedEntry!.IsPriority);
         Assert.True(capturedEntry.Appointment!.IsEmergency);
         Assert.True(result.Value!.IsEmergency);
-        Assert.Contains("Lịch cấp cứu", capturedHistory!.Reason);
+        Assert.Equal("Tiếp đón check-in", capturedHistory!.Reason);
     }
 
     [Fact]

@@ -3,15 +3,20 @@ using Dental.Domain.Common;
 namespace Dental.Domain.Entities;
 
 /// <summary>
-/// Tài khoản đăng nhập. Định danh bằng SĐT.
+/// Tài khoản đăng nhập; nhân viên/tài khoản cũ dùng SĐT, Patient mới có thể dùng CCCD.
 /// Mật khẩu lưu dạng bcrypt hash — không bao giờ lưu plaintext.
 /// </summary>
 public class User : BaseEntity
 {
     public int UserId { get; set; }
 
-    /// <summary>SĐT — dùng để đăng nhập, phải unique</summary>
+    /// <summary>SĐT liên hệ; có thể dùng chung bởi tài khoản đăng nhập CCCD.</summary>
     public string Phone { get; set; } = string.Empty;
+
+    /// <summary>Patient accounts created under DL-340 authenticate with the linked Patient's CCCD hash.</summary>
+    public bool LoginByCitizenId { get; set; }
+    /// <summary>Marks a legacy login account that still needs conversion to an individual Patient account.</summary>
+    public bool RequiresIndividualIdentityConversion { get; set; }
 
     /// <summary>BCrypt hash. Không log, không trả về client.</summary>
     public string PasswordHash { get; set; } = string.Empty;
@@ -36,6 +41,7 @@ public class User : BaseEntity
 
     // Navigation
     public Role Role { get; set; } = null!;
+    public Patient? Patient { get; set; }
     public ICollection<AuditLog> AuditLogs { get; set; } = [];
     public Patient? Patient { get; set; }
 }

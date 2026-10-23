@@ -20,22 +20,25 @@ public sealed class BankTransferRepository(DentalDbContext db) : IBankTransferRe
         => db.Invoices.AsNoTracking().Include(x => x.Visit).FirstOrDefaultAsync(x => x.Id == invoiceId, ct);
 
     public async Task<Result<PaymentTransaction>> ReceiveAsync(BankTransferRequest request, string invoiceCode,
-        int actorId, bool simulated, string? ip, CancellationToken ct = default)
+        int actorId, string? actorRole, bool simulated, bool manualConfirmation, string? ip, CancellationToken ct = default)
     {
-        var source = simulated ? "Simulation" : "Webhook";
-        var requestId = BankTransferRules.RequestId(source, !simulated && request.ProviderEventId.HasValue
+        var source = simulated ? "Simulation" : manualConfirmation ? "Manual" : "Webhook";
+        var requestId = BankTransferRules.RequestId(source, !simulated && !manualConfirmation && request.ProviderEventId.HasValue
             ? "SEPAY:" + request.ProviderEventId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : request.TransactionReference);
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var committed = false;
         try
         {
+            if (manualConfirmation && (actorId <= 0 || actorRole is not (Dental.Domain.Constants.RoleCodes.Admin or Dental.Domain.Constants.RoleCodes.Receptionist) ||
+                !await db.Users.AnyAsync(u => u.UserId == actorId && u.IsActive && u.Role.RoleCode == actorRole, ct)))
+                return Result<PaymentTransaction>.Failure(Error.Forbidden);
             var existing = await db.PaymentTransactions.AsNoTracking().Include(x => x.Invoice)
                 .FirstOrDefaultAsync(x => x.RequestId == requestId || x.TransactionReference == request.TransactionReference, ct);
             if (existing is not null)
             {
                 // DL-195: an already stored bank reference is acknowledged without changing its original data.
                 if (existing.Source != source || existing.TransactionReference != request.TransactionReference ||
-                    simulated && (existing.Invoice.InvoiceCode != invoiceCode || existing.BankReceivedAmount != request.Amount || existing.CashierId != actorId))
+                    (simulated || manualConfirmation) && (existing.Invoice.InvoiceCode != invoiceCode || existing.BankReceivedAmount != request.Amount || existing.CashierId != actorId))
                     return Result<PaymentTransaction>.Failure(Error.Conflict);
                 await tx.CommitAsync(ct); committed = true;
                 return Result<PaymentTransaction>.Success(existing);
@@ -51,7 +54,7 @@ public sealed class BankTransferRepository(DentalDbContext db) : IBankTransferRe
                 Source = source, Note = BankTransferRules.ExcessNote(request.Amount - credited), PaymentMethod = "BankTransfer",
                 CashierId = actorId, PaidAt = DateTime.UtcNow, RequestId = requestId };
             db.PaymentTransactions.Add(payment); await db.SaveChangesAsync(ct);
-            db.AuditLogs.Add(new AuditLog { UserId = actorId, Action = simulated ? "MOD_BIL_BANK_SIMULATED" : "MOD_BIL_BANK_RECEIVED",
+            db.AuditLogs.Add(new AuditLog { UserId = actorId, Action = simulated ? "MOD_BIL_BANK_SIMULATED" : manualConfirmation ? "MOD_BIL_BANK_MANUAL_CONFIRMED" : "MOD_BIL_BANK_RECEIVED",
                 EntityType = "Invoice", EntityId = invoice.Id, CreatedAt = payment.PaidAt, IpAddress = ip,
                 Detail = JsonSerializer.Serialize(new { paymentId = payment.Id, source, requiresExcessReview = payment.ChangeAmount > 0 }) });
             if (payment.ChangeAmount > 0)

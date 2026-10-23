@@ -5,7 +5,7 @@ import ts from 'typescript';
 import {parse,compileScript} from '@vue/compiler-sfc';
 const source=await readFile(new URL('../src/views/PatientActivationView.vue',import.meta.url),'utf8');
 const challenge={challengeId:'abcdef01-2345-6789-abcd-0123456789ab',expiresInSeconds:300,resendAfterSeconds:60};
-const grant={completionToken:'A'.repeat(64),expiresInSeconds:300};
+const grant={completionToken:'A'.repeat(64),expiresInSeconds:300,mustChangePassword:true};
 function fixture(){
  const hooks={watch:[]},auth={user:null,role:null},calls=[];
  let request=()=>challenge,verify=()=>grant,complete=()=>({completed:true});
@@ -29,4 +29,4 @@ test('late verify never preserves a proof after unmount',async()=>{const f=await
 test('changing password choice clears password drafts and confirmation',async()=>{const f=await verified();f.c.newPassword.value='Strong123';f.c.repeatPassword.value='Strong123';f.c.confirmed.value=true;f.hooks.watch[0]();assert.equal(f.c.newPassword.value,'');assert.equal(f.c.repeatPassword.value,'');assert.equal(f.c.confirmed.value,false);});
 test('invalid challenge never advances and failed request clears password',async()=>{const f=fixture();f.setRequest(()=>({...challenge,challengeId:'-'.repeat(36)}));f.c.phone.value='0967000000';f.c.password.value='0967000000';await f.c.requestCode();assert.equal(f.c.challenge.value,null);assert.equal(f.c.password.value,'');assert.ok(f.c.error.value);});
 test('accessible native forms and memory only secrets',()=>{assert.match(source,/<legend>/);assert.match(source,/autocomplete="one-time-code"/);assert.match(source,/role="status" aria-live="polite"/);assert.match(source,/role="alert"/);assert.ok(!/localStorage|sessionStorage|console\.log/.test(source));});
-test('legacy registration route redirects to booking intake',async()=>{const router=await readFile(new URL('../src/router/index.ts',import.meta.url),'utf8');assert.match(router,/path: '\/register'[\s\S]{0,120}redirect: \{ name: 'guest-booking' \}/);const service=await readFile(new URL('../src/services/patientActivation.ts',import.meta.url),'utf8');assert.ok(!/localStorage|sessionStorage|console\.|\?/.test(service));});
+test('legacy registration route redirects to booking intake',async()=>{const router=await readFile(new URL('../src/router/index.ts',import.meta.url),'utf8');assert.match(router,/path: '\/register'[\s\S]{0,120}redirect: \{ name: 'guest-booking' \}/);const service=await readFile(new URL('../src/services/patientActivation.ts',import.meta.url),'utf8');assert.ok(!/localStorage|sessionStorage|console\./.test(service));assert.doesNotMatch(service, /\/auth\/activation\/(?:request|verify|complete)\?/);});

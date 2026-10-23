@@ -5,6 +5,7 @@ export interface BankTransferResponse { id: number; invoiceId: number; amount: n
   changeAmount: number; transactionReference: string; source: string; note: string | null; paidAt: string; }
 export interface BankTransferInfo { invoiceId: number; invoiceCode: string; remainingAmount: number; content: string;
   qrUrl: string | null; accountName: string | null; simulationEnabled: boolean; configurationMessage: string | null; }
+export interface ManualBankTransferConfirmation { amount: number; transactionReference: string; confirmed: true; }
 export const bankTransfersApi = {
   async state(invoiceId: number): Promise<{ id: number; status: number; paidAmount: number; remainingAmount: number }> {
     return (await apiClient.get(`/invoices/${invoiceId}`)).data;
@@ -14,5 +15,8 @@ export const bankTransfersApi = {
     return (await apiClient.post('/webhooks/payment/bank-transfer/simulate', {
       invoiceCode: request.addInfo.replace(/^PKNK /, ''), amount: request.amount, transactionReference: request.transactionReference
     })).data;
+  },
+  async confirmManual(invoiceId: number, request: ManualBankTransferConfirmation): Promise<BankTransferResponse> {
+    return (await apiClient.post(`/invoices/${invoiceId}/bank-transfer/confirm`, request)).data;
   }
 };

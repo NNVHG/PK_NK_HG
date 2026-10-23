@@ -4,12 +4,11 @@ using FluentValidation;
 namespace Dental.Application.Features.MOD_AUTH;
 
 public sealed record PatientPhonePreviewRequest(string NewPhone);
-public sealed record PatientPhoneScopeItem(int PatientId, string FullName, DateOnly DateOfBirth, bool IsActive, bool WillUpdate);
-public sealed record PatientPhonePreview(string CurrentPhone, string NewPhone, string ReviewStamp, IReadOnlyList<PatientPhoneScopeItem> Profiles);
+public sealed record PatientPhonePreview(int PatientId, string PatientName, string CurrentPhone, string NewPhone, bool ContactWillUpdate, string ReviewStamp);
 public sealed record PatientPhoneRequest(string NewPhone, string ReviewStamp, bool Confirmed);
 public sealed record PatientPhoneConfirmation(Guid ChallengeId, string Code, string ReviewStamp, bool Confirmed);
 public sealed record PatientPhonePending(Guid ChallengeId, string NewPhone, DateTimeOffset ExpiresAtUtc);
-public sealed record PatientPhoneCompleted(bool Completed, int UpdatedProfiles);
+public sealed record PatientPhoneCompleted(bool Completed, bool PatientContactUpdated);
 // Server-only binding, never returned in responses or logs.
 public sealed record PatientPhoneTarget(int UserId, string NewPhone, string ReviewStamp);
 public sealed record PatientPhoneDispatch(PatientPhonePending Pending, string Code);
@@ -57,7 +56,7 @@ public sealed class PatientPhoneConfirmationValidator : AbstractValidator<Patien
 public sealed class PatientPhoneChangeService(IPatientPhoneChangeRepository repository, IPatientPhoneChangeProofs proofs, IPatientPhoneChangeSms sms)
 {
     public static readonly Error Invalid = new("PAT_PHONE_PROOF", "Mã hoặc yêu cầu không hợp lệ, đã dùng hoặc hết hạn. Xem lại danh sách và xin OTP mới.");
-    public static readonly Error Stale = new("PAT_PHONE_STALE", "Tài khoản hoặc danh sách hồ sơ đã thay đổi. Vui lòng xem lại và xác nhận phạm vi mới.");
+    public static readonly Error Stale = new("PAT_PHONE_STALE", "Tài khoản hoặc hồ sơ đã thay đổi. Vui lòng tải lại và xác nhận thông tin mới.");
     public static readonly Error NumberUnavailable = new("PAT_PHONE_NUMBER", "Không thể sử dụng số này để đổi đăng nhập. Vui lòng kiểm tra lại.");
     public static readonly Error Unavailable = new("PAT_PHONE_SMS_UNAVAILABLE", "Kênh SMS đổi SĐT chưa sẵn sàng. Số và thông tin hồ sơ hiện tại được giữ nguyên.");
     public Task<Result<PatientPhonePreview>> PreviewAsync(int userId, PatientPhonePreviewRequest request, CancellationToken ct)

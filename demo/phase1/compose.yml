@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: dental_phase1_demo
+      POSTGRES_USER: phase1
+      POSTGRES_PASSWORD: ${PHASE1_DB_PASSWORD:?Run Start.ps1 first}
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - phase1_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U phase1 -d dental_phase1_demo"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+volumes:
+  phase1_data:

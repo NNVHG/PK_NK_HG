@@ -5,7 +5,7 @@
     <p role="status" aria-live="polite">{{ message }}</p>
     <p v-if="error" role="alert">{{ error }}</p>
     <form v-if="!challenge && !grant && !done && !uncertain" @submit.prevent="requestCode" novalidate>
-      <label>Số điện thoại đăng ký<input v-model="phone" type="tel" inputmode="numeric" autocomplete="username" maxlength="10" :disabled="busy" /></label>
+      <label>CCCD bệnh nhân hoặc SĐT nhân viên<input v-model="phone" type="text" inputmode="numeric" autocomplete="username" maxlength="12" :disabled="busy" /></label>
       <label>Mật khẩu hiện tại<input v-model="password" type="password" autocomplete="current-password" maxlength="72" :disabled="busy" /></label>
       <p>Nếu chưa đổi mật khẩu, dùng SĐT làm mật khẩu mặc định.</p>
       <button type="submit" :disabled="busy">Nhận mã kích hoạt</button>
@@ -13,15 +13,17 @@
     <form v-if="challenge && !grant && !uncertain" @submit.prevent="verifyCode" novalidate>
       <label>Mã OTP kích hoạt<input v-model="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" :disabled="busy" /></label>
       <p>Mã có 6 số, hiệu lực 5 phút, tối đa 5 lần sai. Xin mã mới cách ít nhất 60 giây.</p>
+      <p v-if="challenge.developmentCode" class="demo-code">Mã hỗ trợ demo (Development): <strong>{{ challenge.developmentCode }}</strong>
+        <button type="button" :disabled="busy" @click="code = challenge.developmentCode || ''">Dùng mã này</button></p>
       <button type="submit" :disabled="busy">Xác minh OTP</button>
     </form>
     <form v-if="grant && !uncertain" @submit.prevent="complete" novalidate>
-      <h2>Chọn mật khẩu đăng nhập</h2>
+      <h2>{{ grant.mustChangePassword ? 'Đổi mật khẩu bắt buộc' : 'Chọn mật khẩu đăng nhập' }}</h2>
       <p>OTP đã được xác minh. Hoàn tất lựa chọn trong 5 phút.</p>
       <fieldset :disabled="busy">
         <legend>Lựa chọn mật khẩu</legend>
         <label><input v-model="choice" type="radio" value="new" name="password-choice" /> Đặt mật khẩu mới</label>
-        <label><input v-model="choice" type="radio" value="default" name="password-choice" /> Bỏ qua, giữ mật khẩu hiện tại (mặc định là SĐT nếu chưa đổi)</label>
+        <label v-if="!grant.mustChangePassword"><input v-model="choice" type="radio" value="default" name="password-choice" /> Bỏ qua, giữ mật khẩu hiện tại (mặc định là SĐT nếu chưa đổi)</label>
         <template v-if="choice === 'new'">
           <label>Mật khẩu mới<input v-model="newPassword" type="password" autocomplete="new-password" maxlength="72" /></label>
           <label>Nhập lại mật khẩu mới<input v-model="repeatPassword" type="password" autocomplete="new-password" maxlength="72" /></label>
@@ -55,13 +57,13 @@ function restart() { if (disposed || busy.value) return; generation++; clear(); 
 function failure(cause: unknown, fallback: string) { const data = (cause as { response?: { data?: { message?: unknown } } })?.response?.data; return typeof data?.message === 'string' ? data.message : fallback; }
 async function requestCode() {
   if (disposed || busy.value || challenge.value || grant.value || done.value || uncertain.value) return;
-  if (!/^0[0-9]{9}$/.test(phone.value) || phone.value.length !== 10 || password.value.length < 6 || password.value.includes('\0') || new TextEncoder().encode(password.value).length > 72) { error.value = 'Kiểm tra SĐT 10 số và mật khẩu hiện tại.'; return; }
+  if (!/^(0[0-9]{9}|[0-9]{12})$/.test(phone.value) || ![10, 12].includes(phone.value.length) || password.value.length < 8 || password.value.includes('\0') || new TextEncoder().encode(password.value).length > 72) { error.value = 'Nhập CCCD 12 số của bệnh nhân hoặc SĐT 10 số của nhân viên; mật khẩu hiện tại phải hợp lệ.'; return; }
   const t = ++generation, owner = identity(); busy.value = true; error.value = ''; message.value = '';
   try {
     const data = await patientActivationService.request(phone.value, password.value);
     if (!alive(t, owner)) return;
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.challengeId) || data.expiresInSeconds !== 300 || data.resendAfterSeconds !== 60) throw Error();
-    challenge.value = data; phone.value = ''; message.value = 'Nếu thông tin đúng và tài khoản đủ điều kiện, mã kích hoạt sẽ được gửi tới SĐT đăng ký.';
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.challengeId) || data.expiresInSeconds !== 300 || data.resendAfterSeconds !== 60 || data.developmentCode != null && !/^[0-9]{6}$/.test(data.developmentCode)) throw Error();
+    challenge.value = data; phone.value = ''; message.value = data.developmentCode ? 'Mã OTP mô phỏng chỉ hiển thị trong Development.' : 'Nếu thông tin đúng và tài khoản đủ điều kiện, mã kích hoạt sẽ được gửi tới SĐT đăng ký.';
   } catch (cause) { if (alive(t, owner)) error.value = failure(cause, 'Chưa yêu cầu được mã kích hoạt. Thử lại sau hoặc liên hệ phòng khám.'); }
   finally { if (alive(t, owner)) { busy.value = false; password.value = ''; } }
 }
@@ -72,8 +74,8 @@ async function verifyCode() {
   try {
     const data = await patientActivationService.verify(challenge.value.challengeId, code.value);
     if (!alive(t, owner)) return;
-    if (!/^[A-F0-9]{64}$/.test(data.completionToken) || data.expiresInSeconds !== 300) throw Error();
-    grant.value = data; challenge.value = null; message.value = 'Đã xác minh OTP. Chọn đổi hoặc giữ mật khẩu để hoàn tất.';
+    if (!/^[A-F0-9]{64}$/.test(data.completionToken) || data.expiresInSeconds !== 300 || typeof data.mustChangePassword !== 'boolean') throw Error();
+    grant.value = data; challenge.value = null; choice.value = 'new'; message.value = data.mustChangePassword ? 'Đã xác minh OTP. Bệnh nhân cần đổi mật khẩu trước khi đăng nhập.' : 'Đã xác minh OTP. Chọn đổi hoặc giữ mật khẩu để hoàn tất.';
   } catch (cause) { if (alive(t, owner)) error.value = failure(cause, 'Chưa xác minh được mã. Nếu mã đã dùng hoặc hết hạn, xin mã mới.'); }
   finally { if (alive(t, owner)) { busy.value = false; code.value = ''; } }
 }

@@ -5,15 +5,15 @@
       <p class="subtitle">Phòng Khám Nha Khoa</p>
       <div v-if="registrationNotice" class="success-alert">{{ registrationNotice }}</div>
 
-      <p v-if="$route.query.phoneChanged === '1'" role="status">Đã xác minh và đổi SĐT. Đăng nhập bằng số mới và mật khẩu hiện tại.</p>
+      <p v-if="$route.query.phoneChanged === '1'" role="status">Đã xác minh và đổi SĐT. Nhân viên đăng nhập bằng số mới; bệnh nhân tiếp tục đăng nhập bằng CCCD. Mật khẩu được giữ nguyên.</p>
         <form @submit.prevent="handleSubmit">
         <div class="form-group">
-          <label for="phone">Số điện thoại</label>
+          <label for="phone">SĐT (nhân viên/tài khoản cũ) hoặc CCCD (bệnh nhân mới)</label>
           <input
             id="phone"
             v-model="phone"
             type="text"
-            placeholder="0912345678"
+            placeholder="Số điện thoại hoặc CCCD"
             required
             autocomplete="username"
           />
@@ -68,7 +68,7 @@ async function handleSubmit() {
   loading.value = true;
   try {
     await authStore.login(phone.value, password.value);
-    const redirect = (route.query.redirect as string) || '/';
+    const redirect = (route.query.redirect as string) || '/dashboard';
     router.push(redirect);
   } catch (err: any) {
     errorMessage.value = err.response?.data?.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại.';

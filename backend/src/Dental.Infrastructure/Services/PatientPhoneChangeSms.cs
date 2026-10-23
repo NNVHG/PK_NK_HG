@@ -17,7 +17,7 @@ public sealed class PatientPhoneChangeSms(HttpClient client, IConfiguration conf
         using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.twilio.com/2010-04-01/Accounts/" + Value("AccountSid") + "/Messages.json");
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.ASCII.GetBytes(Value("AccountSid") + ":" + Value("AuthToken"))));
         request.Content = new FormUrlEncodedContent(new Dictionary<string,string> { { "To", "+84" + phone[1..] }, { "From", Value("From") },
-            { "Body", "Ma xac minh DOI SO DIEN THOAI tai khoan gia dinh phong kham: " + code + ". Hieu luc 5 phut. Khong chia se ma." } });
+            { "Body", "Ma xac minh DOI SO DIEN THOAI tai khoan ca nhan phong kham: " + code + ". Hieu luc 5 phut. Khong chia se ma." } });
         try { using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct); return response.IsSuccessStatusCode; }
         catch (HttpRequestException) { return false; } catch (OperationCanceledException) { return false; }
     }

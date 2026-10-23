@@ -48,81 +48,44 @@ public sealed class DentistBookingTests
         var result = await Create(); Assert.Equal(Error.Validation.Code, result.Error.Code); Assert.Contains("Bác sĩ đã có lịch", result.Error.Message);
         Assert.Empty(audit.ReceivedCalls()); await appointments.DidNotReceive().AddAsync(Arg.Any<Appointment>(), Arg.Any<CancellationToken>());
     }
-    [Fact] public async Task EmergencyConflictReturnsNamedWarningAndRequiresMatchingConfirmation()
+    [Theory]
+    [InlineData(RoleCodes.Admin)] [InlineData(RoleCodes.Receptionist)] [InlineData(RoleCodes.Patient)]
+    public async Task RetiredEmergencyRejectedForEveryBookingRoleWithoutReadOrWrite(string role)
     {
-        var request = Request() with { IsEmergency = true, EmergencyReason = "Đau răng dữ dội" };
-        var conflict = new Appointment
-        {
-            AppointmentId = 42,
-            AppointmentDate = request.AppointmentDate,
-            SlotTime = request.SlotTime,
-            Dentist = new User { FullName = "Nha sĩ A" },
-            Patient = new Patient { FullName = "Bệnh nhân B" }
-        };
-        appointments.GetDentistBookingConflictAsync(31, request.AppointmentDate, request.SlotTime, 0, Arg.Any<CancellationToken>(), durationMinutes: 30)
-            .Returns(conflict);
-
-        var firstAttempt = await Create(request);
-        Assert.Equal(Error.AppointmentDentistConflict.Code, firstAttempt.Error.Code);
-        Assert.Contains("Nha sĩ A", firstAttempt.Error.Message);
-        Assert.Contains("Bệnh nhân B", firstAttempt.Error.Message);
-        Assert.Contains("09:00", firstAttempt.Error.Message);
-        var details = Assert.IsType<AppointmentDentistConflictDetails>(firstAttempt.Error.Details);
-        Assert.Equal(42, details.ConflictAppointmentId);
-        await appointments.DidNotReceive().AddAsync(Arg.Any<Appointment>(), Arg.Any<CancellationToken>());
-        Assert.Empty(audit.ReceivedCalls());
-
-        var staleConfirmation = await Create(request with { ConfirmedDentistConflictAppointmentId = 43 });
-        Assert.Equal(Error.AppointmentDentistConflict.Code, staleConfirmation.Error.Code);
+        var result = await Create(Request() with { IsEmergency = true, EmergencyReason = "Synthetic attention" }, role);
+        Assert.Equal(Error.Validation.Code, result.Error.Code);
+        Assert.Contains("không tiếp nhận cấp cứu", result.Error.Message);
+        Assert.Empty(uow.ReceivedCalls()); Assert.Empty(appointments.ReceivedCalls()); Assert.Empty(audit.ReceivedCalls());
+    }
+    [Theory] [InlineData(0)] [InlineData(1)] [InlineData(2)]
+    public async Task RetiredOverrideFieldsRejectedEvenWithoutEmergencyFlag(int field)
+    {
+        var request = field switch { 0 => Request() with { EmergencyReason = "Legacy" },
+            1 => Request() with { ConfirmedDentistConflictAppointmentId = 42 },
+            _ => Request() with { ConfirmedDentistConflictRequestId = 17 } };
+        Assert.Equal(Error.Validation.Code, (await Create(request)).Error.Code);
+        Assert.Empty(uow.ReceivedCalls()); Assert.Empty(audit.ReceivedCalls());
+    }
+    [Fact] public async Task AttentionNoteDoesNotBypassDentistConflict()
+    {
+        appointments.GetDentistBookingConflictAsync(31, Request().AppointmentDate, Request().SlotTime, 0, Arg.Any<CancellationToken>(), durationMinutes: 30)
+            .Returns(new Appointment { AppointmentId = 42 });
+        Assert.Equal(Error.Validation.Code, (await Create(Request() with { Notes = "Synthetic attention" })).Error.Code);
         await appointments.DidNotReceive().AddAsync(Arg.Any<Appointment>(), Arg.Any<CancellationToken>());
     }
-    [Fact] public async Task EmergencyConflictWithConfirmedAppointmentIsCreatedAndAuditedWithoutReasonText()
+    [Theory] [InlineData(6, 30)] [InlineData(17, 15)] [InlineData(23, 45)]
+    public async Task AttentionNoteDoesNotPermitFreeTime(int hour, int minute)
     {
-        var request = Request() with { IsEmergency = true, EmergencyReason = "Đau răng dữ dội", ConfirmedDentistConflictAppointmentId = 42 };
-        var conflict = new Appointment
-        {
-            AppointmentId = 42,
-            AppointmentDate = request.AppointmentDate,
-            SlotTime = request.SlotTime,
-            Dentist = new User { FullName = "Nha sĩ A" },
-            Patient = new Patient { FullName = "Bệnh nhân B" }
-        };
-        appointments.GetDentistBookingConflictAsync(31, request.AppointmentDate, request.SlotTime, 0, Arg.Any<CancellationToken>(), durationMinutes: 30)
-            .Returns(conflict);
+        Assert.Equal(Error.Validation.Code, (await Create(Request() with { SlotTime = new(hour, minute), Notes = "Synthetic attention" })).Error.Code);
+        await appointments.DidNotReceive().AddAsync(Arg.Any<Appointment>(), Arg.Any<CancellationToken>());
+    }
+    [Fact] public async Task NormalSlotKeepsAttentionNoteWithoutEmergencyFields()
+    {
         Appointment? saved = null;
-        string? auditDetail = null;
         await appointments.AddAsync(Arg.Do<Appointment>(value => saved = value), Arg.Any<CancellationToken>());
-        await audit.LogAsync(AuditActions.AppointmentCreated, "Appointment", Arg.Any<int>(), Arg.Any<int>(),
-            Arg.Do<string?>(value => auditDetail = value), Arg.Any<string?>(), Arg.Any<CancellationToken>());
-
-        var result = await Create(request);
-        Assert.True(result.IsSuccess);
-        Assert.True(saved!.IsEmergency);
-        Assert.Equal("Đau răng dữ dội", saved.EmergencyReason);
-        Assert.Contains("confirmedDentistConflictOverride\":true", auditDetail);
-        Assert.DoesNotContain("Đau răng dữ dội", auditDetail);
-    }
-    [Fact] public async Task PatientCannotCreateEmergencyBooking()
-    {
-        var result = await Create(Request() with { IsEmergency = true, EmergencyReason = "Đau răng dữ dội" }, RoleCodes.Patient);
-        Assert.Equal(Error.Forbidden, result.Error);
-        Assert.Empty(uow.ReceivedCalls());
-        Assert.Empty(patients.ReceivedCalls());
-    }
-    [Fact] public async Task EmergencyBookingCanStartImmediatelyInTheCurrentDay()
-    {
-        var request = Request() with
-        {
-            AppointmentDate = clock.Today,
-            SlotTime = new TimeOnly(6, 30),
-            IsEmergency = true,
-            EmergencyReason = "Đau răng dữ dội"
-        };
-
-        var result = await Create(request);
-
-        Assert.True(result.IsSuccess);
-        await appointments.Received(1).AddAsync(Arg.Is<Appointment>(appointment => appointment.IsEmergency), Arg.Any<CancellationToken>());
+        var result = await Create(Request() with { Notes = "  Synthetic attention  " });
+        Assert.True(result.IsSuccess); Assert.Equal("Synthetic attention", saved!.Notes);
+        Assert.False(saved.IsEmergency); Assert.Null(saved.EmergencyReason);
     }
     [Theory] [InlineData(false, RoleCodes.Dentist)] [InlineData(true, RoleCodes.Receptionist)]
     public async Task InactiveOrWrongRoleCannotBeAssigned(bool active, string role)
@@ -149,13 +112,13 @@ public sealed class DentistBookingTests
     [Theory] [InlineData(null, true)] [InlineData(31, true)] [InlineData(0, false)] [InlineData(-1, false)]
     public void DentistValidatorPreservesOptionalSelection(int? id, bool valid)
         => Assert.Equal(valid, new CreateAppointmentRequestValidator().Validate(Request(id)).IsValid);
-    [Fact] public void EmergencyValidatorAllowsAnyMinuteButRequiresReason()
+    [Fact] public void ValidatorRejectsEveryRetiredFieldAndAcceptsNormalAttentionNote()
     {
         var validator = new CreateAppointmentRequestValidator();
-        Assert.True(validator.Validate(Request() with { SlotTime = new(17, 15), IsEmergency = true, EmergencyReason = "Đau răng dữ dội" }).IsValid);
-        Assert.False(validator.Validate(Request() with { SlotTime = new(17, 15), IsEmergency = true, EmergencyReason = "đau" }).IsValid);
-        Assert.False(validator.Validate(Request() with { SlotTime = new(17, 15, 1), IsEmergency = true, EmergencyReason = "Đau răng dữ dội" }).IsValid);
-        Assert.False(validator.Validate(Request() with { SlotTime = new TimeOnly(17, 15).Add(TimeSpan.FromTicks(1)), IsEmergency = true, EmergencyReason = "Đau răng dữ dội" }).IsValid);
+        Assert.True(validator.Validate(Request() with { Notes = "Synthetic attention" }).IsValid);
+        foreach (var request in new[] { Request() with { IsEmergency = true }, Request() with { EmergencyReason = "Legacy" },
+            Request() with { ConfirmedDentistConflictAppointmentId = 42 }, Request() with { ConfirmedDentistConflictRequestId = 17 } })
+            Assert.False(validator.Validate(request).IsValid);
     }
     [Theory] [InlineData(RoleCodes.Admin)] [InlineData(RoleCodes.Receptionist)]
     public async Task StaffDentistPickerOnlyProjectsIdAndName(string role)

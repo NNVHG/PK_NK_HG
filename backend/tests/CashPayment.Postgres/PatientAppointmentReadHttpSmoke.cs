@@ -11,7 +11,7 @@ internal static class PatientAppointmentReadHttpSmoke
     public static async Task RunAsync(HttpClient client, DbContextOptions<DentalDbContext> options, int actorId, Action<string> authenticate, Action<bool, string> check)
     {
         await using var db = new DentalDbContext(options);
-        var profiles = await db.Patients.Where(p => p.UserId == actorId && p.IsActive).OrderBy(p => p.PatientId).Take(2).ToArrayAsync();
+        var profiles = await db.Patients.Where(p => p.UserId == actorId && p.IsActive).OrderBy(p => p.PatientId).Take(1).ToArrayAsync();
         var other = new Patient { FullName = "Synthetic other owner", DateOfBirth = new(1990, 1, 1), Phone = "0999999931" };
         db.Patients.Add(other); await db.SaveChangesAsync();
         var date = new VietnamClock(SmokeTestTimeProvider.Instance).Today.AddDays(10);
@@ -35,7 +35,7 @@ internal static class PatientAppointmentReadHttpSmoke
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             ids.Add(json.RootElement.GetProperty("items")[0].GetProperty("appointmentId").GetInt32());
         }
-        check(ids.SequenceEqual(owned.Select(a => a.AppointmentId)), "Patient pagination includes both family members and excludes other account");
+        check(ids.SequenceEqual(owned.Select(a => a.AppointmentId)), "Patient pagination includes own profile and excludes other account");
         using (var response = await client.GetAsync($"/api/appointments?date={date:yyyy-MM-dd}&ownerUserId=2147483647"))
         {
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -48,7 +48,7 @@ internal static class PatientAppointmentReadHttpSmoke
         using (var response = await client.GetAsync($"/api/appointments?date={date:yyyy-MM-dd}&status=Cancelled&patientId={profiles[1].PatientId}"))
         {
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            check(response.StatusCode == HttpStatusCode.OK && json.RootElement.GetProperty("totalCount").GetInt32() == 1, "Patient status and family profile filter intersect owner scope");
+            check(response.StatusCode == HttpStatusCode.OK && json.RootElement.GetProperty("totalCount").GetInt32() == 1, "Patient status and patient filter intersect owner scope");
         }
         foreach (var role in new[] { RoleCodes.Admin, RoleCodes.Receptionist, RoleCodes.Dentist, RoleCodes.Assistant })
         {

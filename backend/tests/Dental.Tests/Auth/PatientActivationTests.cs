@@ -63,9 +63,9 @@ public sealed class PatientActivationTests
     [Fact] public async Task WrongPasswordNeverDispatchesOrBindsARealTarget()
     {
         var repo=Substitute.For<IPatientActivationRepository>();var proofs=Substitute.For<IPatientActivationProofs>();var delivery=Substitute.For<IPatientActivationDelivery>();var passwords=Substitute.For<IPasswordHasher>();
-        repo.FindPendingAsync("0967000000",default).Returns(new ActivationAccount(Target,"hash"));passwords.Verify("Incorrect1","hash").Returns(false);delivery.IsConfigured.Returns(true);
+        repo.FindPendingAsync("0967000000",default).Returns(new ActivationAccount(Target,"hash","0967000000"));passwords.Verify("Incorrect1","hash").Returns(false);delivery.IsConfigured.Returns(true);delivery.ShowDevelopmentCode.Returns(true);
         var dispatch=new ActivationDispatch("0967000000",Guid.NewGuid(),"123456");proofs.Issue(dispatch.Phone,null).Returns(Result<ActivationDispatch>.Success(dispatch));
-        var svc=new PatientActivationService(repo,proofs,delivery,passwords);Assert.True((await svc.RequestAsync(new(dispatch.Phone,"Incorrect1"))).IsSuccess);
+        var svc=new PatientActivationService(repo,proofs,delivery,passwords);var result=await svc.RequestAsync(new(dispatch.Phone,"Incorrect1"));Assert.True(result.IsSuccess);Assert.Null(result.Value!.DevelopmentCode);
         delivery.DidNotReceive().Enqueue(Arg.Any<ActivationDispatch>());proofs.Received(1).Issue(dispatch.Phone,null);
     }
     [Fact] public async Task MissingSmsConfigurationFailsBeforeLookup()
@@ -89,7 +89,21 @@ public sealed class PatientActivationTests
     }
     [Fact] public void PublicDtosContainNoAccountIdentityOrCredentials()
     {
-        Assert.Equal(new[]{"ChallengeId","ExpiresInSeconds","ResendAfterSeconds"},typeof(ActivationChallenge).GetProperties().Select(p=>p.Name).Order().ToArray());
-        Assert.Equal(new[]{"CompletionToken","ExpiresInSeconds"},typeof(ActivationGrant).GetProperties().Select(p=>p.Name).Order().ToArray());
+        Assert.Equal(new[]{"ChallengeId","DevelopmentCode","ExpiresInSeconds","ResendAfterSeconds"},typeof(ActivationChallenge).GetProperties().Select(p=>p.Name).Order().ToArray());
+        Assert.Equal(new[]{"CompletionToken","ExpiresInSeconds","MustChangePassword"},typeof(ActivationGrant).GetProperties().Select(p=>p.Name).Order().ToArray());
+    }
+
+    [Theory][InlineData(false)][InlineData(true)]
+    public async Task CorrectPasswordReturnsSupportCodeOnlyWhenDeliveryAllowsDevelopment(bool development)
+    {
+        var repo=Substitute.For<IPatientActivationRepository>();var proofs=Substitute.For<IPatientActivationProofs>();
+        var delivery=Substitute.For<IPatientActivationDelivery>();var passwords=Substitute.For<IPasswordHasher>();
+        const string phone="0967000000";const string password="Synthetic123";
+        repo.FindPendingAsync(phone,default).Returns(new ActivationAccount(Target,"hash",phone));
+        passwords.Verify(password,"hash").Returns(true);delivery.IsConfigured.Returns(true);delivery.ShowDevelopmentCode.Returns(development);
+        var dispatch=new ActivationDispatch(phone,Guid.NewGuid(),"123456");proofs.Issue(phone,Target).Returns(Result<ActivationDispatch>.Success(dispatch));delivery.Enqueue(dispatch).Returns(true);
+        var result=await new PatientActivationService(repo,proofs,delivery,passwords).RequestAsync(new(phone,password));
+        Assert.True(result.IsSuccess);Assert.Equal(development?dispatch.Code:null,result.Value!.DevelopmentCode);
+        delivery.Received(1).Enqueue(dispatch);
     }
 }

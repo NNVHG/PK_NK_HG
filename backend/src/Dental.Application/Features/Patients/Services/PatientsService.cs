@@ -114,6 +114,14 @@ public sealed class PatientsService
         return Result<PatientResponse>.Success(ToResponse(patient));
     }
 
+    public async Task<Result<PatientListItemResponse>> GetMyPatientAsync(int userId, CancellationToken ct = default)
+    {
+        var patient = await _patientRepository.GetByUserIdAsync(userId, ct);
+        if (patient is null || !patient.IsActive) return Result<PatientListItemResponse>.Failure(Error.NotFound);
+        return Result<PatientListItemResponse>.Success(new PatientListItemResponse(
+            patient.PatientId, patient.PatientCode, patient.FullName, patient.DateOfBirth, patient.Gender, patient.Phone));
+    }
+
     public async Task<Result<PatientResponse>> GetPatientByIdAsync(
         int patientId,
         int? currentUserId,
@@ -129,22 +137,6 @@ public sealed class PatientsService
         }
 
         return Result<PatientResponse>.Success(ToResponse(patient));
-    }
-
-    public async Task<Result<IReadOnlyList<PatientListItemResponse>>> GetMyActiveProfilesAsync(
-        int userId,
-        CancellationToken ct = default)
-    {
-        var patients = await _patientRepository.GetActiveByUserIdAsync(userId, ct);
-        var profiles = patients.Select(patient => new PatientListItemResponse(
-            patient.PatientId,
-            patient.PatientCode,
-            patient.FullName,
-            patient.DateOfBirth,
-            patient.Gender,
-            patient.Phone)).ToList();
-
-        return Result<IReadOnlyList<PatientListItemResponse>>.Success(profiles);
     }
 
     public async Task<Result<PatientResponse>> UpdatePatientAsync(

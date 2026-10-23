@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/auth';
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+    { path: '/my-record', name: 'my-patient-record', component: () => import('@/views/MyPatientRecordView.vue'), meta: { requiresAuth: true, roles: ['PATIENT'] } },
     {path:'/book-appointment',name:'guest-booking',component:()=>import('@/views/GuestBookingView.vue'),meta:{requiresAuth:false}},
     {path:'/appointments/requests',name:'booking-request-review',component:()=>import('@/views/BookingRequestReviewView.vue'),meta:{requiresAuth:true,roles:['ADMIN','RECEPTIONIST']}},
     { path: '/clinical/visits/:visitId/images', name: 'tooth-image-lookup', component: () => import('@/views/ToothImageLookupView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'] } },
@@ -104,6 +105,12 @@ const router = createRouter({
     },
     {
       path: '/',
+      name: 'public-home',
+      component: () => import('@/views/PublicHomeView.vue'),
+      meta: { requiresAuth: false }
+    },
+    {
+      path: '/dashboard',
       name: 'dashboard',
       component: () => import('@/views/DashboardView.vue'),
       meta: { requiresAuth: true }
@@ -154,7 +161,7 @@ const router = createRouter({
       path: '/patients/:id(\\d+)',
       name: 'patient-detail',
       component: () => import('@/views/PatientDetailView.vue'),
-      meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST', 'DENTIST', 'ASSISTANT'] }
+      meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST', 'DENTIST', 'ASSISTANT', 'PATIENT'] }
     },
     ...(import.meta.env.DEV
       ? [

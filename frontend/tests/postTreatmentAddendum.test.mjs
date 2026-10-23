@@ -36,7 +36,6 @@ function fixture(role = 'DENTIST', userId = 5) {
       },
     },
     '@/components/PatientCitizenId.vue': { default: {} },
-    '@/components/PatientAccountLink.vue': { default: {} },
     '@/components/DentalImageAttachments.vue': { default: {} },
     '@/components/PatientPrescriptionHistory.vue': { default: {} },
     '@/services/visits': {

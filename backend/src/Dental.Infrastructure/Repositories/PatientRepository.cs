@@ -16,16 +16,12 @@ public sealed class PatientRepository : IPatientRepository
     public Task<Patient?> GetByIdAsync(int patientId, CancellationToken ct = default)
         => _db.Patients.FirstOrDefaultAsync(patient => patient.PatientId == patientId, ct);
 
-    public Task<Patient?> GetByUserIdAsync(int userId, CancellationToken ct = default)
-        => _db.Patients.FirstOrDefaultAsync(patient => patient.UserId == userId, ct);
+    public Task<Patient?> FindByCitizenIdHashAsync(string citizenIdHash, int? exceptPatientId = null, CancellationToken ct = default)
+        => _db.Patients.FirstOrDefaultAsync(patient => patient.CitizenIdHash == citizenIdHash &&
+            (!exceptPatientId.HasValue || patient.PatientId != exceptPatientId.Value), ct);
 
-    public async Task<IReadOnlyList<Patient>> GetActiveByUserIdAsync(int userId, CancellationToken ct = default)
-        => await _db.Patients
-            .AsNoTracking()
-            .Where(patient => patient.UserId == userId && patient.IsActive)
-            .OrderBy(patient => patient.FullName)
-            .ThenBy(patient => patient.PatientNumber)
-            .ToListAsync(ct);
+    public Task<Patient?> GetByUserIdAsync(int userId, CancellationToken ct = default)
+        => _db.Patients.SingleOrDefaultAsync(patient => patient.UserId == userId, ct);
 
     public async Task<PagedResult<Patient>> SearchAsync(
         string? keyword,

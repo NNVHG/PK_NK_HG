@@ -12,7 +12,7 @@ function deferred() { let resolve; const promise = new Promise(r => { resolve = 
 function fixture() {
   const controls = { now: 100000 }, calls = [], hooks = {}; const store = { challenge: null, set(value) { this.challenge = value; }, clear() { this.challenge = null; } };
   const api = {
-    request: async phone => { calls.push(['request', phone]); if (controls.requestError) throw controls.requestError; return controls.response ?? challenge; },
+    request: async (...args) => { calls.push(['request', ...args]); if (controls.requestError) throw controls.requestError; return controls.response ?? challenge; },
     reset: async (...args) => { calls.push(['reset', ...args]); if (controls.resetError) throw controls.resetError; return controls.reset; }
   };
   const module = { exports: {} };
@@ -22,14 +22,14 @@ function fixture() {
   const c = module.exports.default.setup({}, { expose() {} }); hooks.mount();
   return { c, calls, controls, store, cleanup: hooks.unmount };
 }
-async function ready(f) { f.c.phone.value = '0999999998'; await f.c.submit(); f.c.code.value = '123456'; f.c.password.value = f.c.confirmPassword.value = 'Newpass1'; }
+async function ready(f) { f.c.phone.value = '0999999998'; f.c.citizenId.value = '123456789012'; await f.c.submit(); f.c.code.value = '123456'; f.c.password.value = f.c.confirmPassword.value = 'Newpass1'; }
 
 for (const password of ['Aa1234','Aa12345','Strong1\0x','Aa1'+'Đ'.repeat(35)]) test('recovery rejects policy-invalid password without sending OTP '+JSON.stringify(password),async()=>{
   const f=fixture();await ready(f);f.c.password.value=f.c.confirmPassword.value=password;await f.c.submit();assert.equal(f.calls.length,1);assert.equal(f.c.code.value,'123456');assert.match(f.c.error.value,/8 ký tự/);
 });
 test('request sends registered phone and only stores transient challenge metadata', async () => {
   const f = fixture(); f.c.phone.value = '0999999998'; await f.c.submit();
-  assert.deepEqual(f.calls, [['request','0999999998']]); assert.deepEqual(f.store.challenge, challenge);
+  assert.deepEqual(f.calls, [['request','0999999998','']]); assert.deepEqual(f.store.challenge, challenge);
   assert.match(f.c.message.value, /Nếu số điện thoại/); assert.equal(f.c.code.value, '');
 });
 test('invalid phone, weak password and mismatched confirmation never write', async () => {
@@ -43,7 +43,7 @@ test('local cooldown blocks resends until exactly sixty seconds', async () => {
 });
 test('successful reset clears secrets and offers login without creating a session', async () => {
   const f = fixture(); await ready(f); await f.c.submit();
-  assert.deepEqual(f.calls[1], ['reset',challenge.challengeId,'0999999998','123456','Newpass1']);
+  assert.deepEqual(f.calls[1], ['reset',challenge.challengeId,'0999999998','123456','Newpass1','123456789012']);
   assert.equal(f.c.done.value, true); assert.equal(f.store.challenge, null);
   for (const field of ['phone','code','password','confirmPassword']) assert.equal(f.c[field].value, '');
   await f.c.submit(); assert.equal(f.calls.length, 2);
@@ -73,8 +73,8 @@ test('unmount clears secrets and ignores late request/reset responses', async ()
   const reset = g.c.submit(); g.cleanup(); resetPending.resolve(); await reset; assert.equal(g.c.done.value,false); assert.equal(g.c.password.value,'');
 });
 test('changing phone clears previous challenge and inputs', async () => {
-  const f = fixture(); await ready(f); f.c.changePhone(); assert.equal(f.store.challenge,null);
-  for(const field of ['phone','code','password','confirmPassword']) assert.equal(f.c[field].value,'');
+  const f = fixture(); await ready(f); f.c.changeIdentity(); assert.equal(f.store.challenge,null);
+  for(const field of ['phone','citizenId','code','password','confirmPassword']) assert.equal(f.c[field].value,'');
 });
 test('form labels, notices and public entry exist without persistent secret storage', async () => {
   const client = await readFile(new URL('../src/services/passwordRecovery.ts',import.meta.url),'utf8');

@@ -50,11 +50,11 @@ public sealed class BookingRequestRepository(DentalDbContext db,VietnamClock clo
             if(i.DentistId.HasValue&&await appointments.HasDentistBookingAsync(i.DentistId.Value,i.AppointmentDate,i.SlotTime,0,ct,duration))return Result<BookingReceipt>.Failure(new Error("APP_REQUEST_HELD","Nha sĩ đã có lịch hoặc yêu cầu giữ chỗ trong khung giờ này."));
             if(i.PatientId.HasValue&&(await appointments.HasActiveAppointmentOnDateAsync(i.PatientId.Value,i.AppointmentDate,ct)||await db.BookingRequests.AnyAsync(x=>x.Status=="Pending"&&x.VerifiedPatientId==i.PatientId&&x.AppointmentDate==i.AppointmentDate,ct)))return Result<BookingReceipt>.Failure(Error.AppointmentPatientHasActive);
             if(!i.PatientId.HasValue&&await db.BookingRequests.AnyAsync(x=>x.Status=="Pending"&&x.Phone==i.Phone&&x.FullName==i.FullName.Trim()&&x.DateOfBirth==i.DateOfBirth&&x.AppointmentDate==i.AppointmentDate,ct))return Result<BookingReceipt>.Failure(new Error("APP_REQUEST_DUPLICATE","Đã có yêu cầu cùng thông tin trong ngày này. Liên hệ phòng khám để đối chiếu."));
-            // Do not infer ownership or return visits by matching guest names or a shared family phone.
+            // Do not infer ownership or return visits by matching guest names or a shared phone number.
             var returning=i.PatientId.HasValue&&await db.Visits.AnyAsync(v=>v.PatientId==i.PatientId&&v.Status==VisitStatuses.Completed,ct);
             var row=new BookingRequest{ClientRequestId=request.ClientRequestId,IntentDigest=Digest(i,actor),FullName=i.FullName.Trim(),Phone=i.Phone,DateOfBirth=i.DateOfBirth,Gender=i.Gender,Email=string.IsNullOrWhiteSpace(i.Email)?null:i.Email.Trim(),Notes=string.IsNullOrWhiteSpace(i.Notes)?null:i.Notes.Trim(),AppointmentDate=i.AppointmentDate,SlotTime=i.SlotTime,SlotDurationMinutes=duration,DentistId=i.DentistId,VerifiedPatientId=i.PatientId,SubmittedByUserId=actor,IsReturning=returning,CreatedAt=clock.UtcNow};
             db.BookingRequests.Add(row);await db.SaveChangesAsync(ct);
-            db.AuditLogs.Add(new AuditLog{UserId=actor,EntityType="BookingRequest",EntityId=row.Id,Action="MOD_APP_REQUEST_SUBMITTED",IpAddress=ip,CreatedAt=clock.UtcNow,Detail=JsonSerializer.Serialize(new{version=1,phoneVerified=true,verifiedProfile=i.PatientId.HasValue})});
+            db.AuditLogs.Add(new AuditLog{UserId=actor,EntityType="BookingRequest",EntityId=row.Id,Action="MOD_APP_REQUEST_SUBMITTED",IpAddress=ip,CreatedAt=clock.UtcNow,Detail=JsonSerializer.Serialize(new{version=2,phoneVerified=false,verifiedProfile=i.PatientId.HasValue})});
             await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);committed=true;
             return Result<BookingReceipt>.Success(new(row.ClientRequestId,row.Status));
         }

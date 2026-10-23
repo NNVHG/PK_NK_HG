@@ -10,7 +10,7 @@
       </div>
     </header>
 
-    <PatientFamilyPhoneChange v-if="!loadingProfile && authStore.role === 'PATIENT'" />
+    <PatientPhoneChange v-if="!loadingProfile && authStore.role === 'PATIENT'" />
     <StaffPhoneChangeConfirmation v-if="['ADMIN', 'DENTIST', 'RECEPTIONIST', 'ASSISTANT'].includes(authStore.role)" />
     <div v-if="loadingProfile" class="state-message">Đang tải hồ sơ...</div>
     <div v-else class="profile-grid">
@@ -19,7 +19,7 @@
           <div class="icon-badge" aria-hidden="true">●</div>
           <div>
             <h2>Thông tin cá nhân</h2>
-            <p>Số điện thoại dùng để đăng nhập; hãy dùng luồng OTP riêng ở trên khi cần đổi số.</p>
+            <p>{{ authStore.role === 'PATIENT' ? 'Tài khoản cá nhân đăng nhập bằng CCCD; số điện thoại bên dưới là số liên hệ.' : 'Số điện thoại dùng để đăng nhập. Hãy dùng luồng OTP riêng ở trên khi cần đổi số.' }}</p>
           </div>
         </div>
 
@@ -32,7 +32,7 @@
           <div class="field">
             <label for="phone">Số điện thoại</label>
             <input id="phone" :value="phone" type="tel" readonly aria-readonly="true" />
-            <small>Số điện thoại hiện dùng để đăng nhập.</small>
+            <small>{{ authStore.role === 'PATIENT' ? 'Số điện thoại liên hệ của tài khoản cá nhân.' : 'Số điện thoại hiện dùng để đăng nhập.' }}</small>
           </div>
 
           <div class="field">
@@ -111,7 +111,7 @@
 </template>
 
 <script setup lang="ts">
-import PatientFamilyPhoneChange from '@/components/PatientFamilyPhoneChange.vue';
+import PatientPhoneChange from '@/components/PatientPhoneChange.vue';
 import StaffPhoneChangeConfirmation from '@/components/StaffPhoneChangeConfirmation.vue';
 import { computed, onMounted, ref } from 'vue';
 import { useAuthStore } from '@/stores/auth';

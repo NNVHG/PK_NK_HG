@@ -1,16 +1,12 @@
 import { apiClient } from '@/services/api';
 
-export interface PhoneScopeProfile { patientId: number; fullName: string; dateOfBirth: string; isActive: boolean; willUpdate: boolean }
-export interface PhoneScopePreview { currentPhone: string; newPhone: string; reviewStamp: string; profiles: PhoneScopeProfile[] }
+export interface PatientPhonePreview { patientId: number; patientName: string; currentPhone: string; newPhone: string; contactWillUpdate: boolean; reviewStamp: string }
 export interface PhoneChangePending { challengeId: string; newPhone: string; expiresAtUtc: string }
 const root = '/auth/patient-phone-change';
-export function isPhoneScopePreview(value: any, newPhone: string, currentPhone?: string): value is PhoneScopePreview {
+export function isPatientPhonePreview(value: any, newPhone: string, currentPhone?: string): value is PatientPhonePreview {
   return !!value && typeof value.currentPhone === 'string' && value.currentPhone.length === 10 && typeof value.reviewStamp === 'string' && value.reviewStamp.length === 64 && value.newPhone === newPhone && /^0[0-9]{9}$/.test(value.currentPhone) &&
-    (!currentPhone || value.currentPhone === currentPhone) && /^[A-F0-9]{64}$/.test(value.reviewStamp) &&
-    Array.isArray(value.profiles) && value.profiles.every((p: any) => p && Number.isInteger(p.patientId) && p.patientId > 0 &&
-      typeof p.fullName === 'string' && !!p.fullName.trim() && typeof p.dateOfBirth === 'string' && p.dateOfBirth.length === 10 && /^\d{4}-\d{2}-\d{2}$/.test(p.dateOfBirth) &&
-      Number.isFinite(Date.parse(p.dateOfBirth)) && typeof p.isActive === 'boolean' && typeof p.willUpdate === 'boolean') &&
-    new Set(value.profiles.map((p: PhoneScopeProfile) => p.patientId)).size === value.profiles.length;
+    (!currentPhone || value.currentPhone === currentPhone) && /^[A-F0-9]{64}$/.test(value.reviewStamp) && Number.isSafeInteger(value.patientId) &&
+    value.patientId > 0 && typeof value.patientName === 'string' && !!value.patientName.trim() && typeof value.contactWillUpdate === 'boolean';
 }
 export const patientPhoneChange = {
   async preview(newPhone: string) { return (await apiClient.post(root + '/preview', { newPhone })).data; },

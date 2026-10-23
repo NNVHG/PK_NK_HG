@@ -8,8 +8,9 @@ public sealed class LoginRequestValidator : AbstractValidator<LoginRequest>
     public LoginRequestValidator()
     {
         RuleFor(x => x.Phone)
-            .NotEmpty().WithMessage("Số điện thoại không được để trống.")
-            .Matches(@"^0\d{9}$").WithMessage("Số điện thoại không hợp lệ (định dạng: 0xxxxxxxxx).");
+            .NotEmpty().WithMessage("Nhập SĐT hoặc CCCD.")
+            .Must(x => x is not null && System.Text.RegularExpressions.Regex.IsMatch(x, @"^(0\d{9}|\d{12})$"))
+            .WithMessage("Nhập SĐT gồm 10 số hoặc CCCD gồm 12 số.");
 
         RuleFor(x => x.Password)
             .NotEmpty().WithMessage("Mật khẩu không được để trống.")

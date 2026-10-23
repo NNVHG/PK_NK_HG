@@ -35,7 +35,7 @@ test('search uses API with bounded page and selecting resets confirmation', asyn
 });
 test('confirmed booking sends selected patient and normal slot without dentist assignment', async () => {
   const f = fixture(); await ready(f); f.c.notes.value = '  Synthetic reason  '; await f.c.book();
-  assert.deepEqual(f.calls, [{ patientId: 71, appointmentDate: '2099-01-01', slotTime: '08:30:00', dentistId: null, notes: 'Synthetic reason', isEmergency: false, emergencyReason: null, confirmedDentistConflictAppointmentId: null, expectedScheduleRevision: 'A'.repeat(64) }]);
+  assert.deepEqual(f.calls, [{ patientId: 71, appointmentDate: '2099-01-01', slotTime: '08:30:00', dentistId: null, notes: 'Synthetic reason', expectedScheduleRevision: 'A'.repeat(64) }]);
   assert.equal(f.c.confirmed.value, false); assert.equal(f.c.success.value.appointmentId, 9);
 });
 test('unconfirmed, past date, wrong slot and long notes do not create appointments', async () => {
@@ -85,29 +85,17 @@ test('dentist conflict or ambiguous network outcome keeps draft without automati
   const f = fixture({ failure: true }); await ready(f); f.c.dentistId.value = 31; f.c.notes.value = 'Synthetic draft'; await f.c.book(); await f.c.book();
   assert.equal(f.calls.length, 1); assert.equal(f.c.notes.value, 'Synthetic draft'); assert.equal(f.c.dentistId.value, 31); assert.equal(f.c.confirmed.value, false);
 });
-test('emergency free-time booking requires reason and confirms the exact dentist conflict before retry', async () => {
-  const conflictResponse = { response: { data: { code: 'APP_011', message: 'Synthetic conflict', details: {
-    conflictAppointmentId: 88, dentistName: 'Synthetic dentist', patientName: 'Booked patient', appointmentDate: '2099-01-01', slotTime: '17:15:00'
-  } } } };
-  const f = fixture({ failure: [conflictResponse] }); await ready(f);
-  f.c.isEmergency.value = true; f.c.toggleEmergency(); f.c.slot.value = '17:15'; f.c.emergencyReason.value = '  Đau răng dữ dội  ';
-  f.c.dentistId.value = 31; f.c.confirmed.value = true;
-  await f.c.book();
-  assert.equal(f.calls.length, 1); assert.equal(f.c.conflict.value.conflictAppointmentId, 88);
-  assert.equal(f.c.overrideConflictConfirmed.value, false); assert.equal(f.c.confirmed.value, true);
-  f.c.overrideConflictConfirmed.value = true; await f.c.book();
-  assert.equal(f.calls.length, 2);
-  assert.equal(f.calls[0].isEmergency, true); assert.equal(f.calls[0].slotTime, '17:15:00');
-  assert.equal(f.calls[0].emergencyReason, 'Đau răng dữ dội');
-  assert.equal(f.calls[0].confirmedDentistConflictAppointmentId, null);
-  assert.equal(f.calls[1].confirmedDentistConflictAppointmentId, 88);
-  assert.equal(f.c.success.value.appointmentId, 9);
+test('attention notes use normal slots and never send retired emergency or override fields', async () => {
+  const f = fixture(); await ready(f); f.c.notes.value = '  Synthetic attention  '; await f.c.book();
+  assert.equal(f.calls[0].notes, 'Synthetic attention');
+  for (const key of ['isEmergency', 'emergencyReason', 'confirmedDentistConflictAppointmentId', 'confirmedDentistConflictRequestId']) assert.equal(key in f.calls[0], false);
+  assert.doesNotMatch(descriptor.template.content, /CẤP CỨU|Đặt lịch cấp cứu|type="time"|overrideConflictConfirmed/);
+  assert.match(descriptor.template.content, /ghi chú cần lưu ý/);
 });
 
-test('emergency Pending conflict uses distinct request id and preserves acknowledgement across warnings', async()=>{
- const pending={response:{data:{code:'APP_011',details:{conflictAppointmentId:0,conflictRequestId:17,dentistName:'Synthetic dentist',patientName:'Khách đang chờ xác nhận',appointmentDate:'2099-01-01',slotTime:'08:00:00'}}}};
- const existing={response:{data:{code:'APP_011',details:{conflictAppointmentId:88,dentistName:'Synthetic dentist',patientName:'Synthetic existing',appointmentDate:'2099-01-01',slotTime:'08:00:00'}}}};
- const f=fixture({failure:[pending,existing]});await ready(f);f.c.isEmergency.value=true;f.c.toggleEmergency();f.c.slot.value='17:15';f.c.emergencyReason.value='Synthetic urgent issue';f.c.dentistId.value=31;f.c.confirmed.value=true;
- await f.c.book();f.c.overrideConflictConfirmed.value=true;await f.c.book();assert.equal(f.calls[1].confirmedDentistConflictRequestId,17);assert.equal(f.calls[1].confirmedDentistConflictAppointmentId,null);
- f.c.overrideConflictConfirmed.value=true;await f.c.book();assert.equal(f.calls[2].confirmedDentistConflictRequestId,17);assert.equal(f.calls[2].confirmedDentistConflictAppointmentId,88);assert.ok(f.c.success.value);
+test('legacy conflict responses cannot offer an override or automatically retry', async () => {
+  const f = fixture({ failure: [{ response: { data: { code: 'APP_011', message: 'Synthetic conflict', details: { conflictRequestId: 17 } } } }] });
+  await ready(f); f.c.notes.value = 'Synthetic attention'; await f.c.book(); await f.c.book();
+  assert.equal(f.calls.length, 1); assert.equal(f.c.confirmed.value, false); assert.equal(f.c.error.value, 'Synthetic conflict');
+  assert.equal(f.c.notes.value, 'Synthetic attention'); assert.equal(f.c.conflict, undefined);
 });

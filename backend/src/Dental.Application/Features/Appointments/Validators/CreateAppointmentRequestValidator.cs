@@ -23,23 +23,11 @@ public sealed class CreateAppointmentRequestValidator : AbstractValidator<Create
             .WithMessage("Giờ hẹn phải chính xác đến phút; khung giờ được backend đối chiếu cấu hình hiện hành.");
         RuleFor(x => x.ExpectedScheduleRevision).Matches("^[A-F0-9]{64}$").When(x => x.ExpectedScheduleRevision is not null);
 
-        RuleFor(x => x.EmergencyReason)
-            .Must(reason => !string.IsNullOrWhiteSpace(reason) && reason.Trim().Length is >= 5 and <= 255)
-            .When(x => x.IsEmergency)
-            .WithMessage("Lý do cấp cứu phải có từ 5 đến 255 ký tự.");
-
-        RuleFor(x => x.EmergencyReason)
-            .Null()
-            .When(x => !x.IsEmergency)
-            .WithMessage("Chỉ nhập lý do cấp cứu khi bật lịch cấp cứu.");
-
-        RuleFor(x => x.ConfirmedDentistConflictAppointmentId)
-            .Null()
-            .When(x => !x.IsEmergency)
-            .WithMessage("Chỉ xác nhận chen ngang cho lịch cấp cứu.");
-
-        RuleFor(x => x.ConfirmedDentistConflictRequestId).GreaterThan(0).When(x=>x.ConfirmedDentistConflictRequestId.HasValue);
-        RuleFor(x => x.ConfirmedDentistConflictRequestId).Null().When(x=>!x.IsEmergency);
+        // DL337: reject retired fields, including payloads from older UI versions.
+        RuleFor(x => x.IsEmergency).Equal(false).WithMessage("Phòng khám không tiếp nhận cấp cứu.");
+        RuleFor(x => x.EmergencyReason).Null().WithMessage("Ghi điều cần lưu ý vào ghi chú.");
+        RuleFor(x => x.ConfirmedDentistConflictAppointmentId).Null().WithMessage("Không hỗ trợ chen lịch.");
+        RuleFor(x => x.ConfirmedDentistConflictRequestId).Null().WithMessage("Không hỗ trợ chen lịch.");
 
         RuleFor(x => x.Notes)
             .MaximumLength(500)

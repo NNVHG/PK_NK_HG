@@ -19,13 +19,12 @@ internal static class PatientSelfReschedulingHttpSmoke
     {
         await using var db = new DentalDbContext(options);
         var owner = await db.Patients.FirstAsync(p => p.UserId == actorId && p.IsActive);
-        var family = new Patient { FullName = "Synthetic reschedule family", DateOfBirth = new(2020, 1, 1), Phone = "0999999941", UserId = actorId };
         var foreign = new Patient { FullName = "Synthetic reschedule foreign", DateOfBirth = new(1990, 1, 1), Phone = "0999999942" };
-        db.Patients.AddRange(family, foreign); await db.SaveChangesAsync();
+        db.Patients.Add(foreign); await db.SaveChangesAsync();
         var clock = new VietnamClock(SmokeTestTimeProvider.Instance); var oldDay = clock.Today.AddDays(80); var targetDay = oldDay.AddDays(1);
         Appointment Make(int patientId, string state = AppointmentStatuses.Scheduled, int count = 0) => new()
         { PatientId = patientId, AppointmentDate = oldDay, SlotTime = new(9, 0), Status = state, CreatedByUserId = actorId, Notes = "Original note", RescheduleCount = count };
-        var row = Make(family.PatientId); var other = Make(foreign.PatientId); var near = Make(owner.PatientId);
+        var row = Make(owner.PatientId); var other = Make(foreign.PatientId); var near = Make(owner.PatientId);
         var nearTime = clock.Now.AddMinutes(30); near.AppointmentDate = DateOnly.FromDateTime(nearTime); near.SlotTime = TimeOnly.FromDateTime(nearTime);
         var limit = Make(owner.PatientId, count: 2); var closed = Make(owner.PatientId, AppointmentStatuses.CheckedIn);
         var racer = Make(owner.PatientId, count: 1);
@@ -42,7 +41,7 @@ internal static class PatientSelfReschedulingHttpSmoke
         using (var response = await client.GetAsync(Eligibility(row.AppointmentId)))
         {
             var data = await response.Content.ReadFromJsonAsync<SelfReschedulingEligibilityResponse>();
-            check(response.StatusCode == HttpStatusCode.OK && data?.CanReschedule == true && data.RemainingChanges == 2 && data.Appointment.PatientId == family.PatientId, "Self reschedule linked family snapshot eligible");
+            check(response.StatusCode == HttpStatusCode.OK && data?.CanReschedule == true && data.RemainingChanges == 2 && data.Appointment.PatientId == owner.PatientId, "Self reschedule own patient snapshot eligible");
             check(response.Headers.CacheControl?.NoStore == true, "Self reschedule eligibility no-store");
         }
         foreach (var id in new[] { other.AppointmentId, int.MaxValue })
@@ -78,7 +77,7 @@ internal static class PatientSelfReschedulingHttpSmoke
         using (var response = await client.GetAsync(Eligibility(row.AppointmentId)))
             check((await response.Content.ReadFromJsonAsync<SelfReschedulingEligibilityResponse>()) is { CanReschedule: false, RemainingChanges: 0 }, "Self reschedule fresh eligibility reflects count2");
         var stored = await db.Appointments.AsNoTracking().SingleAsync(a => a.AppointmentId == row.AppointmentId);
-        check(stored.AppointmentDate == second.AppointmentDate && stored.RescheduleCount == 2 && stored.RescheduleReason == request.Reason && stored.PatientId == family.PatientId, "Self reschedule committed time/reason/identity retained");
+        check(stored.AppointmentDate == second.AppointmentDate && stored.RescheduleCount == 2 && stored.RescheduleReason == request.Reason && stored.PatientId == owner.PatientId, "Self reschedule committed time/reason/identity retained");
         var auditRows = await db.AuditLogs.Where(a => a.Action == AuditActions.AppointmentRescheduled && a.EntityId == row.AppointmentId).ToListAsync();
         check(auditRows.Count == 2 && auditRows.All(a => a.UserId == actorId && !a.Detail!.Contains(request.Reason!)), "Self reschedule two audits from JWT actor and no free text");
 

@@ -57,7 +57,6 @@ public sealed class PatientConfiguration : IEntityTypeConfiguration<Patient>
             .HasDatabaseName("IX_Patients_PatientNumber");
 
         builder.HasIndex(patient => patient.Phone)
-            .IsUnique()
             .HasDatabaseName("IX_Patients_Phone");
 
         builder.HasIndex(patient => patient.FullName)

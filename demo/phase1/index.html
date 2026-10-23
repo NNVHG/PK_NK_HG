@@ -1,0 +1,461 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Demo Phase 1 · Nha khoa Hoàng Gia</title><style>
+:root{color-scheme:light;font-family:system-ui,Segoe UI,sans-serif;color:#17313c;background:#eef4f5}body{margin:0}header{background:#093e4b;color:white;padding:32px max(20px,calc((100vw - 1080px)/2))}header p{color:#c7e3e7}header a{color:#fff;margin-right:18px}main{max-width:1080px;margin:24px auto;background:white;padding:32px;border-radius:16px;box-sizing:border-box;box-shadow:0 8px 35px #0736430d}h1{font-size:1.8rem;line-height:1.3}h2{margin-top:2rem;color:#126173;border-bottom:1px solid #d7e6e9;padding-bottom:8px}h3{color:#126173}p,li{line-height:1.7}a{color:#116c85;overflow-wrap:anywhere}pre{background:#102e38;color:#edf7f8;padding:18px;border-radius:8px;overflow:auto}code{font-size:.9em;overflow-wrap:anywhere}table{border-collapse:collapse;display:block;overflow-x:auto;margin:20px 0;width:100%;font-size:.93rem}th,td{border:1px solid #d8e4e7;padding:10px 12px;text-align:left;vertical-align:top;min-width:90px}th{background:#e9f3f5}tr:nth-child(even){background:#f8fafb}hr{border:0;border-top:3px solid #d8e4e7;margin:48px 0}.badge{display:inline-block;padding:6px 12px;border-radius:20px;background:#e3ad42;color:#172c33;font-weight:700}button{font:inherit;padding:8px 16px;border:1px solid #ccdfe3;border-radius:8px;background:white;color:#093e4b;cursor:pointer}.preflight{display:grid;gap:8px;background:#eff8f6;padding:18px;border-radius:8px}.preflight label{line-height:1.6}@media(max-width:600px){main{margin:12px 8px;padding:18px 14px}header{padding:24px 20px}h1{font-size:1.5rem}th,td{padding:8px}}@media print{body{background:white}header,main{box-shadow:none;margin:0;border-radius:0}nav,button,.preflight{display:none}table{display:table;font-size:9pt}th,td{min-width:0}pre{white-space:pre-wrap}h2,h3{break-after:avoid}}
+</style></head><body><header><span class="badge">Chuẩn bị demo · Chờ Gia UAT</span><h1>Nha khoa Hoàng Gia / Phase 1</h1><p>Tài khoản cá nhân · Tiếp đón → Khám & FDI → Kê đơn → Thanh toán</p><nav><a href="README.md">Hướng dẫn MD</a><a href="UAT.md">Phiếu nghiệm thu</a><a href="FUNCTIONS.csv">52 chức năng</a><a href="http://127.0.0.1:5173">Mở website demo</a><button onclick="window.print()">In tài liệu</button></nav></header><main><section class="preflight"><strong>Trước khi bắt đầu</strong><label><input type="checkbox"> Docker và API/website đang chạy</label><label><input type="checkbox"> Đã mở đúng phiên đăng nhập cho từng vai trò</label><label><input type="checkbox"> Ghế, thuốc/vật tư và giờ hẹn sẵn sàng</label><label><input type="checkbox"> Chỉ dùng dữ liệu minh họa; phiếu UAT còn để trống</label></section><h1 id="demo-phase-1-phong-kham-nha-khoa-hoang-gia">Demo Phase 1 — Phòng khám nha khoa Hoàng Gia</h1>
+<p><strong>Cập nhật 24/10/2026 · Nhánh <code>codex/individual-accounts-demo-prep</code> · Commit V4–V6 <code>15f6c2b</code> · Chờ Gia UAT.</strong></p>
+<h2 id="bat-au">1. Bắt đầu</h2>
+<p>Yêu cầu: Windows, PowerShell 7 (<code>pwsh</code>), .NET SDK 10, Node.js 22 trở lên, Docker Desktop đang chạy Linux containers. Lần chuẩn bị đầu cần mạng để tải các dependency đã khóa và PostgreSQL 16. Không thêm package.</p>
+<p>Tại thư mục gốc của <strong>worktree này</strong>, chạy:</p>
+<pre><code class="language-powershell">pwsh -NoProfile -File demo/phase1/Prepare.ps1
+pwsh -NoProfile -File demo/phase1/Start.ps1
+</code></pre>
+<p>Nếu PowerShell chặn script, mở từng file để xem nội dung trước; chạy trong phiên được máy cho phép thực thi script. Script không đổi chính sách máy.</p>
+<table>
+<thead>
+<tr>
+<th>Thành phần</th>
+<th>Địa chỉ / vị trí</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Website</td>
+<td><a href="http://127.0.0.1:5173">http://127.0.0.1:5173</a></td>
+</tr>
+<tr>
+<td>Swagger</td>
+<td><a href="http://127.0.0.1:5000/swagger">http://127.0.0.1:5000/swagger</a></td>
+</tr>
+<tr>
+<td>PostgreSQL demo</td>
+<td><code>127.0.0.1:55432</code>, database <code>dental_phase1_demo</code></td>
+</tr>
+<tr>
+<td>Nhật ký chạy</td>
+<td><code>demo/phase1/.runtime/api.log</code>, <code>api-error.log</code>, <code>web.log</code>, <code>web-error.log</code></td>
+</tr>
+<tr>
+<td>Cấu hình riêng</td>
+<td><code>.runtime/settings.json</code>, tự sinh và không đưa vào Git</td>
+</tr>
+</tbody>
+</table>
+<p>Start kiểm tra cổng, khởi động database, chạy migration/seed và chờ API + website phản hồi. Nếu cổng 5000 hoặc 5173 đang bận, script dừng để Gia đóng ứng dụng đang dùng cổng đó. Cửa sổ tiến trình chạy ẩn.</p>
+<p>Dừng bằng <code>pwsh -NoProfile -File demo/phase1/Stop.ps1</code>. Chạy lại Start để tiếp tục với dữ liệu đã lưu. Stop chỉ dừng tiến trình được script ghi nhận và container demo; không xóa volume. Giữ thư mục <code>.runtime</code> để dùng lại mật khẩu database đã sinh. Không chạy <code>docker compose down -v</code> trong buổi demo.</p>
+<h2 id="tai-khoan-va-du-lieu-mau">2. Tài khoản và dữ liệu mẫu</h2>
+<p>Đây là thông tin <strong>chỉ dành cho database demo tổng hợp</strong>. Không dùng dữ liệu bệnh nhân thật.</p>
+<table>
+<thead>
+<tr>
+<th>Vai trò</th>
+<th>Định danh đăng nhập</th>
+<th>Mật khẩu ban đầu</th>
+<th>Ghi chú</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Admin</td>
+<td><code>0900000001</code></td>
+<td><code>AdminPassword@123</code></td>
+<td>Danh mục, báo cáo, audit</td>
+</tr>
+<tr>
+<td>Lễ tân/Thu ngân</td>
+<td><code>0900000002</code></td>
+<td><code>DemoPassword@123</code></td>
+<td>Đặt lịch, check-in, thu tiền</td>
+</tr>
+<tr>
+<td>Nha sĩ</td>
+<td><code>0900000003</code></td>
+<td><code>DemoPassword@123</code></td>
+<td>Chọn ghế, khám, FDI, kê đơn</td>
+</tr>
+<tr>
+<td>Phụ tá</td>
+<td><code>0900000004</code></td>
+<td><code>DemoPassword@123</code></td>
+<td>Theo nha sĩ, vật tư, ảnh</td>
+</tr>
+<tr>
+<td>Sáu Patient Demo</td>
+<td>CCCD giả <code>000000000901</code>–<code>000000000906</code></td>
+<td><code>0900000091</code></td>
+<td>Sáu tài khoản/hồ sơ riêng; dùng chung SĐT; OTP lần đầu và bắt đổi mật khẩu</td>
+</tr>
+
+</tbody>
+</table>
+<p>Seed tạo sáu tài khoản Patient cá nhân riêng với CCCD tổng hợp <code>000000000901</code>–<code>000000000906</code>; tất cả dùng chung SĐT liên hệ <code>0900000091</code>. Database chỉ lưu hash/giá trị che CCCD. Mật khẩu khởi tạo là SĐT; OTP kích hoạt Development hiển thị trên giao diện và lần đầu phải đổi mật khẩu trước khi vào portal. Không có dữ liệu bệnh nhân thật.</p>
+<p>Seed còn tạo ghế <code>DEMO01</code>, dịch vụ giá minh họa <strong>100.000đ</strong>, vật tư ngưỡng 5; lịch hôm nay bốn trạng thái, một Visit đang khám, hai lượt Waiting và một InConsultation. Hồ sơ tổng hợp có tiền sử/dị ứng, sinh hiệu và sâu răng FDI ở răng 16. Không seed hóa đơn/doanh thu hoặc tồn kho. Danh mục bệnh lý và 30 tên thuốc giữ seed hiện hành; thuốc bắt đầu ngừng hoạt động, giá 0. Admin chọn sản phẩm/giá demo và kích hoạt trước khi nha sĩ kê. Không cung cấp sẵn liều thuốc hoặc phác đồ chưa được nha sĩ duyệt.</p>
+<h2 id="quy-tac-trinh-dien">3. Quy tắc trình diễn</h2>
+<ul>
+<li>Trang chủ mở công khai. Gửi yêu cầu đặt lịch không cần đăng nhập hoặc OTP.</li>
+<li>Mỗi tài khoản Patient chỉ sở hữu một hồ sơ. Cùng SĐT không tự liên kết hoặc cấp quyền xem hồ sơ khác.</li>
+<li>Duyệt yêu cầu tạo lịch/hồ sơ phù hợp; tài khoản mới được cấp khi check-in đã đối soát CCCD và SĐT tại quầy. Không tự check-in khi đặt lịch.</li>
+<li>Patient mới dùng CCCD để đăng nhập, mật khẩu ban đầu là SĐT; OTP lần đầu và đổi mật khẩu bắt buộc trước khi vào portal. Tài khoản cá nhân cũ giữ chính sách đăng nhập đã chốt.</li>
+<li>Ca nặng có lưu ý dùng ghi chú/tiền sử; không có chức năng cấp cứu hoặc chen lịch. TV giữ phạm vi đã chốt.</li>
+<li>Thu tiền mặt hoặc ghi nhận chuyển khoản thủ công sau đối soát. Mọi tiền trong database demo là số liệu minh họa; không chuyển tiền thật.</li>
+<li>Hoàn tất Phase 1 bằng phiếu UAT của Gia. Bộ file này không phải bằng chứng đã nghiệm thu; chưa mở Phase 2.</li>
+</ul>
+<h2 id="chuan-bi-truoc-khi-trinh-bay">4. Chuẩn bị trước khi trình bày</h2>
+<ol>
+<li>Mở các phiên trình duyệt riêng cho Lễ tân, Nha sĩ, Phụ tá và Patient; tránh ghi đè tài khoản giữa các tab.</li>
+<li>Admin xem dịch vụ/giá và ghế ở <code>/admin/services</code>, <code>/admin/chairs</code>. Nha sĩ vào <code>/staff/workspace</code> chọn ghế DEMO01; Phụ tá chọn nha sĩ làm cùng.</li>
+<li>Nếu demo kê/giao thuốc: Admin chuẩn bị thuốc và nhập số lượng thực trong <code>/admin/medicines</code>, <code>/admin/medicine-stock</code>. Liều/cách dùng do người demo nhập từ nội dung đã được nha sĩ duyệt.</li>
+<li>Nếu demo tiêu hao: Phụ tá/Admin tạo phiếu nhập 10 cái vật tư DEMO01 tại <code>/inventory/receipts</code>, xác nhận; sau điều trị sẽ xác nhận tiêu hao 2 cái tại <code>/inventory/issues</code>.</li>
+<li>Dùng <code>sample-upload.png</code> (ô xám tổng hợp, không phải ảnh y khoa) để demo thao tác tải/xem/thu phóng. Không dùng ảnh bệnh nhân thật. Tài liệu không yêu cầu tự suy diễn nội dung ảnh.</li>
+<li>Chọn ngày/giờ còn nhận lịch theo giờ Việt Nam; lịch cho buổi demo phải còn trong giờ làm việc và trước cutoff 23:30. Khi ca đã hoàn tất, dùng lịch/hồ sơ mới cho lần diễn tiếp, không sửa dữ liệu đã thu.</li>
+</ol>
+<h2 id="kich-ban-xuyen-suot-khoang-2030-phut">5. Kịch bản xuyên suốt (khoảng 20–30 phút)</h2>
+<table>
+<thead>
+<tr>
+<th>Bước</th>
+<th>Vai trò / màn hình</th>
+<th>Thao tác</th>
+<th>Kết quả cần quan sát</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Khách · <code>/</code> → <code>/book-appointment</code></td>
+<td>Nhập thông tin giả, chọn giờ còn chỗ và gửi</td>
+<td>Có xác nhận tiếp nhận; không màn hình OTP; yêu cầu Pending giữ chỗ</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Lễ tân · <code>/appointments/requests</code></td>
+<td>Đối soát và duyệt đúng hồ sơ hoặc xác nhận hồ sơ mới</td>
+<td>Có lịch Scheduled; chưa tự cấp số hàng đợi</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Lễ tân · Bệnh nhân / <code>/queue/check-in</code></td>
+<td>Đối chiếu CCCD/SĐT, cập nhật CCCD khi cần, chọn lịch và xác nhận khách đến</td>
+<td>Visit mới và số hàng đợi; thông tin cấp tài khoản mới nếu đủ điều kiện</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Patient · <code>/login</code></td>
+<td>Dùng CCCD/SĐT ban đầu; nhận OTP Development, nhập mã và đặt mật khẩu mới</td>
+<td>Chỉ vào portal sau bước đổi mật khẩu; <code>/my-record</code> chỉ có hồ sơ của mình</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Lễ tân/Phụ tá · <code>/queue/today</code></td>
+<td>Gọi số và dẫn bệnh nhân tới nha sĩ</td>
+<td>Trạng thái, nha sĩ và vị trí được cập nhật</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Nha sĩ · hàng đợi → hồ sơ</td>
+<td>Bắt đầu khám, ghi tiền sử/sinh hiệu và chẩn đoán</td>
+<td>Ghế chiếm dụng; cảnh báo an toàn theo dữ liệu đã nhập</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Nha sĩ · tab FDI</td>
+<td>Chọn răng hợp lệ, lưu tình trạng, chỉ định dịch vụ DEMO01</td>
+<td>Lưu bản ghi lịch sử và đơn giá snapshot 100.000đ</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Nha sĩ/Phụ tá · ảnh/đơn thuốc</td>
+<td>Tải ảnh minh họa; kê đơn bằng nội dung được duyệt; xem bản in</td>
+<td>Ảnh gắn đúng Visit; kê chỉ cảnh báo tồn, chưa trừ tồn</td>
+</tr>
+<tr>
+<td>9</td>
+<td>Nha sĩ → Lễ tân</td>
+<td>Kết thúc khám, mở hóa đơn nháp, thu tiền</td>
+<td>Hóa đơn lấy dịch vụ/thuốc hợp lệ; giữ chứng từ và lịch sử</td>
+</tr>
+<tr>
+<td>10</td>
+<td>Lễ tân · hóa đơn</td>
+<td>Với ca chỉ có DEMO01: thu 40.000đ, rồi 60.000đ</td>
+<td>Sau đợt 1 nợ 60.000đ; sau đợt 2 đã thu đủ 100.000đ; in biên lai</td>
+</tr>
+<tr>
+<td>11</td>
+<td>Người được giao quyền</td>
+<td>Nếu có thuốc, xác nhận giao sau thanh toán đủ</td>
+<td>Thiếu tồn bị chặn; đủ tồn thì bàn giao/trừ tồn/audit cùng giao dịch</td>
+</tr>
+<tr>
+<td>12</td>
+<td>Phụ tá/Admin</td>
+<td>Xác nhận tiêu hao 2 cái ở Visit đã điều trị</td>
+<td>Tồn DEMO01 từ 10 còn 8; có người xác nhận</td>
+</tr>
+<tr>
+<td>13</td>
+<td>Admin · <code>/admin/reports/revenue</code></td>
+<td>Chọn kỳ chứa giao dịch vừa thu, đối chiếu audit</td>
+<td>Thực thu đúng các đợt; công nợ hiện tại hiển thị riêng kỳ lọc</td>
+</tr>
+</tbody>
+</table>
+<p>Kịch bản 100.000đ chỉ áp dụng khi hóa đơn có đúng một dịch vụ DEMO01, không thuốc, không chiết khấu. Nếu có thuốc hoặc giảm giá, dùng số tiền hiển thị trên hóa đơn; không áp con số minh họa cố định.</p>
+<h2 id="kiem-tra-tai-khoan-ca-nhan">6. Kiểm tra tài khoản cá nhân</h2>
+<p>Đăng nhập Patient Một và Patient Hai lần lượt qua hai phiên riêng. Kiểm tra tên/mã hồ sơ khác nhau dù cùng SĐT. Mở liên kết hồ sơ của tài khoản kia phải bị từ chối/404, không hiện bệnh án. Gửi lịch cho mình không có ô chọn người khác. Đổi số liên hệ chỉ hiển thị một hồ sơ để xác nhận. Khôi phục Patient cần CCCD + SĐT khớp chính tài khoản đó; gửi SMS khôi phục thật cần cấu hình nhà cung cấp, không thuộc mô phỏng OTP kích hoạt này.</p>
+<h2 id="nang-cap-database-cu">7. Nâng cấp database cũ</h2>
+<p>Bộ demo dùng database riêng. Chưa chạy chuyển đổi trên database phòng khám. Migration lịch sử giữ nguyên; hai migration mới đổi tên cờ chuyển đổi và đặt unique index <code>Patients.UserId</code>. <code>Patients.Phone</code> không unique; tài khoản Patient đăng nhập CCCD được dùng chung SĐT.</p>
+<p>Trước unique index, startup chuyển toàn bộ liên kết cũ trong một transaction theo Q-363b: mỗi hồ sơ có CCCD hash hợp lệ/duy nhất và SĐT hợp lệ nhận tài khoản riêng; tài khoản nguồn bị vô hiệu hóa/thu hồi phiên. Thiếu hoặc mơ hồ định danh ở bất kỳ hồ sơ nào thì dừng toàn bộ. Trùng SĐT giữa các hồ sơ <strong>không phải lỗi</strong>. Chuyển lại sau thành công không tạo thêm tài khoản. Giữ PatientId và toàn bộ lịch sử điều trị/tài chính. Khi áp dụng vào dữ liệu thật cần bản sao lưu và rà preflight; không lấy volume demo thay database hiện hữu.</p>
+<h2 id="ho-so-ban-giao">8. Hồ sơ bàn giao</h2>
+<ul>
+<li><code>index.html</code>: bản HTML đọc ngoại tuyến, có mục lục và checklist chuẩn bị.</li>
+<li><code>UAT.md</code>: phiếu ghi kết quả/ảnh bằng chứng và quyết định nghiệm thu.</li>
+<li><code>FUNCTIONS.csv</code>: 52 chức năng chính thức để Gia đánh dấu từng mục, chưa gán PASS.</li>
+<li><code>BUILD_REPORT.md</code>: phạm vi đã kiểm tra thực tế và giới hạn.</li>
+<li><code>Prepare.ps1</code>, <code>Start.ps1</code>, <code>Stop.ps1</code>, <code>compose.yml</code>: chạy bộ demo độc lập.</li>
+</ul>
+<p>Lỗi thường gặp: Docker chưa mở → mở Docker Desktop; cổng bận → dừng phiên cũ đúng cách; API lỗi migration → xem log và giữ nguyên database, không tự xóa volume; tài khoản mẫu đã đổi mật khẩu → dùng mật khẩu đã đổi; thiếu thuốc/tồn → chuẩn bị danh mục và phiếu nhập; lịch đã quá giờ → đặt lịch còn hiệu lực. Ghi lỗi vào UAT, không đánh PASS khi chưa quan sát được luồng.</p>
+<hr><section><h1>Cập nhật kiểm chứng — 24/10/2026</h1><ul>
+<li>Seed V4 chạy khi Seed:Phase1=true; Start.ps1 bật cờ này cho DB demo. Sáu Patient giả, lịch/Visit/queue, tiền sử/dị ứng, sinh hiệu và FDI răng 16.</li>
+<li>V5–V6: tự nạp lịch/hàng chờ, tìm kiếm và phân trang; Notes tùy chọn 0–500 ký tự, lỗi theo trường.</li>
+<li>Node riêng V5/V6: 19/19; frontend build 445 modules; backend Infrastructure build 0 lỗi/3 cảnh báo; harness build 0 lỗi/4 cảnh báo.</li>
+<li>Toàn Node suite: 1128 ca, 1099 đạt, 29 lỗi; Q-368 đang chờ Gia. Docker Desktop API từ chối quyền, nên PostgreSQL/browser/UAT chưa chạy; không có DB được seed trong lượt này.</li>
+<li>Mã V4–V6: commit 15f6c2b; không push/merge. Phase 2 chưa mở.</li>
+</ul></section><hr><h1 id="bao-cao-chuan-bi-phase-1-23102026">Báo cáo chuẩn bị Phase 1 — cập nhật 24/10/2026</h1>
+<h2 id="pham-vi-ban-giao">Phạm vi bàn giao</h2>
+<ul>
+<li>Gỡ API/service/repository/policy và UI liên kết nhiều hồ sơ; bỏ bộ chọn hồ sơ ở đặt lịch/lịch hẹn; đổi SĐT chỉ xác nhận một hồ sơ.</li>
+<li><code>GET /api/patients/me</code> và <code>/my-record</code> đưa Patient tới đúng hồ sơ của mình; backend kiểm quyền sở hữu như trước.</li>
+<li>Mô hình User–Patient một-một, unique <code>Patients.UserId</code>; SĐT Patient vẫn không unique. Giữ các migration cũ. Bổ sung <code>RenameLegacyAccountConversionMarker</code> và <code>EnforceIndividualPatientOwnership</code>.</li>
+<li>Chuyển đổi legacy chạy giữa hai migration; đọc detached để EF không tự thay liên kết cũ trước preflight. Toàn bộ thay đổi tài khoản/dữ liệu/audit trong transaction serializable. Chưa thực thi trên database phòng khám thật.</li>
+<li>Sửa snapshot cũ đặt nhầm hai cờ tài khoản vào DentalChair. Snapshot hiện khớp model.</li>
+<li>Tích hợp phần bỏ cấp cứu đã chốt DL337 từ commit <code>0f1551cf</code> vào bản demo; giữ schema lịch sử.</li>
+<li>Seed Development: sáu Patient cá nhân giả dùng chung SĐT, lịch bốn trạng thái, Visit/queue, tiền sử/dị ứng, sinh hiệu, FDI răng 16; thêm ghế/dịch vụ/vật tư demo. Có script chuẩn bị/chạy/dừng và hướng dẫn UAT đủ 52 mã.</li>
+</ul>
+<h2 id="bang-chung-thuc-hien">Bằng chứng thực hiện</h2>
+<table>
+<thead>
+<tr>
+<th>Kết quả</th>
+<th>Lệnh / thao tác</th>
+<th>Bằng chứng / giới hạn</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Đạt</td>
+<td><code>dotnet restore backend/DentalClinic.sln --disable-parallel</code></td>
+<td>Khôi phục package đã khai báo; không thêm package</td>
+</tr>
+<tr>
+<td>Đạt</td>
+<td><code>dotnet build backend/DentalClinic.sln --no-restore -m:1 /p:UseSharedCompilation=false</code></td>
+<td>0 lỗi; gồm biên dịch project kiểm thử, chưa chạy test</td>
+</tr>
+<tr>
+<td>Đạt</td>
+<td>Build <code>backend/tests/CashPayment.Postgres/CashPayment.Postgres.csproj</code></td>
+<td>0 lỗi sau đồng bộ chữ ký API chuyển khoản; chưa chạy smoke</td>
+</tr>
+<tr>
+<td>Đạt</td>
+<td><code>npm ci --ignore-scripts --no-audit --no-fund</code> và <code>npm run build</code></td>
+<td>TypeScript/Vue build đạt, 444 modules</td>
+</tr>
+<tr>
+<td>Đạt</td>
+<td><code>dotnet ef migrations has-pending-model-changes</code></td>
+<td>EF báo model không có thay đổi chưa được migration ghi nhận</td>
+</tr>
+<tr>
+<td>Đạt</td>
+<td><code>Start.ps1</code> trên database demo mới</td>
+<td>PostgreSQL riêng healthy; migration/seed hoàn tất; catalog API và website phản hồi HTTP 200</td>
+</tr>
+<tr>
+<td>Đạt</td>
+<td><code>Stop.ps1</code> rồi <code>Start.ps1</code></td>
+<td>Đúng tiến trình/container demo dừng và chạy lại; không xóa volume</td>
+</tr>
+<tr>
+<td>Đạt</td>
+<td>Rà mã nguồn ứng dụng</td>
+<td>Không còn chức năng/nhãn nhiều hồ sơ; <code>font-family</code> chỉ là CSS, migration cũ giữ phục vụ nâng cấp</td>
+</tr>
+<tr>
+<td>Đạt</td>
+<td>Danh sách nghiệm thu</td>
+<td>FUNCTIONS.csv gồm đúng 52 mã chính thức; tất cả để Chưa chạy</td>
+</tr>
+<tr>
+<td>Chưa chạy</td>
+<td>xUnit, Node Test Runner, PostgreSQL smoke</td>
+<td>Lượt này chuẩn bị/build bộ demo; không công bố số test PASS hoặc dùng số cũ làm kết quả mới</td>
+</tr>
+<tr>
+<td>Chưa chạy</td>
+<td>Nghiệm thu trình duyệt xuyên suốt/di động</td>
+<td>Gia ghi kết quả trong UAT.md; chưa có bằng chứng UAT 320–390px</td>
+</tr>
+<tr>
+<td>Chưa chạy</td>
+<td>Bulk conversion trên dữ liệu phòng khám</td>
+<td>Chỉ startup DB demo trống và chạy lại đã thực hiện; đường nâng cấp có dữ liệu legacy cần kiểm chứng riêng trước áp dụng thật</td>
+</tr>
+</tbody>
+</table>
+<h2 id="canh-bao-build-va-pham-vi-kiem-thu">Cảnh báo build và phạm vi kiểm thử</h2>
+<p>NuGet hiện cảnh báo NU1902/NU1903 cho dependency có sẵn <code>System.Security.Cryptography.Pkcs</code> 9.0.0. Không tự nâng package ngoài phạm vi đã duyệt. Có cảnh báo tham số <code>passwords</code> chưa dùng trong BookingApprovalRepository. Các cảnh báo này không làm build thất bại nhưng cần xử lý trước khi sử dụng thật.</p>
+<p>Các fixture kiểm thử của chức năng đã bỏ được gỡ: PatientAccountLink (unit/HTTP/Node), FamilyBooking (HTTP/Node), hai trang browser fixture cũ; smoke BookingRequest/BookingApproval/PatientPhoneChange cũ dựa trên OTP đặt lịch hoặc nhiều hồ sơ cũng được gỡ khỏi runner và các cờ gọi tương ứng. Đã cập nhật unit/model/controller, frontend đổi SĐT/lịch hẹn và fixture sở hữu cá nhân còn dùng. <strong>Không coi việc gỡ fixture là kiểm thử đạt</strong>; cần bổ sung/kiểm chứng lại HTTP cho hợp đồng mới khi Gia yêu cầu lượt kiểm thử.</p>
+<p>Không hợp nhất toàn bộ <code>main</code> ở commit <code>14c8a13</code>: commit đó thay chuỗi migration bằng baseline và đặt Patient.Phone unique, không phù hợp dữ liệu nâng cấp và yêu cầu dùng chung SĐT. Bộ demo được giữ trên nhánh riêng, không merge/push.</p>
+<h2 id="trang-thai">Trạng thái</h2>
+<p><strong>Đã chuẩn bị mã nguồn và bộ file demo; đã build và khởi động môi trường riêng. Chờ Gia UAT Phase 1.</strong> Các file quyết định/lịch sử cũ được giữ để truy vết, không dùng làm hướng dẫn vận hành hiện hành. Phase 2 chưa được mở.</p>
+<hr><h1 id="phieu-nghiem-thu-phase-1">Phiếu nghiệm thu Phase 1</h1>
+<p>Ngày/giờ: __________ · Người nghiệm thu: Gia __________ · Commit: __________</p>
+<p>Máy/trình duyệt: __________ · Database demo: <code>dental_phase1_demo</code> · Phiên bản file: 23/10/2026.</p>
+<p>Điền <strong>Đạt / Không đạt / Chưa chạy / Không áp dụng</strong>, kèm bằng chứng. Không dùng thông tin bệnh nhân thật trong ảnh.</p>
+<table>
+<thead>
+<tr>
+<th>Mục</th>
+<th>Kỳ vọng</th>
+<th>Kết quả</th>
+<th>Ảnh / ghi chú lỗi</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Trang công khai</td>
+<td>Mở trang chủ khi đăng xuất, đặt lịch không OTP</td>
+<td>Chưa chạy</td>
+<td></td>
+</tr>
+<tr>
+<td>Tiếp nhận</td>
+<td>Duyệt lịch, CCCD/SĐT tại quầy, check-in sinh Visit/số</td>
+<td>Chưa chạy</td>
+<td></td>
+</tr>
+<tr>
+<td>Tài khoản mới</td>
+<td>CCCD đăng nhập; OTP và bắt đổi mật khẩu</td>
+<td>Chưa chạy</td>
+<td></td>
+</tr>
+<tr>
+<td>Cùng SĐT</td>
+<td>Hai tài khoản riêng, không thấy dữ liệu của nhau</td>
+<td>Chưa chạy</td>
+<td></td>
+</tr>
+<tr>
+<td>Quyền truy cập</td>
+<td>Patient không xem hàng đợi/audit/hồ sơ khác</td>
+<td>Chưa chạy</td>
+<td></td>
+</tr>
+<tr>
+<td>Điều phối</td>
+<td>Gọi số, bắt đầu/kết thúc khám và trạng thái ghế đúng</td>
+<td>Chưa chạy</td>
+<td></td>
+</tr>
+<tr>
+<td>An toàn</td>
+<td>Cảnh báo tiền sử/dị ứng/huyết áp có hiển thị cho nhân viên</td>
+<td>Chưa chạy</td>
+<td></td>
+</tr>
+<tr>
+<td>FDI</td>
+<td>Bộ 32/20 răng; chọn mặt; lưu và xem lịch sử</td>
+<td>Chưa chạy</td>
+<td></td>
+</tr>
+<tr>
+<td>Ảnh</td>
+<td>Tải ảnh vào ca hợp lệ, mở/thu phóng theo quyền</td>
+<td>Chưa chạy</td>
+<td></td>
+</tr>
+<tr>
+<td>Kê đơn</td>
+<td>Lưu đơn, in A5/QR, quyền xem đúng; thuốc tồn thiếu bị chặn giao</td>
+<td>Chưa chạy</td>
+<td></td>
+</tr>
+<tr>
+<td>Thu nhiều đợt</td>
+<td>40.000 + 60.000 cho dịch vụ 100.000; hết nợ</td>
+<td>Chưa chạy</td>
+<td></td>
+</tr>
+<tr>
+<td>Chuyển khoản</td>
+<td>Xác nhận thủ công có đối soát/tham chiếu; không thu trùng</td>
+<td>Chưa chạy</td>
+<td></td>
+</tr>
+<tr>
+<td>Giảm giá</td>
+<td>Phần trăm chỉ giảm dịch vụ, làm tròn nguyên đồng</td>
+<td>Chưa chạy</td>
+<td></td>
+</tr>
+<tr>
+<td>Kho</td>
+<td>Nhập 10, xác nhận tiêu hao 2 còn 8; có audit</td>
+<td>Chưa chạy</td>
+<td></td>
+</tr>
+<tr>
+<td>Báo cáo</td>
+<td>Đúng thực thu theo kỳ và công nợ hiện tại</td>
+<td>Chưa chạy</td>
+<td></td>
+</tr>
+<tr>
+<td>Di động</td>
+<td>Rộng 320–390px không tràn ngang, thao tác được</td>
+<td>Chưa chạy</td>
+<td></td>
+</tr>
+<tr>
+<td>Chạy lại</td>
+<td>Stop → Start giữ dữ liệu và mật khẩu đã đổi</td>
+<td>Chưa chạy</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h2 id="loi-can-xu-ly">Lỗi cần xử lý</h2>
+<table>
+<thead>
+<tr>
+<th>Mã</th>
+<th>Vai trò / bước</th>
+<th>Mong đợi</th>
+<th>Thực tế</th>
+<th>Cách tái hiện</th>
+<th>Mức độ</th>
+<th>Bằng chứng</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h2 id="ket-luan-cua-gia">Kết luận của Gia</h2>
+<ul class="contains-task-list">
+<li class="task-list-item"><input disabled="disabled" type="checkbox" /> Phase 1 demo đạt; ghi rõ phạm vi được nghiệm thu: __________</li>
+<li class="task-list-item"><input disabled="disabled" type="checkbox" /> Cần sửa và demo lại; danh sách lỗi: __________</li>
+<li class="task-list-item"><input disabled="disabled" type="checkbox" /> Chưa nghiệm thu.</li>
+</ul>
+<p>Chưa có lựa chọn/xác nhận của Gia thì trạng thái vẫn <strong>Chờ UAT</strong>, không tự mở Phase 2.</p>
+</main></body></html>

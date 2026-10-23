@@ -6,6 +6,7 @@ public interface IUserRepository
 {
     Task<IReadOnlyList<User>> GetActiveDentistsAsync(CancellationToken ct = default);
     Task<User?> FindByPhoneAsync(string phone, CancellationToken ct = default);
+    Task<User?> FindByCitizenIdHashAsync(string citizenIdHash, CancellationToken ct = default);
     Task<User?> FindByIdAsync(int userId, CancellationToken ct = default);
     Task<Role?> FindRoleByCodeAsync(string roleCode, CancellationToken ct = default);
     Task<bool> PhoneExistsAsync(string phone, int? exceptUserId = null, CancellationToken ct = default);

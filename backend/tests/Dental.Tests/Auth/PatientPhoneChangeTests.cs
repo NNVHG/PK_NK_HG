@@ -51,11 +51,11 @@ public sealed class PatientPhoneChangeTests
         var results=await Task.WhenAll(Enumerable.Range(0,20).Select(_=>Task.Run(()=>p.Consume(4,new(d.Pending.ChallengeId,d.Code,Stamp,true)))));
         Assert.Single(results,x=>x is not null);
     }
-    [Fact] public void StaffProofCannotBeUsedForFamilyChange()
+    [Fact] public void StaffProofCannotBeUsedForPatientChange()
     {
-        var c=new Clock();using var family=new PatientPhoneChangeProofs(c);using var staff=new StaffPhoneChangeProofs(c);
+        var c=new Clock();using var patient=new PatientPhoneChangeProofs(c);using var staff=new StaffPhoneChangeProofs(c);
         var d=staff.Issue(new(7,4,"0967000001","actor","user")).Value!;
-        Assert.Null(family.Consume(4,new(d.Pending.ChallengeId,d.Code,Stamp,true)));
+        Assert.Null(patient.Consume(4,new(d.Pending.ChallengeId,d.Code,Stamp,true)));
     }
     private static (PatientPhoneChangeService Service,IPatientPhoneChangeRepository Repo,IPatientPhoneChangeSms Sms,PatientPhoneChangeProofs Proofs) Setup()
     {
@@ -103,9 +103,9 @@ public sealed class PatientPhoneChangeTests
     }
     [Fact] public async Task SuccessOnlyCallsAtomicRepositoryOnce()
     {
-        var f=Setup();using var p=f.Proofs;var d=p.Issue(Target()).Value!;f.Repo.CompleteAsync(Target(),null,default).Returns(Result<PatientPhoneCompleted>.Success(new(true,2)));
+        var f=Setup();using var p=f.Proofs;var d=p.Issue(Target()).Value!;f.Repo.CompleteAsync(Target(),null,default).Returns(Result<PatientPhoneCompleted>.Success(new(true,true)));
         var request=new PatientPhoneConfirmation(d.Pending.ChallengeId,d.Code,Stamp,true);
-        Assert.Equal(2,(await f.Service.ConfirmAsync(4,request,null,default)).Value!.UpdatedProfiles);
+        Assert.True((await f.Service.ConfirmAsync(4,request,null,default)).Value!.PatientContactUpdated);
         Assert.True((await f.Service.ConfirmAsync(4,request,null,default)).IsFailure);await f.Repo.Received(1).CompleteAsync(Target(),null,default);
     }
 }

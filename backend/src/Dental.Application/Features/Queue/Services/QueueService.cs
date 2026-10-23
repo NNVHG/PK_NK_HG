@@ -2,6 +2,7 @@ using System.Text.Json;
 using Dental.Application.Common;
 using Dental.Application.Features.Queue.DTOs;
 using Dental.Application.Interfaces;
+using Dental.Application.Features.MOD_PAT;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
 using Dental.Domain.Enums;
@@ -21,6 +22,7 @@ public sealed class QueueService
     private readonly VietnamClock _vietnamClock;
     private readonly IInvoiceDraftGenerator _invoiceDraft;
     private readonly IVisitChairCoordinator _visitChairs;
+    private readonly IPasswordHasher? _passwordHasher;
 
     public QueueService(
         IQueueRepository queueRepository,
@@ -32,7 +34,7 @@ public sealed class QueueService
         IUnitOfWork unitOfWork,
         IAuditLogger auditLogger,
         VietnamClock vietnamClock,
-        IInvoiceDraftGenerator invoiceDraft, IVisitChairCoordinator visitChairs)
+        IInvoiceDraftGenerator invoiceDraft, IVisitChairCoordinator visitChairs, IPasswordHasher? passwordHasher = null)
     {
         _queueRepository = queueRepository;
         _appointmentRepository = appointmentRepository;
@@ -44,6 +46,7 @@ public sealed class QueueService
         _auditLogger = auditLogger;
         _vietnamClock = vietnamClock;
         _invoiceDraft = invoiceDraft; _visitChairs = visitChairs;
+        _passwordHasher = passwordHasher;
     }
 
     public async Task<Result<OutstandingDebtResponse>> GetOutstandingDebtAsync(int patientId, CancellationToken ct = default)
@@ -98,7 +101,6 @@ public sealed class QueueService
 
         // Xử lý lịch hẹn và tính độ ưu tiên (DL-046 & DL-054)
         var isPriority = false;
-        var isEmergency = false;
         Appointment? appointment = null;
         if (request.AppointmentId.HasValue)
         {
@@ -112,11 +114,10 @@ public sealed class QueueService
             if (appointment.Status != AppointmentStatuses.Scheduled)
                 return Result<QueueEntryResponse>.Failure(Error.AppointmentCannotCheckIn);
 
-            isEmergency = appointment.IsEmergency;
             var scheduledDateTime = appointment.AppointmentDate.ToDateTime(appointment.SlotTime);
             var nowVietnam = _vietnamClock.Now;
-            isPriority = isEmergency || (nowVietnam >= scheduledDateTime.AddMinutes(-30) &&
-                                         nowVietnam <= scheduledDateTime.AddMinutes(15));
+            isPriority = nowVietnam >= scheduledDateTime.AddMinutes(-30) &&
+                         nowVietnam <= scheduledDateTime.AddMinutes(15);
 
         }
 
@@ -125,6 +126,40 @@ public sealed class QueueService
             var dentist = await _userRepository.FindByIdAsync(request.DentistId.Value, ct);
             if (dentist is null || !dentist.IsActive || dentist.Role?.RoleCode != RoleCodes.Dentist)
                 return Result<QueueEntryResponse>.Failure(Error.Validation.Code, "Nha sĩ được chọn không hợp lệ hoặc không hoạt động.");
+        }
+
+        // Existing internal callers are validated at the API boundary; keep the service usable
+        // by legacy queue maintenance flows that do not supply identity input.
+        var citizenIdChanged = false;
+          string? verifiedCitizenId = null;
+        if (!string.IsNullOrWhiteSpace(request.CitizenId) || !string.IsNullOrWhiteSpace(request.Phone))
+        {
+            // Q-358..361 / DL-340..344: staff verifies the patient's identity at the counter.
+            // Keep raw CCCD and phone only in this request; persist the existing SHA-256/masked form.
+            if (string.IsNullOrWhiteSpace(request.CitizenId) || request.CitizenId.Length != 12 || request.CitizenId.Any(c => c is < '0' or > '9') ||
+                string.IsNullOrWhiteSpace(request.Phone) || request.Phone.Length != 10 || request.Phone.Any(c => c is < '0' or > '9') ||
+                !string.Equals(patient.Phone, request.Phone.Trim(), StringComparison.Ordinal))
+                return Result<QueueEntryResponse>.Failure(Error.Validation.Code,
+                    "CCCD hoặc số điện thoại không khớp hồ sơ. Hãy đối soát thông tin trước khi check-in.");
+
+            var citizenId = request.CitizenId.Trim();
+              verifiedCitizenId = citizenId;
+            var citizenIdHash = CitizenIdIdentity.Hash(citizenId);
+            if (patient.CitizenIdHash is not null && !CitizenIdIdentity.Matches(patient.CitizenIdHash, citizenId))
+                return Result<QueueEntryResponse>.Failure(Error.Validation.Code,
+                    "CCCD không khớp hồ sơ. Hãy đối soát thông tin trước khi check-in.");
+            if (patient.CitizenIdHash is null)
+            {
+                var duplicate = await _patientRepository.FindByCitizenIdHashAsync(citizenIdHash, patient.PatientId, ct);
+                if (duplicate is not null)
+                    return Result<QueueEntryResponse>.Failure(Error.Validation.Code,
+                        "CCCD đã liên kết với hồ sơ khác. Hãy đối soát thông tin trước khi check-in.");
+                patient.CitizenIdHash = citizenIdHash;
+                patient.CitizenIdMasked = CitizenIdIdentity.Mask(citizenId);
+                patient.CitizenIdVersion++;
+                patient.UpdatedAt = _vietnamClock.UtcNow;
+                citizenIdChanged = true;
+            }
         }
 
         foreach (var entry in expired)
@@ -141,15 +176,62 @@ public sealed class QueueService
             appointment.Status = AppointmentStatuses.CheckedIn;
             appointment.UpdatedAt = _vietnamClock.UtcNow;
         }
-        return await CreateCheckInAsync(actorUserId, request, today, isPriority, isEmergency, ipAddress, ct);
+        if (citizenIdChanged)
+            await _auditLogger.LogRequiredAsync(AuditActions.PatientUpdated, "Patient", patient.PatientId, actorUserId,
+                JsonSerializer.Serialize(new { changedFields = new[] { nameof(patient.CitizenIdHash), nameof(patient.CitizenIdMasked) }, source = "CheckInIdentityVerification" }),
+                ipAddress, ct);
+          if (verifiedCitizenId is not null)
+          {
+              var accountResult = await EnsurePatientAccountAsync(patient, actorUserId, ipAddress, ct);
+              if (accountResult.IsFailure) return Result<QueueEntryResponse>.Failure(accountResult.Error);
+          }
+        return await CreateCheckInAsync(actorUserId, request, today, isPriority, ipAddress, ct);
     }
+
+      private async Task<Result<bool>> EnsurePatientAccountAsync(Dental.Domain.Entities.Patient patient, int actorUserId, string? ipAddress, CancellationToken ct)
+      {
+          if (patient.UserId.HasValue)
+          {
+              var owner = await _userRepository.FindByIdAsync(patient.UserId.Value, ct);
+              if (owner is null || !owner.IsActive) return Result<bool>.Failure(Error.Conflict);
+              return Result<bool>.Success(true); // An individually owned legacy account remains attached to this Patient.
+          }
+
+          var patientRole = await _userRepository.FindRoleByCodeAsync(RoleCodes.Patient, ct);
+          if (patientRole is null || _passwordHasher is null) return Result<bool>.Failure(Error.Conflict);
+          var now = _vietnamClock.UtcNow;
+          var account = new User
+          {
+              Phone = patient.Phone,
+              PasswordHash = _passwordHasher.Hash(patient.Phone),
+              LoginByCitizenId = true,
+              RequiresPhoneActivation = true,
+              FullName = patient.FullName,
+              Email = patient.Email,
+              DateOfBirth = patient.DateOfBirth,
+              Gender = patient.Gender,
+              RoleId = patientRole.RoleId,
+              IsActive = true,
+              CreatedAt = now,
+              UpdatedAt = now
+          };
+          await _userRepository.AddAsync(account, ct);
+          await _unitOfWork.SaveChangesAsync(ct);
+          patient.UserId = account.UserId;
+          patient.UpdatedAt = now;
+          await _unitOfWork.SaveChangesAsync(ct);
+
+          await _auditLogger.LogRequiredAsync("MOD_AUTH_PATIENT_ACCOUNT_CREATED", "User", account.UserId, actorUserId,
+              JsonSerializer.Serialize(new { patientId = patient.PatientId, activationRequired = true, loginIdentifier = "CitizenId" }),
+              ipAddress, ct);
+          return Result<bool>.Success(true);
+      }
 
     private async Task<Result<QueueEntryResponse>> CreateCheckInAsync(
         int actorUserId,
         CheckInRequest request,
         DateOnly today,
         bool isPriority,
-        bool isEmergency,
         string? ipAddress,
         CancellationToken ct)
     {
@@ -182,8 +264,7 @@ public sealed class QueueService
             ToStatus = QueueStatus.Waiting,
             ChangedByUserId = actorUserId,
             ChangedAt = _vietnamClock.UtcNow,
-            Reason = isEmergency ? "Tiếp đón check-in (Lịch cấp cứu)"
-                : isPriority ? "Tiếp đón check-in (Ưu tiên đúng giờ)" : "Tiếp đón check-in"
+            Reason = isPriority ? "Tiếp đón check-in (Ưu tiên đúng giờ)" : "Tiếp đón check-in"
         };
 
         await _queueRepository.AddStatusHistoryAsync(history, ct);

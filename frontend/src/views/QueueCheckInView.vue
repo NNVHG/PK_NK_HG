@@ -1,21 +1,57 @@
 <template>
-  <main class="page">
+  <main v-if="canCheckIn" class="page">
     <header>
       <h1>Tiếp đón và check-in</h1>
-      <p>Tìm hồ sơ bệnh nhân, xác nhận khách đã đến và cấp số thứ tự. Lượt chưa khám được đóng sau 23:30 giờ Việt Nam; khi quay lại sẽ nhận lượt mới.</p>
+      <p>Tìm hồ sơ, đối chiếu CCCD và số điện thoại tại quầy, sau đó xác nhận khách đã đến. Lượt chưa khám được đóng sau 23:30 giờ Việt Nam; khi quay lại sẽ nhận lượt mới.</p>
     </header>
 
+    <section class="card" aria-labelledby="today-title">
+      <h2 id="today-title">Tiếp đón hôm nay · {{ todayLocal() }}</h2>
+      <button class="secondary" :disabled="deskLoading || waitingLoading" @click="refreshToday">Tải lại danh sách</button>
+      <h3>Lịch hẹn chờ tiếp đón</h3>
+      <p v-if="deskLoading" role="status">Đang tải lịch hẹn…</p>
+      <p v-else-if="deskError" class="error" role="alert">{{ deskError }} <button class="secondary" @click="loadDesk(deskPage)">Thử lại</button></p>
+      <template v-else>
+        <p v-if="!deskRows.length">Chưa có lịch hẹn chờ tiếp đón hôm nay.</p>
+        <div class="results">
+          <button v-for="row in deskRows" :key="row.appointmentId" type="button" class="patient-option" :disabled="checkingIn || selecting" @click="selectFromDesk(row)">
+            <span><strong>{{ row.slotTime.slice(0, 5) }} · {{ row.patientName }}</strong><small>{{ row.patientCode }} · Chờ tiếp đón</small></span>
+            <span>Chọn</span>
+          </button>
+        </div>
+      </template>
+      <nav class="pagination" aria-label="Phân trang lịch hẹn">
+        <button class="secondary" :disabled="deskLoading || deskPage <= 1" @click="loadDesk(deskPage - 1)">Trước</button>
+        <span>Trang {{ deskPage }} · {{ deskTotal }} lịch</span>
+        <button class="secondary" :disabled="deskLoading || !deskNext" @click="loadDesk(deskPage + 1)">Sau</button>
+      </nav>
+      <h3>Bệnh nhân đã tiếp đón, đang chờ</h3>
+      <p v-if="waitingLoading" role="status">Đang tải hàng chờ…</p>
+      <p v-else-if="waitingError" class="error" role="alert">{{ waitingError }} <button class="secondary" @click="loadWaiting(waitingPage)">Thử lại</button></p>
+      <template v-else>
+        <p v-if="!waitingRows.length">Chưa có bệnh nhân đang chờ.</p>
+        <ol class="waiting-list"><li v-for="row in waitingRows" :key="row.queueEntryId"><strong>A-{{ String(row.queueNumber).padStart(3, '0') }} · {{ row.patientName }}</strong><span>{{ row.patientCode }} · {{ row.statusText }}</span></li></ol>
+      </template>
+      <nav class="pagination" aria-label="Phân trang hàng chờ">
+        <button class="secondary" :disabled="waitingLoading || waitingPage <= 1" @click="loadWaiting(waitingPage - 1)">Trước</button>
+        <span>Trang {{ waitingPage }} · {{ waitingTotal }} lượt</span>
+        <button class="secondary" :disabled="waitingLoading || !waitingNext" @click="loadWaiting(waitingPage + 1)">Sau</button>
+      </nav>
+      <RouterLink to="/queue/today">Mở hàng đợi để gọi số</RouterLink>
+    </section>
+
     <section class="card">
-      <form class="search" @submit.prevent="searchPatients">
-        <label for="patient-search">Tìm bệnh nhân theo tên, số điện thoại hoặc mã hồ sơ</label>
+      <form class="search" @submit.prevent="searchPatients(1)">
+        <label for="patient-search">Tìm theo tên, số điện thoại, CCCD hoặc mã hồ sơ</label>
         <div class="search-row">
-          <input id="patient-search" v-model.trim="keyword" autocomplete="off" placeholder="Nhập thông tin bệnh nhân" />
-          <button type="submit" class="secondary" :disabled="searching || !keyword">
+          <input id="patient-search" v-model.trim="keyword" :disabled="checkingIn" autocomplete="off" maxlength="100" placeholder="Nhập thông tin bệnh nhân" />
+          <button type="submit" class="secondary" :disabled="searching || checkingIn || !keyword">
             {{ searching ? 'Đang tìm…' : 'Tìm hồ sơ' }}
           </button>
         </div>
       </form>
 
+      <p v-if="searching" role="status">Đang tìm hồ sơ…</p>
       <p v-if="searchError" class="message error" role="alert">{{ searchError }}</p>
       <div v-if="patients.length" class="results" aria-label="Kết quả tìm bệnh nhân">
         <button
@@ -25,17 +61,32 @@
           class="patient-option"
           :class="{ selected: selectedPatient?.patientId === patient.patientId }"
           :aria-pressed="selectedPatient?.patientId === patient.patientId"
+          :disabled="checkingIn || selecting"
           @click="selectPatient(patient)"
         >
           <span><strong>{{ patient.fullName }}</strong><small>{{ patient.patientCode }} · {{ patient.phone }}</small></span>
           <span v-if="selectedPatient?.patientId === patient.patientId">Đã chọn</span>
         </button>
       </div>
-      <p v-else-if="searched" class="hint">Không tìm thấy hồ sơ phù hợp.</p>
+      <p v-else-if="searched && !searching && !searchError" class="hint">Không tìm thấy hồ sơ phù hợp. <RouterLink to="/patients">Mở hồ sơ bệnh nhân để đối soát hoặc tạo mới</RouterLink>.</p>
+      <nav v-if="searched && !searchError" class="pagination" aria-label="Phân trang kết quả tìm">
+        <button class="secondary" :disabled="searching || searchPage <= 1" @click="searchPatients(searchPage - 1)">Trước</button>
+        <span>Trang {{ searchPage }} · {{ searchTotal }} hồ sơ</span>
+        <button class="secondary" :disabled="searching || !searchNext" @click="searchPatients(searchPage + 1)">Sau</button>
+      </nav>
+      <p v-if="selecting" role="status">Đang tải hồ sơ đã chọn…</p>
     </section>
 
     <section v-if="selectedPatient" class="card checkin-card">
       <h2>{{ selectedPatient.fullName }} <small>{{ selectedPatient.patientCode }}</small></h2>
+
+      <label for="checkin-citizen-id">CCCD của người bệnh</label>
+      <input :aria-invalid="!!fieldErrors.citizenId" aria-describedby="citizen-error" id="checkin-citizen-id" v-model="citizenId" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="Nhập CCCD 12 chữ số" />
+      <p v-if="fieldErrors.citizenId" id="citizen-error" class="error">{{ fieldErrors.citizenId }}</p>
+      <label for="checkin-phone">Số điện thoại trong hồ sơ</label>
+      <input :aria-invalid="!!fieldErrors.phone" aria-describedby="phone-error" id="checkin-phone" v-model="checkInPhone" inputmode="tel" autocomplete="tel" maxlength="10" placeholder="Nhập số điện thoại đã đăng ký" />
+      <p v-if="fieldErrors.phone" id="phone-error" class="error">{{ fieldErrors.phone }}</p>
+      <p class="hint">Thông tin chỉ dùng để đối chiếu tại quầy. Hệ thống không lưu CCCD rõ.</p>
 
       <div v-if="debtLoading" class="hint" role="status">Đang kiểm tra công nợ cũ…</div>
       <div v-else-if="debtLookupFailed" class="message debt-error" role="alert">
@@ -57,16 +108,18 @@
         <label for="appointment">Lịch hẹn hôm nay</label>
         <select id="appointment" v-model.number="appointmentId">
           <option v-for="appointment in appointments" :key="appointment.appointmentId" :value="appointment.appointmentId">
-            {{ appointment.slotTime.slice(0, 5) }} · {{ appointment.status }}{{ appointment.isEmergency ? ' · CẤP CỨU' : '' }}
+            {{ appointment.slotTime.slice(0, 5) }} · {{ appointment.status }}
           </option>
         </select>
+        <p v-for="appointment in appointments.filter(a => a.appointmentId === appointmentId && a.notes)" :key="appointment.appointmentId">Ghi chú khi đặt lịch: {{ appointment.notes }}</p>
         <p class="hint">Check-in sẽ gắn lượt chờ với lịch đã chọn. Hệ thống tự xác định ưu tiên theo giờ đến.</p>
       </template>
       <p v-else class="hint">Không có lịch hẹn chờ hôm nay. Check-in sẽ được ghi nhận là khách vãng lai.</p>
 
       <label for="notes">Ghi chú tiếp đón (không bắt buộc)</label>
-      <textarea id="notes" v-model.trim="notes" rows="2" maxlength="500" placeholder="Ghi chú ngắn nếu cần" />
+      <textarea id="notes" v-model="notes" :aria-invalid="!!fieldErrors.notes" aria-describedby="notes-error" rows="2" maxlength="500" placeholder="Ghi tình trạng bệnh nặng hoặc điều cần lưu ý" />
 
+      <p v-if="fieldErrors.notes" id="notes-error" class="error">{{ fieldErrors.notes }}</p>
       <p v-if="checkInError" class="message error" role="alert">{{ checkInError }}</p>
       <button type="button" :disabled="checkingIn || loadingAppointments || appointmentLookupFailed || debtLoading" @click="submitCheckIn">
         {{ checkingIn ? 'Đang xác nhận…' : 'Xác nhận khách đã đến' }}
@@ -78,28 +131,35 @@
       <strong class="number">{{ ticket.queueNumber }}</strong>
       <h2>{{ ticket.patientName }}</h2>
       <p>{{ ticket.queueDate }} · {{ ticket.statusText }}</p>
-      <span v-if="ticket.isEmergency" class="emergency-badge">CẤP CỨU · ƯU TIÊN</span>
-      <span v-else class="priority" :class="{ normal: !ticket.isPriority }">
+      <span class="priority" :class="{ normal: !ticket.isPriority }">
         {{ ticket.isPriority ? 'Ưu tiên theo lịch hẹn' : 'Thứ tự chờ thông thường' }}
       </span>
       <button type="button" class="secondary" @click="resetForm">Check-in bệnh nhân khác</button>
     </section>
   </main>
+  <p v-else role="alert">Bạn không có quyền tiếp đón bệnh nhân.</p>
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import axios from 'axios';
+import { useAuthStore } from '@/stores/auth';
+import { hashCitizenId, qrPatientIntakeService } from '@/services/qrPatientIntake';
+import { validateCheckIn, checkInProblem, type CheckInErrors } from '@/services/checkInForm';
 import { appointmentsService, type AppointmentResponse } from '@/services/appointments';
 import { patientsService, type PatientSummary } from '@/services/patients';
 import { queueService, type OutstandingDebtResponse, type QueueEntryResponse } from '@/services/queue';
 
+const auth = useAuthStore();
+const canCheckIn = computed(() => ['ADMIN', 'RECEPTIONIST'].includes(auth.role ?? ''));
 const keyword = ref('');
 const patients = ref<PatientSummary[]>([]);
 const selectedPatient = ref<PatientSummary | null>(null);
 const appointments = ref<AppointmentResponse[]>([]);
 const appointmentId = ref<number | null>(null);
 const notes = ref('');
+const citizenId = ref('');
+const checkInPhone = ref('');
 const searching = ref(false);
 const searched = ref(false);
 const loadingAppointments = ref(false);
@@ -107,37 +167,102 @@ const appointmentLookupFailed = ref(false);
 const checkingIn = ref(false);
 const searchError = ref('');
 const checkInError = ref('');
+const fieldErrors = ref<CheckInErrors>({});
 const ticket = ref<QueueEntryResponse | null>(null);
 const outstandingDebt = ref<OutstandingDebtResponse | null>(null);
 const debtLoading = ref(false);
 const debtLookupFailed = ref(false);
 let debtRequestSequence = 0;
 
-async function searchPatients() {
-  searching.value = true;
-  searched.value = false;
-  searchError.value = '';
-  selectedPatient.value = null;
-  appointments.value = [];
-  appointmentId.value = null;
-  ticket.value = null;
-  debtRequestSequence++;
-  outstandingDebt.value = null;
-  debtLoading.value = false;
-  debtLookupFailed.value = false;
+const searchPage = ref(1), searchTotal = ref(0), searchNext = ref(false);
+const deskRows = ref<AppointmentResponse[]>([]), deskPage = ref(1), deskTotal = ref(0), deskNext = ref(false);
+const deskLoading = ref(false), deskError = ref('');
+const waitingRows = ref<QueueEntryResponse[]>([]), waitingPage = ref(1), waitingTotal = ref(0), waitingNext = ref(false);
+const waitingLoading = ref(false), waitingError = ref(''), selecting = ref(false);
+let searchSequence = 0, deskSequence = 0, waitingSequence = 0, selectionSequence = 0, appointmentSequence = 0;
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+let disposed = false;
+
+async function loadDesk(page = 1) {
+  if (!canCheckIn.value || disposed || page < 1) return;
+  const sequence = ++deskSequence;
+  deskLoading.value = true; deskError.value = ''; deskRows.value = []; deskTotal.value = 0; deskNext.value = false; deskPage.value = page;
   try {
-    const result = await patientsService.search({ keyword: keyword.value, page: 1, pageSize: 20 });
-    patients.value = result.items;
-    searched.value = true;
-  } catch {
-    searchError.value = 'Không thể tìm hồ sơ bệnh nhân. Vui lòng thử lại.';
-  } finally {
-    searching.value = false;
-  }
+    const result = await appointmentsService.getForDesk(todayLocal(), page, 'Scheduled');
+    if (sequence !== deskSequence || disposed) return;
+    deskRows.value = result.items; deskTotal.value = result.totalCount; deskNext.value = result.hasNextPage;
+  } catch { if (sequence === deskSequence) deskError.value = 'Không tải được lịch hẹn hôm nay.'; }
+  finally { if (sequence === deskSequence) deskLoading.value = false; }
 }
+async function loadWaiting(page = 1) {
+  if (!canCheckIn.value || disposed || page < 1) return;
+  const sequence = ++waitingSequence;
+  waitingLoading.value = true; waitingError.value = ''; waitingRows.value = []; waitingTotal.value = 0; waitingNext.value = false; waitingPage.value = page;
+  try {
+    const result = await queueService.getToday(page, 1);
+    if (sequence !== waitingSequence || disposed) return;
+    waitingRows.value = result.items; waitingTotal.value = result.totalCount; waitingNext.value = result.hasNextPage;
+  } catch { if (sequence === waitingSequence) waitingError.value = 'Không tải được hàng chờ hôm nay.'; }
+  finally { if (sequence === waitingSequence) waitingLoading.value = false; }
+}
+async function refreshToday() { await Promise.all([loadDesk(), loadWaiting()]); }
+async function selectFromDesk(row: AppointmentResponse) {
+  if (!canCheckIn.value || checkingIn.value || selecting.value) return;
+  const sequence = ++selectionSequence;
+  selecting.value = true; searchError.value = '';
+  try {
+    const patient = await patientsService.getById(row.patientId);
+    if (sequence !== selectionSequence || disposed) return;
+    await selectPatient(patient);
+    if (sequence === selectionSequence && appointments.value.some(a => a.appointmentId === row.appointmentId)) appointmentId.value = row.appointmentId;
+  } catch { if (sequence === selectionSequence) searchError.value = 'Không tải được hồ sơ. Vui lòng thử lại.'; }
+  finally { if (sequence === selectionSequence) selecting.value = false; }
+}
+function clearSelection() {
+  appointmentSequence++; debtRequestSequence++; selectionSequence++;
+  selecting.value = false; selectedPatient.value = null; citizenId.value = ''; checkInPhone.value = ''; notes.value = '';
+  appointments.value = []; appointmentId.value = null; loadingAppointments.value = false; appointmentLookupFailed.value = false;
+  outstandingDebt.value = null; debtLoading.value = false; debtLookupFailed.value = false; fieldErrors.value = {}; checkInError.value = ''; ticket.value = null;
+}
+async function searchPatients(page = 1) {
+  clearTimeout(searchTimer);
+  if (!canCheckIn.value || checkingIn.value || disposed || page < 1) return;
+  const sequence = ++searchSequence, value = keyword.value.trim();
+  clearSelection(); patients.value = []; searched.value = false; searchError.value = ''; searchTotal.value = 0; searchNext.value = false; searchPage.value = page;
+  if (!value) { searching.value = false; return; }
+  searching.value = true;
+  try {
+    if (/^[0-9]{12}$/.test(value)) {
+      const hash = await hashCitizenId(value);
+      if (sequence !== searchSequence || disposed) return;
+      const lookup = await qrPatientIntakeService.lookup(hash);
+      if (sequence !== searchSequence || disposed) return;
+      const patient = lookup.existing?.isActive ? await patientsService.getById(lookup.existing.patientId) : null;
+      if (sequence !== searchSequence || disposed) return;
+      patients.value = patient ? [patient] : []; searchTotal.value = patients.value.length; searchPage.value = 1;
+    } else {
+      const result = await patientsService.search({ keyword: value, page, pageSize: 20 });
+      if (sequence !== searchSequence || disposed) return;
+      patients.value = result.items; searchTotal.value = result.totalCount; searchNext.value = result.hasNextPage;
+    }
+    searched.value = true;
+  } catch { if (sequence === searchSequence) searchError.value = 'Không thể tìm hồ sơ bệnh nhân. Vui lòng thử lại; tìm CCCD cần HTTPS hoặc localhost.'; }
+  finally { if (sequence === searchSequence) searching.value = false; }
+}
+watch(keyword, () => {
+  clearTimeout(searchTimer); searchSequence++; clearSelection(); patients.value = []; searched.value = false; searchError.value = ''; searching.value = false;
+  if (keyword.value.trim() && canCheckIn.value) searchTimer = setTimeout(() => { void searchPatients(1); }, 350);
+});
+watch(() => auth.user?.userId, () => { clearTimeout(searchTimer); searchSequence++; deskSequence++; waitingSequence++; clearSelection(); keyword.value = ''; deskRows.value = []; waitingRows.value = []; patients.value = []; });
+onMounted(refreshToday);
 
 async function selectPatient(patient: PatientSummary) {
+  if (!canCheckIn.value || checkingIn.value || disposed) return;
+  notes.value = '';
   selectedPatient.value = patient;
+  citizenId.value = '';
+  fieldErrors.value = {};
+  checkInPhone.value = '';
   await Promise.all([loadAppointments(patient), loadOutstandingDebt(patient)]);
 }
 
@@ -165,6 +290,7 @@ function formatCurrency(amount: number): string {
 }
 
 async function loadAppointments(patient: PatientSummary) {
+  const sequence = ++appointmentSequence;
   appointments.value = [];
   appointmentId.value = null;
   appointmentLookupFailed.value = false;
@@ -173,17 +299,21 @@ async function loadAppointments(patient: PatientSummary) {
   loadingAppointments.value = true;
   try {
     const result = await appointmentsService.getScheduledForPatientOnDate(patient.patientId, todayLocal());
+    if (sequence !== appointmentSequence || disposed || selectedPatient.value?.patientId !== patient.patientId) return;
     appointments.value = result.items;
     appointmentId.value = result.items[0]?.appointmentId ?? null;
   } catch {
-    appointmentLookupFailed.value = true;
+    if (sequence === appointmentSequence && !disposed) appointmentLookupFailed.value = true;
   } finally {
-    loadingAppointments.value = false;
+    if (sequence === appointmentSequence) loadingAppointments.value = false;
   }
 }
 
 async function submitCheckIn() {
-  if (!selectedPatient.value) return;
+  if (!canCheckIn.value || !selectedPatient.value || checkingIn.value || loadingAppointments.value || appointmentLookupFailed.value || debtLoading.value) return;
+  fieldErrors.value = validateCheckIn(citizenId.value, checkInPhone.value, notes.value);
+  checkInError.value = '';
+  if (Object.keys(fieldErrors.value).length) return;
   checkingIn.value = true;
   checkInError.value = '';
   try {
@@ -191,52 +321,42 @@ async function submitCheckIn() {
       patientId: selectedPatient.value.patientId,
       appointmentId: appointmentId.value,
       dentistId: null,
-      notes: notes.value || null
+      notes: notes.value.trim() || null,
+      citizenId: citizenId.value.trim(),
+      phone: checkInPhone.value.trim()
     });
-    notes.value = '';
+    notes.value = ''; citizenId.value = ''; checkInPhone.value = ''; selectedPatient.value = null;
+    await refreshToday();
   } catch (error) {
     const response = axios.isAxiosError(error) ? error.response?.data : null;
-    checkInError.value = response?.message
-      ?? response?.errors?.[0]?.message
-      ?? 'Không thể check-in. Bệnh nhân có thể đã có lượt đang mở hoặc lịch hẹn đã được tiếp đón.';
+    const problem = checkInProblem(response);
+    fieldErrors.value = problem.fields;
+    checkInError.value = problem.message;
   } finally {
     checkingIn.value = false;
   }
 }
 
 function resetForm() {
-  debtRequestSequence++;
-  keyword.value = '';
-  patients.value = [];
-  selectedPatient.value = null;
-  appointments.value = [];
-  appointmentId.value = null;
-  appointmentLookupFailed.value = false;
-  notes.value = '';
-  searched.value = false;
-  ticket.value = null;
-  outstandingDebt.value = null;
-  debtLoading.value = false;
-  debtLookupFailed.value = false;
-  searchError.value = '';
-  checkInError.value = '';
+  clearTimeout(searchTimer); searchSequence++; clearSelection(); keyword.value = ''; patients.value = []; searched.value = false; searching.value = false; searchError.value = '';
 }
-
 onBeforeUnmount(() => {
-  debtRequestSequence++;
-  outstandingDebt.value = null;
-  selectedPatient.value = null;
+  disposed = true; clearTimeout(searchTimer); searchSequence++; deskSequence++; waitingSequence++; clearSelection(); keyword.value = ''; patients.value = []; deskRows.value = []; waitingRows.value = [];
 });
 
 function todayLocal(): string {
-  const now = new Date();
-  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 10);
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' });
 }
 </script>
 
 <style scoped>
 .page { max-width: 760px; margin: 0 auto; padding: 2rem 1rem; color: #243447; }
+.pagination { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin: 1rem 0; }
+.waiting-list { padding-left: 1.25rem; }
+.waiting-list li { margin: .75rem 0; }
+.waiting-list span { display: block; color: #607080; }
+.page, .card, .patient-option > span { min-width: 0; overflow-wrap: anywhere; }
+input, select, textarea { min-width: 0; }
 header { margin-bottom: 1.25rem; }
 h1 { margin: 0 0 .4rem; font-size: 1.6rem; }
 header p, .hint { color: #607080; }
@@ -268,7 +388,6 @@ button:disabled { cursor: wait; opacity: .6; }
 .ticket h2 { margin: .75rem 0 .3rem; }
 .priority { display: inline-block; margin-bottom: 1rem; padding: .35rem .7rem; border-radius: 999px; color: #176b45; background: #d9f0e2; }
 .priority.normal { color: #5d4b0e; background: #f7efcc; }
-.emergency-badge { display: inline-block; margin-bottom: 1rem; padding: .35rem .7rem; border-radius: 999px; color: #fff; background: #b91c1c; font-weight: 800; }
 .ticket button { display: block; margin: 0 auto; }
 @media (max-width: 520px) { .search-row { flex-direction: column; } }
 </style>

@@ -2,18 +2,12 @@
   <main class="page">
     <header>
       <h1>Đặt lịch khám</h1>
-      <p>Chọn hồ sơ, ngày và khung giờ. Hệ thống kiểm tra giờ hợp lệ và chỗ trống khi xác nhận.</p>
+      <p>Đặt lịch cho tài khoản cá nhân của bạn. Hệ thống kiểm tra giờ hợp lệ và chỗ trống khi xác nhận.</p>
     </header>
 
     <form class="booking-card" @submit.prevent="submit">
-      <label for="patient">Hồ sơ bệnh nhân</label>
-      <select id="patient" v-model.number="patientId" required :disabled="submitting || loadingProfiles || profiles.length === 0">
-        <option :value="0" disabled>Chọn hồ sơ</option>
-        <option v-for="profile in profiles" :key="profile.patientId" :value="profile.patientId">
-          {{ profile.fullName }} · {{ formatDate(profile.dateOfBirth) }} · {{ profile.patientCode }}
-        </option>
-      </select>
-      <p v-if="!loadingProfiles && profiles.length === 0" class="hint">Tài khoản chưa có hồ sơ bệnh nhân hoạt động để đặt lịch.</p>
+      <p v-if="patient">Đặt lịch cho <strong>{{ patient.fullName }}</strong> · {{ patient.patientCode }}.</p>
+      <p v-else-if="!loadingProfiles" class="hint">Chưa tìm thấy hồ sơ cá nhân. Liên hệ Lễ tân để được hỗ trợ.</p>
 
       <label for="date">Ngày khám</label>
       <input id="date" v-model="appointmentDate" type="date" :min="today" :disabled="submitting" required />
@@ -35,7 +29,7 @@
         Đã đặt lịch cho {{ success.patientName }} vào {{ formatDate(success.appointmentDate) }} lúc {{ success.slotTime.slice(0, 5) }}.
       </p>
 
-      <button type="submit" :disabled="submitting || loadingProfiles || profiles.length === 0">
+      <button type="submit" :disabled="submitting || loadingProfiles || !patient">
         {{ submitting ? 'Đang đặt lịch…' : 'Xác nhận đặt lịch' }}
       </button>
     </form>
@@ -49,8 +43,7 @@ import { appointmentsService, type AppointmentResponse } from '@/services/appoin
 import { patientsService, type PatientSummary } from '@/services/patients';
 import { useBookingSchedule } from '@/composables/useBookingSchedule';
 
-const profiles = ref<PatientSummary[]>([]);
-const patientId = ref(0);
+const patient = ref<PatientSummary | null>(null);
 const appointmentDate = ref('');
 const slotTime = ref('');
 const notes = ref('');
@@ -72,8 +65,8 @@ watch(scheduleRevision, () => { slotTime.value = ''; });
 onMounted(async () => {
   const ticket = version;
   try {
-    const result = await patientsService.getMyProfiles();
-    if (ticket === version) profiles.value = result;
+    const result = await patientsService.getMyPatient();
+    if (ticket === version) patient.value = result;
   } catch {
     if (ticket === version) errorMessage.value = 'Không thể tải hồ sơ của bạn. Hãy đăng nhập lại hoặc thử sau.';
   } finally {
@@ -86,7 +79,7 @@ async function submit() {
   errorMessage.value = '';
   success.value = null;
 
-  if (!Number.isInteger(patientId.value) || !profiles.value.some(profile => profile.patientId === patientId.value) ||
+  if (!patient.value ||
       !appointmentDate.value || !slots.value.includes(slotTime.value) || notes.value.length > 500) {
     errorMessage.value = 'Vui lòng chọn hồ sơ, ngày và khung giờ khám.';
     return;
@@ -96,7 +89,7 @@ async function submit() {
   const ticket = version;
   try {
     const result = await appointmentsService.create({
-      patientId: patientId.value,
+      patientId: patient.value.patientId,
       appointmentDate: appointmentDate.value,
       slotTime: `${slotTime.value}:00`,
       notes: notes.value || null,
@@ -117,7 +110,7 @@ async function submit() {
     if (ticket === version) submitting.value = false;
   }
 }
-onUnmounted(() => { version++; profiles.value = []; patientId.value = 0; notes.value = ''; success.value = null; });
+onUnmounted(() => { version++; patient.value = null; notes.value = ''; success.value = null; });
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat('vi-VN').format(new Date(`${value}T00:00:00`));

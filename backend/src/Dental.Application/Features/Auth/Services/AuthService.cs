@@ -46,7 +46,10 @@ public sealed class AuthService
         string? ipAddress,
         CancellationToken ct = default)
     {
-        var user = await _userRepo.FindByPhoneAsync(request.Phone, ct);
+        var identifier = request.Phone ?? string.Empty;
+        var user = identifier.Length == 12
+            ? await _userRepo.FindByCitizenIdHashAsync(Dental.Application.Features.MOD_PAT.CitizenIdIdentity.Hash(identifier), ct)
+            : await _userRepo.FindByPhoneAsync(identifier, ct);
 
         // Không tìm thấy SĐT → trả lỗi chung (không tiết lộ SĐT không tồn tại)
         if (user is null)
@@ -151,7 +154,7 @@ public sealed class AuthService
         if (user is null)
             return Result<MeResponse>.Failure(Error.NotFound);
 
-        // DL027/334: đổi số phải qua OTP và xác nhận phạm vi gia đình; profile PUT không được đi tắt.
+        // DL-334/335: đổi số phải qua OTP và xác nhận chính chủ; profile PUT không được đi tắt.
         if (request.Phone != user.Phone)
             return Result<MeResponse>.Failure(Error.PhoneChangeNotAllowed);
 
