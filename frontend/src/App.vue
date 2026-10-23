@@ -12,7 +12,9 @@
         <router-link v-if="['ADMIN', 'RECEPTIONIST'].includes(authStore.role ?? '')" to="/appointments/counter">Đặt lịch tại quầy</router-link>
         <router-link v-if="authStore.role === 'PATIENT'" to="/my-record">Hồ sơ của tôi</router-link>
         <router-link v-if="authStore.role === 'PATIENT'" to="/appointments/mine">Lịch hẹn của tôi</router-link>
+        <router-link v-if="authStore.role === 'PATIENT'" to="/invoices/mine">Hóa đơn của tôi</router-link>
         <router-link v-if="['ADMIN', 'RECEPTIONIST'].includes(authStore.role ?? '')" to="/appointments/desk">Lịch hẹn tại quầy</router-link>
+        <router-link v-if="['ADMIN', 'RECEPTIONIST'].includes(authStore.role ?? '')" to="/invoices">Tra cứu hóa đơn</router-link>
         <template v-if="isStaff">
           <router-link to="/queue/today">Hàng đợi hôm nay</router-link>
           <router-link to="/patients">Bệnh nhân</router-link>

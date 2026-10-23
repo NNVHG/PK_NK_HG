@@ -37,6 +37,18 @@ const router = createRouter({
       meta: { requiresAuth: true, roles: ['ADMIN'] }
     },
     {
+      path: '/invoices/mine',
+      name: 'patient-invoices',
+      component: () => import('@/views/PatientInvoicesView.vue'),
+      meta: { requiresAuth: true, roles: ['PATIENT'] }
+    },
+    {
+      path: '/invoices',
+      name: 'invoice-desk',
+      component: () => import('@/views/InvoicesView.vue'),
+      meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST'] }
+    },
+    {
       path: '/appointments/counter',
       name: 'counter-booking',
       component: () => import('@/views/CounterBookingView.vue'),

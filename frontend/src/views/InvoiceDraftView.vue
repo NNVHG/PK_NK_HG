@@ -16,7 +16,7 @@
         <label>Lý do mở khóa (bắt buộc, 10–500 ký tự)
           <textarea v-model="unlockReason" minlength="10" maxlength="500" :disabled="busy || discountBusy" />
         </label>
-        <button :disabled="busy || discountBusy || unlockReason.trim().length < 10" @click="unlock">Xác nhận mở khóa và hủy hóa đơn chưa thu</button>
+        <button :disabled="busy || discountBusy || !ready || unlockReason.trim().length < 10 || unlockReason.trim().length > 500" @click="unlock">Xác nhận mở khóa và hủy hóa đơn chưa thu</button>
       </section>
       <section v-if="isCorrection" aria-label="Đính chính hồ sơ ngoài ca khám">
         <h2>Đính chính hồ sơ</h2>
@@ -112,6 +112,7 @@ const { invoice } = storeToRefs(store);
 const visitId = computed(() => Number(route.params.visitId));
 const visit = ref<VisitDetails | null>(null);
 const busy = ref(false);
+const ready = ref(false);
 const discountBusy = ref(false);
 const cancellingDraft = ref(false);
 const cancelDraftReason = ref('');
@@ -126,7 +127,7 @@ const correctionDirty = computed(() => isCorrection.value && (correctionDiagnosi
 const canCorrect = computed(() => isCorrection.value && !visit.value?.isLocked && !correctionNeedsReview.value &&
   (auth.role === 'ADMIN' || auth.role === 'DENTIST' && visit.value?.dentistId === auth.user?.userId));
 const unlockHistory = ref<VisitUnlockHistory[]>([]);
-const canUnlock = computed(() => auth.role === 'ADMIN' && visit.value?.status === 'Completed' && visit.value.isLocked &&
+const canUnlock = computed(() => ready.value && auth.role === 'ADMIN' && visit.value?.status === 'Completed' && visit.value.isLocked &&
   (!invoice.value || invoice.value.paidAmount === 0 && [0, 1].includes(invoice.value.status)));
 const canCancelDraft = computed(() => auth.role === 'ADMIN' && invoice.value?.status === 0 && invoice.value.paidAmount === 0);
 const statuses: Record<number, string> = { 0: 'Nháp', 1: 'Chờ thanh toán', 2: 'Thanh toán một phần', 3: 'Đã thanh toán', 4: 'Đã hủy', 5: 'Đã hoàn một phần', 6: 'Đã hoàn toàn bộ' };
@@ -139,7 +140,7 @@ function message(cause: unknown) {
 }
 async function load() {
   const ticket = ++version;
-  busy.value = true; cancellingDraft.value = false; cancelDraftReason.value = ''; cancelDraftConfirmed.value = false;
+  ready.value = false; busy.value = true; cancellingDraft.value = false; cancelDraftReason.value = ''; cancelDraftConfirmed.value = false;
   error.value = ''; success.value = ''; visit.value = null; store.replace(null); confirmed.value = false; unlockReason.value = ''; unlockHistory.value = []; correctionDiagnosis.value = ''; correctionNotes.value = ''; correctionNeedsReview.value = false;
   if (!Number.isInteger(visitId.value) || visitId.value <= 0) { error.value = 'Mã lần khám không hợp lệ.'; busy.value = false; return; }
   try {
@@ -156,7 +157,8 @@ async function load() {
       const records = await invoiceDraftApi.unlockHistory(visitId.value);
       if (ticket === version) unlockHistory.value = records;
     }
-  } catch (cause) { if (ticket === version) { error.value = message(cause); visit.value = null; } }
+    if (ticket === version) ready.value = true;
+  } catch (cause) { if (ticket === version) { error.value = message(cause); ready.value = false; visit.value = null; store.replace(null); unlockHistory.value = []; } }
   finally { if (ticket === version) busy.value = false; }
 }
 async function cancelDraft() {
@@ -198,12 +200,16 @@ async function unlock() {
     await invoiceDraftApi.unlock(visitId.value, reason);
     if (ticket !== version) return;
     const refreshVersion = version + 1; await load();
-    if (refreshVersion === version && visit.value?.status === 'Correcting')
+    if (refreshVersion === version && ready.value && visit.value?.status === 'Correcting')
       success.value = oldCode ? `Đã mở đính chính và hủy hóa đơn ${oldCode}. Hóa đơn mới dùng mã mới.` : 'Đã mở đính chính hồ sơ.';
   } catch (cause) {
     if (ticket !== version) return;
-    const failureMessage = message(cause); const refreshVersion = version + 1;
-    await load(); if (refreshVersion === version) error.value = failureMessage;
+    const failureMessage = message(cause); const attemptedReason = unlockReason.value; const refreshVersion = version + 1;
+    await load();
+    if (refreshVersion === version) {
+      error.value = failureMessage;
+      if (ready.value && visit.value?.status === 'Completed') unlockReason.value = attemptedReason;
+    }
   } finally { if (ticket === version) busy.value = false; }
 }
 async function saveCorrection() {
@@ -240,7 +246,8 @@ async function complete() {
   } finally { if (ticket === version) busy.value = false; }
 }
 watch(visitId, load, { immediate: true });
-onUnmounted(() => { version++; store.replace(null); visit.value = null; correctionDiagnosis.value = ''; correctionNotes.value = ''; unlockReason.value = ''; unlockHistory.value = []; error.value = ''; success.value = ''; });
+watch(() => [auth.role, auth.user?.userId], load);
+onUnmounted(() => { version++; ready.value = false; store.replace(null); visit.value = null; correctionDiagnosis.value = ''; correctionNotes.value = ''; unlockReason.value = ''; unlockHistory.value = []; error.value = ''; success.value = ''; confirmed.value = false; });
 </script>
 
 <style scoped>

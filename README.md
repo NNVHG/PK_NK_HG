@@ -563,3 +563,9 @@ Trong tab **Ảnh hồ sơ**, bấm thumbnail để mở viewer. Có zoom50–50
 GET /api/dental-images/{id}/file luôn kiểm JWT/role/ownership, trả stream NoStore/nosniff; ảnh không nằm trong thư mục static công khai. Frontend nhận Axios Blob và thu hồi URL khi đóng/đổi hồ sơ/unmount. Phụ tá giữ quyền upload, không tự có quyền đọc theo Q-247. Không thêm package hoặc migration cho viewer.
 
 Fixture tổng hợp tại frontend/tests/browser-dental-image-viewer.html; chỉ fixture dùng API giả trong tests. Chưa có kết quả browser/Gia UAT vì IAB không kết nối được localhost; các kiểm thử state/API và build đã chạy. Chưa thêm quản lý sửa/xóa ảnh hoặc ghi chú lâm sàng nối tiếp riêng trong lát cắt xem cơ bản.
+
+## Tra cứu hóa đơn và lịch sử thanh toán (F_BIL_03, F_BIL_06, F_BIL_07)
+
+Admin/Lễ tân có thể tra cứu hóa đơn theo mã, bệnh nhân, trạng thái và khoảng ngày; lịch sử thanh toán, dòng hóa đơn và lịch sử điều chỉnh được giữ theo snapshot. Bệnh nhân dùng mục **Hóa đơn của tôi** để đọc hóa đơn, dòng dịch vụ và các khoản đã thu của đúng hồ sơ duy nhất gắn với tài khoản. API kiểm tra ownership ở backend và trả `no-store`; giao diện không cho chọn hoặc liên kết hồ sơ khác.
+
+Mở đính chính vẫn theo DL-263: Admin mở hồ sơ đã kết thúc/khóa khi hóa đơn chưa thu; hồ sơ chuyển `Correcting`, hàng đợi đã hoàn tất và dấu thời gian khám được giữ nguyên. Đính chính không chiếm ghế và không bị chặn do nha sĩ đang khám ca khác.

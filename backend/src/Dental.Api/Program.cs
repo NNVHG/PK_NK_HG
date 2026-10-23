@@ -75,6 +75,16 @@ builder.Services.AddScoped<IInvoiceDraftGenerator>(services => services.GetRequi
 builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.InvoiceVisitRequestValidator>();
 builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
 builder.Services.AddScoped<ICashPaymentRepository, CashPaymentRepository>();
+        builder.Services.AddScoped<IInvoiceLookupRepository, InvoiceLookupRepository>();
+        builder.Services.AddScoped<IInvoiceHistoryRepository, InvoiceHistoryRepository>();
+        builder.Services.AddScoped<IInvoicePortalRepository, InvoicePortalRepository>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.InvoicePortalService>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.InvoicePortalQueryValidator>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.InvoicePortalListQueryValidator>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.InvoiceHistoryService>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.InvoiceHistoryQueryValidator>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.InvoiceLookupService>();
+        builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.InvoiceLookupRequestValidator>();
 builder.Services.AddScoped<IReceiptRepository, ReceiptRepository>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.ReceiptPrintService>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.ReceiptRequestValidator>();
