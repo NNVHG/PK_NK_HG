@@ -8,6 +8,7 @@ using Dental.Infrastructure.Data;
 using Dental.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Npgsql;
 internal static class VisitReopenSafetySmoke
 {
     public static async Task RunAsync(HttpClient client, DbContextOptions<DentalDbContext> options, int actor, Action<string> authenticate, Action<bool, string> check)
@@ -75,6 +76,21 @@ internal static class VisitReopenSafetySmoke
         async Task<Dental.Application.Common.Result<VisitUnlockRecord>> Reopen(DbContextOptions<DentalDbContext> settings, int id) {
             await using var scoped = new DentalDbContext(settings); return await new VisitReopenRepository(scoped).ReopenAsync(id, actor, reason, null);
         }
+        foreach (var sqlState in new[] { "40001", "40P01", "23505" }) {
+            var wrapped = await Fixture(raceDentist.UserId);
+            var wrappedOptions = new DbContextOptionsBuilder<DentalDbContext>(options).AddInterceptors(new FailWithWrappedPostgres(sqlState)).Options;
+            await using var scoped = new DentalDbContext(wrappedOptions);
+            var result = await new VisitReopenRepository(scoped).ReopenAsync(wrapped.Visit.VisitId, actor, reason, null);
+            check(result.IsFailure && result.Error.Code == "BIL_006", "Lỗi cạnh tranh được EF bọc trả BIL_006: " + sqlState);
+            check(!scoped.ChangeTracker.Entries().Any() && await Untouched(wrapped), "Lỗi được bọc hoàn tác toàn bộ và xóa trạng thái theo dõi: " + sqlState);
+            check((await Reopen(options, wrapped.Visit.VisitId)).IsSuccess, "Yêu cầu mới mở đính chính được sau khi hoàn tác: " + sqlState);
+        }
+        var unrelated = await Fixture(raceDentist.UserId);
+        var unrelatedOptions = new DbContextOptionsBuilder<DentalDbContext>(options).AddInterceptors(new FailWithWrappedPostgres("23514")).Options;
+        var propagated = false;
+        try { await Reopen(unrelatedOptions, unrelated.Visit.VisitId); }
+        catch (InvalidOperationException error) when (error.GetBaseException() is PostgresException { SqlState: "23514" }) { propagated = true; }
+        check(propagated && await Untouched(unrelated), "Lỗi PostgreSQL khác vẫn được truyền lên và hoàn tác, không đổi thành BIL_006");
         var outcomes = await Task.WhenAll(Reopen(raceOptions, race.Visit.VisitId), Reopen(raceOptions, race.Visit.VisitId));
         check(outcomes.Count(r => r.IsSuccess) == 1 && outcomes.Count(r => r.Error.Code == "BIL_006") == 1, "Concurrent correction of the same Visit commits once and rejects the competing write");
         check(await db.Visits.AsNoTracking().AnyAsync(v => v.VisitId == race.Visit.VisitId && v.Status == VisitStatuses.Correcting && !v.IsLocked), "Concurrent correction keeps the Visit in correction mode");
@@ -99,5 +115,10 @@ internal static class VisitReopenSafetySmoke
     private sealed class FailAfterWrite : SaveChangesInterceptor {
         public override ValueTask<int> SavedChangesAsync(SaveChangesCompletedEventData data, int result, CancellationToken ct = default)
             => throw new InvalidOperationException("Synthetic reopen failure");
+    }
+    private sealed class FailWithWrappedPostgres(string sqlState) : SaveChangesInterceptor {
+        public override ValueTask<int> SavedChangesAsync(SaveChangesCompletedEventData data, int result, CancellationToken ct = default)
+            => throw new InvalidOperationException("Lỗi EF mô phỏng sau khi ghi để kiểm tra hoàn tác.",
+                new DbUpdateException("Lỗi ghi mô phỏng.", new PostgresException("Lỗi PostgreSQL mô phỏng.", "ERROR", "ERROR", sqlState)));
     }
 }

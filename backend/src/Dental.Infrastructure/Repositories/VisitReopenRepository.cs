@@ -52,8 +52,7 @@ public sealed class VisitReopenRepository(DentalDbContext db) : IVisitReopenRepo
             await transaction.CommitAsync(ct); committed = true;
             return Result<VisitUnlockRecord>.Success(record);
         }
-        catch (Exception error) when (error is PostgresException { SqlState: "40001" or "40P01" or "23505" } ||
-            error is DbUpdateException { InnerException: PostgresException { SqlState: "40001" or "40P01" or "23505" } })
+        catch (Exception error) when (error.GetBaseException() is PostgresException { SqlState: "40001" or "40P01" or "23505" })
         {
             await transaction.RollbackAsync(CancellationToken.None);
             return Fail(new Error("BIL_006", "Có thao tác đồng thời; tải lại hồ sơ trước khi thử lại."));
