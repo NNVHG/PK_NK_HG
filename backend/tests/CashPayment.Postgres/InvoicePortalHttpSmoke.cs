@@ -9,6 +9,7 @@ using Dental.Domain.Enums;
 using Dental.Infrastructure.Data;
 using Dental.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 internal static class InvoicePortalHttpSmoke
 {
     public static async Task RunAsync(HttpClient client, DbContextOptions<DentalDbContext> options, int actor,
@@ -23,7 +24,8 @@ internal static class InvoicePortalHttpSmoke
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()), IsActive = true };
         var owner = Owner("Synthetic portal account A"); var other = Owner("Synthetic portal account B");
         var archivedOwner = Owner("Synthetic archived portal account"); var emptyOwner = Owner("Synthetic portal account without profile");
-        db.Users.AddRange(owner, other, archivedOwner, emptyOwner); await db.SaveChangesAsync();
+        var filterOwner = Owner("Synthetic filter account A"); var filterOther = Owner("Synthetic filter account B");
+        db.Users.AddRange(owner, other, archivedOwner, emptyOwner, filterOwner, filterOther); await db.SaveChangesAsync();
         var sharedPhone = "03" + Random.Shared.Next(10000000, 99999999);
         Patient Profile(string name, User user, bool active = true) => new() { FullName = name, UserId = user.UserId, Phone = sharedPhone,
             DateOfBirth = new DateOnly(2000, 1, 1), IsActive = active };
@@ -34,8 +36,8 @@ internal static class InvoicePortalHttpSmoke
         Invoice Make(string code, Patient patient, InvoiceStatus status, decimal paid = 0) => new() { InvoiceCode = prefix + code,
             TotalAmount = 100000, PaidAmount = paid, Status = status, CreatedAt = now, CreatedByUserId = actor,
             Visit = new Visit { PatientId = patient.PatientId, CreatedByUserId = actor, Status = VisitStatuses.Completed, IsLocked = true } };
-        var invoice = Make("-A", a, InvoiceStatus.PartiallyPaid, 70000); var otherInvoice = Make("-B", foreign, InvoiceStatus.PendingPayment);
-        var outsider = Make("-F", foreign, InvoiceStatus.Paid, 100000); var archived = Make("-I", inactive, InvoiceStatus.PendingPayment);
+        var invoice = Make("-A", a, InvoiceStatus.PendingPayment); var otherInvoice = Make("-B", foreign, InvoiceStatus.PendingPayment);
+        var outsider = Make("-F", foreign, InvoiceStatus.PendingPayment); var archived = Make("-I", inactive, InvoiceStatus.PendingPayment);
         var cancelled = Make("-OLD", a, InvoiceStatus.Cancelled); cancelled.Visit = invoice.Visit; cancelled.CreatedAt = now.AddDays(-1);
         db.Invoices.AddRange(invoice, otherInvoice, outsider, archived, cancelled); await db.SaveChangesAsync();
         var cash = new PaymentTransaction { InvoiceId = invoice.Id, Amount = 40000, AmountTendered = 50000, ChangeAmount = 10000,
@@ -43,7 +45,6 @@ internal static class InvoicePortalHttpSmoke
         var bank = new PaymentTransaction { InvoiceId = invoice.Id, Amount = 30000, BankReceivedAmount = 30000, PaymentMethod = "BankTransfer",
             CashierId = actor, PaidAt = now.AddMinutes(-1), RequestId = Guid.NewGuid(), Source = "Simulation",
             TransactionReference = "SIM" + Guid.NewGuid().ToString("N")[..8], Note = "Synthetic private cashier review" };
-        db.PaymentTransactions.AddRange(cash, bank); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
         InvoiceItem Item(Invoice target, string code, string name, int quantity, decimal unitPrice) => new() {
             InvoiceId = target.Id, SourceVisitServiceId = int.MaxValue, Code = code, Name = name, Quantity = quantity,
             UnitPrice = unitPrice, TotalAmount = quantity * unitPrice, ToothNumber = 11, Surface = "buccal" };
@@ -53,6 +54,12 @@ internal static class InvoicePortalHttpSmoke
         var foreignItem = Item(outsider, "SNAP-FOREIGN", "Synthetic other account snapshot", 1, 100000);
         var inactiveItem = Item(archived, "SNAP-ARCHIVED", "Synthetic archived snapshot", 1, 100000);
         db.InvoiceItems.AddRange(firstItem, secondItem, oldItem, foreignItem, inactiveItem); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
+        // Tạo đủ dòng snapshot trước khi thu tiền để tuân thủ bất biến hóa đơn đã thanh toán.
+        var payable = await db.Invoices.SingleAsync(i => i.Id == invoice.Id);
+        payable.Status = InvoiceStatus.PartiallyPaid; payable.PaidAmount = 70000;
+        var paidOutsider = await db.Invoices.SingleAsync(i => i.Id == outsider.Id);
+        paidOutsider.Status = InvoiceStatus.Paid; paidOutsider.PaidAmount = 100000;
+        db.PaymentTransactions.AddRange(cash, bank); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
         var itemCount = await db.InvoiceItems.CountAsync();
         var audits = await db.AuditLogs.CountAsync(); var transactions = await db.PaymentTransactions.CountAsync(); var invoiceCount = await db.Invoices.CountAsync();
         string List(int id, string rest = "") => "/api/portal/invoices?patientId=" + id + rest;
@@ -74,8 +81,8 @@ internal static class InvoicePortalHttpSmoke
             using var payments = await client.GetAsync("/api/portal/invoices/" + invoice.Id + "/payments?patientId=" + raw);
             check(list.StatusCode == HttpStatusCode.Forbidden && payments.StatusCode == HttpStatusCode.Forbidden, "Portal invalid/foreign explicit profile403");
         }
-        using (var r = await client.GetAsync("/api/patients/mine"))
-        { var json = await r.Content.ReadFromJsonAsync<JsonElement>(); check(json.GetArrayLength() == 1 && json[0].GetProperty("patientId").GetInt32() == a.PatientId, "Portal account has one active patient profile"); }
+        using (var r = await client.GetAsync("/api/patients/me"))
+        { check(r.StatusCode == HttpStatusCode.OK, "Hồ sơ cá nhân trả HTTP 200"); var json = await r.Content.ReadFromJsonAsync<JsonElement>(); check(json.ValueKind == JsonValueKind.Object && json.GetProperty("patientId").GetInt32() == a.PatientId, "Portal account has one active patient profile"); }
         using (var r = await client.GetAsync(List(a.PatientId)))
         {
             var page = (await r.Content.ReadFromJsonAsync<PagedResult<InvoiceLookupResponse>>())!;
@@ -121,7 +128,7 @@ internal static class InvoicePortalHttpSmoke
         using (var r = await client.GetAsync(List(foreign.PatientId))) { var page = await r.Content.ReadFromJsonAsync<PagedResult<InvoiceLookupResponse>>(); check(page?.TotalCount == 2 && page.Items.Any(i => i.InvoiceId == outsider.Id) && page.Items.Any(i => i.InvoiceId == otherInvoice.Id), "Portal other account own list valid"); }
         var repo = new InvoicePortalRepository(db);
         check(await repo.OwnsPatientAsync(a.PatientId, owner.UserId), "Portal ownership initial check true");
-        await db.Patients.Where(p => p.PatientId == a.PatientId).ExecuteUpdateAsync(s => s.SetProperty(p => p.UserId, (int?)other.UserId));
+        await db.Patients.Where(p => p.PatientId == a.PatientId).ExecuteUpdateAsync(s => s.SetProperty(p => p.UserId, (int?)emptyOwner.UserId));
         var staleList = await repo.GetInvoicesAsync(a.PatientId, owner.UserId, 1, 20);
         check(staleList.TotalCount == 0 && staleList.Items.Count == 0, "Portal SQL rechecks ownership after earlier check");
         check(await repo.GetPaymentsAsync(invoice.Id, a.PatientId, owner.UserId, 1, 20) is null, "Portal payment SQL rejects changed ownership");
@@ -176,7 +183,7 @@ internal static class InvoicePortalHttpSmoke
         using (var r = await client.GetAsync(Items(outsider.Id, foreign.PatientId)))
         { var page = await r.Content.ReadFromJsonAsync<PagedResult<InvoicePortalItemResponse>>(); check(page?.Items.Single().ItemId == foreignItem.Id, "Portal other account own item succeeds"); }
         check(await repo.OwnsPatientAsync(a.PatientId, owner.UserId), "Portal item prior ownership true");
-        await db.Patients.Where(p => p.PatientId == a.PatientId).ExecuteUpdateAsync(s => s.SetProperty(p => p.UserId, (int?)other.UserId));
+        await db.Patients.Where(p => p.PatientId == a.PatientId).ExecuteUpdateAsync(s => s.SetProperty(p => p.UserId, (int?)emptyOwner.UserId));
         check(await repo.GetItemsAsync(invoice.Id, a.PatientId, owner.UserId, 1, 20) is null, "Portal item SQL rejects stale ownership");
         await db.Patients.Where(p => p.PatientId == a.PatientId).ExecuteUpdateAsync(s => s.SetProperty(p => p.UserId, (int?)owner.UserId));
         check(await db.InvoiceItems.CountAsync() == itemCount && await db.Invoices.Where(i => i.Id == invoice.Id).AnyAsync(i => i.TotalAmount == 100000 && i.PaidAmount == 70000 && i.Status == InvoiceStatus.PartiallyPaid),
@@ -201,8 +208,8 @@ internal static class InvoicePortalHttpSmoke
             var json = await r.Content.ReadFromJsonAsync<JsonElement>();
             check(json[0].EnumerateObject().Select(p => p.Name).Order().SequenceEqual(new[] { "patientId", "patientCode", "fullName", "dateOfBirth", "isActive" }.Order()), "Portal profile DTO excludes contact CCCD and internal identifiers");
         }
-        using (var r = await client.GetAsync("/api/patients/mine"))
-        { var json = await r.Content.ReadFromJsonAsync<JsonElement>(); check(json.GetArrayLength() == 1 && json[0].GetProperty("patientId").GetInt32() == a.PatientId, "Patient active profile contract preserved"); }
+        using (var r = await client.GetAsync("/api/patients/me"))
+        { check(r.StatusCode == HttpStatusCode.OK, "Hợp đồng hồ sơ cá nhân giữ HTTP 200"); var json = await r.Content.ReadFromJsonAsync<JsonElement>(); check(json.ValueKind == JsonValueKind.Object && json.GetProperty("patientId").GetInt32() == a.PatientId, "Patient active profile contract preserved"); }
         authenticateActor(RoleCodes.Patient, archivedOwner.UserId);
         using (var r = await client.GetAsync(List(inactive.PatientId)))
         { var page = await r.Content.ReadFromJsonAsync<PagedResult<InvoiceLookupResponse>>(); check(page?.Items.Single().InvoiceId == archived.Id, "Selected archived profile own invoice accessible"); }
@@ -217,15 +224,18 @@ internal static class InvoicePortalHttpSmoke
         using (var r = await client.GetAsync("/api/portal/invoices/profiles"))
         { var rows = await r.Content.ReadFromJsonAsync<List<InvoicePortalProfileResponse>>(); check(rows?.Count == 1 && rows[0].PatientId == foreign.PatientId, "Portal other account receives only own profiles despite shared phone"); }
         check((await repo.GetProfilesAsync(owner.UserId)).Count == 1, "Portal profile repository ownership initial");
-        await db.Patients.Where(p => p.PatientId == inactive.PatientId).ExecuteUpdateAsync(s => s.SetProperty(p => p.UserId, (int?)other.UserId));
-        check((await repo.GetProfilesAsync(owner.UserId)).Count == 1 && (await repo.GetProfilesAsync(other.UserId)).Count == 0 &&
-            !(await repo.OwnsPatientAsync(inactive.PatientId, other.UserId)), "Portal hides and rejects accounts with multiple linked profiles");
-        check(await repo.GetItemsAsync(archived.Id, inactive.PatientId, owner.UserId, 1, 20) is null, "Portal financial read rejects stale archived selector after owner change");
-        await db.Patients.Where(p => p.PatientId == inactive.PatientId).ExecuteUpdateAsync(s => s.SetProperty(p => p.UserId, (int?)owner.UserId));
+        var duplicateOwnerRejected = false;
+        try { await db.Patients.Where(p => p.PatientId == inactive.PatientId).ExecuteUpdateAsync(s => s.SetProperty(p => p.UserId, (int?)other.UserId)); }
+        catch (PostgresException error) when (error.SqlState == "23505" && error.ConstraintName == "IX_Patients_UserId") { duplicateOwnerRejected = true; }
+        check(duplicateOwnerRejected && (await repo.GetProfilesAsync(other.UserId)).Count == 1 &&
+            await repo.OwnsPatientAsync(inactive.PatientId, archivedOwner.UserId), "CSDL từ chối tài khoản có nhiều hồ sơ và giữ nguyên chủ sở hữu");
+        await db.Patients.Where(p => p.PatientId == inactive.PatientId).ExecuteUpdateAsync(s => s.SetProperty(p => p.UserId, (int?)emptyOwner.UserId));
+        check(await repo.GetItemsAsync(archived.Id, inactive.PatientId, archivedOwner.UserId, 1, 20) is null, "Portal financial read rejects stale archived selector after owner change");
+        await db.Patients.Where(p => p.PatientId == inactive.PatientId).ExecuteUpdateAsync(s => s.SetProperty(p => p.UserId, (int?)archivedOwner.UserId));
         check(await db.Patients.Where(p => p.PatientId == inactive.PatientId).AnyAsync(p => !p.IsActive), "Portal read never reactivates archived profile");
         check(await db.AuditLogs.CountAsync() == audits && await db.PaymentTransactions.CountAsync() == transactions &&
             await db.Invoices.CountAsync() == invoiceCount, "Portal reads never mutate financial records or audit");
-        await InvoicePortalFilterHttpSmoke.RunAsync(client, options, actor, owner.UserId, other.UserId, authenticateActor, check);
+        await InvoicePortalFilterHttpSmoke.RunAsync(client, options, actor, filterOwner.UserId, filterOther.UserId, emptyOwner.UserId, authenticateActor, check);
         authenticate(RoleCodes.Admin);
     }
 }

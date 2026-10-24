@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore;
 internal static class InvoicePortalFilterHttpSmoke
 {
     public static async Task RunAsync(HttpClient client, DbContextOptions<DentalDbContext> options, int actor,
-        int ownerId, int otherId, Action<string, int> authenticate, Action<bool, string> check)
+        int ownerId, int otherId, int emptyOwnerId, Action<string, int> authenticate, Action<bool, string> check)
     {
         await using var db = new DentalDbContext(options);
         if (!db.Database.GetDbConnection().Database.StartsWith("dental_cash_test_", StringComparison.Ordinal))
@@ -76,7 +76,7 @@ internal static class InvoicePortalFilterHttpSmoke
             var page = await r.Content.ReadFromJsonAsync<PagedResult<InvoiceLookupResponse>>(); check(page?.TotalCount == 6 && page.Items.Any(i => i.InvoiceId == before.Id), "Portal open-ended To");
         }
         using (var r = await client.GetAsync(Url())) {
-            var page = await r.Content.ReadFromJsonAsync<PagedResult<InvoiceLookupResponse>>(); check(page?.TotalCount == 6, "Portal clearing filters includes all scoped history");
+            var page = await r.Content.ReadFromJsonAsync<PagedResult<InvoiceLookupResponse>>(); check(page?.TotalCount == 7, "Portal clearing filters includes all scoped history");
         }
         using (var r = await client.GetAsync(Url("&toDate=1900-01-01&status=3"))) {
             var page = await r.Content.ReadFromJsonAsync<PagedResult<InvoiceLookupResponse>>(); check(r.StatusCode == HttpStatusCode.OK && page?.TotalCount == 0 && page.Items.Count == 0, "Portal valid empty filter200");
@@ -91,7 +91,7 @@ internal static class InvoicePortalFilterHttpSmoke
         }
         using (var r = await client.GetAsync(Url(day + "&status=2", foreign.PatientId)))
             check(r.StatusCode == HttpStatusCode.Forbidden, "Portal filtered list rejects another account profile");
-        await db.Patients.Where(p => p.PatientId == own.PatientId).ExecuteUpdateAsync(s => s.SetProperty(p => p.UserId, (int?)otherId));
+        await db.Patients.Where(p => p.PatientId == own.PatientId).ExecuteUpdateAsync(s => s.SetProperty(p => p.UserId, (int?)emptyOwnerId));
         var rows = await new InvoicePortalRepository(db).GetInvoicesAsync(own.PatientId, ownerId, 1, 20, 2, start, until);
         check(rows.TotalCount == 0 && rows.Items.Count == 0, "Portal filtered SQL repeats ownership after prior scope check");
         await db.Patients.Where(p => p.PatientId == own.PatientId).ExecuteUpdateAsync(s => s.SetProperty(p => p.UserId, (int?)ownerId));
