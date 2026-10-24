@@ -3,7 +3,7 @@ using Dental.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 namespace Dental.Tests.Infrastructure;
-public sealed class FamilyPatientModelTests
+public sealed class PatientUserModelTests
 {
     private static DentalDbContext CreateDb() => new(new DbContextOptionsBuilder<DentalDbContext>().UseNpgsql("Host=localhost;Database=model_only").Options);
     [Fact] public void UserPatientRelationshipIsOneToOneWithRestrictDelete()

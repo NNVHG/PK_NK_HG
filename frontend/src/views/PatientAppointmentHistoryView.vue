@@ -1,8 +1,8 @@
 <template>
   <main class="page">
-    <h1>Lịch hẹn của gia đình</h1>
+    <h1>Lịch hẹn của tôi</h1>
     <label for="profile">Hồ sơ</label><select id="profile" v-model.number="patientId" @change="load(1)">
-      <option :value="0">Mọi hồ sơ trong tài khoản</option>
+      <option :value="0">Hồ sơ cá nhân</option>
       <option v-for="profile in profiles" :key="profile.patientId" :value="profile.patientId">{{ profile.fullName }} · {{ profile.dateOfBirth }} · {{ profile.patientCode }}</option>
     </select>
     <p v-if="profileError" role="alert">{{ profileError }}</p>
