@@ -69,29 +69,11 @@ public static partial class ClinicalDemoDataSeeder
             ]
         };
         db.Invoices.Add(invoice1);
+        rx1.Invoice = invoice1;
         await db.SaveChangesAsync(ct);
-
-        rx1.InvoiceId = invoice1.Id;
-        await db.SaveChangesAsync(ct);
-
-        var dispensedAt = now.Date.AddHours(9).AddMinutes(20);
-        rx1.DispensedAt = dispensedAt;
-        rx1.DispensedBy = assistant1.UserId;
-        rx1.ReceivedByProxy = false;
-        rx1.DispenseNote = "Đã dặn dò liều lượng chi tiết";
-        rx1.UpdatedAt = dispensedAt;
-        rx1.Version++;
-        db.PrescriptionDispenseEvents.Add(new PrescriptionDispenseEvent
-        {
-            PrescriptionId = rx1.Id, PrescriptionVersion = rx1.Version, Action = "Dispense",
-            PerformedAt = dispensedAt, PerformedBy = assistant1.UserId, ReceivedByProxy = false,
-        });
-        await db.SavePrescriptionHandoverAsync(ct);
 
         invoice1.Status = InvoiceStatus.Paid;
         invoice1.PaidAmount = 585000m;
-        await db.SaveChangesAsync(ct);
-
         var paymentTx1 = new PaymentTransaction
         {
             InvoiceId = invoice1.Id, Amount = 585000m, AmountTendered = 600000m, ChangeAmount = 15000m,
@@ -100,6 +82,19 @@ public static partial class ClinicalDemoDataSeeder
         };
         db.PaymentTransactions.Add(paymentTx1);
         await db.SaveChangesAsync(ct);
+
+        rx1.DispensedAt = now.Date.AddHours(9).AddMinutes(20);
+        rx1.DispensedBy = assistant1.UserId;
+        rx1.ReceivedByProxy = false;
+        rx1.DispenseNote = "Đã dặn dò liều lượng chi tiết";
+        rx1.Version = 2;
+        rx1.UpdatedAt = now.Date.AddHours(9).AddMinutes(20);
+        db.PrescriptionDispenseEvents.Add(new PrescriptionDispenseEvent
+        {
+            PrescriptionId = rx1.Id, PrescriptionVersion = 2, Action = "Dispense",
+            PerformedAt = now.Date.AddHours(9).AddMinutes(20), PerformedBy = assistant1.UserId, ReceivedByProxy = false,
+        });
+        await db.SavePrescriptionHandoverAsync(ct);
 
         await SeedStockAsync(db, v1, assistant1, adminId, rx1, now, ct);
     }

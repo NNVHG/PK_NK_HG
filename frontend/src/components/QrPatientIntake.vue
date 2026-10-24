@@ -28,9 +28,9 @@
     <label>SĐT (nhập tay)<input ref="phoneInput" v-model="form.phone" type="tel" required pattern="0[0-9]{9}" maxlength="10" autocomplete="off" :disabled="busy || needsReview" @input="invalidate" /></label>
     <label>Địa chỉ<textarea v-model="form.address" maxlength="500" :disabled="busy || needsReview" @input="invalidate" /></label>
     <div v-if="duplicates.length">
-     <p>Đã có hồ sơ trùng SĐT và thông tin nhận dạng. Đối chiếu CCCD để tránh tạo trùng hồ sơ.</p>
+     <p>SĐT đã được dùng bởi các hồ sơ sau. Đối chiếu CCCD để tránh tạo trùng hồ sơ.</p>
      <ul><li v-for="item in duplicates" :key="item.patientCode">{{ item.patientCode }} · {{ item.fullName }} · {{ item.dateOfBirth }}</li></ul>
-     <label><input v-model="duplicateIdentityConfirmed" type="checkbox" :disabled="busy || needsReview" /> Đã đối chiếu CCCD và xác nhận đây là bệnh nhân khác</label>
+     <label><input v-model="duplicateIdentityConfirmed" type="checkbox" :disabled="busy || needsReview" /> Đã đối chiếu CCCD: đây là người khác dùng chung SĐT, cần tạo hồ sơ độc lập</label>
     </div>
     <label><input v-model="confirmed" type="checkbox" :disabled="busy || needsReview" /> Tôi đã đối chiếu thông tin với bệnh nhân</label>
     <button :disabled="busy || needsReview || !confirmed || (duplicates.length>0 && !duplicateIdentityConfirmed)">Tạo hồ sơ</button>
