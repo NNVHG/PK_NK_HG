@@ -61,7 +61,7 @@ Hệ thống được xây dựng theo kiến trúc phân tầng Clean Architect
 |---|---|:---:|---|
 | `MOD_AUTH` | Xác thực & Phân quyền | **6** | Đăng ký bệnh nhân, Đăng nhập JWT & RBAC, Hồ sơ cá nhân & đổi mật khẩu, Khôi phục mật khẩu OTP (`F_AUTH_04`), Quản lý vai trò/quyền, Nhật ký Audit Log |
 | `MOD_PAT` | Bệnh nhân & Hồ sơ | **9** | Tạo hồ sơ (kèm nhập/đối soát CCCD SHA-256), Tìm kiếm nhanh, Kiểm tra trùng, Tiền sử & dị ứng, Sinh hiệu, Cảnh báo an toàn, Lịch sử điều trị timeline, Khóa/chốt hồ sơ, Tạo bản ghi khám mới (`Visit`) |
-| `MOD_APP` | Đặt lịch bệnh nhân | **2** | Đặt lịch trực tuyến (`F_APP_01`) và Đặt lịch tại quầy do Lễ tân thao tác hộ (`F_APP_02`, kèm ca cấp cứu & nhắc hẹn) |
+| `MOD_APP` | Đặt lịch bệnh nhân | **2** | Đặt lịch trực tuyến (`F_APP_01`) và Đặt lịch tại quầy do Lễ tân thao tác hộ (`F_APP_02`, ghi chú cần lưu ý và nhắc hẹn) |
 | `MOD_CHK` | Tiếp đón & Hàng đợi | **6** | Xác nhận khách đến (kèm cảnh báo công nợ), Hàng đợi chung, Gọi số & màn hình TV, Quản lý trạng thái tiến trình, Điều phối Nha sĩ/X-quang (gộp chỉ định chụp), Bắt đầu/kết thúc lần khám |
 | `MOD_FDI` | Sơ đồ răng FDI | **7** | Hiển thị sơ đồ 32/20 răng chuẩn FDI, Chọn răng & mặt răng, Gán tình trạng bệnh lý, Chỉ định dịch vụ theo răng, Cập nhật sau điều trị, Lịch sử trạng thái răng, Ghi chú lâm sàng theo răng |
 | `MOD_IMG` | Hình ảnh hồ sơ | **2** | Tải lên tệp ảnh X-quang/chụp trong miệng gắn với lần khám/răng (`F_IMG_02` đơn giản hóa) và Xem/thu phóng ảnh (`F_IMG_04` đơn giản hóa) |
@@ -569,3 +569,7 @@ Fixture tổng hợp tại frontend/tests/browser-dental-image-viewer.html; ch�
 Admin/Lễ tân có thể tra cứu hóa đơn theo mã, bệnh nhân, trạng thái và khoảng ngày; lịch sử thanh toán, dòng hóa đơn và lịch sử điều chỉnh được giữ theo snapshot. Bệnh nhân dùng mục **Hóa đơn của tôi** để đọc hóa đơn, dòng dịch vụ và các khoản đã thu của đúng hồ sơ duy nhất gắn với tài khoản. API kiểm tra ownership ở backend và trả `no-store`; giao diện không cho chọn hoặc liên kết hồ sơ khác.
 
 Mở đính chính vẫn theo DL-263: Admin mở hồ sơ đã kết thúc/khóa khi hóa đơn chưa thu; hồ sơ chuyển `Correcting`, hàng đợi đã hoàn tất và dấu thời gian khám được giữ nguyên. Đính chính không chiếm ghế và không bị chặn do nha sĩ đang khám ca khác.
+
+### Phạm vi đặt lịch/tiếp đón theo DL337 (2026-10-22)
+
+Phòng khám không triển khai luồng cấp cứu, đặt giờ tự do hoặc chen lịch. Bệnh nặng cần lưu ý được ghi trong ghi chú đặt lịch/tiếp đón và hiển thị cho nhân viên nội bộ; ghi chú không tự đổi thứ tự khám. Mọi lịch mới tuân thủ khung giờ cấu hình và chặn trùng nha sĩ. Mốc dọn lượt23:30 cùng ưu tiên đúng hẹn/trở lại từ chụp ảnh giữ quy tắc riêng. Các nhắc đến cấp cứu trong nhật ký triển khai cũ phía trên là lịch sử trước DL337. Các cột/giá trị cấp cứu cũ được giữ để truy vết; API từ chối yêu cầu cấp cứu/chen lịch từ client cũ.
