@@ -170,6 +170,12 @@ const router = createRouter({
       meta: { requiresAuth: true, roles: ['ADMIN', 'DENTIST'] }
     },
     {
+      path: '/my-records',
+      name: 'my-patient-records',
+      redirect: { name: 'my-patient-record' },
+      meta: { requiresAuth: true, roles: ['PATIENT'] }
+    },
+    {
       path: '/patients/:id(\\d+)',
       name: 'patient-detail',
       component: () => import('@/views/PatientDetailView.vue'),

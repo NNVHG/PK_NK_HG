@@ -33,6 +33,23 @@ public sealed class PatientsServiceTests
         await _patientRepository.Received(1).GetByUserIdAsync(22, Arg.Any<CancellationToken>());
     }
 
+    [Theory]
+    [InlineData(22, true)]
+    [InlineData(10, false)]
+    [InlineData(null, false)]
+    public async Task PatientPortalDetailUsesLinkedAccountOwnership(int? actor, bool allowed)
+    {
+        _patientRepository.GetByIdAsync(41, Arg.Any<CancellationToken>()).Returns(new Patient
+        {
+            PatientId = 41, PatientNumber = 41, UserId = 22, FullName = "Synthetic patient",
+            DateOfBirth = new DateOnly(2010, 1, 1), Phone = "0900000000"
+        });
+        var result = await CreateService().GetPatientByIdAsync(41, actor, RoleCodes.Patient);
+        Assert.Equal(allowed, result.IsSuccess);
+        if (allowed) Assert.Equal(41, result.Value!.PatientId);
+        else Assert.Equal(Error.NotFound, result.Error);
+    }
+
     [Fact]
     public async Task CreatePatientAsync_ValidRequest_CreatesPatientAndAuditsWithoutPersonalData()
     {

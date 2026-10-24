@@ -70,7 +70,7 @@
               <p>Nha sĩ: {{ visit.dentistName || 'Chưa phân công' }}</p>
               <RouterLink :to="`/clinical/visits/${visit.visitId}/fdi`">Xem tình trạng răng của lần khám</RouterLink>
               <RouterLink :to="`/clinical/visits/${visit.visitId}/prescription`">{{ authStore.role === 'PATIENT' ? 'Xem đơn thuốc' : 'Xem / kê đơn thuốc' }}</RouterLink>
-              <RouterLink v-if="['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(authStore.role)" :to="`/clinical/visits/${visit.visitId}/invoice-draft`">Xem hóa đơn nháp</RouterLink>
+              <RouterLink v-if="['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(authStore.role)" :to="`/clinical/visits/${visit.visitId}/invoice-draft`">{{ authStore.role === 'PATIENT' ? 'Xem hóa đơn' : 'Xem hóa đơn nháp' }}</RouterLink>
               <div class="visit-flags"><span>{{ visit.hasMedicalHistory ? 'Có tiền sử' : 'Chưa ghi tiền sử' }}</span><span>{{ visit.hasVitalSigns ? 'Có sinh hiệu' : 'Chưa ghi sinh hiệu' }}</span></div>
               <div class="post-treatment-section">
                 <button class="button button-quiet" v-if="postTreatmentExpandedMap[visit.visitId]" :disabled="savingAddendumMap[visit.visitId] || postTreatmentLoadingMap[visit.visitId]" @click="loadPostTreatmentNotes(visit.visitId)">Tải lại ghi chú</button>

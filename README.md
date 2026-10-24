@@ -584,3 +584,11 @@ Trong màn hình hóa đơn, Admin/Lễ tân có thể đối soát tiền thự
 Khi mất kết nối, UI giữ nguyên yêu cầu theo tài khoản/hóa đơn và chỉ thử lại khi người dùng xác nhận. Khi số dư thay đổi, phải tải lại/đối soát trước khi xác nhận mới. Một tham chiếu đúng hóa đơn/số tiền được đối chiếu với khoản thực đã lưu từ thủ công hoặc webhook, giữ nguồn/người ghi ban đầu; không chuyển khoản mô phỏng thành tiền thật. Nhập chính xác tham chiếu ngân hàng, phân biệt chữ hoa/thường theo ràng buộc hiện hữu.
 
 Kiểm chứng nhánh:2027.NET/1155Node;54HTTPPG riêng+616hồi quy đầy đủ+40giảmgiá+172hoàntiền+51báocáoPASS;Vue447modules,EF0pending/53migration. Browser Vue→API→PostgreSQL tổng hợp:30000+60000 trên hóa đơn sau giảm90000→Paid/còn0, lịch sử có hai khoản thủ công. Chưa Gia UAT/đối soát ngân hàng thật. Chi tiết cục bộ:`docs/testing/MANUAL_BANK_20261022_REPORT.md` tại thư mục gốc dự án.
+
+## Hồ sơ điều trị cá nhân của bệnh nhân
+
+Bệnh nhân đăng nhập vào **Hồ sơ của tôi** (`/my-record`) để xem đúng một hồ sơ cá nhân từ `GET /api/patients/me`, rồi mở lịch sử khám và các màn hình đọc hiện có. Đường dẫn cũ `/my-records` chuyển về cùng trang cá nhân. Backend kiểm tra ownership cho từng hồ sơ/ca; hồ sơ tài khoản khác trả 404. Không chọn nhiều hồ sơ hoặc tự nhận hồ sơ bằng số điện thoại.
+
+Đây là lối vào UI cho quyền đọc đã có; không thêm quyền tạo/sửa, kê đơn hoặc thu tiền. Banner cảnh báo an toàn chuyên môn vẫn chỉ dành cho nhân viên. Thanh điều hướng và bộ lọc lịch hẹn đã điều chỉnh cho màn hình nhỏ theo DL062; kiểm tra viewport không thay thế nghiệm thu thiết bị thật.
+
+Kết quả kiểm chứng nhánh nguồn được lưu tại `docs/testing/PATIENT_PORTAL_20261022_REPORT.md`; kết quả sau hòa giải tài khoản cá nhân được ghi riêng trong báo cáo tích hợp ngày 24/10/2026. Chưa thay thế nghiệm thu giao diện của Gia.

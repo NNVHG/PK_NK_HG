@@ -34,7 +34,8 @@
     </div>
     <div v-else class="patient-banner">
       <h3>Cổng Thông Tin Dành Cho Bệnh Nhân</h3>
-      <p>Hồ sơ răng hàm mặt, đơn thuốc và lịch sử khám của bạn sẽ xuất hiện tại đây khi bác sĩ tiến hành điều trị.</p>
+      <p>Xem hồ sơ điều trị cá nhân và lịch sử khám của bạn.</p>
+      <RouterLink class="btn-profile" to="/my-record">Xem hồ sơ điều trị của tôi</RouterLink>
       <RouterLink class="btn-appointment" to="/appointments">Đặt lịch khám</RouterLink>
     </div>
   </div>
