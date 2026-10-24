@@ -4,7 +4,7 @@
       <div class="brand">
         <h2>Phòng Khám Nha Khoa</h2>
       </div>
-      <nav class="nav-links">
+      <nav class="nav-links" aria-label="Điều hướng chính">
         <router-link to="/dashboard">Bảng điều khiển</router-link>
         <router-link v-if="['ADMIN','RECEPTIONIST'].includes(authStore.role)" to="/appointments/requests">Yêu cầu đặt lịch</router-link>
         <router-link v-if="authStore.role === 'PATIENT'" to="/book-appointment">Gửi yêu cầu đặt lịch</router-link>
@@ -77,12 +77,16 @@ async function handleLogout() {
 
 .navbar {
   display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
   align-items: center;
   justify-content: space-between;
   background-color: #2c3e50;
   color: #fff;
   padding: 0.75rem 1.5rem;
 }
+
+.brand { flex: 0 0 auto; }
 
 .brand h2 {
   font-size: 1.15rem;
@@ -91,10 +95,15 @@ async function handleLogout() {
 
 .nav-links {
   display: flex;
-  gap: 1.25rem;
+  flex: 1 1 36rem;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: .5rem 1rem;
 }
 
 .nav-links a {
+  white-space: nowrap;
+  padding: .25rem 0;
   color: #bdc3c7;
   text-decoration: none;
   font-weight: 500;
@@ -108,11 +117,16 @@ async function handleLogout() {
 
 .user-menu {
   display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
   align-items: center;
   gap: 1rem;
 }
 
+.user-menu span { overflow-wrap: anywhere; }
+
 .btn-logout {
+  flex-shrink: 0;
   background-color: #e74c3c;
   color: white;
   border: none;
@@ -128,9 +142,17 @@ async function handleLogout() {
 
 .main-content {
   flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 1.5rem;
   max-width: 1200px;
   margin: 0 auto;
   width: 100%;
+}
+
+@media (max-width: 640px) {
+  .navbar { align-items: flex-start; padding: .75rem 1rem; }
+  .nav-links { flex-basis: 100%; }
+  .main-content { padding: 1rem; }
 }
 </style>
