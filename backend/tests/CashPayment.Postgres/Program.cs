@@ -51,14 +51,14 @@ try
 {
     if (args.Length == 3 && args[2] == "--scheduling-settings-only")
     {
-        await setup.GetService<IMigrator>().MigrateAsync("20261019011607_AddStockIssues");
+        await setup.Database.MigrateAsync();
         await SchedulingSettingsHttpSmoke.RunAsync(options, Check);
         Console.WriteLine($"PostgreSQL scheduling settings checks: {checks}/{checks} PASS");
         return;
     }
     if (args.Length == 3 && args[2] == "--medicine-stock-only")
     {
-        await setup.GetService<IMigrator>().MigrateAsync("20261019135244_CompleteSystemConfigMetadata");
+        await setup.Database.MigrateAsync();
         await MedicineStockHttpSmoke.RunAsync(options, Check);
         Console.WriteLine($"PostgreSQL medicine stock checks: {checks}/{checks} PASS");
         return;

@@ -27,7 +27,8 @@ using Microsoft.IdentityModel.Tokens;
 
 internal static class SchedulingSettingsHttpSmoke
 {
-    // EF model of only the pre-migration columns, used to exercise upgrade of an existing row.
+    // Projection tối thiểu để kiểm tra giá trị mặc định và bảo toàn dữ liệu trên baseline hiện hành.
+    // Không thay thế kiểm thử nâng cấp các migration lịch sử đã được gộp vào InitialBaseline.
     private sealed class LegacyBooking
     {
         public int AppointmentId { get; set; } public int PatientId { get; set; } public DateOnly AppointmentDate { get; set; }
@@ -39,7 +40,13 @@ internal static class SchedulingSettingsHttpSmoke
     {
         public DbSet<LegacyBooking> Bookings => Set<LegacyBooking>();
         public DbSet<LegacyConfig> Configs => Set<LegacyConfig>();
-        protected override void OnModelCreating(ModelBuilder b) { b.Entity<LegacyBooking>().ToTable("Appointments").HasKey(x => x.AppointmentId); b.Entity<LegacyConfig>().ToTable("SystemConfigs").HasKey(x => x.Key); }
+        protected override void OnModelCreating(ModelBuilder b)
+        {
+            b.Entity<LegacyBooking>().ToTable("Appointments").HasKey(x => x.AppointmentId);
+            b.Entity<LegacyConfig>().ToTable("SystemConfigs").HasKey(x => x.Key);
+            b.Entity<LegacyConfig>().Property(x => x.Key).HasColumnName("ConfigKey");
+            b.Entity<LegacyConfig>().Property(x => x.Value).HasColumnName("ConfigValue");
+        }
     }
     private sealed class FailAudit : SaveChangesInterceptor
     {
@@ -56,7 +63,7 @@ internal static class SchedulingSettingsHttpSmoke
         await using var db = new DentalDbContext(configured); var users = new Dictionary<string, User>();
         foreach (var role in new[] { RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant, RoleCodes.Receptionist, RoleCodes.Patient })
         { var u = new User { Role = new Role { RoleCode = role, RoleName = "Schedule " + role }, FullName = "Synthetic schedule actor " + role, Phone = "093000000" + users.Count, PasswordHash = "synthetic-not-used" }; users[role] = u; }
-        await LegacyIdentitySeed.UsersAsync(db.Database.GetConnectionString()!, users.Values);
+        db.Users.AddRange(users.Values); await db.SaveChangesAsync();
         var patient = new Patient { FullName = "Synthetic schedule patient", DateOfBirth = new DateOnly(1990, 1, 1), Phone = "0930000008", UserId = users[RoleCodes.Patient].UserId }; db.Patients.Add(patient); await db.SaveChangesAsync();
         var day = new VietnamClock(TimeProvider.System).Today.AddDays(5);
         int legacyId;
@@ -64,9 +71,9 @@ internal static class SchedulingSettingsHttpSmoke
         { var row = new LegacyBooking { PatientId = patient.PatientId, AppointmentDate = day, SlotTime = new(8, 30), DentistId = users[RoleCodes.Dentist].UserId, CreatedByUserId = users[RoleCodes.Admin].UserId, CreatedAt = DateTime.UtcNow }; legacy.Bookings.Add(row); legacy.Configs.Add(new LegacyConfig { Key = "Clinic:Address", Value = "Synthetic clinic location" }); await legacy.SaveChangesAsync(); legacyId = row.AppointmentId; }
         await db.Database.MigrateAsync(); db.ChangeTracker.Clear();
         var upgraded = await db.Appointments.AsNoTracking().SingleAsync(x => x.AppointmentId == legacyId);
-        check(upgraded.SlotTime == new TimeOnly(8, 30) && upgraded.SlotDurationMinutes == 30 && upgraded.AppointmentDate == day, "Migration backfills existing appointment duration30 without moving its time");
+        check(upgraded.SlotTime == new TimeOnly(8, 30) && upgraded.SlotDurationMinutes == 30 && upgraded.AppointmentDate == day, "Baseline mặc định thời lượng 30 phút và chạy migration lại không đổi giờ hẹn");
         var upgradedConfig = await db.SystemConfigs.AsNoTracking().SingleAsync(x => x.Key == "Clinic:Address");
-        check(upgradedConfig.Id > 0 && upgradedConfig.Value == "Synthetic clinic location" && upgradedConfig.UpdatedAt is null && upgradedConfig.UpdatedByUserId is null, "Config PK/column upgrade preserves old value without fabricating updater history");
+        check(upgradedConfig.Id > 0 && upgradedConfig.Value == "Synthetic clinic location" && upgradedConfig.UpdatedAt is null && upgradedConfig.UpdatedByUserId is null, "Baseline cấp ID và bảo toàn giá trị cấu hình, không tạo lịch sử người sửa giả");
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [], EnvironmentName = "Testing" }); builder.Logging.ClearProviders(); builder.WebHost.UseUrls("http://127.0.0.1:0");
         var secret = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)); builder.Configuration["Jwt:Secret"] = secret;
         builder.Services.AddScoped(_ => new DentalDbContext(configured)); builder.Services.AddHttpContextAccessor(); builder.Services.AddScoped<ICurrentUser, CurrentUser>();
@@ -146,8 +153,8 @@ internal static class SchedulingSettingsHttpSmoke
             As(RoleCodes.Patient); using (var r = await client.GetAsync("/api/appointments/booking-schedule")) check(!(await r.Content.ReadAsStringAsync()).Contains("synthetic-private-marker"), "Derived booking schedule never exposes private settings");
             var effective = (await client.GetFromJsonAsync<BookingScheduleDto>("/api/appointments/booking-schedule"))!;
             using (var r = await Book(patient.PatientId, day.AddDays(9), new(8, 0), effective.Revision)) check(r.StatusCode == HttpStatusCode.Created, "Patient can book own profile on dynamic schedule");
-            var child = patient;
-            using (var r = await Book(child.PatientId, day.AddDays(9), new(9, 0), effective.Revision)) check(r.StatusCode == HttpStatusCode.Created, "Booking uses the current personal profile");
+            using (var r = await Book(patient.PatientId, day.AddDays(9), new(9, 0), effective.Revision)) check(r.StatusCode == HttpStatusCode.Conflict, "Hồ sơ cá nhân không đặt hai lịch đang hoạt động trong cùng ngày");
+            using (var r = await Book(patient.PatientId, day.AddDays(11), new(9, 0), effective.Revision)) check(r.StatusCode == HttpStatusCode.Created, "Đặt ngày khác vẫn dùng đúng hồ sơ cá nhân hiện tại");
             using (var r = await Book(newPatient.PatientId, day.AddDays(9), new(10, 0), effective.Revision)) check(r.StatusCode == HttpStatusCode.NotFound, "Dynamic scheduling does not expand patient ownership");
             using (var r = await client.PostAsJsonAsync("/api/appointments", new CreateAppointmentRequest(patient.PatientId, day.AddDays(10), new(8, 15), IsEmergency: true, EmergencyReason: "Synthetic urgent visit", ExpectedScheduleRevision: effective.Revision))) check(r.StatusCode == HttpStatusCode.BadRequest, "Retired emergency rejected for Patient");
             var ownAppointment = await db.Appointments.AsNoTracking().SingleAsync(x => x.PatientId == patient.PatientId && x.AppointmentDate == day.AddDays(9));

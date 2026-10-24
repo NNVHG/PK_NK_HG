@@ -65,7 +65,7 @@ internal static class MedicineStockHttpSmoke
         var users = new Dictionary<string, User>();
         foreach (var role in new[] { RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant, RoleCodes.Receptionist, RoleCodes.Patient })
         { var user = new User { Role = new Role { RoleCode = role, RoleName = role }, FullName = "Synthetic stock actor", Phone = "096000000" + users.Count, PasswordHash = "synthetic-not-used" }; users[role] = user; }
-        await LegacyIdentitySeed.UsersAsync(db.Database.GetConnectionString()!, users.Values); var admin = users[RoleCodes.Admin].UserId; var doctor = users[RoleCodes.Dentist].UserId;
+        db.Users.AddRange(users.Values); await db.SaveChangesAsync(); var admin = users[RoleCodes.Admin].UserId; var doctor = users[RoleCodes.Dentist].UserId;
         var patient = new Patient { FullName = "Synthetic stock patient", Phone = "0960000008", UserId = users[RoleCodes.Patient].UserId, DateOfBirth = new DateOnly(1990, 1, 1) }; db.Patients.Add(patient);
         var medicine = new Medicine { Code = "M-STOCK", Name = "Synthetic medicine", Unit = "Viên", UnitPrice = 1000, IsActive = true, SearchText = "m stock synthetic medicine" };
         var second = new Medicine { Code = "M-SECOND", Name = "Synthetic second", Unit = "Viên", UnitPrice = 1000, IsActive = true, SearchText = "m second" };
@@ -82,11 +82,12 @@ internal static class MedicineStockHttpSmoke
                 Items = lines.Select(l => new PrescriptionItem { MedicineId = l.Medicine.Id, MedicineCode = l.Medicine.Code, MedicineName = l.Medicine.Name, Unit = mismatchedUnit ? "Hộp" : l.Medicine.Unit, Quantity = l.Qty, UnitPrice = l.Medicine.UnitPrice, UsageInstructions = "Synthetic instructions" }).ToArray() };
             db.Prescriptions.Add(rx); await db.SaveChangesAsync(); db.ChangeTracker.Clear(); return rx;
         }
-        var legacy = await Order([(medicine, 2)], true); // Seeded on the old schema, before stock exists.
+        // Dữ liệu lịch sử tổng hợp trên baseline; không khẳng định đã kiểm nâng cấp migration cũ.
+        var legacy = await Order([(medicine, 2)], true);
         var legacyTimestamp = await db.Prescriptions.AsNoTracking().Where(p => p.Id == legacy.Id).Select(p => p.DispensedAt).SingleAsync();
         await db.Database.MigrateAsync();
-        check(await db.MedicineStockBalances.CountAsync() == 0 && await db.MedicineStockReceipts.CountAsync() == 0 && await db.MedicineStockIssues.CountAsync() == 0, "Upgrade adds three empty stock tables without inventing quantities");
-        check((await db.Prescriptions.AsNoTracking().SingleAsync(p => p.Id == legacy.Id)).DispensedAt == legacyTimestamp, "Upgrade preserves legacy prescription handover");
+        check(await db.MedicineStockBalances.CountAsync() == 0 && await db.MedicineStockReceipts.CountAsync() == 0 && await db.MedicineStockIssues.CountAsync() == 0, "Baseline và chạy migration lại không sinh tồn kho từ lịch sử bàn giao");
+        check((await db.Prescriptions.AsNoTracking().SingleAsync(p => p.Id == legacy.Id)).DispensedAt == legacyTimestamp, "Chạy migration lại giữ nguyên thời điểm bàn giao lịch sử");
         var clock = new VietnamClock(TimeProvider.System);
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [], EnvironmentName = "Testing" }); builder.Logging.ClearProviders(); builder.WebHost.UseUrls("http://127.0.0.1:0");
         var secret = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)); builder.Configuration["Jwt:Secret"] = secret;
