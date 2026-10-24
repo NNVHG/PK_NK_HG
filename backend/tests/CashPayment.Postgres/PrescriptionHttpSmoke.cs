@@ -33,6 +33,7 @@ internal static class PrescriptionHttpSmoke
   async Task<QueueEntry> Started(Patient? patient = null)
   {
    patient ??= new Patient { FullName = "Synthetic Rx patient", Phone = "0990000771", DateOfBirth = new(1990, 1, 1), UserId = owner.UserId };
+   if (patient.PatientId > 0 && db.Entry(patient).State == EntityState.Detached) db.Patients.Attach(patient);
    var row = new QueueEntry { Patient = patient, DentistId = doctor.UserId, QueueDate = clock.Today, QueueNumber = (await db.QueueEntries.MaxAsync(q => (int?)q.QueueNumber) ?? 0) + 1,
     CheckInTime = clock.UtcNow, Status = QueueStatus.Waiting, Visit = new Visit { Patient = patient, CreatedByUserId = cashierId, Status = VisitStatuses.Created, Diagnosis = "Original visit diagnosis" } };
    db.QueueEntries.Add(row); await db.SaveChangesAsync(); db.ChangeTracker.Clear(); authenticate(RoleCodes.Dentist, doctor.UserId);
@@ -129,7 +130,7 @@ internal static class PrescriptionHttpSmoke
   using (var r = await client.PutAsJsonAsync($"/api/queue/{next.QueueEntryId}/status", new { newStatus = 4, reason = "Synthetic clinical cancellation" })) check(r.StatusCode == HttpStatusCode.OK, "Clinical cancellation cancels Rx and Draft together");
   check(await db.Prescriptions.AnyAsync(p => p.Id == nextRx.Id && p.IsCancelled) && await db.Invoices.AnyAsync(i => i.Id == nextRx.InvoiceId && i.Status == InvoiceStatus.Cancelled), "Cancellation retains financial snapshots and canceled Rx");
   using (var r = await client.GetAsync(nextPath + "/lookup-link")) check(r.StatusCode == HttpStatusCode.Conflict, "Cancelled prescription cannot issue lookup QR409");
-  var third = await Started(); var thirdId = third.VisitId!.Value; var thirdPath = $"/api/visits/{thirdId}/prescription";
+  var third = await Started(patient); var thirdId = third.VisitId!.Value; var thirdPath = $"/api/visits/{thirdId}/prescription";
   var thirdRequest = request with { Items = [new(m.Id, 2, 2, "Synthetic third instructions")] };
   using (var r = await client.PostAsJsonAsync(thirdPath, await Confirm(thirdPath, thirdRequest))) check(r.StatusCode == HttpStatusCode.Created, "New independent order created for financial race");
   using (var r = await client.PutAsync($"/api/visits/{thirdId}/complete", null)) check(r.StatusCode == HttpStatusCode.OK, "Financial race starts from completed unpaid visit");

@@ -22,6 +22,11 @@ internal static class QueueCleanupHttpSmoke
     {
         await using var db = new DentalDbContext(options);
         if (!db.Database.GetDbConnection().Database.StartsWith("dental_cash_test_", StringComparison.Ordinal)) throw new InvalidOperationException("Owned test database required");
+        if (!await db.Roles.AnyAsync(r => r.RoleCode == RoleCodes.Patient))
+        {
+            db.Roles.Add(new Role { RoleCode = RoleCodes.Patient, RoleName = "Synthetic patient" });
+            await db.SaveChangesAsync();
+        }
         var today = new VietnamClock(SmokeTestTimeProvider.Instance).Today;
         async Task<QueueEntry> Entry(DateOnly date, QueueStatus status = QueueStatus.Waiting, string clinical = VisitStatuses.Created, bool locked = false)
         {
@@ -77,14 +82,14 @@ internal static class QueueCleanupHttpSmoke
         using (var r = await client.GetAsync($"/api/queue/{automatic.QueueEntryId}")) { var json = await r.Content.ReadFromJsonAsync<JsonElement>(); var history = json.GetProperty("history")[0]; check(r.Headers.CacheControl?.NoStore == true && history.GetProperty("changedByUserId").ValueKind == JsonValueKind.Null && history.GetProperty("changedByUserName").GetString() == "Hệ thống", "System history is readable and no-store"); }
         var returning = await Entry(today.AddDays(-1), QueueStatus.Skipped);
         authenticate(RoleCodes.Receptionist);
-        using (var r = await client.PostAsJsonAsync("/api/queue/check-in", new { patientId = returning.PatientId })) check(r.StatusCode == HttpStatusCode.Created, "Next-day check-in closes old Skipped Visit then succeeds201");
+        using (var r = await client.PostAsJsonAsync("/api/queue/check-in", new { patientId = returning.PatientId, citizenId = "012345678901", phone = "0999999943" })) check(r.StatusCode == HttpStatusCode.Created, $"Next-day check-in closes old Skipped Visit then succeeds201 ({r.StatusCode}: {await r.Content.ReadAsStringAsync()})");
         check(await db.Visits.CountAsync(v => v.PatientId == returning.PatientId && v.Status == VisitStatuses.Created) == 1 &&
             await db.QueueEntries.CountAsync(q => q.PatientId == returning.PatientId && q.Status == QueueStatus.Waiting && q.QueueDate == today) == 1, "Returning patient has exactly one new open Visit and today's ticket");
         check(await db.QueueStatusHistories.AnyAsync(h => h.QueueEntryId == returning.QueueEntryId && h.FromStatus == QueueStatus.Skipped && h.ToStatus == QueueStatus.Cancelled), "Check-in fallback records original Skipped status");
         var invalid = await Entry(today.AddDays(-1));
-        using (var r = await client.PostAsJsonAsync("/api/queue/check-in", new { patientId = invalid.PatientId, appointmentId = int.MaxValue })) check(r.StatusCode == HttpStatusCode.NotFound, "Invalid new appointment rejects check-in404");
+        using (var r = await client.PostAsJsonAsync("/api/queue/check-in", new { patientId = invalid.PatientId, appointmentId = int.MaxValue, citizenId = "012345678902", phone = "0999999943" })) check(r.StatusCode == HttpStatusCode.NotFound, "Invalid new appointment rejects check-in404");
         check(await db.QueueEntries.AsNoTracking().AnyAsync(q => q.QueueEntryId == invalid.QueueEntryId && q.Status == QueueStatus.Waiting) && !await db.QueueStatusHistories.AnyAsync(h => h.QueueEntryId == invalid.QueueEntryId), "Failed validation never partially cancels old ticket");
-        using (var r = await client.PostAsJsonAsync("/api/queue/check-in", new { patientId = started.PatientId })) check(r.StatusCode == HttpStatusCode.Conflict, "Old started clinical Visit blocks new check-in409 without auto-cancel");
+        using (var r = await client.PostAsJsonAsync("/api/queue/check-in", new { patientId = started.PatientId, citizenId = "012345678903", phone = "0999999943" })) check(r.StatusCode == HttpStatusCode.Conflict, "Old started clinical Visit blocks new check-in409 without auto-cancel");
         var fault = await Entry(today.AddDays(-1), QueueStatus.Calling);
         var faultOptions = new DbContextOptionsBuilder<DentalDbContext>(options).AddInterceptors(new FailAudit()).Options;
         foreach (var viaCheckIn in new[] { false, true })

@@ -11,6 +11,9 @@ using Dental.Application.Features.Auth.Services;
 using Dental.Application.Features.Auth.Validators;
 using Dental.Application.Features.MOD_APP;
 using Dental.Application.Features.MOD_AUTH;
+using Dental.Application.Features.MOD_BIL.Services;
+using Dental.Application.Features.Queue.DTOs;
+using Dental.Application.Features.Queue.Services;
 using Dental.Application.Interfaces;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
@@ -24,6 +27,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.IdentityModel.Tokens;
 
 internal static class PatientActivationHttpSmoke
@@ -48,7 +52,7 @@ internal static class PatientActivationHttpSmoke
     }
     public static async Task RunAsync(DbContextOptions<DentalDbContext> options,Action<bool,string> check)
     {
-        var clock=new Clock();var sms=new Sms();var failure=new AuditFailure();
+        var clock=new Clock { Now = new DateTimeOffset(DateTime.UtcNow.Date.AddHours(3), TimeSpan.Zero) };var sms=new Sms();var failure=new AuditFailure();
         var dbOptions=new DbContextOptionsBuilder<DentalDbContext>(options).AddInterceptors(failure).Options;
         var builder=WebApplication.CreateBuilder(new WebApplicationOptions{Args=[],EnvironmentName="Testing"});
         builder.Logging.ClearProviders();builder.WebHost.UseUrls("http://127.0.0.1:0");
@@ -76,7 +80,7 @@ internal static class PatientActivationHttpSmoke
         var oldHash=hasher.Hash("Legacy123");
         var admin=new User{Role=roles[RoleCodes.Admin],FullName="Synthetic staff",Phone="0967100000",PasswordHash=oldHash};
         var legacy=new User{Role=roles[RoleCodes.Patient],FullName="Synthetic legacy",Phone="0967100001",PasswordHash=oldHash};
-        db.Users.AddRange(admin,legacy);await db.SaveChangesAsync();var sequence=2;
+        db.Users.AddRange(admin,legacy);await db.SaveChangesAsync();var sequence=2;var citizenIds=new Dictionary<int,string>();
         async Task<User> NewAccount()
         {
             var n=++sequence;var row=new BookingRequest{ClientRequestId=Guid.NewGuid(),IntentDigest=new string('A',64),FullName="Synthetic new "+n,Phone="09671"+n.ToString("D5"),DateOfBirth=new(1990,1,1),Gender="Other",AppointmentDate=new VietnamClock(clock).Today.AddDays(30+n),SlotTime=new(8,30),SlotDurationMinutes=30};
@@ -84,16 +88,28 @@ internal static class PatientActivationHttpSmoke
             await using var approvalDb=new DentalDbContext(dbOptions);var repo=new BookingApprovalRepository(approvalDb,new VietnamClock(clock),hasher);
             var c=(await repo.ReadAsync(row.Id,admin.UserId,RoleCodes.Admin,default)).Value!;
             var r=await repo.ApproveAsync(row.Id,admin.UserId,RoleCodes.Admin,new(c.Version,c.ReviewStamp,null,true,false,true),null,default);
-            check(r.IsSuccess&&r.Value!.CreatedAccount&&r.Value.RequiresPhoneActivation,"Real booking approval creates account requiring activation");
-            return await db.Users.AsNoTracking().Include(u=>u.Role).SingleAsync(u=>u.Phone==row.Phone);
+            check(r.IsSuccess&&!r.Value!.CreatedAccount&&!r.Value.RequiresPhoneActivation,"Booking approval defers account creation until verified check-in");
+            var citizenId="012345"+n.ToString("D6");
+            await using var checkInDb=new DentalDbContext(dbOptions);
+            var patients=new PatientRepository(checkInDb);var visits=new VisitRepository(checkInDb);
+            var audit=new AuditLogger(checkInDb,NullLogger<AuditLogger>.Instance);var vietnamClock=new VietnamClock(clock);
+            var queue=new QueueService(new QueueRepository(checkInDb),new AppointmentRepository(checkInDb),patients,visits,
+                new InvoiceRepository(checkInDb),new UserRepository(checkInDb),new UnitOfWork(checkInDb),audit,vietnamClock,
+                new InvoiceDraftService(new InvoiceRepository(checkInDb),visits,patients,audit,vietnamClock),TestChairFixtures.Service(checkInDb,vietnamClock),hasher);
+            var checkedIn=await queue.CheckInAsync(admin.UserId,new CheckInRequest(r.Value!.PatientId,CitizenId:citizenId,Phone:row.Phone),null);
+            check(checkedIn.IsSuccess,"Verified check-in creates a personal Patient account");
+            var user=await db.Users.AsNoTracking().Include(u=>u.Role).SingleAsync(u=>u.Phone==row.Phone);
+            check(user.RequiresPhoneActivation&&user.LoginByCitizenId,"New Patient account requires OTP and CCCD login");
+            citizenIds[user.UserId]=citizenId;return user;
         }
+        string Identifier(User u)=>citizenIds.TryGetValue(u.UserId,out var citizenId)?citizenId:u.Phone;
         const string root="/api/auth/activation/";
         async Task<HttpResponseMessage> Send(string path,object body,string? ip=null){using var req=new HttpRequestMessage(HttpMethod.Post,path){Content=JsonContent.Create(body)};if(ip is not null)req.Headers.Add("X-Test-IP",ip);return await client.SendAsync(req);}
         async Task<ActivationChallenge> Issue(User u,string? password=null)
         {
-            using var r=await Send(root+"request",new ActivationRequest(u.Phone,password??u.Phone));
+            using var r=await Send(root+"request",new ActivationRequest(Identifier(u),password??u.Phone));
             check(r.StatusCode==HttpStatusCode.Accepted&&r.Headers.CacheControl?.NoStore==true,"Activation request is generic 202 and NoStore");
-            var json=await r.Content.ReadAsStringAsync();check(!json.Contains(u.Phone)&&!json.Contains("passwordHash",StringComparison.OrdinalIgnoreCase)&&!json.Contains("\"code\"",StringComparison.OrdinalIgnoreCase)&&!json.Contains("userId",StringComparison.OrdinalIgnoreCase),"Activation response excludes identity and OTP");
+            var json=await r.Content.ReadAsStringAsync();check(!json.Contains(u.Phone)&&!json.Contains(Identifier(u))&&!json.Contains("passwordHash",StringComparison.OrdinalIgnoreCase)&&!json.Contains("\"code\"",StringComparison.OrdinalIgnoreCase)&&!json.Contains("userId",StringComparison.OrdinalIgnoreCase),"Activation response excludes identity and OTP");
             return(await r.Content.ReadFromJsonAsync<ActivationChallenge>())!;
         }
         async Task<HttpStatusCode> Verify(ActivationChallenge c,string code){using var r=await Send(root+"verify",new ActivationVerification(c.ChallengeId,code));return r.StatusCode;}
@@ -103,8 +119,8 @@ internal static class PatientActivationHttpSmoke
             check(r.StatusCode==HttpStatusCode.OK&&r.Headers.CacheControl?.NoStore==true,"Correct OTP yields only short purpose-bound completion proof");
             return(await r.Content.ReadFromJsonAsync<ActivationGrant>())!;
         }
-        async Task<HttpStatusCode> Finish(ActivationGrant g,bool keep=true,string? password=null){using var r=await Send(root+"complete",new ActivationCompletion(g.CompletionToken,keep,password,true));check(r.Headers.CacheControl?.NoStore==true||r.StatusCode==HttpStatusCode.InternalServerError,"Completion never caches secrets");return r.StatusCode;}
-        async Task<HttpResponseMessage> Login(User u,string password)=>await Send("/api/auth/login",new LoginRequest(u.Phone,password));
+        async Task<HttpStatusCode> Finish(ActivationGrant g,bool keep=false,string? password="Strong123"){using var r=await Send(root+"complete",new ActivationCompletion(g.CompletionToken,keep,password,true));check(r.Headers.CacheControl?.NoStore==true||r.StatusCode==HttpStatusCode.InternalServerError,"Completion never caches secrets");return r.StatusCode;}
+        async Task<HttpResponseMessage> Login(User u,string password)=>await Send("/api/auth/login",new LoginRequest(Identifier(u),password));
         async Task<HttpStatusCode> Probe(string token){using var req=new HttpRequestMessage(HttpMethod.Get,"/probe");req.Headers.Authorization=new("Bearer",token);using var r=await client.SendAsync(req);return r.StatusCode;}
         var legacyToken=tokens.GenerateAccessToken(legacy);check(await Probe(legacyToken)==HttpStatusCode.OK,"Legacy JWT continues to authorize without fabricated OTP");
         using(var r=await Login(legacy,"Legacy123"))check(r.StatusCode==HttpStatusCode.OK,"Legacy account still logs in without OTP");
@@ -112,22 +128,23 @@ internal static class PatientActivationHttpSmoke
         var account=await NewAccount();var staleToken=tokens.GenerateAccessToken(account);
         using(var r=await Login(account,account.Phone))check(r.StatusCode==HttpStatusCode.Unauthorized&&(await r.Content.ReadAsStringAsync()).Contains("AUTH_ACTIVATION_REQUIRED"),"New approved account cannot receive JWT before activation");
         check(await Probe(staleToken)==HttpStatusCode.Unauthorized,"Even a correctly signed preactivation JWT is rejected");
-        sms.IsConfigured=false;using(var r=await Send(root+"request",new ActivationRequest(account.Phone,account.Phone)))check(r.StatusCode==HttpStatusCode.ServiceUnavailable&&sms.Codes.Count==0,"Missing SMS configuration fails closed");sms.IsConfigured=true;
+        sms.IsConfigured=false;using(var r=await Send(root+"request",new ActivationRequest(Identifier(account),account.Phone)))check(r.StatusCode==HttpStatusCode.ServiceUnavailable&&sms.Codes.Count==0,"Missing SMS configuration fails closed");sms.IsConfigured=true;
         foreach(var u in new[]{legacy,admin}){var before=sms.Codes.Count;await Issue(u,"Legacy123");check(sms.Codes.Count==before,"Old Patient and staff accounts cannot be activated");}
         var unknown=new User{Phone="0967199999"};await Issue(unknown);check(!sms.Codes.ContainsKey(unknown.Phone),"Unknown account returns metadata without SMS");
         await Issue(account,"Wrong123");check(!sms.Codes.ContainsKey(account.Phone),"Incorrect current password never sends activation SMS");
         clock.Now+=TimeSpan.FromSeconds(61);var locked=await Issue(account);var good=sms.Codes[account.Phone].Code;var wrong=good=="000000"?"000001":"000000";
-        using(var r=await Send(root+"request",new ActivationRequest(account.Phone,account.Phone)))check(r.StatusCode==HttpStatusCode.TooManyRequests,"Resend within 60 seconds is rejected");
+        using(var r=await Send(root+"request",new ActivationRequest(Identifier(account),account.Phone)))check(r.StatusCode==HttpStatusCode.TooManyRequests,"Resend within 60 seconds is rejected");
         for(var n=0;n<5;n++)check(await Verify(locked,wrong)==HttpStatusCode.BadRequest,"Incorrect OTP attempt rejected");check(await Verify(locked,good)==HttpStatusCode.BadRequest,"Fifth wrong attempt blocks even the correct OTP");
         clock.Now+=TimeSpan.FromSeconds(61);var expired=await Issue(account);good=sms.Codes[account.Phone].Code;clock.Now+=TimeSpan.FromMinutes(5);check(await Verify(expired,good)==HttpStatusCode.BadRequest,"OTP expires exactly at five minutes");
         var first=await Issue(account);var firstCode=sms.Codes[account.Phone].Code;clock.Now+=TimeSpan.FromSeconds(61);var second=await Issue(account);check(await Verify(first,firstCode)==HttpStatusCode.BadRequest,"Resend invalidates previous OTP challenge");
         var grant=await Grant(account);check(await Probe(grant.CompletionToken)==HttpStatusCode.Unauthorized,"Completion proof cannot authorize protected API as JWT");
         await db.Entry(account).ReloadAsync();check(account.RequiresPhoneActivation&&account.PhoneVerifiedAtUtc is null&&hasher.Verify(account.Phone,account.PasswordHash),"OTP verification alone does not activate account or change password");
         var hash=account.PasswordHash;
-        var results=await Task.WhenAll(Finish(grant),Finish(grant));check(results.Count(x=>x==HttpStatusCode.OK)==1&&results.Count(x=>x==HttpStatusCode.BadRequest)==1,"Concurrent completion commits exactly one activation");
-        await db.Entry(account).ReloadAsync();check(!account.RequiresPhoneActivation&&account.PhoneVerifiedAtUtc.HasValue&&Math.Abs((account.PhoneVerifiedAtUtc.Value-clock.Now.UtcDateTime).TotalMilliseconds)<1&&account.TokenVersion==1&&account.PasswordHash==hash,"Keeping default records actual OTP time and revokes old version without changing password");
+        var results=await Task.WhenAll(Finish(grant),Finish(grant));check(results.Count(x=>x==HttpStatusCode.OK)==1&&results.Count(x=>x==HttpStatusCode.BadRequest)==1,$"Concurrent completion commits exactly one activation ({string.Join(",",results)})");
+        await db.Entry(account).ReloadAsync();check(!account.RequiresPhoneActivation&&account.PhoneVerifiedAtUtc.HasValue&&Math.Abs((account.PhoneVerifiedAtUtc.Value-clock.Now.UtcDateTime).TotalMilliseconds)<1&&account.TokenVersion==1&&account.PasswordHash!=hash&&hasher.Verify("Strong123",account.PasswordHash),"Patient activation records OTP time, revokes old token and replaces initial password");
         check(await Probe(staleToken)==HttpStatusCode.Unauthorized,"Preactivation JWT remains invalid after completion");
-        using(var r=await Login(account,account.Phone)){check(r.StatusCode==HttpStatusCode.OK,"Activated account logs in with retained phone password");var login=(await r.Content.ReadFromJsonAsync<LoginResponse>())!;check(await Probe(login.AccessToken)==HttpStatusCode.OK,"Postactivation login JWT authorizes protected API");}
+        using(var r=await Login(account,account.Phone))check(r.StatusCode==HttpStatusCode.Unauthorized,"Initial phone password cannot log in after activation");
+        using(var r=await Login(account,"Strong123")){check(r.StatusCode==HttpStatusCode.OK,"Activated account logs in with chosen password");var login=(await r.Content.ReadFromJsonAsync<LoginResponse>())!;check(await Probe(login.AccessToken)==HttpStatusCode.OK,"Postactivation login JWT authorizes protected API");}
         var changed=await NewAccount();var chosen=await Grant(changed);
         using(var r=await Send(root+"complete",new ActivationCompletion(chosen.CompletionToken,false,"Weak123",true)))check(r.StatusCode==HttpStatusCode.BadRequest,"Chosen password below eight characters is rejected without consuming proof");
         check(await Finish(chosen,false,"Strong123")==HttpStatusCode.OK,"Chosen valid password completes activation");await db.Entry(changed).ReloadAsync();check(hasher.Verify("Strong123",changed.PasswordHash)&&!hasher.Verify(changed.Phone,changed.PasswordHash),"Selected password persists as bcrypt and replaces default");

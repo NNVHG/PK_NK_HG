@@ -33,7 +33,9 @@ internal static class PostTreatmentNoteHttpSmoke
         var patientUser = await Staff(RoleCodes.Patient);
         async Task<Visit> Paid(User dentist)
         {
-            var visit = new Visit { Patient = new() { UserId = patientUser.UserId, FullName = "Synthetic addendum patient", Phone = "0999999907", DateOfBirth = new(1990, 1, 1) },
+            var owner = dentist.UserId == doctor.UserId && !await db.Patients.AnyAsync(p => p.UserId == patientUser.UserId)
+                ? patientUser : await Staff(RoleCodes.Patient);
+            var visit = new Visit { Patient = new() { UserId = owner.UserId, FullName = "Synthetic addendum patient", Phone = "0999999907", DateOfBirth = new(1990, 1, 1) },
                 CreatedByUserId = actorId, DentistId = dentist.UserId, Status = VisitStatuses.Completed, IsLocked = true,
                 StartedAt = DateTime.UtcNow.AddHours(-2), EndedAt = DateTime.UtcNow.AddHours(-1), Diagnosis = "Synthetic diagnosis", ClinicalNotes = "Synthetic original" };
             var invoice = new Invoice { Visit = visit, CreatedByUserId = actorId, Status = InvoiceStatus.Paid,

@@ -7,6 +7,7 @@ using Dental.Api.Controllers;
 using Dental.Api.Policies;
 using Dental.Api.RateLimiting;
 using Dental.Application.Features.MOD_AUTH;
+using Dental.Application.Features.MOD_PAT;
 using Dental.Application.Interfaces;
 using Dental.Domain.Entities;
 using Dental.Infrastructure.Data;
@@ -86,10 +87,14 @@ internal static class PasswordRecoveryHttpSmoke
             users.Add(user); db.Users.Add(user);
         }
         await db.SaveChangesAsync();
+        const string patientCitizenId = "012345678901";
+        db.Patients.Add(new Patient { UserId = users[^1].UserId, FullName = "Synthetic recovery patient", Phone = users[^1].Phone,
+            DateOfBirth = new(1990, 1, 1), CitizenIdHash = CitizenIdIdentity.Hash(patientCitizenId), CitizenIdMasked = CitizenIdIdentity.Mask(patientCitizenId) });
+        await db.SaveChangesAsync();
         const string root = "/api/auth/password-recovery/";
-        async Task<RecoveryResponse> Issue(string phone)
+        async Task<RecoveryResponse> Issue(string phone, string? citizenId = null)
         {
-            using var response = await client.PostAsJsonAsync(root + "request", new RecoveryRequest(phone));
+            using var response = await client.PostAsJsonAsync(root + "request", new RecoveryRequest(phone, citizenId));
             check(response.StatusCode == HttpStatusCode.Accepted && response.Headers.CacheControl?.NoStore == true, "Recovery request accepted/no-store");
             var json = await response.Content.ReadAsStringAsync();
             check(!json.Contains(phone) && !json.Contains("passwordHash", StringComparison.OrdinalIgnoreCase) && !json.Contains("\"code\"", StringComparison.OrdinalIgnoreCase), "Recovery response contains only challenge metadata");
@@ -97,7 +102,8 @@ internal static class PasswordRecoveryHttpSmoke
         }
         async Task<HttpStatusCode> Reset(RecoveryResponse challenge, User user, string? code = null)
         {
-            using var response = await client.PostAsJsonAsync(root + "reset", new ResetPasswordRequest(challenge.ChallengeId, user.Phone, code ?? sms.Codes[user.Phone], "Newpass2"));
+            using var response = await client.PostAsJsonAsync(root + "reset", new ResetPasswordRequest(challenge.ChallengeId, user.Phone, code ?? sms.Codes[user.Phone], "Newpass2",
+                user.Role.RoleCode == "PATIENT" ? patientCitizenId : null));
             return response.StatusCode;
         }
         using (var response = await client.PostAsJsonAsync(root + "request", new RecoveryRequest(users[0].Phone)))
@@ -111,13 +117,14 @@ internal static class PasswordRecoveryHttpSmoke
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", oldToken);
             using (var response = await client.GetAsync("/probe")) check(response.IsSuccessStatusCode, "Existing access token accepted before recovery");
             client.DefaultRequestHeaders.Authorization = null;
-            var challenge = await Issue(user.Phone);
+            var citizenId = user.Role.RoleCode == "PATIENT" ? patientCitizenId : null;
+            var challenge = await Issue(user.Phone, citizenId);
             foreach(var password in new[]{"Aa1234","Aa12345"})
             {
-                using var weak=await client.PostAsJsonAsync(root+"reset",new ResetPasswordRequest(challenge.ChallengeId,user.Phone,sms.Codes[user.Phone],password));
+                using var weak=await client.PostAsJsonAsync(root+"reset",new ResetPasswordRequest(challenge.ChallengeId,user.Phone,sms.Codes[user.Phone],password,citizenId));
                 check(weak.StatusCode==HttpStatusCode.BadRequest,"Recovery rejects six/seven-character password before consuming correct OTP");
             }
-            using (var response = await client.PostAsJsonAsync(root + "request", new RecoveryRequest(user.Phone)))
+            using (var response = await client.PostAsJsonAsync(root + "request", new RecoveryRequest(user.Phone, citizenId)))
                 check(response.StatusCode == HttpStatusCode.TooManyRequests, "Per-phone 60 second cooldown enforced");
             var results = await Task.WhenAll(Reset(challenge, user), Reset(challenge, user));
             check(results.Count(x => x == HttpStatusCode.OK) == 1 && results.Count(x => x == HttpStatusCode.BadRequest) == 1, "Concurrent reset: exactly one winner for " + user.Role.RoleCode);
