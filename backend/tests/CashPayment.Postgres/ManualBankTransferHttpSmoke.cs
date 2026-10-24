@@ -129,7 +129,8 @@ internal static class ManualBankTransferHttpSmoke
             check(await db.PaymentTransactions.CountAsync(p => p.InvoiceId == other.Id) == 1, "Manual bank: webhook/manual confirmation stores one receipt");
             var simulation = await InvoiceAsync();
             await using (var simulationDb = new DentalDbContext(options))
-                await new BankTransferRepository(simulationDb).ReceiveAsync(new("PKNK " + simulation.InvoiceCode, 20000, "SIMMAN01"), simulation.InvoiceCode, actor, true, null);
+                await new BankTransferRepository(simulationDb).ReceiveAsync(new("PKNK " + simulation.InvoiceCode, 20000, "SIMMAN01"), simulation.InvoiceCode, actor,
+                    actorRole: null, simulated: true, manualConfirmation: false, ip: null);
             using (var r = await Post(simulation.Id, new(Guid.NewGuid(), 20000, "SIMMAN01", 100000, true)))
                 check(r.StatusCode == HttpStatusCode.Conflict, "Manual bank: simulated transfer cannot be confirmed as real");
 
