@@ -38,20 +38,6 @@ public sealed class BankTransferWebhookController(BankTransferWebhookService ser
         return Record(new($"PKNK {request.InvoiceCode}", request.Amount, request.TransactionReference), user.RoleCode, true, false, ct);
     }
 
-    [HttpPost("api/invoices/{invoiceId:int}/bank-transfer/confirm")]
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = AppPolicies.CashPaymentWrite)]
-    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
-    public async Task<IActionResult> ConfirmManual(int invoiceId, ManualBankTransferConfirmationRequest request, CancellationToken ct)
-    {
-        if (user.UserId is not int actorId) return Unauthorized();
-        var result = await service.ConfirmManualAsync(invoiceId, actorId, user.RoleCode, request,
-            HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
-        return result.IsSuccess ? Ok(result.Value) : StatusCode(result.Error.Code switch
-        {
-            "GEN_001" => 404, "GEN_002" => 403, "GEN_003" or "BIL_032" => 400, _ => 409
-        }, new { code = result.Error.Code, message = result.Error.Message });
-    }
-
     private async Task<IActionResult> Record(BankTransferRequest request, string? actorRole, bool simulated,
         bool manualConfirmation, CancellationToken ct, bool providerResponse = false)
     {

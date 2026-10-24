@@ -70,6 +70,8 @@
         :invoice="invoice" :role="auth.role" @applied="load" @refresh="load" @busy="discountBusy = $event" />
       <InvoiceCashPayment v-if="invoice.status !== 4 && !discountBusy && (auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST')"
         :invoice-id="invoice.id" :remaining-amount="invoice.remainingAmount" :status="invoice.status" @paid="onPaymentReceived" />
+      <InvoiceManualBankTransfer v-if="!discountBusy && (auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST') && invoice.status !== 4"
+        :invoice-id="invoice.id" @paid="onBankReceived" />
       <InvoiceBankTransfer v-if="!discountBusy && (auth.role === 'ADMIN' || auth.role === 'RECEPTIONIST') && [1, 2, 5].includes(invoice.status) && invoice.remainingAmount > 0"
         :invoice-id="invoice.id" @paid="onBankReceived" />
     </section>
@@ -98,6 +100,7 @@ import InvoiceRefundPanel from '@/components/InvoiceRefundPanel.vue';
 import InvoiceRefundProposalPanel from '@/components/InvoiceRefundProposalPanel.vue';
 import InvoiceCashPayment from '@/components/InvoiceCashPayment.vue';
 import InvoiceBankTransfer from '@/components/InvoiceBankTransfer.vue';
+import InvoiceManualBankTransfer from '@/components/InvoiceManualBankTransfer.vue';
 import InvoiceDiscountPanel from '@/components/InvoiceDiscountPanel.vue';
 import type { BankTransferResponse } from '@/services/bankTransfers';
 import type { CashPaymentResponse } from '@/services/cashPayments';
@@ -188,7 +191,7 @@ async function onPaymentReceived(payment: CashPaymentResponse) {
 async function onBankReceived(payment: BankTransferResponse | null) {
   const expectedVersion = version + 1; await load();
   if (version === expectedVersion) success.value = payment
-    ? `Đã ghi nhận MÔ PHỎNG #${payment.id}: ${money(payment.amount)} vào hóa đơn. ${payment.note ?? ''}`
+    ? `${payment.source === 'Simulation' ? 'Đã ghi nhận MÔ PHỎNG' : 'Đã đối chiếu chuyển khoản'} #${payment.id}: ${money(payment.amount)} vào hóa đơn. ${payment.note ?? ''}`
     : 'Đã có khoản thu mới. Đối chiếu hóa đơn và lịch sử khoản thu bên dưới.';
 }
 async function unlock() {

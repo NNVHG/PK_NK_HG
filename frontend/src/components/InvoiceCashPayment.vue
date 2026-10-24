@@ -26,6 +26,7 @@
       <p v-if="payment.amount < 0">Chi hoàn {{ money(-payment.amount) }} · {{ payment.paymentMethod }}. Admin xem phiếu chi trong lịch sử hoàn / điều chỉnh.</p>
       <p v-else-if="payment.paymentMethod === 'Cash'">Tiền mặt · Đã thu {{ money(payment.amount) }} · Khách đưa {{ money(payment.amountTendered ?? 0) }} · Thối {{ money(payment.changeAmount ?? 0) }}</p>
       <p v-else>Chuyển khoản · Ghi vào hóa đơn {{ money(payment.amount) }} · Ngân hàng nhận {{ money(payment.bankReceivedAmount ?? 0) }} · Mã {{ payment.transactionReference }}
+        <span v-if="payment.source === 'Manual'"> · Xác nhận thủ công</span>
         <strong v-if="payment.source === 'Simulation'"> · MÔ PHỎNG</strong></p>
       <p v-if="payment.note" role="alert">{{ payment.note }}</p>
       <PaymentReceiptModal v-if="payment.amount > 0" :invoice-id="invoiceId" :payment-id="payment.id" />

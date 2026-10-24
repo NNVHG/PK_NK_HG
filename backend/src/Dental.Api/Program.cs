@@ -90,6 +90,7 @@ builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.ReceiptP
 builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.ReceiptRequestValidator>();
 builder.Services.AddScoped<IBankTransferRepository, BankTransferRepository>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.BankTransferWebhookService>();
+builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.ManualBankTransferService>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Validators.BankTransferRequestValidator>();
 builder.Services.AddAuthentication().AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, BankWebhookAuthenticationHandler>(BankWebhookAuthenticationHandler.SchemeName, _ => { });
 builder.Services.AddScoped<Dental.Application.Features.MOD_BIL.Services.CashPaymentService>();
