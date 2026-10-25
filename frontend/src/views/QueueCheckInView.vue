@@ -274,30 +274,34 @@ async function searchPatients(page = 1) {
   searching.value = true;
   try {
     if (value.includes('|')) {
+      let hash: string;
       try {
-        const decoded = await decodeCitizenQr(value);
-        if (sequence !== searchSequence || disposed) return;
-        const lookup = await qrPatientIntakeService.lookup(decoded.citizenIdHash);
-        if (sequence !== searchSequence || disposed) return;
-        const patient = lookup.existing?.isActive ? await patientsService.getById(lookup.existing.patientId) : null;
-        if (sequence !== searchSequence || disposed) return;
-        if (patient) {
-          patients.value = [patient];
-          searchTotal.value = 1;
-          searchPage.value = 1;
-          searched.value = true;
-          const id = value.split('|')[0].trim();
-          await selectPatient(patient);
-          citizenId.value = id;
-          if (patient.phone) checkInPhone.value = patient.phone;
-          return;
-        } else {
-          searchError.value = 'Chưa có hồ sơ cho CCCD này. Mở hồ sơ bệnh nhân để tạo mới.';
-          searched.value = true;
-          return;
-        }
+        hash = (await decodeCitizenQr(value)).citizenIdHash;
       } catch {
-        // Fall back to normal search
+        if (sequence === searchSequence && !disposed) {
+          searchError.value = 'Mã QR CCCD không hợp lệ. Vui lòng quét lại hoặc nhập CCCD 12 chữ số.';
+        }
+        return;
+      }
+      if (sequence !== searchSequence || disposed) return;
+      const lookup = await qrPatientIntakeService.lookup(hash);
+      if (sequence !== searchSequence || disposed) return;
+      const patient = lookup.existing?.isActive ? await patientsService.getById(lookup.existing.patientId) : null;
+      if (sequence !== searchSequence || disposed) return;
+      if (patient) {
+        patients.value = [patient];
+        searchTotal.value = 1;
+        searchPage.value = 1;
+        searched.value = true;
+        const id = value.split('|')[0].trim();
+        await selectPatient(patient);
+        citizenId.value = id;
+        if (patient.phone) checkInPhone.value = patient.phone;
+        return;
+      } else {
+        searchError.value = 'Chưa có hồ sơ cho CCCD này. Mở hồ sơ bệnh nhân để tạo mới.';
+        searched.value = true;
+        return;
       }
     }
     if (/^[0-9]{12}$/.test(value)) {

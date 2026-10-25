@@ -54,5 +54,3 @@ public sealed class BookingRequestTests
         Assert.True(request.Confirmed);
     }
 }
-
-

@@ -11,7 +11,7 @@ const appointment = { appointmentId: 11, patientId: 7, patientName: 'Synthetic p
 const patient = { patientId: 7, fullName: 'Synthetic patient', patientCode: 'BN000007', phone: '0900000091' };
 const page = { items: [appointment], page: 1, pageSize: 20, totalCount: 41, totalPages: 3, hasNextPage: true, hasPreviousPage: false };
 function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
-function fixture({ role = 'RECEPTIONIST', queryPages = [page], deskPages = [page], waitingPages = [{ ...page, items: [] }] } = {}) {
+function fixture({ role = 'RECEPTIONIST', queryPages = [page], deskPages = [page], waitingPages = [{ ...page, items: [] }], rejectQr = false } = {}) {
   let mount, unmount; const watchers = [], calls = { search: [], desk: [], waiting: [], patient: [], appointments: [], debt: [], checkIn: [], lookup: [] };
   const auth = { role, user: { userId: 5 } };
   const imports = {
@@ -20,6 +20,7 @@ function fixture({ role = 'RECEPTIONIST', queryPages = [page], deskPages = [page
     '@/stores/auth': { useAuthStore: () => auth },
     '@/services/qrPatientIntake': {
       decodeCitizenQr: async raw => {
+        if (rejectQr) throw new Error('Mã QR không hợp lệ.');
         const parts = raw.split('|');
         return { citizenIdHash: 'HASH:' + parts[0], citizenIdMasked: parts[0].slice(0, 3) + '***', fullName: parts[2] || '', dateOfBirth: '1990-01-01', gender: 'Male', address: '' };
       },
@@ -67,6 +68,12 @@ test('F_CHK_01 parses raw CCCD QR string, looks up hashed CCCD, selects patient 
   const f = fixture(); f.c.keyword.value = '000000000901||Nguyen Van A|01011990|Nam|Ha Noi|01012021'; await f.c.searchPatients();
   assert.equal(f.calls.patient[0], 7);
   assert.equal(f.c.citizenId.value, '000000000901');
+});
+test('F_CHK_01 rejects invalid CCCD QR locally without sending identifiers in search URL', async () => {
+  const f = fixture({ rejectQr: true }); f.c.keyword.value = '000000000901|invalid'; await f.c.searchPatients();
+  assert.match(f.c.searchError.value, /Mã QR CCCD không hợp lệ/);
+  assert.deepEqual(f.calls.search, []); assert.deepEqual(f.calls.lookup, []);
+  assert.equal(f.c.searching.value, false);
 });
 
 test('F_CHK_01 debounce reruns the quick search after input changes', async () => {

@@ -1,5 +1,5 @@
 # CẨM NĂNG & DỮ LIỆU DEMO 52 CHỨC NĂNG HỆ THỐNG NHA KHOA HOÀNG GIA
-> **Căn cứ chuẩn:** Đề cương tốt nghiệp ĐH Thủ Dầu Một & `chuc_nang_Gia_demo_11.xlsx` (52 chức năng / 12 phân hệ / 5 vai trò).  
+> **Căn cứ chuẩn:** Đề cương tốt nghiệp ĐH Thủ Dầu Một & `chuc_nang_Gia_demo_11.xlsx` (52 chức năng / 12 phân hệ / 5 vai trò).
 > **Mục tiêu:** Cung cấp tài khoản, chuỗi QR CCCD mẫu và kịch bản demo trơn tru, chuẩn xác từ đầu đến cuối cho buổi báo cáo / nghiệm thu đồ án.
 
 ---
@@ -36,7 +36,7 @@ docker compose up -d postgres
 
 ## 2. BỘ DỮ LIỆU CHUỖI QR CCCD MẪU ĐỂ QUÉT NHANH
 
-Chuỗi chuẩn 7 trường trên thẻ CCCD gắn chip Việt Nam (`Số_CCCD|Số_CMND_cũ|Họ_tên|Ngày_sinh_ddMMyyyy|Giới_tính|Địa_chỉ|Ngày_cấp_ddMMyyyy`).  
+Chuỗi chuẩn 7 trường trên thẻ CCCD gắn chip Việt Nam (`Số_CCCD|Số_CMND_cũ|Họ_tên|Ngày_sinh_ddMMyyyy|Giới_tính|Địa_chỉ|Ngày_cấp_ddMMyyyy`).
 Có thể copy chuỗi này dán trực tiếp vào ô quét QR, ô tìm kiếm tiếp đón hoặc dùng trang tạo mã QR (như qrcode-monkey.com) để soi camera / súng quét barcode:
 
 ### Chuỗi 1: Bệnh nhân đã có hồ sơ và tiền sử bệnh lý (Nguyễn Văn An)
@@ -245,4 +245,3 @@ Có thể copy chuỗi này dán trực tiếp vào ô quét QR, ô tìm kiếm 
 | **F_MST_06** | Cấu hình hệ thống & Lịch khám | `/settings` | Quản trị viên |
 | **F_MST_07** | Quản lý người dùng nhân viên | `/staff` | Quản trị viên |
 | **F_RPT_01** | Báo cáo doanh thu tài chính | `/reports/revenue` | Quản trị viên |
-
