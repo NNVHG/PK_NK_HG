@@ -44,9 +44,12 @@
       <form class="search" @submit.prevent="searchPatients(1)">
         <label for="patient-search">Tìm theo tên, số điện thoại, CCCD hoặc mã hồ sơ</label>
         <div class="search-row">
-          <input id="patient-search" v-model.trim="keyword" :disabled="checkingIn" autocomplete="off" maxlength="100" placeholder="Nhập thông tin bệnh nhân" />
+          <input id="patient-search" v-model.trim="keyword" :disabled="checkingIn" autocomplete="off" maxlength="1024" placeholder="Nhập thông tin hoặc quét mã CCCD" />
           <button type="submit" class="secondary" :disabled="searching || checkingIn || !keyword">
             {{ searching ? 'Đang tìm…' : 'Tìm hồ sơ' }}
+          </button>
+          <button type="button" class="secondary qr-btn" :disabled="checkingIn" @click="openQr">
+            Quét QR CCCD
           </button>
         </div>
       </form>
@@ -80,7 +83,10 @@
     <section v-if="selectedPatient" class="card checkin-card">
       <h2>{{ selectedPatient.fullName }} <small>{{ selectedPatient.patientCode }}</small></h2>
 
-      <label for="checkin-citizen-id">CCCD của người bệnh</label>
+      <div class="field-with-action">
+        <label for="checkin-citizen-id">CCCD của người bệnh</label>
+        <button type="button" class="link-btn" @click="openQr">Quét QR để điền</button>
+      </div>
       <input :aria-invalid="!!fieldErrors.citizenId" aria-describedby="citizen-error" id="checkin-citizen-id" v-model="citizenId" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="Nhập CCCD 12 chữ số" />
       <p v-if="fieldErrors.citizenId" id="citizen-error" class="error">{{ fieldErrors.citizenId }}</p>
       <label for="checkin-phone">Số điện thoại trong hồ sơ</label>
@@ -136,15 +142,39 @@
       </span>
       <button type="button" class="secondary" @click="resetForm">Check-in bệnh nhân khác</button>
     </section>
+
+    <!-- Modal quét QR CCCD -->
+    <div v-if="qrOpened" class="qr-modal-backdrop" @click.self="closeQr">
+      <section class="qr-dialog" role="dialog" aria-modal="true" aria-label="Quét QR Căn cước công dân">
+        <header class="qr-header">
+          <h3>Quét QR Căn cước công dân (CCCD)</h3>
+          <button type="button" class="close-btn" @click="closeQr" aria-label="Đóng">✕</button>
+        </header>
+        <p class="hint">Dùng máy quét USB (đặt con trỏ vào ô nhập và bấm máy quét) hoặc quét trực tiếp bằng Camera.</p>
+        <form @submit.prevent="onQrSubmit">
+          <input ref="qrScanInput" v-model="qrRaw" type="password" maxlength="1024" placeholder="Dùng máy quét USB hoặc dán mã QR CCCD..." autocomplete="off" :disabled="qrCameraOn" />
+          <div class="qr-actions">
+            <button type="submit" class="secondary" :disabled="!qrRaw.trim() || qrCameraOn">Nhận diện mã</button>
+            <button type="button" class="secondary" :disabled="qrCameraOn" @click="startQrCamera">Quét bằng Camera</button>
+          </div>
+        </form>
+        <div v-if="qrCameraOn" class="qr-camera-box">
+          <video ref="qrVideo" muted playsinline aria-label="Camera quét QR" />
+          <button type="button" class="secondary" @click="stopQrCamera">Tắt camera</button>
+        </div>
+        <p v-if="qrError" class="error" role="alert">{{ qrError }}</p>
+        <p v-if="qrMessage" class="hint" role="status">{{ qrMessage }}</p>
+      </section>
+    </div>
   </main>
   <p v-else role="alert">Bạn không có quyền tiếp đón bệnh nhân.</p>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import axios from 'axios';
 import { useAuthStore } from '@/stores/auth';
-import { hashCitizenId, qrPatientIntakeService } from '@/services/qrPatientIntake';
+import { decodeCitizenQr, hashCitizenId, qrPatientIntakeService } from '@/services/qrPatientIntake';
 import { validateCheckIn, checkInProblem, type CheckInErrors } from '@/services/checkInForm';
 import { appointmentsService, type AppointmentResponse } from '@/services/appointments';
 import { patientsService, type PatientSummary } from '@/services/patients';
@@ -182,6 +212,17 @@ const waitingLoading = ref(false), waitingError = ref(''), selecting = ref(false
 let searchSequence = 0, deskSequence = 0, waitingSequence = 0, selectionSequence = 0, appointmentSequence = 0;
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 let disposed = false;
+
+const qrOpened = ref(false);
+const qrRaw = ref('');
+const qrCameraOn = ref(false);
+const qrError = ref('');
+const qrMessage = ref('');
+const qrVideo = ref<HTMLVideoElement | null>(null);
+const qrScanInput = ref<HTMLInputElement | null>(null);
+let qrTimer: ReturnType<typeof setTimeout> | undefined;
+let qrStream: MediaStream | null = null;
+let qrCameraGen = 0;
 
 async function loadDesk(page = 1) {
   if (!canCheckIn.value || disposed || page < 1) return;
@@ -232,6 +273,33 @@ async function searchPatients(page = 1) {
   if (!value) { searching.value = false; return; }
   searching.value = true;
   try {
+    if (value.includes('|')) {
+      try {
+        const decoded = await decodeCitizenQr(value);
+        if (sequence !== searchSequence || disposed) return;
+        const lookup = await qrPatientIntakeService.lookup(decoded.citizenIdHash);
+        if (sequence !== searchSequence || disposed) return;
+        const patient = lookup.existing?.isActive ? await patientsService.getById(lookup.existing.patientId) : null;
+        if (sequence !== searchSequence || disposed) return;
+        if (patient) {
+          patients.value = [patient];
+          searchTotal.value = 1;
+          searchPage.value = 1;
+          searched.value = true;
+          const id = value.split('|')[0].trim();
+          await selectPatient(patient);
+          citizenId.value = id;
+          if (patient.phone) checkInPhone.value = patient.phone;
+          return;
+        } else {
+          searchError.value = 'Chưa có hồ sơ cho CCCD này. Mở hồ sơ bệnh nhân để tạo mới.';
+          searched.value = true;
+          return;
+        }
+      } catch {
+        // Fall back to normal search
+      }
+    }
     if (/^[0-9]{12}$/.test(value)) {
       const hash = await hashCitizenId(value);
       if (sequence !== searchSequence || disposed) return;
@@ -337,11 +405,144 @@ async function submitCheckIn() {
   }
 }
 
+interface NativeDetector { detect(source: HTMLVideoElement): Promise<Array<{ rawValue: string }>> }
+interface NativeDetectorConstructor { new(options: { formats: string[] }): NativeDetector; getSupportedFormats(): Promise<string[]> }
+
+function openQr() {
+  qrOpened.value = true;
+  qrRaw.value = '';
+  qrError.value = '';
+  qrMessage.value = '';
+  nextTick(() => {
+    qrScanInput.value?.focus();
+  });
+}
+
+function closeQr() {
+  stopQrCamera();
+  qrOpened.value = false;
+  qrRaw.value = '';
+  qrError.value = '';
+  qrMessage.value = '';
+}
+
+function stopQrCamera() {
+  qrCameraGen++;
+  clearTimeout(qrTimer);
+  qrTimer = undefined;
+  if (qrStream) {
+    qrStream.getTracks().forEach(t => t.stop());
+    qrStream = null;
+  }
+  qrCameraOn.value = false;
+}
+
+async function processQrString(raw: string) {
+  const value = raw.trim();
+  if (!value) return;
+  qrError.value = '';
+  qrMessage.value = '';
+  try {
+    let id12 = '';
+    let hash = '';
+    if (value.includes('|')) {
+      const decoded = await decodeCitizenQr(value);
+      id12 = value.split('|')[0].trim();
+      hash = decoded.citizenIdHash;
+    } else if (/^[0-9]{12}$/.test(value)) {
+      id12 = value;
+      hash = await hashCitizenId(value);
+    } else {
+      qrError.value = 'Mã không đúng định dạng QR CCCD gắn chip hoặc 12 số CCCD.';
+      return;
+    }
+
+    citizenId.value = id12;
+
+    if (!selectedPatient.value) {
+      const lookup = await qrPatientIntakeService.lookup(hash);
+      const patient = lookup.existing?.isActive ? await patientsService.getById(lookup.existing.patientId) : null;
+      if (patient) {
+        await selectPatient(patient);
+        citizenId.value = id12;
+        if (patient.phone) checkInPhone.value = patient.phone;
+        closeQr();
+      } else {
+        qrError.value = 'Không tìm thấy hồ sơ cho CCCD này. Mở trang Bệnh nhân để tạo hồ sơ mới.';
+      }
+    } else {
+      closeQr();
+    }
+  } catch {
+    qrError.value = 'Không thể đọc mã CCCD. Vui lòng quét lại hoặc nhập tay 12 số.';
+  }
+}
+
+async function onQrSubmit() {
+  if (!qrRaw.value.trim()) return;
+  await processQrString(qrRaw.value);
+}
+
+async function startQrCamera() {
+  if (disposed || !canCheckIn.value || !qrOpened.value || qrCameraOn.value) return;
+  const Detector = (globalThis as typeof globalThis & { BarcodeDetector?: NativeDetectorConstructor }).BarcodeDetector;
+  if (!Detector || !navigator.mediaDevices?.getUserMedia) {
+    qrError.value = 'Trình duyệt không hỗ trợ quét camera trực tiếp. Vui lòng dùng máy quét USB hoặc dán mã QR.';
+    return;
+  }
+  stopQrCamera();
+  qrCameraOn.value = true;
+  const ticketId = qrCameraGen;
+  try {
+    if (!(await Detector.getSupportedFormats()).includes('qr_code')) throw Error();
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+    if (ticketId !== qrCameraGen || disposed || !qrOpened.value) {
+      stream.getTracks().forEach(t => t.stop());
+      return;
+    }
+    qrStream = stream;
+    await nextTick();
+    if (!qrVideo.value) { stopQrCamera(); return; }
+    qrVideo.value.srcObject = stream;
+    await qrVideo.value.play();
+    const detector = new Detector({ formats: ['qr_code'] });
+    async function frame() {
+      if (ticketId !== qrCameraGen || disposed || !qrOpened.value || !qrVideo.value) return;
+      try {
+        if (qrVideo.value.readyState >= 2) {
+          const codes = await detector.detect(qrVideo.value);
+          if (ticketId !== qrCameraGen) return;
+          if (codes[0]?.rawValue) {
+            stopQrCamera();
+            await processQrString(codes[0].rawValue);
+            return;
+          }
+        }
+      } catch {
+        if (ticketId === qrCameraGen) {
+          stopQrCamera();
+          qrError.value = 'Lỗi camera khi quét mã.';
+        }
+        return;
+      }
+      if (ticketId === qrCameraGen && qrCameraOn.value) {
+        qrTimer = setTimeout(() => void frame(), 300);
+      }
+    }
+    void frame();
+  } catch {
+    if (ticketId === qrCameraGen) {
+      stopQrCamera();
+      qrError.value = 'Không mở được camera. Kiểm tra quyền camera của trình duyệt.';
+    }
+  }
+}
+
 function resetForm() {
   clearTimeout(searchTimer); searchSequence++; clearSelection(); keyword.value = ''; patients.value = []; searched.value = false; searching.value = false; searchError.value = '';
 }
 onBeforeUnmount(() => {
-  disposed = true; clearTimeout(searchTimer); searchSequence++; deskSequence++; waitingSequence++; clearSelection(); keyword.value = ''; patients.value = []; deskRows.value = []; waitingRows.value = [];
+  disposed = true; stopQrCamera(); clearTimeout(searchTimer); searchSequence++; deskSequence++; waitingSequence++; clearSelection(); keyword.value = ''; patients.value = []; deskRows.value = []; waitingRows.value = [];
 });
 
 function todayLocal(): string {
@@ -389,5 +590,19 @@ button:disabled { cursor: wait; opacity: .6; }
 .priority { display: inline-block; margin-bottom: 1rem; padding: .35rem .7rem; border-radius: 999px; color: #176b45; background: #d9f0e2; }
 .priority.normal { color: #5d4b0e; background: #f7efcc; }
 .ticket button { display: block; margin: 0 auto; }
+.field-with-action { display: flex; align-items: center; justify-content: space-between; margin-bottom: .2rem; }
+.field-with-action label { margin-bottom: 0; }
+.link-btn { background: none; border: 0; padding: 0; color: #13795b; font-size: .88rem; font-weight: 600; text-decoration: underline; cursor: pointer; }
+.link-btn:hover { color: #0d543f; }
+.qr-btn { display: inline-flex; align-items: center; gap: .3rem; white-space: nowrap; }
+.qr-modal-backdrop { position: fixed; inset: 0; background: rgba(16, 24, 40, .45); display: grid; place-items: center; z-index: 1000; padding: 1rem; }
+.qr-dialog { background: #fff; border-radius: 10px; width: 100%; max-width: 500px; padding: 1.25rem; box-shadow: 0 10px 30px rgba(0,0,0,.2); display: grid; gap: .75rem; box-sizing: border-box; }
+.qr-header { display: flex; align-items: center; justify-content: space-between; }
+.qr-header h3 { margin: 0; font-size: 1.15rem; color: #174e3d; }
+.close-btn { background: none; border: 0; font-size: 1.2rem; color: #607080; cursor: pointer; padding: .2rem .5rem; line-height: 1; }
+.close-btn:hover { color: #243447; }
+.qr-actions { display: flex; gap: .5rem; margin-top: .5rem; flex-wrap: wrap; }
+.qr-camera-box { display: grid; gap: .5rem; margin-top: .5rem; }
+.qr-camera-box video { width: 100%; max-height: 240px; background: #000; border-radius: 6px; object-fit: cover; }
 @media (max-width: 520px) { .search-row { flex-direction: column; } }
 </style>

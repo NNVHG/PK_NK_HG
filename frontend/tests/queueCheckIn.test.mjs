@@ -18,7 +18,14 @@ function fixture({ role = 'RECEPTIONIST', queryPages = [page], deskPages = [page
     vue: { defineComponent: component => component, computed: get => ({ get value() { return get(); } }), ref: value => ({ value }), onMounted: cb => { mount = cb; }, onBeforeUnmount: cb => { unmount = cb; }, watch: (getter, cb) => watchers.push({ getter, cb }) },
     axios: { isAxiosError: error => Boolean(error?.response) },
     '@/stores/auth': { useAuthStore: () => auth },
-    '@/services/qrPatientIntake': { hashCitizenId: async id => { calls.lookup.push(['hash', id]); return 'HASH:' + id; }, qrPatientIntakeService: { lookup: async hash => { calls.lookup.push(['lookup', hash]); return { existing: { patientId: 7, isActive: true } }; } } },
+    '@/services/qrPatientIntake': {
+      decodeCitizenQr: async raw => {
+        const parts = raw.split('|');
+        return { citizenIdHash: 'HASH:' + parts[0], citizenIdMasked: parts[0].slice(0, 3) + '***', fullName: parts[2] || '', dateOfBirth: '1990-01-01', gender: 'Male', address: '' };
+      },
+      hashCitizenId: async id => { calls.lookup.push(['hash', id]); return 'HASH:' + id; },
+      qrPatientIntakeService: { lookup: async hash => { calls.lookup.push(['lookup', hash]); return { existing: { patientId: 7, isActive: true } }; } }
+    },
     '@/services/checkInForm': { validateCheckIn: (id, phone, notes) => { const e = {}; if (!/^\d{12}$/.test(id.trim())) e.citizenId = 'CCCD phải gồm 12 chữ số.'; if (!/^0\d{9}$/.test(phone.trim())) e.phone = 'Số điện thoại phải gồm 10 chữ số.'; if (notes.length > 500) e.notes = 'Ghi chú không được vượt quá 500 ký tự.'; return e; }, checkInProblem: problem => ({ fields: {}, message: problem?.message ?? 'Không thể tiếp đón.' }) },
     '@/services/appointments': { appointmentsService: {
       getForDesk: async (...args) => { calls.desk.push(args); const value = deskPages.shift() ?? page; if (value instanceof Error) throw value; return value; },
@@ -56,6 +63,12 @@ test('F_CHK_01 hashes CCCD before server lookup and never queries with the raw i
   assert.deepEqual(f.calls.lookup, [['hash', '000000000901'], ['lookup', 'HASH:000000000901']]);
   assert.equal(f.calls.patient[0], 7); assert.equal(f.calls.search.length, 0);
 });
+test('F_CHK_01 parses raw CCCD QR string, looks up hashed CCCD, selects patient and populates citizenId', async () => {
+  const f = fixture(); f.c.keyword.value = '000000000901||Nguyen Van A|01011990|Nam|Ha Noi|01012021'; await f.c.searchPatients();
+  assert.equal(f.calls.patient[0], 7);
+  assert.equal(f.c.citizenId.value, '000000000901');
+});
+
 test('F_CHK_01 debounce reruns the quick search after input changes', async () => {
   const f = fixture(); f.c.keyword.value = 'Synthetic'; f.watchers[0].cb();
   await new Promise(resolve => setTimeout(resolve, 390));

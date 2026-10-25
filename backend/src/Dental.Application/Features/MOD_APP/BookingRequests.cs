@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Dental.Application.Common;
 using Dental.Domain.Constants;
 using FluentValidation;
@@ -7,6 +8,7 @@ public sealed record BookingIntent(string FullName,string Phone,DateOnly DateOfB
     DateOnly AppointmentDate,TimeOnly SlotTime,int? DentistId,string? Notes,string ScheduleRevision,int? PatientId=null);
 public sealed record BookingOtpRequest(BookingIntent Intent);
 public sealed record BookingOtpResponse(Guid ChallengeId,int ExpiresInSeconds=300,int ResendAfterSeconds=60);
+[method: JsonConstructor]
 public sealed record SubmitBookingRequest(BookingIntent Intent,Guid ClientRequestId,bool Confirmed)
 {
     // Compatibility constructor for existing internal callers; appointment submission no longer uses OTP.

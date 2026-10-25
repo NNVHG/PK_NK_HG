@@ -24,4 +24,35 @@ public sealed class BookingRequestTests
     [Fact]public async Task InvalidSubmissionDoesNotConsumeOtp(){var c=new Clock();var repo=Substitute.For<IBookingRequestRepository>();var otp=Substitute.For<IBookingOtp>();var service=new BookingRequestService(repo,otp,new(c));var req=new SubmitBookingRequest(Intent(c),Guid.NewGuid(),"123456",Guid.NewGuid(),false);Assert.Equal(Error.Validation,(await service.SubmitAsync(req,null,null,null)).Error);Assert.Empty(repo.ReceivedCalls());Assert.Empty(otp.ReceivedCalls());}
     [Fact]public async Task ExactReplayDoesNotConsumeAnotherCode(){var c=new Clock();var repo=Substitute.For<IBookingRequestRepository>();var otp=Substitute.For<IBookingOtp>();var req=new SubmitBookingRequest(Intent(c),Guid.NewGuid(),"123456",Guid.NewGuid(),true);repo.ReplayAsync(req,null,default).Returns(new BookingReceipt(req.ClientRequestId,"Pending"));var service=new BookingRequestService(repo,otp,new(c));Assert.True((await service.SubmitAsync(req,null,null,null)).IsSuccess);Assert.Empty(otp.ReceivedCalls());}
     [Fact]public void PublicReceiptHasNoPatientIdentityOrPriority()=>Assert.Equal(new[]{"RequestId","Status"},typeof(BookingReceipt).GetProperties().Select(p=>p.Name).Order().ToArray());
+    [Fact]
+    public void SubmitBookingRequestDeserializesFromJsonSuccessfully()
+    {
+        const string json = """
+        {
+          "intent": {
+            "fullName": "Nguyen Van A",
+            "phone": "0912345678",
+            "dateOfBirth": "1990-01-01",
+            "gender": "Male",
+            "email": null,
+            "appointmentDate": "2026-10-26",
+            "slotTime": "09:00:00",
+            "dentistId": null,
+            "notes": null,
+            "scheduleRevision": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "patientId": null
+          },
+          "clientRequestId": "11111111-1111-1111-1111-111111111111",
+          "confirmed": true
+        }
+        """;
+        var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        var request = System.Text.Json.JsonSerializer.Deserialize<SubmitBookingRequest>(json, options);
+        Assert.NotNull(request);
+        Assert.Equal("Nguyen Van A", request.Intent.FullName);
+        Assert.Equal(Guid.Parse("11111111-1111-1111-1111-111111111111"), request.ClientRequestId);
+        Assert.True(request.Confirmed);
+    }
 }
+
+
