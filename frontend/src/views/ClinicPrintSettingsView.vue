@@ -1,4 +1,8 @@
-<template><main class="clinic-settings"><h1>Thông tin phòng khám trên bản in</h1><p>Dùng cho đơn thuốc và biên lai. Tên cơ sở: Nha khoa Hoàng Gia.</p>
+<template><main class="clinic-settings">
+  <div class="clinic-brand-preview">
+    <img src="/logo-ngang.svg" alt="Nha Khoa Hoàng Gia" width="220" height="59" />
+  </div>
+  <h1>Thông tin phòng khám trên bản in</h1><p>Dùng cho đơn thuốc và biên lai. Tên cơ sở: Nha khoa Hoàng Gia.</p>
  <p v-if="error" role="alert">{{ error }}</p><p v-if="message" role="status">{{ message }}</p>
  <button :disabled="busy || !allowed" @click="load">Tải lại thông tin</button>
  <form v-if="loaded" @submit.prevent="save"><label>Địa chỉ<input v-model="address" maxlength="500" required :disabled="busy || needsReview" /></label><label>Hotline<input v-model="phone" maxlength="30" required type="tel" :disabled="busy || needsReview" /></label>
@@ -34,4 +38,4 @@ async function save() {
 watch(identity, () => { generation++; busy.value = false; clear(); error.value = ''; message.value = ''; if (!disposed) void load(); });
 onMounted(() => load()); onUnmounted(() => { disposed = true; generation++; clear(); });
 </script>
-<style scoped>.clinic-settings { max-width:48rem;margin:1rem auto;padding:1rem; } label { display:block;margin:1rem 0; } input,button { padding:.5rem; } input:not([type=checkbox]) { width:100%; } [role=alert] { color:#b91c1c; }</style>
+<style scoped>.clinic-settings { max-width:48rem;margin:1rem auto;padding:1rem; } .clinic-brand-preview { margin-bottom:1rem; } .clinic-brand-preview img { display:block; max-width:100%; height:auto; } label { display:block;margin:1rem 0; } input,button { padding:.5rem; } input:not([type=checkbox]) { width:100%; } [role=alert] { color:#b91c1c; }</style>

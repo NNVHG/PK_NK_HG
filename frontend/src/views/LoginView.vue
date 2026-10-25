@@ -1,8 +1,11 @@
 <template>
   <div class="login-wrapper">
     <div class="login-card">
+      <div class="login-brand">
+        <img src="/logo-icon.svg" alt="Nha Khoa Hoàng Gia" class="brand-logo" width="48" height="48" />
+      </div>
       <h2>Đăng Nhập Hệ Thống</h2>
-      <p class="subtitle">Phòng Khám Nha Khoa</p>
+      <p class="subtitle">Nha Khoa Hoàng Gia</p>
       <div v-if="registrationNotice" class="success-alert">{{ registrationNotice }}</div>
 
       <p v-if="$route.query.phoneChanged === '1'" role="status">Đã xác minh và đổi SĐT. Nhân viên đăng nhập bằng số mới; bệnh nhân tiếp tục đăng nhập bằng CCCD. Mật khẩu được giữ nguyên.</p>
@@ -93,6 +96,16 @@ async function handleSubmit() {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   width: 100%;
   max-width: 400px;
+}
+
+.login-brand {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0.75rem;
+}
+
+.brand-logo {
+  display: block;
 }
 
 .login-card h2 {

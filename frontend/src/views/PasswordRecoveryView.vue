@@ -1,5 +1,8 @@
 <template>
   <section class="recovery-card" aria-labelledby="recovery-title">
+    <div class="recovery-brand">
+      <img src="/logo-icon.svg" alt="Nha Khoa Hoàng Gia" class="brand-logo" width="40" height="40" />
+    </div>
     <h1 id="recovery-title">Khôi phục mật khẩu</h1>
     <p>Bệnh nhân nhập CCCD và số điện thoại đã đăng ký. Nhân viên chỉ cần số điện thoại. Mã xác minh được gửi qua SMS.</p>
     <p class="notice" role="status">{{ message }}</p>
@@ -103,6 +106,8 @@ onUnmounted(() => { active = false; ++requestVersion; store.clear(); clearSecret
 
 <style scoped>
 .recovery-card { max-width: 440px; margin: 2rem auto; padding: 1.5rem; background: white; border: 1px solid #d7dce1; border-radius: 8px; }
+.recovery-brand { display: flex; justify-content: center; margin-bottom: 0.75rem; }
+.brand-logo { display: block; }
 label { display: block; margin: 1rem 0 .4rem; font-weight: 600; }
 input { box-sizing: border-box; width: 100%; padding: .65rem; font-size: 1rem; border: 1px solid #7b8791; border-radius: 4px; }
 button { min-height: 40px; padding: .6rem 1rem; cursor: pointer; }

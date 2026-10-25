@@ -1,5 +1,8 @@
 <template>
   <main class="activation">
+    <div class="activation-brand">
+      <img src="/logo-icon.svg" alt="Nha Khoa Hoàng Gia" class="brand-logo" width="40" height="40" />
+    </div>
     <h1>Kích hoạt tài khoản mới</h1>
     <p>Dành cho bệnh nhân mới sau khi Lễ tân xác nhận lịch và nhân viên mới do Admin tạo. Tài khoản cũ tiếp tục đăng nhập như trước.</p>
     <p role="status" aria-live="polite">{{ message }}</p>
@@ -97,7 +100,10 @@ watch(identity, () => { generation++; busy.value = false; clear(); done.value = 
 onUnmounted(() => { disposed = true; generation++; clear(); message.value = ''; error.value = ''; });
 </script>
 <style scoped>
-.activation { max-width: 38rem; margin: 2rem auto; padding: 1rem; } label { display: block; margin-block: 1rem; }
+.activation { max-width: 38rem; margin: 2rem auto; padding: 1rem; }
+.activation-brand { display: flex; justify-content: flex-start; margin-bottom: 0.75rem; }
+.brand-logo { display: block; }
+label { display: block; margin-block: 1rem; }
 input:not([type=checkbox]):not([type=radio]) { display: block; width: 100%; box-sizing: border-box; }
 input, button { font: inherit; padding: .6rem; } button { margin: .5rem .5rem .5rem 0; } [role=alert] { color: #9f1239; }
 :focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }

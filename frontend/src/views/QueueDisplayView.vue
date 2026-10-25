@@ -2,8 +2,11 @@
   <div class="tv-monitor">
     <header class="header">
       <div class="brand">
-        <h1>NHA KHOA HỒNG GIA</h1>
-        <span class="subtitle">BẢNG GỌI SỐ VÀ TIẾP ĐÓN PHÒNG CHỜ</span>
+        <img src="/logo-icon-nen-toi.svg" alt="Nha Khoa Hoàng Gia" class="tv-logo" width="48" height="48" />
+        <div class="brand-text">
+          <h1>NHA KHOA HOÀNG GIA</h1>
+          <span class="subtitle">BẢNG GỌI SỐ VÀ TIẾP ĐÓN PHÒNG CHỜ</span>
+        </div>
       </div>
       <div class="header-right">
         <button
@@ -268,6 +271,17 @@ onUnmounted(() => {
   border-bottom: 2px solid #334155;
   padding-bottom: 1rem;
   margin-bottom: 1.5rem;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.tv-logo {
+  flex-shrink: 0;
+  display: block;
 }
 
 .brand h1 {

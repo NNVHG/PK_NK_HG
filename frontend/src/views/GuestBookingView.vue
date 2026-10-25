@@ -1,5 +1,11 @@
 <template>
  <main class="booking">
+  <div class="booking-brand">
+    <RouterLink to="/" class="brand-link">
+      <img src="/logo-icon.svg" alt="Nha Khoa Hoàng Gia" class="brand-logo" width="32" height="32" />
+      <span>Nha Khoa Hoàng Gia</span>
+    </RouterLink>
+  </div>
   <RouterLink to="/login">Đăng nhập</RouterLink><h1>Đặt lịch khám</h1>
   <p>Không cần đăng nhập hoặc mã OTP để gửi yêu cầu. Yêu cầu hợp lệ giữ chỗ trong khi chờ Lễ tân xác nhận; tài khoản được xử lý khi khách đến phòng khám.</p>
   <p role="status" aria-live="polite">{{receipt?(receipt.status==='Pending'?'Đã nhận yêu cầu và giữ chỗ. Vui lòng chờ Lễ tân xác nhận lịch.':receipt.status==='Approved'?'Lễ tân đã xác nhận lịch. Liên hệ phòng khám nếu cần đối chiếu thêm.':'Yêu cầu đã bị từ chối và chỗ đã được nhả. Vui lòng liên hệ phòng khám.'):''}}</p>
@@ -69,5 +75,9 @@ async function submit(){
 watch(identity,()=>{generation++;busy.value=false;clear();if(!disposed)void load();});onMounted(()=>void load());onUnmounted(()=>{disposed=true;generation++;clear();});
 </script>
 <style scoped>
-.booking{max-width:48rem;margin:1rem auto;padding:1rem;}fieldset{display:grid;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));gap:1rem;}label{display:flex;flex-direction:column;gap:.35rem;margin:.7rem 0;}input,select,textarea,button{font:inherit;padding:.6rem;}input[type=checkbox]{align-self:flex-start;}button{margin:.4rem;}[role=alert]{color:#9f1239;}
+.booking{max-width:48rem;margin:1rem auto;padding:1rem;}
+.booking-brand{margin-bottom:.75rem;}
+.brand-link{display:inline-flex;align-items:center;gap:.5rem;text-decoration:none;font-weight:700;color:#164e63;}
+.brand-logo{flex-shrink:0;}
+fieldset{display:grid;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));gap:1rem;}label{display:flex;flex-direction:column;gap:.35rem;margin:.7rem 0;}input,select,textarea,button{font:inherit;padding:.6rem;}input[type=checkbox]{align-self:flex-start;}button{margin:.4rem;}[role=alert]{color:#9f1239;}
 </style>

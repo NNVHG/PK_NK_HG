@@ -11,7 +11,10 @@
       <button v-if="receipt" :disabled="busy" @click="print">{{ receipt.printCount ? 'In lại biên lai K80' : 'In biên lai K80' }}</button>
     </div>
     <article v-if="receipt" class="payment-receipt" aria-label="Biên lai K80">
-      <header><h2>{{ receipt.clinicName }}</h2><p v-if="receipt.clinicAddress">{{ receipt.clinicAddress }}</p><p v-if="receipt.clinicPhone">Hotline: {{ receipt.clinicPhone }}</p></header>
+      <header>
+        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 128 128" class="receipt-logo" role="img" aria-label="Logo Nha khoa Hoàng Gia"><g transform="translate(4 0) scale(1.2)"><path fill="#1857B6" d="M20 34 C27 27 36 27 49 31 C62 27 72 26 80 34 C93 46 82 69 77 81 C71 98 66 104 59 96 C55 91 57 73 50 73 C43 73 45 91 41 96 C34 104 29 96 23 81 C18 67 7 47 20 34 Z"/><path fill="#E5B95E" d="M24 24 L21 9 L39 16 L50 5 L61 16 L79 9 L76 24 Z"/><path d="M30 28 H70" stroke="#E5B95E" stroke-width="4" stroke-linecap="round"/><path d="M37 49 Q50 60 63 49" fill="none" stroke="#FFFFFF" stroke-width="5.6" stroke-linecap="round"/></g></svg>
+        <h2>{{ receipt.clinicName }}</h2><p v-if="receipt.clinicAddress">{{ receipt.clinicAddress }}</p><p v-if="receipt.clinicPhone">Hotline: {{ receipt.clinicPhone }}</p>
+      </header>
       <h3>BIÊN LAI THU TIỀN</h3>
       <p v-if="receipt.printNumber > 1"><strong>[BẢN IN LẠI - LẦN {{ receipt.printNumber }}]</strong><br />Thời gian in lại: {{ date(receipt.printedAt) }}</p>
       <p v-if="receipt.source === 'Simulation'"><strong>MÔ PHỎNG — KHÔNG CÓ TIỀN NGÂN HÀNG THỰC</strong></p>
@@ -76,6 +79,7 @@ onUnmounted(cleanup);
 .receipt-dialog { width: min(90vw, 500px); max-height: 85vh; overflow: auto; }
 .receipt-dialog::backdrop { background: rgb(0 0 0 / .4); }
 .payment-receipt { background: white; color: black; padding: 12px; font: 12px Arial, sans-serif; }
+.receipt-logo { display: block; margin: 0 auto 4px; }
 .payment-receipt header, .payment-receipt h3, .payment-receipt footer { text-align: center; }
 .payment-receipt table { border-collapse: collapse; width: 100%; font-size: 10px; }
 .payment-receipt td, .payment-receipt th { padding: 3px; border-bottom: 1px dotted #555; overflow-wrap: anywhere; }

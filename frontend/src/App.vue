@@ -2,7 +2,10 @@
   <div class="layout">
     <header v-if="authStore.isAuthenticated" class="navbar">
       <div class="brand">
-        <h2>Phòng Khám Nha Khoa</h2>
+        <router-link to="/dashboard" class="brand-link">
+          <img src="/logo-icon-nen-toi.svg" alt="Nha Khoa Hoàng Gia" class="brand-logo" width="28" height="28" />
+          <h2>Nha Khoa Hoàng Gia</h2>
+        </router-link>
       </div>
       <nav class="nav-links" aria-label="Điều hướng chính">
         <router-link to="/dashboard">Bảng điều khiển</router-link>
@@ -88,9 +91,23 @@ async function handleLogout() {
 
 .brand { flex: 0 0 auto; }
 
+.brand-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #fff;
+  text-decoration: none;
+}
+
+.brand-logo {
+  display: block;
+  flex-shrink: 0;
+}
+
 .brand h2 {
   font-size: 1.15rem;
   font-weight: 600;
+  margin: 0;
 }
 
 .nav-links {
