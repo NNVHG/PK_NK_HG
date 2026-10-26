@@ -71,7 +71,8 @@ async function handleSubmit() {
   loading.value = true;
   try {
     await authStore.login(phone.value, password.value);
-    const redirect = (route.query.redirect as string) || '/dashboard';
+    const defaultRoute = authStore.role === 'PATIENT' ? '/patient/my-record' : '/management/dashboard';
+    const redirect = (route.query.redirect as string) || defaultRoute;
     router.push(redirect);
   } catch (err: any) {
     errorMessage.value = err.response?.data?.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại.';

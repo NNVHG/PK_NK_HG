@@ -1,11 +1,13 @@
 <template>
   <div class="layout">
-    <header v-if="authStore.isAuthenticated" class="navbar">
+    <header v-if="authStore.isAuthenticated && !isTvRoute" class="navbar" :class="isPatient ? 'navbar-patient' : 'navbar-staff'">
       <div class="brand">
-        <router-link to="/dashboard" class="brand-link">
+        <router-link :to="isPatient ? '/patient/my-record' : '/management/dashboard'" class="brand-link">
           <img src="/logo-icon-nen-toi.svg" alt="Nha Khoa Hoàng Gia" class="brand-logo" width="28" height="28" />
           <h2>Nha Khoa Hoàng Gia</h2>
         </router-link>
+        <span v-if="isPatient" class="area-tag patient-tag">Cổng Bệnh Nhân</span>
+        <span v-else class="area-tag staff-tag">Khu Quản Lý</span>
       </div>
       <nav class="nav-links" aria-label="Điều hướng chính">
         <router-link to="/dashboard">Bảng điều khiển</router-link>
@@ -54,16 +56,22 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 
 const authStore = useAuthStore();
 const router = useRouter();
+const route = useRoute();
 
 const isStaff = computed(() => {
   const staffRoles = ['ADMIN', 'RECEPTIONIST', 'DENTIST', 'ASSISTANT'];
   return staffRoles.includes(authStore.role);
 });
 const isAdmin = computed(() => authStore.role === 'ADMIN');
+const isPatient = computed(() => authStore.role === 'PATIENT');
+const isTvRoute = computed(() => {
+  const path = route.path || '';
+  return path.startsWith('/queue/display') || path.startsWith('/queue/public-monitor');
+});
 
 async function handleLogout() {
   await authStore.logout();
@@ -89,7 +97,41 @@ async function handleLogout() {
   padding: 0.75rem 1.5rem;
 }
 
-.brand { flex: 0 0 auto; }
+.navbar-patient {
+  border-bottom: 3px solid #0f766e;
+}
+
+.navbar-staff {
+  border-bottom: 3px solid #f59e0b;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+}
+
+.area-tag {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.patient-tag {
+  background-color: #0f766e;
+  color: #fff;
+}
+
+.staff-tag {
+  background-color: #d97706;
+  color: #fff;
+}
 
 .brand-link {
   display: flex;
