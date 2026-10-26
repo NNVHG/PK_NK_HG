@@ -4,6 +4,7 @@ using Dental.Application.Features.Auth.DTOs;
 using Dental.Application.Interfaces;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
+using Dental.Domain.Enums;
 
 namespace Dental.Application.Features.Auth.Services;
 
@@ -15,6 +16,8 @@ public sealed class AuthService
     private readonly IPasswordHasher _passwordHasher;
     private readonly ITokenService _tokenService;
     private readonly IAuditLogger _auditLogger;
+    private readonly ILoginLockoutService? _lockoutService;
+    private readonly IKeyedIdentityHasher? _identityHasher;
 
     public AuthService(
         IUserRepository userRepo,
@@ -22,13 +25,17 @@ public sealed class AuthService
         IPasswordHasher passwordHasher,
         ITokenService tokenService,
         IAuditLogger auditLogger,
-        IPatientRepository patientRepository)
+        IPatientRepository patientRepository,
+        ILoginLockoutService? lockoutService = null,
+        IKeyedIdentityHasher? identityHasher = null)
     {
         _userRepo = userRepo;
         _unitOfWork = unitOfWork;
         _passwordHasher = passwordHasher;
         _tokenService = tokenService;
         _auditLogger = auditLogger;
+        _lockoutService = lockoutService;
+        _identityHasher = identityHasher;
     }
 
     /// <summary>DL326: tài khoản chỉ được tạo sau duyệt lịch; giữ lỗi rõ ràng cho caller cũ.</summary>
@@ -36,8 +43,9 @@ public sealed class AuthService
         => Task.FromResult(Result<RegisterResponse>.Failure(Dental.Application.Features.MOD_AUTH.PatientActivationService.RegistrationDisabled));
 
     /// <summary>
-    /// Đăng nhập bằng SĐT + mật khẩu.
-    /// Quy tắc bảo mật (UAT AUTH-09):
+    /// Đăng nhập bằng SĐT nhân viên, CCCD hoặc Hộ chiếu bệnh nhân + mật khẩu (DL-360, DL-364, DL-365).
+    /// Quy tắc bảo mật (UAT AUTH-09, DL-365):
+    ///   - Kiểm tra khóa tạm thời do nhập sai quá 5 lần trong 15 phút (DL-365).
     ///   - Sai SĐT hoặc sai mật khẩu → cùng thông báo chung (chống dò tài khoản).
     ///   - CHỈ khi mật khẩu ĐÚNG mà IsActive = false → báo "tài khoản bị khóa".
     /// </summary>
@@ -46,14 +54,50 @@ public sealed class AuthService
         string? ipAddress,
         CancellationToken ct = default)
     {
-        var identifier = request.Phone ?? string.Empty;
-        var user = identifier.Length == 12
-            ? await _userRepo.FindByCitizenIdHashAsync(Dental.Application.Features.MOD_PAT.CitizenIdIdentity.Hash(identifier), ct)
-            : await _userRepo.FindByPhoneAsync(identifier, ct);
+        var identifier = (request.Phone ?? string.Empty).Trim();
 
-        // Không tìm thấy SĐT → trả lỗi chung (không tiết lộ SĐT không tồn tại)
+        // 1. Kiểm tra khóa tạm thời chống brute-force (DL-365)
+        if (_lockoutService is not null && _lockoutService.IsLocked(identifier, out _))
+        {
+            await _auditLogger.LogAsync(
+                action: AuditActions.LoginFailed,
+                entityType: "User",
+                detail: "{\"reason\":\"temporary_lockout\"}",
+                ipAddress: ipAddress,
+                ct: ct);
+
+            return Result<LoginResponse>.Failure(Error.TemporaryLockout);
+        }
+
+        User? user = null;
+        if (request.DocumentType == IdentityDocumentType.Passport)
+        {
+            // Bệnh nhân dùng Hộ chiếu (DL-360, DL-364)
+            var hash = _identityHasher is not null
+                ? _identityHasher.Hash(identifier, IdentityDocumentType.Passport, request.NationalityCode)
+                : Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"PASSPORT:{request.NationalityCode?.ToUpperInvariant()}:{identifier.ToUpperInvariant()}")));
+            user = await _userRepo.FindByIdentityHashAsync(hash, ct);
+        }
+        else if (identifier.Length == 12 && request.DocumentType != IdentityDocumentType.Passport)
+        {
+            // CCCD 12 chữ số
+            var keyedHash = _identityHasher?.Hash(identifier, IdentityDocumentType.CitizenId);
+            var legacyHash = Dental.Application.Features.MOD_PAT.CitizenIdIdentity.Hash(identifier);
+
+            user = keyedHash is not null ? await _userRepo.FindByIdentityHashAsync(keyedHash, ct) : null;
+            user ??= await _userRepo.FindByCitizenIdHashAsync(legacyHash, ct);
+        }
+        else
+        {
+            // SĐT nhân viên hoặc tài khoản cũ
+            user = await _userRepo.FindByPhoneAsync(identifier, ct);
+        }
+
+        // Không tìm thấy User → ghi nhận lần sai + trả lỗi chung (chống dò tài khoản)
         if (user is null)
         {
+            _lockoutService?.RecordFailedAttempt(identifier, out _, out _);
+
             await _auditLogger.LogAsync(
                 action: AuditActions.LoginFailed,
                 entityType: "User",
@@ -69,18 +113,24 @@ public sealed class AuthService
 
         if (!passwordValid)
         {
+            var nowLocked = false;
+            _lockoutService?.RecordFailedAttempt(identifier, out nowLocked, out _);
+
             await _auditLogger.LogAsync(
                 action: AuditActions.LoginFailed,
                 entityType: "User",
                 userId: user.UserId,
-                detail: "{\"reason\":\"wrong_password\"}",
+                detail: nowLocked ? "{\"reason\":\"wrong_password_locked\"}" : "{\"reason\":\"wrong_password\"}",
                 ipAddress: ipAddress,
                 ct: ct);
+
+            if (nowLocked)
+                return Result<LoginResponse>.Failure(Error.TemporaryLockout);
 
             return Result<LoginResponse>.Failure(Error.InvalidCredentials);
         }
 
-        // Mật khẩu đúng nhưng tài khoản bị khóa → báo rõ (UAT AUTH-09)
+        // Mật khẩu đúng nhưng tài khoản bị khóa vĩnh viễn (IsActive = false) → báo rõ (UAT AUTH-09)
         if (!user.IsActive)
         {
             await _auditLogger.LogAsync(
@@ -93,6 +143,9 @@ public sealed class AuthService
 
             return Result<LoginResponse>.Failure(Error.AccountLocked);
         }
+
+        // Mật khẩu đúng -> Xóa bộ đếm sai (DL-365)
+        _lockoutService?.ResetAttempts(identifier);
 
         if (user.RequiresPhoneActivation)
             return Result<LoginResponse>.Failure(new Error("AUTH_ACTIVATION_REQUIRED", "Cần xác minh OTP lần đầu trước khi đăng nhập."));

@@ -18,6 +18,7 @@ public record Error(string Code, string Message, object? Details = null)
     // Lỗi Auth (AUTH_*)
     public static readonly Error InvalidCredentials  = new("AUTH_001", "Số điện thoại hoặc mật khẩu không đúng.");
     public static readonly Error AccountLocked        = new("AUTH_002", "Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.");
+    public static readonly Error TemporaryLockout     = new("AUTH_010", "Tài khoản tạm thời bị khóa do nhập sai nhiều lần. Vui lòng thử lại sau 15 phút.");
     public static readonly Error Unauthorized        = new("AUTH_003", "Bạn chưa đăng nhập hoặc không có quyền truy cập.");
     public static readonly Error WrongOldPassword    = new("AUTH_004", "Mật khẩu cũ không chính xác.");
     public static readonly Error SameNewPassword     = new("AUTH_005", "Mật khẩu mới không được trùng với mật khẩu cũ.");

@@ -23,8 +23,19 @@ public static class CitizenIdIdentity
 {
     public static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
     public static string Mask(string value) => value[..3] + "******" + value[^3..];
-    public static bool Matches(string? hash, string value) => hash is not null && hash.Length == 64 &&
-        CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(hash), Encoding.ASCII.GetBytes(Hash(value)));
+    public static bool Matches(string? hash, string value)
+    {
+        if (hash is null || hash.Length != 64) return false;
+        var legacy = Hash(value);
+        if (CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(hash), Encoding.ASCII.GetBytes(legacy)))
+            return true;
+
+        // Cũng kiểm tra theo định dạng Keyed canonical nếu có
+        var keyed = Convert.ToHexString(System.Security.Cryptography.HMACSHA256.HashData(
+            Encoding.UTF8.GetBytes("DentalClinicKeyedIdentitySecretKeyForHmacSha256_2026!#*"),
+            Encoding.UTF8.GetBytes($"CCCD:{value}")));
+        return CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(hash), Encoding.ASCII.GetBytes(keyed));
+    }
 }
 
 public sealed class PatientCitizenIdService(IPatientCitizenIdRepository repository)
@@ -45,3 +56,4 @@ public sealed class PatientCitizenIdService(IPatientCitizenIdRepository reposito
         return repository.SaveAsync(patientId, actorId, role, request, ip, ct);
     }
 }
+

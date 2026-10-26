@@ -68,10 +68,15 @@ public sealed class AuthController : ControllerBase
 
         if (result.IsFailure)
         {
-            // AUTH_002 = tài khoản bị khóa → 403; các lỗi khác → 401
-            var statusCode = result.Error.Code == "AUTH_002"
-                ? StatusCodes.Status403Forbidden
-                : StatusCodes.Status401Unauthorized;
+            // AUTH_002 = tài khoản bị khóa vĩnh viễn → 403
+            // AUTH_010 = tài khoản bị khóa tạm thời 15 phút (DL-365) → 423 (Locked) hoặc 403
+            // các lỗi khác → 401
+            var statusCode = result.Error.Code switch
+            {
+                "AUTH_002" => StatusCodes.Status403Forbidden,
+                "AUTH_010" => StatusCodes.Status423Locked,
+                _ => StatusCodes.Status401Unauthorized
+            };
 
             return StatusCode(statusCode, new { code = result.Error.Code, message = result.Error.Message });
         }

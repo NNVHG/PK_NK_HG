@@ -8,15 +8,40 @@
       <p class="subtitle">Nha Khoa Hoàng Gia</p>
       <div v-if="registrationNotice" class="success-alert">{{ registrationNotice }}</div>
 
-      <p v-if="$route.query.phoneChanged === '1'" role="status">Đã xác minh và đổi SĐT. Nhân viên đăng nhập bằng số mới; bệnh nhân tiếp tục đăng nhập bằng CCCD. Mật khẩu được giữ nguyên.</p>
-        <form @submit.prevent="handleSubmit">
+      <p v-if="$route.query.phoneChanged === '1'" role="status">Đã xác minh và đổi SĐT. Nhân viên đăng nhập bằng số mới; bệnh nhân tiếp tục đăng nhập bằng CCCD/Hộ chiếu. Mật khẩu được giữ nguyên.</p>
+
+      <div class="document-type-selector">
+        <label class="doc-radio">
+          <input type="radio" value="cccd" v-model="loginMode" />
+          <span>SĐT / CCCD</span>
+        </label>
+        <label class="doc-radio">
+          <input type="radio" value="passport" v-model="loginMode" />
+          <span>Hộ chiếu</span>
+        </label>
+      </div>
+
+      <form @submit.prevent="handleSubmit">
+        <div class="form-group" v-if="loginMode === 'passport'">
+          <label for="country">Quốc gia cấp hộ chiếu</label>
+          <input
+            id="country"
+            v-model="nationalityCode"
+            type="text"
+            placeholder="Ví dụ: VN, USA, JPN"
+            required
+            maxlength="3"
+            autocomplete="country-name"
+          />
+        </div>
+
         <div class="form-group">
-          <label for="phone">SĐT (nhân viên/tài khoản cũ) hoặc CCCD (bệnh nhân mới)</label>
+          <label for="phone">{{ loginMode === 'passport' ? 'Số Hộ chiếu' : 'SĐT (nhân viên/tài khoản cũ) hoặc CCCD (bệnh nhân)' }}</label>
           <input
             id="phone"
             v-model="phone"
             type="text"
-            placeholder="Số điện thoại hoặc CCCD"
+            :placeholder="loginMode === 'passport' ? 'Nhập số hộ chiếu' : 'Số điện thoại hoặc CCCD'"
             required
             autocomplete="username"
           />
@@ -58,6 +83,8 @@ const authStore = useAuthStore();
 const router = useRouter();
 const route = useRoute();
 
+const loginMode = ref<'cccd' | 'passport'>('cccd');
+const nationalityCode = ref('VN');
 const phone = ref('');
 const password = ref('');
 const errorMessage = ref('');
@@ -70,12 +97,19 @@ async function handleSubmit() {
   errorMessage.value = '';
   loading.value = true;
   try {
-    await authStore.login(phone.value, password.value);
+    const docType = loginMode.value === 'passport' ? 2 : (phone.value.length === 12 ? 1 : null);
+    const country = loginMode.value === 'passport' ? nationalityCode.value.trim().toUpperCase() : null;
+
+    await authStore.login(phone.value, password.value, docType, country);
     const defaultRoute = authStore.role === 'PATIENT' ? '/patient/my-record' : '/management/dashboard';
     const redirect = (route.query.redirect as string) || defaultRoute;
     router.push(redirect);
   } catch (err: any) {
-    errorMessage.value = err.response?.data?.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại.';
+    if (err.response?.status === 423) {
+      errorMessage.value = err.response?.data?.message || 'Tài khoản tạm thời bị khóa 15 phút do nhập sai nhiều lần.';
+    } else {
+      errorMessage.value = err.response?.data?.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại.';
+    }
   } finally {
     loading.value = false;
   }
@@ -97,6 +131,29 @@ async function handleSubmit() {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   width: 100%;
   max-width: 400px;
+}
+
+.document-type-selector {
+  display: flex;
+  gap: 1.5rem;
+  justify-content: center;
+  margin-bottom: 1.25rem;
+  padding: 0.5rem;
+  background: #f8fafc;
+  border-radius: 6px;
+}
+
+.doc-radio {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: #475569;
+}
+
+.doc-radio input[type="radio"] {
+  accent-color: #0284c7;
 }
 
 .login-brand {

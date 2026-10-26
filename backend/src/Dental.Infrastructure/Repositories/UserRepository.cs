@@ -31,6 +31,12 @@ public sealed class UserRepository : IUserRepository
         return matches.Count == 1 ? matches[0] : null;
     }
 
+    public async Task<User?> FindByIdentityHashAsync(string identityHash, CancellationToken ct = default)
+    {
+        return await FindByCitizenIdHashAsync(identityHash, ct);
+    }
+
+
     public async Task<User?> FindByIdAsync(int userId, CancellationToken ct = default)
         => await _db.Users
             .Include(u => u.Role)

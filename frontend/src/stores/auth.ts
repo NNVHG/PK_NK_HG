@@ -33,8 +33,12 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = computed(() => !!token.value);
   const role = computed(() => user.value?.roleCode || '');
 
-  async function login(phone: string, password: string) {
-    const res = await apiClient.post('/auth/login', { phone, password });
+  async function login(phone: string, password: string, documentType?: number | null, nationalityCode?: string | null) {
+    const payload: Record<string, any> = { phone, password };
+    if (documentType) payload.documentType = documentType;
+    if (nationalityCode) payload.nationalityCode = nationalityCode;
+
+    const res = await apiClient.post('/auth/login', payload);
     const data = res.data;
     token.value = data.accessToken;
     setAccessToken(data.accessToken);

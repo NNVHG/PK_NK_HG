@@ -163,6 +163,8 @@ builder.Services.AddScoped<ITokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuditLogger, AuditLogger>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+builder.Services.AddSingleton<IKeyedIdentityHasher, KeyedIdentityHasher>();
+builder.Services.AddSingleton<ILoginLockoutService, LoginLockoutService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<VietnamClock>();
 
