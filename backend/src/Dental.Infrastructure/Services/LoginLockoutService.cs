@@ -84,7 +84,8 @@ public sealed class LoginLockoutService : ILoginLockoutService, IDisposable
             else
             {
                 // Nếu cửa sổ theo dõi 15 phút đã trôi qua kể từ lần sai đầu tiên, làm mới cửa sổ
-                if (now - entry.FirstAttemptAt > LockoutWindow && !entry.LockedUntil.HasValue)
+                if ((entry.LockedUntil.HasValue && entry.LockedUntil.Value <= now) ||
+                    (now - entry.FirstAttemptAt >= LockoutWindow && !entry.LockedUntil.HasValue))
                 {
                     entry.FailedAttempts = 1;
                     entry.FirstAttemptAt = now;

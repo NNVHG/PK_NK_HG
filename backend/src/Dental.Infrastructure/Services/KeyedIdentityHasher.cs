@@ -9,7 +9,7 @@ namespace Dental.Infrastructure.Services;
 
 /// <summary>
 /// Triển khai băm định danh có khóa bí mật (HMAC-SHA256) theo DL-364.
-/// Khóa bí mật đọc từ configuration (IdentitySecurity:HmacKey) hoặc fallback key cố định cho Dev/Test.
+/// Khóa bí mật bắt buộc đọc từ cấu hình riêng, không có khóa mặc định trong mã nguồn.
 /// </summary>
 public sealed class KeyedIdentityHasher : IKeyedIdentityHasher
 {
@@ -18,21 +18,18 @@ public sealed class KeyedIdentityHasher : IKeyedIdentityHasher
     public KeyedIdentityHasher(IConfiguration configuration)
     {
         var configuredKey = configuration["IdentitySecurity:HmacKey"]?.Trim();
-        if (!string.IsNullOrEmpty(configuredKey) && configuredKey.Length >= 32)
-        {
-            _hmacKey = Encoding.UTF8.GetBytes(configuredKey);
-        }
-        else
-        {
-            // Khóa mặc định an toàn cho môi trường thử nghiệm
-            _hmacKey = Encoding.UTF8.GetBytes("DentalClinicKeyedIdentitySecretKeyForHmacSha256_2026!#*");
-        }
+        if (string.IsNullOrEmpty(configuredKey) || Encoding.UTF8.GetByteCount(configuredKey) < 32)
+            throw new InvalidOperationException("Thiếu khóa HMAC định danh hợp lệ trong cấu hình riêng.");
+
+        _hmacKey = Encoding.UTF8.GetBytes(configuredKey);
     }
 
     // Constructor cho phép test inject key trực tiếp
     public KeyedIdentityHasher(byte[] key)
     {
-        _hmacKey = key ?? throw new ArgumentNullException(nameof(key));
+        ArgumentNullException.ThrowIfNull(key);
+        if (key.Length < 32) throw new ArgumentException("Khóa HMAC định danh phải có ít nhất 32 byte.", nameof(key));
+        _hmacKey = (byte[])key.Clone();
     }
 
     public static string Canonicalize(string identifier, IdentityDocumentType documentType, string? nationalityCode)

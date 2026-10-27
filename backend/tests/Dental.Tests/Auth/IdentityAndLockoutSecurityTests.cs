@@ -16,6 +16,12 @@ namespace Dental.Tests.Auth;
 
 public sealed class IdentityAndLockoutSecurityTests
 {
+    private sealed class MutableClock(DateTimeOffset now) : TimeProvider
+    {
+        public DateTimeOffset Now { get; set; } = now;
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+
     private readonly IUserRepository _userRepo = Substitute.For<IUserRepository>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly IPasswordHasher _passwordHasher = Substitute.For<IPasswordHasher>();
@@ -62,6 +68,14 @@ public sealed class IdentityAndLockoutSecurityTests
     }
 
     [Fact]
+    public void KeyedHasher_RequiresConfiguredSecret()
+    {
+        var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
+        Assert.Throws<InvalidOperationException>(() => new KeyedIdentityHasher(config));
+        Assert.Throws<ArgumentException>(() => new KeyedIdentityHasher(new byte[31]));
+    }
+
+    [Fact]
     public void LoginRequestValidator_AcceptsCitizenIdAndPassport()
     {
         var validator = new LoginRequestValidator();
@@ -97,6 +111,62 @@ public sealed class IdentityAndLockoutSecurityTests
 
         lockout.ResetAttempts(phone);
         Assert.False(lockout.IsLocked(phone, out _));
+    }
+
+    [Fact]
+    public void LockoutService_ExpiredLockoutStartsFreshWindow()
+    {
+        var clock = new MutableClock(new DateTimeOffset(2026, 10, 28, 0, 0, 0, TimeSpan.Zero));
+        using var lockout = new LoginLockoutService(clock);
+
+        for (var i = 0; i < LoginLockoutService.MaxAttempts; i++)
+            lockout.RecordFailedAttempt("CCCD:001200000001", out _, out _);
+
+        Assert.True(lockout.IsLocked("CCCD:001200000001", out _));
+        clock.Now = clock.Now.Add(LoginLockoutService.LockoutDuration).AddSeconds(1);
+        Assert.False(lockout.IsLocked("CCCD:001200000001", out _));
+
+        lockout.RecordFailedAttempt("CCCD:001200000001", out var locked, out _);
+        Assert.False(locked);
+        Assert.False(lockout.IsLocked("CCCD:001200000001", out _));
+    }
+
+    [Fact]
+    public async Task AuthService_UnknownAccountHasSameLockoutResponse()
+    {
+        using var lockout = new LoginLockoutService(TimeProvider.System);
+        var svc = new AuthService(
+            _userRepo, _unitOfWork, _passwordHasher, _tokenService, _auditLogger, _patientRepository,
+            lockoutService: lockout, identityHasher: _identityHasher);
+        var request = new LoginRequest("0911223344", "wrong_pass");
+
+        for (var i = 0; i < 4; i++)
+        {
+            var result = await svc.LoginAsync(request, null);
+            Assert.Equal("AUTH_001", result.Error.Code);
+        }
+
+        var fifth = await svc.LoginAsync(request, null);
+        Assert.Equal("AUTH_010", fifth.Error.Code);
+        var lockedAttempt = await svc.LoginAsync(request, null);
+        Assert.Equal("AUTH_010", lockedAttempt.Error.Code);
+    }
+
+    [Fact]
+    public async Task AuthService_PassportLockoutUsesNationality()
+    {
+        using var lockout = new LoginLockoutService(TimeProvider.System);
+        var svc = new AuthService(
+            _userRepo, _unitOfWork, _passwordHasher, _tokenService, _auditLogger, _patientRepository,
+            lockoutService: lockout, identityHasher: _identityHasher);
+        var vn = new LoginRequest("B1234567", "wrong_pass", IdentityDocumentType.Passport, "VN");
+        var us = new LoginRequest("B1234567", "wrong_pass", IdentityDocumentType.Passport, "US");
+
+        for (var i = 0; i < 5; i++)
+            await svc.LoginAsync(vn, null);
+
+        var usFirst = await svc.LoginAsync(us, null);
+        Assert.Equal("AUTH_001", usFirst.Error.Code);
     }
 
     [Fact]

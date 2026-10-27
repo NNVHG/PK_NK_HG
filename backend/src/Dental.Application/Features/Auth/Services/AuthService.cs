@@ -55,9 +55,14 @@ public sealed class AuthService
         CancellationToken ct = default)
     {
         var identifier = (request.Phone ?? string.Empty).Trim();
+        var lockoutKey = request.DocumentType == IdentityDocumentType.Passport
+            ? $"PASSPORT:{request.NationalityCode?.Trim().ToUpperInvariant()}:{identifier.ToUpperInvariant()}"
+            : request.DocumentType == IdentityDocumentType.CitizenId || identifier.Length == 12
+                ? $"CCCD:{identifier}"
+                : $"PHONE:{identifier}";
 
         // 1. Kiểm tra khóa tạm thời chống brute-force (DL-365)
-        if (_lockoutService is not null && _lockoutService.IsLocked(identifier, out _))
+        if (_lockoutService is not null && _lockoutService.IsLocked(lockoutKey, out _))
         {
             await _auditLogger.LogAsync(
                 action: AuditActions.LoginFailed,
@@ -96,7 +101,8 @@ public sealed class AuthService
         // Không tìm thấy User → ghi nhận lần sai + trả lỗi chung (chống dò tài khoản)
         if (user is null)
         {
-            _lockoutService?.RecordFailedAttempt(identifier, out _, out _);
+            var nowLocked = false;
+            _lockoutService?.RecordFailedAttempt(lockoutKey, out nowLocked, out _);
 
             await _auditLogger.LogAsync(
                 action: AuditActions.LoginFailed,
@@ -105,7 +111,7 @@ public sealed class AuthService
                 ipAddress: ipAddress,
                 ct: ct);
 
-            return Result<LoginResponse>.Failure(Error.InvalidCredentials);
+            return Result<LoginResponse>.Failure(nowLocked ? Error.TemporaryLockout : Error.InvalidCredentials);
         }
 
         // Kiểm tra mật khẩu
@@ -114,7 +120,7 @@ public sealed class AuthService
         if (!passwordValid)
         {
             var nowLocked = false;
-            _lockoutService?.RecordFailedAttempt(identifier, out nowLocked, out _);
+            _lockoutService?.RecordFailedAttempt(lockoutKey, out nowLocked, out _);
 
             await _auditLogger.LogAsync(
                 action: AuditActions.LoginFailed,
@@ -145,7 +151,7 @@ public sealed class AuthService
         }
 
         // Mật khẩu đúng -> Xóa bộ đếm sai (DL-365)
-        _lockoutService?.ResetAttempts(identifier);
+        _lockoutService?.ResetAttempts(lockoutKey);
 
         if (user.RequiresPhoneActivation)
             return Result<LoginResponse>.Failure(new Error("AUTH_ACTIVATION_REQUIRED", "Cần xác minh OTP lần đầu trước khi đăng nhập."));
