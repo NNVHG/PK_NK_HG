@@ -105,6 +105,18 @@ async function handleSubmit() {
     const redirect = (route.query.redirect as string) || defaultRoute;
     router.push(redirect);
   } catch (err: any) {
+    if (err.response?.status === 401 && err.response?.data?.code === 'AUTH_ACTIVATION_REQUIRED') {
+      router.push({
+        path: '/activate-account',
+        query: {
+          identifier: phone.value,
+          docType: loginMode.value === 'passport' ? 'passport' : undefined,
+          country: loginMode.value === 'passport' ? nationalityCode.value.trim().toUpperCase() : undefined
+        }
+      });
+      return;
+    }
+
     if (err.response?.status === 423) {
       errorMessage.value = err.response?.data?.message || 'Tài khoản tạm thời bị khóa 15 phút do nhập sai nhiều lần.';
     } else {

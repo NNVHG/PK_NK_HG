@@ -3,15 +3,17 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Dental.Application.Common;
 using Dental.Application.Features.MOD_AUTH;
+using Dental.Application.Interfaces;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
+using Dental.Domain.Enums;
 using Dental.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
 namespace Dental.Infrastructure.Repositories;
 
-public sealed class PatientActivationRepository(DentalDbContext db, VietnamClock clock) : IPatientActivationRepository
+public sealed class PatientActivationRepository(DentalDbContext db, VietnamClock clock, IKeyedIdentityHasher identityHasher) : IPatientActivationRepository
 {
     private IQueryable<User> EligibleStaff() => db.Users.Include(u => u.Role).Where(u => u.IsActive && u.RequiresPhoneActivation &&
         RoleCodes.StaffRoles.Contains(u.Role.RoleCode));
@@ -20,19 +22,34 @@ public sealed class PatientActivationRepository(DentalDbContext db, VietnamClock
     private static string Stamp(User u) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new {
         u.UserId, u.Phone, u.PasswordHash, u.TokenVersion, u.RoleId, u.Role.RoleCode, u.IsActive, u.RequiresPhoneActivation, u.LoginByCitizenId, u.UpdatedAt
     })));
-    public async Task<ActivationAccount?> FindPendingAsync(string identifier, CancellationToken ct)
+
+    public Task<ActivationAccount?> FindPendingAsync(string identifier, CancellationToken ct)
+        => FindPendingAsync(identifier, null, null, ct);
+
+    public async Task<ActivationAccount?> FindPendingAsync(string identifier, IdentityDocumentType? documentType, string? nationalityCode, CancellationToken ct)
     {
         User? user;
-        var patient = identifier.Length == 12;
-        if (patient)
+        var isPassport = documentType == IdentityDocumentType.Passport;
+        var isPatient = isPassport || identifier.Length == 12;
+
+        if (isPatient)
         {
-            var hash = Dental.Application.Features.MOD_PAT.CitizenIdIdentity.Hash(identifier);
-            var matches = await EligiblePatient().AsNoTracking().Where(u => db.Patients.Any(p => p.UserId == u.UserId && p.CitizenIdHash == hash))
+            var keyedHash = identityHasher.Hash(identifier, documentType ?? IdentityDocumentType.CitizenId, nationalityCode);
+            var legacyHash = documentType != IdentityDocumentType.Passport && identifier.Length == 12
+                ? Dental.Application.Features.MOD_PAT.CitizenIdIdentity.Hash(identifier)
+                : null;
+
+            var matches = await EligiblePatient().AsNoTracking().Where(u => db.Patients.Any(p => p.UserId == u.UserId &&
+                (p.CitizenIdHash == keyedHash || (legacyHash != null && p.CitizenIdHash == legacyHash))))
                 .Take(2).ToListAsync(ct);
             user = matches.Count == 1 ? matches[0] : null;
         }
-        else user = await EligibleStaff().AsNoTracking().SingleOrDefaultAsync(u => u.Phone == identifier, ct);
-        return user is null ? null : new(new(user.UserId, Stamp(user), patient), user.PasswordHash, user.Phone);
+        else
+        {
+            user = await EligibleStaff().AsNoTracking().SingleOrDefaultAsync(u => u.Phone == identifier, ct);
+        }
+
+        return user is null ? null : new(new(user.UserId, Stamp(user), isPatient), user.PasswordHash, user.Phone);
     }
     public async Task<bool> IsCurrentAsync(ActivationTarget target, CancellationToken ct)
     {

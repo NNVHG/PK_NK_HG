@@ -8,7 +8,18 @@
     <p role="status" aria-live="polite">{{ message }}</p>
     <p v-if="error" role="alert">{{ error }}</p>
     <form v-if="!challenge && !grant && !done && !uncertain" @submit.prevent="requestCode" novalidate>
-      <label>CCCD bệnh nhân hoặc SĐT nhân viên<input v-model="phone" type="text" inputmode="numeric" autocomplete="username" maxlength="12" :disabled="busy" /></label>
+      <div class="mode-selector">
+        <label><input type="radio" v-model="loginMode" value="cccd" :disabled="busy" /> CCCD (bệnh nhân) / SĐT (nhân viên)</label>
+        <label><input type="radio" v-model="loginMode" value="passport" :disabled="busy" /> Hộ chiếu (bệnh nhân nước ngoài)</label>
+      </div>
+      <div v-if="loginMode === 'passport'" class="form-subgroup">
+        <label>Quốc gia cấp hộ chiếu
+          <input v-model="nationalityCode" type="text" maxlength="3" placeholder="VN, US, JP..." :disabled="busy" />
+        </label>
+      </div>
+      <label>{{ loginMode === 'passport' ? 'Số hộ chiếu' : 'CCCD bệnh nhân hoặc SĐT nhân viên' }}
+        <input v-model="phone" type="text" :inputmode="loginMode === 'passport' ? 'text' : 'numeric'" autocomplete="username" :maxlength="loginMode === 'passport' ? 12 : 12" :disabled="busy" />
+      </label>
       <label>Mật khẩu hiện tại<input v-model="password" type="password" autocomplete="current-password" maxlength="72" :disabled="busy" /></label>
       <p>Nếu chưa đổi mật khẩu, dùng SĐT làm mật khẩu mặc định.</p>
       <button type="submit" :disabled="busy">Nhận mã kích hoạt</button>
@@ -43,27 +54,64 @@
   </main>
 </template>
 <script setup lang="ts">
-import { onUnmounted, ref, watch } from 'vue';
-import { RouterLink } from 'vue-router';
+import { onMounted, onUnmounted, ref, watch } from 'vue';
+import { RouterLink, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { patientActivationService, type ActivationChallenge, type ActivationGrant } from '@/services/patientActivation';
 
+const route = useRoute();
 const auth = useAuthStore();
+const loginMode = ref<'cccd' | 'passport'>('cccd');
+const nationalityCode = ref('VN');
 const phone = ref(''), password = ref(''), code = ref(''), newPassword = ref(''), repeatPassword = ref('');
 const choice = ref('new'), confirmed = ref(false), busy = ref(false), done = ref(false), uncertain = ref(false);
 const challenge = ref<ActivationChallenge | null>(null), grant = ref<ActivationGrant | null>(null), error = ref(''), message = ref('');
 let generation = 0, disposed = false;
 const identity = () => `${auth.user?.userId}/${auth.role}`;
 const alive = (t: number, owner: string) => !disposed && t === generation && owner === identity();
+
+onMounted(() => {
+  if (route.query.identifier && typeof route.query.identifier === 'string') {
+    phone.value = route.query.identifier;
+  }
+  if (route.query.docType === 'passport') {
+    loginMode.value = 'passport';
+  }
+  if (route.query.country && typeof route.query.country === 'string') {
+    nationalityCode.value = route.query.country;
+  }
+});
+
 function clear() { phone.value = ''; password.value = ''; code.value = ''; newPassword.value = ''; repeatPassword.value = ''; challenge.value = null; grant.value = null; confirmed.value = false; choice.value = 'new'; }
 function restart() { if (disposed || busy.value) return; generation++; clear(); done.value = false; uncertain.value = false; error.value = ''; message.value = ''; }
 function failure(cause: unknown, fallback: string) { const data = (cause as { response?: { data?: { message?: unknown } } })?.response?.data; return typeof data?.message === 'string' ? data.message : fallback; }
 async function requestCode() {
   if (disposed || busy.value || challenge.value || grant.value || done.value || uncertain.value) return;
-  if (!/^(0[0-9]{9}|[0-9]{12})$/.test(phone.value) || ![10, 12].includes(phone.value.length) || password.value.length < 8 || password.value.includes('\0') || new TextEncoder().encode(password.value).length > 72) { error.value = 'Nhập CCCD 12 số của bệnh nhân hoặc SĐT 10 số của nhân viên; mật khẩu hiện tại phải hợp lệ.'; return; }
+
+  const isPassport = loginMode.value === 'passport';
+  const val = phone.value.trim();
+  if (isPassport) {
+    if (!/^[A-Za-z0-9]{6,12}$/.test(val) || !nationalityCode.value || !/^[A-Za-z]{2,3}$/.test(nationalityCode.value.trim())) {
+      error.value = 'Nhập số hộ chiếu hợp lệ (6–12 ký tự) và mã quốc gia cấp (2–3 chữ cái).';
+      return;
+    }
+  } else {
+    if (!/^(0[0-9]{9}|[0-9]{12})$/.test(val)) {
+      error.value = 'Nhập CCCD 12 số của bệnh nhân hoặc SĐT 10 số của nhân viên.';
+      return;
+    }
+  }
+
+  if (password.value.length < 6 || password.value.includes('\0') || new TextEncoder().encode(password.value).length > 72) {
+    error.value = 'Mật khẩu hiện tại phải hợp lệ.';
+    return;
+  }
+
   const t = ++generation, owner = identity(); busy.value = true; error.value = ''; message.value = '';
   try {
-    const data = await patientActivationService.request(phone.value, password.value);
+    const docType = isPassport ? 2 : (val.length === 12 ? 1 : null);
+    const country = isPassport ? nationalityCode.value.trim().toUpperCase() : null;
+    const data = await patientActivationService.request(val, password.value, docType, country);
     if (!alive(t, owner)) return;
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.challengeId) || data.expiresInSeconds !== 300 || data.resendAfterSeconds !== 60 || data.developmentCode != null && !/^[0-9]{6}$/.test(data.developmentCode)) throw Error();
     challenge.value = data; phone.value = ''; message.value = data.developmentCode ? 'Mã OTP mô phỏng chỉ hiển thị trong Development.' : 'Nếu thông tin đúng và tài khoản đủ điều kiện, mã kích hoạt sẽ được gửi tới SĐT đăng ký.';

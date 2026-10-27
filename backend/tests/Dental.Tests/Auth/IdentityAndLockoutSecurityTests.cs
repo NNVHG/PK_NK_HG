@@ -2,6 +2,7 @@ using Dental.Application.Common;
 using Dental.Application.Features.Auth.DTOs;
 using Dental.Application.Features.Auth.Services;
 using Dental.Application.Features.Auth.Validators;
+using Dental.Application.Features.MOD_AUTH;
 using Dental.Application.Interfaces;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
@@ -139,4 +140,47 @@ public sealed class IdentityAndLockoutSecurityTests
         Assert.Equal("AUTH_010", lockedAttempt.Error.Code);
     }
 
+    [Fact]
+    public async Task AuthService_ReturnsAuthActivationRequired_WhenUserRequiresPhoneActivation()
+    {
+        var svc = new AuthService(
+            _userRepo, _unitOfWork, _passwordHasher, _tokenService, _auditLogger, _patientRepository,
+            lockoutService: new LoginLockoutService(TimeProvider.System),
+            identityHasher: _identityHasher
+        );
+
+        const string targetPhone = "0988776655";
+        var user = new User
+        {
+            UserId = 12,
+            Phone = targetPhone,
+            PasswordHash = "correct_hash",
+            FullName = "Activation Pending User",
+            IsActive = true,
+            RequiresPhoneActivation = true,
+            Role = new Role { RoleCode = RoleCodes.Patient, RoleName = "Bệnh nhân" }
+        };
+
+        _userRepo.FindByPhoneAsync(targetPhone, Arg.Any<CancellationToken>()).Returns(user);
+        _passwordHasher.Verify("correct_pass", "correct_hash").Returns(true);
+
+        var result = await svc.LoginAsync(new LoginRequest(targetPhone, "correct_pass"), null);
+        Assert.True(result.IsFailure);
+        Assert.Equal("AUTH_ACTIVATION_REQUIRED", result.Error.Code);
+        _tokenService.DidNotReceive().GenerateAccessToken(Arg.Any<User>());
+    }
+
+    [Fact]
+    public void ActivationRequestValidator_AcceptsPassportWithNationality()
+    {
+        var validator = new ActivationRequestValidator();
+        var validPassport = new ActivationRequest("B1234567", "Default123", IdentityDocumentType.Passport, "VN");
+        Assert.True(validator.Validate(validPassport).IsValid);
+
+        var missingCountry = new ActivationRequest("B1234567", "Default123", IdentityDocumentType.Passport, null);
+        Assert.False(validator.Validate(missingCountry).IsValid);
+
+        var validCccd = new ActivationRequest("001200000001", "Default123", IdentityDocumentType.CitizenId);
+        Assert.True(validator.Validate(validCccd).IsValid);
+    }
 }

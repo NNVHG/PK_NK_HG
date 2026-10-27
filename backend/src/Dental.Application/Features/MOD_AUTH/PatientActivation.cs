@@ -1,11 +1,13 @@
 using System.Text;
 using Dental.Application.Common;
 using Dental.Application.Interfaces;
+using Dental.Domain.Constants;
+using Dental.Domain.Enums;
 using FluentValidation;
 
 namespace Dental.Application.Features.MOD_AUTH;
 
-public sealed record ActivationRequest(string Phone, string Password);
+public sealed record ActivationRequest(string Phone, string Password, IdentityDocumentType? DocumentType = null, string? NationalityCode = null);
 public sealed record ActivationVerification(Guid ChallengeId, string Code);
 public sealed record ActivationCompletion(string CompletionToken, bool KeepDefaultPassword, string? NewPassword, bool Confirmed);
 public sealed record ActivationChallenge(Guid ChallengeId, int ExpiresInSeconds = 300, int ResendAfterSeconds = 60, string? DevelopmentCode = null);
@@ -17,7 +19,8 @@ public sealed record ActivationDispatch(string Phone, Guid ChallengeId, string C
 
 public interface IPatientActivationRepository
 {
-    Task<ActivationAccount?> FindPendingAsync(string phone, CancellationToken ct);
+    Task<ActivationAccount?> FindPendingAsync(string identifier, CancellationToken ct);
+    Task<ActivationAccount?> FindPendingAsync(string identifier, IdentityDocumentType? documentType, string? nationalityCode, CancellationToken ct);
     Task<bool> IsCurrentAsync(ActivationTarget target, CancellationToken ct);
     Task<bool> CompleteAsync(ActivationTarget target, string? passwordHash, string? ip, CancellationToken ct);
 }
@@ -45,8 +48,32 @@ public sealed class ActivationRequestValidator : AbstractValidator<ActivationReq
 {
     public ActivationRequestValidator()
     {
-        RuleFor(x => x.Phone).NotEmpty().Must(x => x is not null && System.Text.RegularExpressions.Regex.IsMatch(x, "^(0[0-9]{9}|[0-9]{12})$"));
-        RuleFor(x => x.Password).NotEmpty().MinimumLength(8).MaximumLength(72)
+        RuleFor(x => x.Phone)
+            .NotEmpty().WithMessage("Nhập SĐT, CCCD hoặc Hộ chiếu.")
+            .Must((req, val) =>
+            {
+                if (string.IsNullOrWhiteSpace(val)) return false;
+                val = val.Trim();
+
+                if (req.DocumentType == IdentityDocumentType.Passport)
+                {
+                    return System.Text.RegularExpressions.Regex.IsMatch(val, IdentityDocumentConstants.PassportNumberRegex);
+                }
+
+                return System.Text.RegularExpressions.Regex.IsMatch(val, "^(0[0-9]{9}|[0-9]{12})$") ||
+                       (req.DocumentType.HasValue && req.DocumentType.Value == IdentityDocumentType.Passport &&
+                        System.Text.RegularExpressions.Regex.IsMatch(val, IdentityDocumentConstants.PassportNumberRegex));
+            })
+            .WithMessage("SĐT gồm 10 số, CCCD gồm 12 số hoặc Hộ chiếu 6–12 ký tự hợp lệ.");
+
+        When(x => x.DocumentType == IdentityDocumentType.Passport, () =>
+        {
+            RuleFor(x => x.NationalityCode)
+                .NotEmpty().WithMessage("Cần mã quốc gia cấp hộ chiếu.")
+                .Matches(IdentityDocumentConstants.NationalityCodeRegex).WithMessage("Mã quốc gia phải gồm 2–3 chữ cái.");
+        });
+
+        RuleFor(x => x.Password).NotEmpty().MinimumLength(6).MaximumLength(72)
             .Must(x => x is not null && !x.Contains('\0') && Encoding.UTF8.GetByteCount(x) <= 72);
     }
 }
@@ -74,11 +101,13 @@ public sealed class PatientActivationService(IPatientActivationRepository reposi
     {
         if (!new ActivationRequestValidator().Validate(request).IsValid) return Result<ActivationChallenge>.Failure(Error.Validation);
         if (!delivery.IsConfigured) return Result<ActivationChallenge>.Failure(Unavailable);
-        var account = await repository.FindPendingAsync(request.Phone, ct);
+        var identifier = (request.Phone ?? string.Empty).Trim();
+        var account = await repository.FindPendingAsync(identifier, request.DocumentType, request.NationalityCode, ct)
+                      ?? await repository.FindPendingAsync(identifier, ct);
         // Equal password work for missing/old/locked accounts; no provider timing or account status in the response.
         var padding = passwords.Hash(Guid.NewGuid().ToString("N"));
         var validPassword = passwords.Verify(request.Password, account?.PasswordHash ?? padding);
-        var phone = account?.Phone ?? request.Phone;
+        var phone = account?.Phone ?? identifier;
         var issued = proofs.Issue(phone, validPassword ? account?.Target : null);
         if (issued.IsFailure) return Result<ActivationChallenge>.Failure(issued.Error);
         var dispatch = issued.Value!;

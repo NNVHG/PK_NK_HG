@@ -6,10 +6,19 @@ import {parse,compileScript} from '@vue/compiler-sfc';
 const source=await readFile(new URL('../src/views/PatientActivationView.vue',import.meta.url),'utf8');
 const challenge={challengeId:'abcdef01-2345-6789-abcd-0123456789ab',expiresInSeconds:300,resendAfterSeconds:60};
 const grant={completionToken:'A'.repeat(64),expiresInSeconds:300,mustChangePassword:true};
-function fixture(){
+function fixture(routeQuery = {}){
  const hooks={watch:[]},auth={user:null,role:null},calls=[];
  let request=()=>challenge,verify=()=>grant,complete=()=>({completed:true});
- const imports={vue:{defineComponent:x=>x,ref:value=>({value}),watch:(_g,fn)=>hooks.watch.push(fn),onUnmounted:fn=>hooks.unmount=fn},'@/stores/auth':{useAuthStore:()=>auth},'@/services/patientActivation':{patientActivationService:{request:async(...args)=>{calls.push(['request',...args]);return await request();},verify:async(...args)=>{calls.push(['verify',...args]);return await verify();},complete:async(...args)=>{calls.push(['complete',...args]);return await complete();}}}};
+ const imports={
+  vue:{defineComponent:x=>x,ref:value=>({value}),watch:(_g,fn)=>hooks.watch.push(fn),onMounted:fn=>fn(),onUnmounted:fn=>hooks.unmount=fn},
+  'vue-router':{useRoute:()=>({query:routeQuery}),useRouter:()=>({push:(target)=>calls.push(['route',target])}),RouterLink:{}},
+  '@/stores/auth':{useAuthStore:()=>auth},
+  '@/services/patientActivation':{patientActivationService:{
+    request:async(...args)=>{calls.push(['request',...args]);return await request();},
+    verify:async(...args)=>{calls.push(['verify',...args]);return await verify();},
+    complete:async(...args)=>{calls.push(['complete',...args]);return await complete();}
+  }}
+ };
  const js=ts.transpileModule(compileScript(parse(source).descriptor,{id:'activation-test'}).content,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
  const module={exports:{}};new Function('require','module','exports',js)(n=>imports[n]??{},module,module.exports);
  const c=module.exports.default.setup({}, {expose(){}});
@@ -17,7 +26,7 @@ function fixture(){
 }
 async function requested(){const f=fixture();f.c.phone.value='0967000000';f.c.password.value='0967000000';await f.c.requestCode();return f;}
 async function verified(){const f=await requested();f.c.code.value='123456';await f.c.verifyCode();return f;}
-test('request clears credentials and exposes only the generic next step',async()=>{const f=await requested();assert.deepEqual(f.calls,[['request','0967000000','0967000000']]);assert.equal(f.c.phone.value,'');assert.equal(f.c.password.value,'');assert.equal(f.c.challenge.value,challenge);assert.match(f.c.message.value,/Nếu thông tin đúng/);});
+test('request clears credentials and exposes only the generic next step',async()=>{const f=await requested();assert.deepEqual(f.calls,[['request','0967000000','0967000000',null,null]]);assert.equal(f.c.phone.value,'');assert.equal(f.c.password.value,'');assert.equal(f.c.challenge.value,challenge);assert.match(f.c.message.value,/Nếu thông tin đúng/);});
 test('cannot skip OTP to complete activation',async()=>{const f=await requested();f.c.confirmed.value=true;await f.c.complete();assert.equal(f.calls.length,1);});
 test('only six numeric OTP digits are submitted and cleared afterwards',async()=>{const f=await requested();f.c.code.value='12345x';await f.c.verifyCode();assert.equal(f.calls.length,1);f.c.code.value='123456';await f.c.verifyCode();assert.equal(f.c.code.value,'');assert.equal(f.c.challenge.value,null);assert.equal(f.c.grant.value,grant);});
 test('keep default password requires explicit confirmation and sends no new password',async()=>{const f=await verified();f.c.choice.value='default';await f.c.complete();assert.equal(f.calls.length,2);f.c.confirmed.value=true;await f.c.complete();assert.deepEqual(f.calls[2],['complete',grant.completionToken,true,null]);assert.equal(f.c.done.value,true);assert.equal(f.c.grant.value,null);});
