@@ -5,6 +5,7 @@ using Dental.Application.Interfaces;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
 using Dental.Domain.Enums;
+using Dental.Infrastructure.Services;
 using Dental.Tests.Common;
 using NSubstitute;
 using Xunit;
@@ -24,6 +25,7 @@ public sealed class QueueServiceTests
     private readonly IInvoiceDraftGenerator _invoiceDraft = Substitute.For<IInvoiceDraftGenerator>();
     private readonly IVisitChairCoordinator _visitChairs = TestVisitChairs.Create();
     private readonly IPasswordHasher _passwordHasher = Substitute.For<IPasswordHasher>();
+    private readonly IKeyedIdentityHasher _identityHasher = new KeyedIdentityHasher(new byte[32]);
     private readonly FixedTimeProvider _timeProvider;
     private readonly VietnamClock _vietnamClock;
 
@@ -120,7 +122,7 @@ public sealed class QueueServiceTests
     }
 
     private QueueService CreateService()
-        => new(_queueRepository, _appointmentRepository, _patientRepository, _visitRepository, _invoiceRepository, _userRepository, _unitOfWork, _auditLogger, _vietnamClock, _invoiceDraft, _visitChairs, _passwordHasher);
+        => new(_queueRepository, _appointmentRepository, _patientRepository, _visitRepository, _invoiceRepository, _userRepository, _unitOfWork, _auditLogger, _vietnamClock, _invoiceDraft, _visitChairs, _passwordHasher, _identityHasher);
 
     [Fact]
     public async Task TransferDentist_ActiveVisitMovesAssignmentAndChairInOneTransactionalFlow()
@@ -558,6 +560,7 @@ public sealed class QueueServiceTests
 
         Assert.True(result.IsSuccess);
         Assert.NotNull(patient.CitizenIdHash);
+        Assert.Equal(_identityHasher.Hash(request.CitizenId!), patient.CitizenIdHash);
         Assert.Equal("012******901", patient.CitizenIdMasked);
         Assert.Equal(1, patient.CitizenIdVersion);
         await _auditLogger.Received(1).LogRequiredAsync(

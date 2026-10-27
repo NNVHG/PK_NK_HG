@@ -95,7 +95,8 @@ internal static class PatientActivationHttpSmoke
             var audit=new AuditLogger(checkInDb,NullLogger<AuditLogger>.Instance);var vietnamClock=new VietnamClock(clock);
             var queue=new QueueService(new QueueRepository(checkInDb),new AppointmentRepository(checkInDb),patients,visits,
                 new InvoiceRepository(checkInDb),new UserRepository(checkInDb),new UnitOfWork(checkInDb),audit,vietnamClock,
-                new InvoiceDraftService(new InvoiceRepository(checkInDb),visits,patients,audit,vietnamClock),TestChairFixtures.Service(checkInDb,vietnamClock),hasher);
+                new InvoiceDraftService(new InvoiceRepository(checkInDb),visits,patients,audit,vietnamClock),TestChairFixtures.Service(checkInDb,vietnamClock),hasher,
+                new KeyedIdentityHasher(new byte[32]));
             var checkedIn=await queue.CheckInAsync(admin.UserId,new CheckInRequest(r.Value!.PatientId,CitizenId:citizenId,Phone:row.Phone),null);
             check(checkedIn.IsSuccess,"Verified check-in creates a personal Patient account");
             var user=await db.Users.AsNoTracking().Include(u=>u.Role).SingleAsync(u=>u.Phone==row.Phone);

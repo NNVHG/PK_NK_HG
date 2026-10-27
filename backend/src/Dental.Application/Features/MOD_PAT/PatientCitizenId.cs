@@ -27,14 +27,7 @@ public static class CitizenIdIdentity
     {
         if (hash is null || hash.Length != 64) return false;
         var legacy = Hash(value);
-        if (CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(hash), Encoding.ASCII.GetBytes(legacy)))
-            return true;
-
-        // Cũng kiểm tra theo định dạng Keyed canonical nếu có
-        var keyed = Convert.ToHexString(System.Security.Cryptography.HMACSHA256.HashData(
-            Encoding.UTF8.GetBytes("DentalClinicKeyedIdentitySecretKeyForHmacSha256_2026!#*"),
-            Encoding.UTF8.GetBytes($"CCCD:{value}")));
-        return CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(hash), Encoding.ASCII.GetBytes(keyed));
+        return CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(hash), Encoding.ASCII.GetBytes(legacy));
     }
 }
 

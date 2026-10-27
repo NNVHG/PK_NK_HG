@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using Dental.Application.Common;
-using Dental.Application.Features.MOD_PAT;
 using Dental.Application.Interfaces;
+using Dental.Domain.Enums;
 using FluentValidation;
 
 namespace Dental.Application.Features.MOD_RX;
@@ -16,7 +16,7 @@ public sealed class PublicPrescriptionVerifyValidator : AbstractValidator<Public
 {
     public PublicPrescriptionVerifyValidator() => RuleFor(x => x.CitizenId).NotEmpty().Length(12).Matches("^[0-9]{12}$");
 }
-public sealed class PublicPrescriptionService(IPublicPrescriptionRepository repository, IPublicPrescriptionAccess access)
+public sealed class PublicPrescriptionService(IPublicPrescriptionRepository repository, IPublicPrescriptionAccess access, IKeyedIdentityHasher identityHasher)
 {
     public static bool ValidCode(string? code) => code is { Length: 16 } && Regex.IsMatch(code, "^RX-[0-9]{8}-[0-9]{4}$", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
     public static readonly Error Locked = new("RX_PUBLIC_LOCKED", "Đã vượt giới hạn đối chiếu. Vui lòng thử lại sau 15 phút.");
@@ -33,7 +33,7 @@ public sealed class PublicPrescriptionService(IPublicPrescriptionRepository repo
         if (access.IsLocked(code)) return Result<PublicPrescriptionSession>.Failure(Locked);
         var proof = await repository.ProofAsync(code, ct);
         if (proof is null) return Result<PublicPrescriptionSession>.Failure(Error.Forbidden);
-        var matches = CitizenIdIdentity.Matches(proof.CitizenIdHash, input.CitizenId);
+        var matches = identityHasher.Matches(proof.CitizenIdHash, input.CitizenId, IdentityDocumentType.CitizenId);
         if (!access.RecordResult(code, matches)) return Result<PublicPrescriptionSession>.Failure(Locked);
         if (!matches) return Result<PublicPrescriptionSession>.Failure(Error.Forbidden);
         return Result<PublicPrescriptionSession>.Success(access.Issue(code, proof!.Id, proof.CitizenIdVersion));

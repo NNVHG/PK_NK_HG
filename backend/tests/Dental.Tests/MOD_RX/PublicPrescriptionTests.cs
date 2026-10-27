@@ -15,6 +15,7 @@ using Xunit;
 namespace Dental.Tests.MOD_RX;
 public sealed class PublicPrescriptionTests
 {
+    private static readonly KeyedIdentityHasher IdentityHasher = new(new byte[32]);
     private const string Code = "RX-20261017-0001";
     [Theory] [InlineData("")] [InlineData("RX-1")] [InlineData("../patients")] [InlineData("rx-20261017-0001")] [InlineData("RX-20261017-0001\n")] [InlineData(null)]
     public void InvalidCodeRejected(string? code) => Assert.False(PublicPrescriptionService.ValidCode(code));
@@ -65,7 +66,7 @@ public sealed class PublicPrescriptionTests
         var repo = Substitute.For<IPublicPrescriptionRepository>(); var access = Substitute.For<IPublicPrescriptionAccess>();
         repo.ProofAsync(Code, default).Returns(new PublicPrescriptionProof(3, 2, CitizenIdIdentity.Hash("987654321098")));
         access.RecordResult(Code, false).Returns(true);
-        var service = new PublicPrescriptionService(repo, access);
+        var service = new PublicPrescriptionService(repo, access, IdentityHasher);
         Assert.True((await service.VerifyAsync(Code, new("987654321099"))).IsFailure);
         Assert.True((await service.DetailsAsync(Code, null)).IsFailure);
         access.DidNotReceiveWithAnyArgs().Issue(default!, default, default);
@@ -76,7 +77,7 @@ public sealed class PublicPrescriptionTests
     {
         var repo = Substitute.For<IPublicPrescriptionRepository>(); var access = Substitute.For<IPublicPrescriptionAccess>();
         access.RecordResult(Code, false).Returns(true);
-        var service = new PublicPrescriptionService(repo, access);
+        var service = new PublicPrescriptionService(repo, access, IdentityHasher);
         Assert.True((await service.VerifyAsync(Code, new("987654321098"))).IsFailure);
         access.DidNotReceiveWithAnyArgs().RecordResult(default!, default);
         repo.ProofAsync(Code, default).Returns(new PublicPrescriptionProof(3, 0, null));
@@ -89,7 +90,7 @@ public sealed class PublicPrescriptionTests
         var repo = Substitute.For<IPublicPrescriptionRepository>(); var access = Substitute.For<IPublicPrescriptionAccess>();
         repo.ProofAsync(Code, default).Returns(new PublicPrescriptionProof(3, 2, CitizenIdIdentity.Hash("987654321098")));
         access.RecordResult(Code, true).Returns(true); access.Issue(Code, 3, 2).Returns(new PublicPrescriptionSession("view-token", DateTimeOffset.UtcNow.AddMinutes(15)));
-        var result = await new PublicPrescriptionService(repo, access).VerifyAsync(Code, new("987654321098"));
+        var result = await new PublicPrescriptionService(repo, access, IdentityHasher).VerifyAsync(Code, new("987654321098"));
         Assert.True(result.IsSuccess); Assert.Equal("view-token", result.Value!.Token);
     }
     private sealed class Clock : TimeProvider

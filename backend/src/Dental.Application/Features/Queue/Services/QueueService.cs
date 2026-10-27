@@ -23,6 +23,7 @@ public sealed class QueueService
     private readonly IInvoiceDraftGenerator _invoiceDraft;
     private readonly IVisitChairCoordinator _visitChairs;
     private readonly IPasswordHasher? _passwordHasher;
+    private readonly IKeyedIdentityHasher? _identityHasher;
 
     public QueueService(
         IQueueRepository queueRepository,
@@ -34,7 +35,8 @@ public sealed class QueueService
         IUnitOfWork unitOfWork,
         IAuditLogger auditLogger,
         VietnamClock vietnamClock,
-        IInvoiceDraftGenerator invoiceDraft, IVisitChairCoordinator visitChairs, IPasswordHasher? passwordHasher = null)
+        IInvoiceDraftGenerator invoiceDraft, IVisitChairCoordinator visitChairs, IPasswordHasher? passwordHasher = null,
+        IKeyedIdentityHasher? identityHasher = null)
     {
         _queueRepository = queueRepository;
         _appointmentRepository = appointmentRepository;
@@ -47,6 +49,7 @@ public sealed class QueueService
         _vietnamClock = vietnamClock;
         _invoiceDraft = invoiceDraft; _visitChairs = visitChairs;
         _passwordHasher = passwordHasher;
+        _identityHasher = identityHasher;
     }
 
     public async Task<Result<OutstandingDebtResponse>> GetOutstandingDebtAsync(int patientId, CancellationToken ct = default)
@@ -135,7 +138,7 @@ public sealed class QueueService
         if (!string.IsNullOrWhiteSpace(request.CitizenId) || !string.IsNullOrWhiteSpace(request.Phone))
         {
             // Q-358..361 / DL-340..344: staff verifies the patient's identity at the counter.
-            // Keep raw CCCD and phone only in this request; persist the existing SHA-256/masked form.
+            // Chỉ giữ CCCD và SĐT thô trong yêu cầu; lưu HMAC có khóa và số đã che.
             if (string.IsNullOrWhiteSpace(request.CitizenId) || request.CitizenId.Length != 12 || request.CitizenId.Any(c => c is < '0' or > '9') ||
                 string.IsNullOrWhiteSpace(request.Phone) || request.Phone.Length != 10 || request.Phone.Any(c => c is < '0' or > '9') ||
                 !string.Equals(patient.Phone, request.Phone.Trim(), StringComparison.Ordinal))
@@ -144,13 +147,15 @@ public sealed class QueueService
 
             var citizenId = request.CitizenId.Trim();
               verifiedCitizenId = citizenId;
-            var citizenIdHash = CitizenIdIdentity.Hash(citizenId);
-            if (patient.CitizenIdHash is not null && !CitizenIdIdentity.Matches(patient.CitizenIdHash, citizenId))
+            if (_identityHasher is null) return Result<QueueEntryResponse>.Failure(Error.ServerError);
+            var citizenIdHash = _identityHasher.Hash(citizenId);
+            if (patient.CitizenIdHash is not null && !_identityHasher.Matches(patient.CitizenIdHash, citizenId))
                 return Result<QueueEntryResponse>.Failure(Error.Validation.Code,
                     "CCCD không khớp hồ sơ. Hãy đối soát thông tin trước khi check-in.");
-            if (patient.CitizenIdHash is null)
+            if (patient.CitizenIdHash is null || patient.CitizenIdHash != citizenIdHash)
             {
                 var duplicate = await _patientRepository.FindByCitizenIdHashAsync(citizenIdHash, patient.PatientId, ct);
+                duplicate ??= await _patientRepository.FindByCitizenIdHashAsync(CitizenIdIdentity.Hash(citizenId), patient.PatientId, ct);
                 if (duplicate is not null)
                     return Result<QueueEntryResponse>.Failure(Error.Validation.Code,
                         "CCCD đã liên kết với hồ sơ khác. Hãy đối soát thông tin trước khi check-in.");
