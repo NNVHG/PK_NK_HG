@@ -1,6 +1,6 @@
 import {apiClient} from './api';
 export interface BookingIntent {fullName:string;phone:string;dateOfBirth:string;gender:string;email:string|null;appointmentDate:string;slotTime:string;dentistId:number|null;notes:string|null;scheduleRevision:string;patientId:number|null}
-export interface BookingCatalog {today:string;slots:string[];durationMinutes:number;revision:string;dentists:{dentistId:number;fullName:string}[]}
+export interface BookingCatalog {today:string;slots:string[];durationMinutes:number;revision:string}
 export interface BookingSubmission {intent:BookingIntent;clientRequestId:string;confirmed:boolean}
 export interface BookingReceipt {requestId:string;status:string}
 export interface BookingRequestRow {id:number;fullName:string;phone:string;dateOfBirth:string;appointmentDate:string;slotTime:string;slotDurationMinutes:number;dentistId:number|null;dentistName:string|null;notes:string|null;isReturning:boolean;createdAt:string;version:number}

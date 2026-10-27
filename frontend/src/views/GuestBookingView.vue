@@ -47,7 +47,7 @@ function clear(){catalog.value=null;patient.value=null;patientId.value=0;Object.
 async function load(){
  const ticket=++generation,owner=identity();clear();busy.value=true;
  try{const data=await bookingRequestsService.catalog();if(!alive(ticket,owner))return;
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(data.today)||!Array.isArray(data.slots)||!data.slots.length||data.slots.some(s=>!/^\d{2}:\d{2}$/.test(s))||!Array.isArray(data.dentists)||!/^[A-F0-9]{64}$/.test(data.revision))throw Error();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(data.today)||!Array.isArray(data.slots)||!data.slots.length||data.slots.some(s=>!/^\d{2}:\d{2}$/.test(s))||!/^[A-F0-9]{64}$/.test(data.revision))throw Error();
   catalog.value=data;form.appointmentDate=data.today;
   if(auth.role==='PATIENT'){try{const mine=await patientsService.getMyPatient();if(alive(ticket,owner)){patient.value=mine;patientId.value=mine.patientId;Object.assign(form,{fullName:mine.fullName,phone:mine.phone,dateOfBirth:mine.dateOfBirth,gender:mine.gender});}}catch{if(alive(ticket,owner))profilesError.value='Không tải được hồ sơ cá nhân. Tải lại trước khi tiếp tục.';}}
  }catch{if(alive(ticket,owner))error.value='Không tải được khung hẹn. Vui lòng thử lại.';}

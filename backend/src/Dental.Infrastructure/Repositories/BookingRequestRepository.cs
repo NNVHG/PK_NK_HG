@@ -19,8 +19,7 @@ public sealed class BookingRequestRepository(DentalDbContext db,VietnamClock clo
     public async Task<PublicBookingCatalog> CatalogAsync(CancellationToken ct)
     {
         var s=await ClinicScheduleReader.ReadAsync(db,ct);
-        var dentists=await db.Users.AsNoTracking().Where(u=>u.IsActive&&u.Role.RoleCode==RoleCodes.Dentist).OrderBy(u=>u.FullName).ThenBy(u=>u.UserId).Select(u=>new PublicBookingDentist(u.UserId,u.FullName)).ToArrayAsync(ct);
-        return new(clock.Today.ToString("yyyy-MM-dd"),s.Schedule.Slots().Select(t=>t.ToString("HH:mm")).ToArray(),s.Schedule.DurationMinutes,s.Revision,dentists);
+        return new(clock.Today.ToString("yyyy-MM-dd"),s.Schedule.Slots().Select(t=>t.ToString("HH:mm")).ToArray(),s.Schedule.DurationMinutes,s.Revision);
     }
     public async Task<Result<bool>> ValidateAsync(BookingIntent i,int? actor,string? role,CancellationToken ct)
     {
@@ -28,7 +27,7 @@ public sealed class BookingRequestRepository(DentalDbContext db,VietnamClock clo
         if(i.PatientId.HasValue&&(!actor.HasValue||!await db.Patients.AnyAsync(p=>p.PatientId==i.PatientId&&p.IsActive&&p.UserId==actor&&p.FullName==i.FullName.Trim()&&p.DateOfBirth==i.DateOfBirth,ct)))return Result<bool>.Failure(Error.NotFound);
         var s=await ClinicScheduleReader.ReadAsync(db,ct);
         if(s.Revision!=i.ScheduleRevision||!s.Schedule.IsValidSlot(i.SlotTime)||i.AppointmentDate<clock.Today||i.AppointmentDate==clock.Today&&i.SlotTime<=TimeOnly.FromDateTime(clock.Now))return Result<bool>.Failure(new Error("APP_REQUEST_SCHEDULE","Khung hẹn không còn hợp lệ. Tải lại và chọn giờ trước khi gửi."));
-        if(i.DentistId.HasValue&&!await db.Users.AnyAsync(u=>u.UserId==i.DentistId&&u.IsActive&&u.Role.RoleCode==RoleCodes.Dentist,ct))return Result<bool>.Failure(Error.Validation);
+        if(i.DentistId.HasValue)return Result<bool>.Failure(Error.Validation);
         return Result<bool>.Success(true);
     }
     public async Task<BookingReceipt?> ReplayAsync(SubmitBookingRequest request,int? actor,CancellationToken ct)
@@ -47,12 +46,11 @@ public sealed class BookingRequestRepository(DentalDbContext db,VietnamClock clo
             var i=request.Intent;var schedule=await ClinicScheduleReader.ReadAsync(db,ct);var duration=schedule.Schedule.DurationMinutes;
             var appointments=new AppointmentRepository(db);
             if(await appointments.GetSlotBookingCountAsync(i.AppointmentDate,i.SlotTime,ct,durationMinutes:duration)>=AppointmentSlots.MaxBookingsPerSlot)return Result<BookingReceipt>.Failure(Error.AppointmentSlotFull);
-            if(i.DentistId.HasValue&&await appointments.HasDentistBookingAsync(i.DentistId.Value,i.AppointmentDate,i.SlotTime,0,ct,duration))return Result<BookingReceipt>.Failure(new Error("APP_REQUEST_HELD","Nha sĩ đã có lịch hoặc yêu cầu giữ chỗ trong khung giờ này."));
             if(i.PatientId.HasValue&&(await appointments.HasActiveAppointmentOnDateAsync(i.PatientId.Value,i.AppointmentDate,ct)||await db.BookingRequests.AnyAsync(x=>x.Status=="Pending"&&x.VerifiedPatientId==i.PatientId&&x.AppointmentDate==i.AppointmentDate,ct)))return Result<BookingReceipt>.Failure(Error.AppointmentPatientHasActive);
             if(!i.PatientId.HasValue&&await db.BookingRequests.AnyAsync(x=>x.Status=="Pending"&&x.Phone==i.Phone&&x.FullName==i.FullName.Trim()&&x.DateOfBirth==i.DateOfBirth&&x.AppointmentDate==i.AppointmentDate,ct))return Result<BookingReceipt>.Failure(new Error("APP_REQUEST_DUPLICATE","Đã có yêu cầu cùng thông tin trong ngày này. Liên hệ phòng khám để đối chiếu."));
             // Do not infer ownership or return visits by matching guest names or a shared phone number.
             var returning=i.PatientId.HasValue&&await db.Visits.AnyAsync(v=>v.PatientId==i.PatientId&&v.Status==VisitStatuses.Completed,ct);
-            var row=new BookingRequest{ClientRequestId=request.ClientRequestId,IntentDigest=Digest(i,actor),FullName=i.FullName.Trim(),Phone=i.Phone,DateOfBirth=i.DateOfBirth,Gender=i.Gender,Email=string.IsNullOrWhiteSpace(i.Email)?null:i.Email.Trim(),Notes=string.IsNullOrWhiteSpace(i.Notes)?null:i.Notes.Trim(),AppointmentDate=i.AppointmentDate,SlotTime=i.SlotTime,SlotDurationMinutes=duration,DentistId=i.DentistId,VerifiedPatientId=i.PatientId,SubmittedByUserId=actor,IsReturning=returning,CreatedAt=clock.UtcNow};
+            var row=new BookingRequest{ClientRequestId=request.ClientRequestId,IntentDigest=Digest(i,actor),FullName=i.FullName.Trim(),Phone=i.Phone,DateOfBirth=i.DateOfBirth,Gender=i.Gender,Email=string.IsNullOrWhiteSpace(i.Email)?null:i.Email.Trim(),Notes=string.IsNullOrWhiteSpace(i.Notes)?null:i.Notes.Trim(),AppointmentDate=i.AppointmentDate,SlotTime=i.SlotTime,SlotDurationMinutes=duration,DentistId=null,VerifiedPatientId=i.PatientId,SubmittedByUserId=actor,IsReturning=returning,CreatedAt=clock.UtcNow};
             db.BookingRequests.Add(row);await db.SaveChangesAsync(ct);
             db.AuditLogs.Add(new AuditLog{UserId=actor,EntityType="BookingRequest",EntityId=row.Id,Action="MOD_APP_REQUEST_SUBMITTED",IpAddress=ip,CreatedAt=clock.UtcNow,Detail=JsonSerializer.Serialize(new{version=2,phoneVerified=false,verifiedProfile=i.PatientId.HasValue})});
             await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);committed=true;

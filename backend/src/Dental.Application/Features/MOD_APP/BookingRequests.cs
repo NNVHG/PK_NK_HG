@@ -18,8 +18,7 @@ public sealed record SubmitBookingRequest(BookingIntent Intent,Guid ClientReques
     public string Code { get; init; } = string.Empty;
 }
 public sealed record BookingReceipt(Guid RequestId,string Status);
-public sealed record PublicBookingDentist(int DentistId,string FullName);
-public sealed record PublicBookingCatalog(string Today,string[] Slots,int DurationMinutes,string Revision,PublicBookingDentist[] Dentists);
+public sealed record PublicBookingCatalog(string Today,string[] Slots,int DurationMinutes,string Revision);
 public sealed record BookingRequestRow(int Id,string FullName,string Phone,DateOnly DateOfBirth,DateOnly AppointmentDate,
     TimeOnly SlotTime,int SlotDurationMinutes,int? DentistId,string? DentistName,string? Notes,bool IsReturning,DateTime CreatedAt,int Version);
 public sealed record RejectBookingRequest(int ExpectedVersion,string Reason,bool Confirmed);
@@ -51,7 +50,7 @@ public sealed class BookingIntentValidator:AbstractValidator<BookingIntent>
         RuleFor(x=>x.Notes).MaximumLength(500).Must(x=>x is null||!x.Contains('\0'));
         RuleFor(x=>x.AppointmentDate).Must(d=>d>=clock.Today);
         RuleFor(x=>x.SlotTime).Must(t=>t.Ticks%TimeSpan.TicksPerMinute==0);
-        RuleFor(x=>x.DentistId).GreaterThan(0).When(x=>x.DentistId.HasValue);
+        RuleFor(x=>x.DentistId).Null().WithMessage("Khách không chọn nha sĩ khi đặt lịch; phòng khám sẽ điều phối khi tiếp đón.");
         RuleFor(x=>x.PatientId).GreaterThan(0).When(x=>x.PatientId.HasValue);
         RuleFor(x=>x.ScheduleRevision).NotEmpty().Length(64).Matches("^[A-F0-9]{64}$");
     }
