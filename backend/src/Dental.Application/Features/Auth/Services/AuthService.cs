@@ -78,9 +78,8 @@ public sealed class AuthService
         if (request.DocumentType == IdentityDocumentType.Passport)
         {
             // Bệnh nhân dùng Hộ chiếu (DL-360, DL-364)
-            var hash = _identityHasher is not null
-                ? _identityHasher.Hash(identifier, IdentityDocumentType.Passport, request.NationalityCode)
-                : Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"PASSPORT:{request.NationalityCode?.ToUpperInvariant()}:{identifier.ToUpperInvariant()}")));
+            if (_identityHasher is null) return Result<LoginResponse>.Failure(Error.ServerError);
+            var hash = _identityHasher.Hash(identifier, IdentityDocumentType.Passport, request.NationalityCode);
             user = await _userRepo.FindByIdentityHashAsync(hash, ct);
         }
         else if (identifier.Length == 12 && request.DocumentType != IdentityDocumentType.Passport)
