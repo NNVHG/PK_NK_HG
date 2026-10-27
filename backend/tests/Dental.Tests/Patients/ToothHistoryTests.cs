@@ -40,6 +40,23 @@ public sealed class ToothHistoryTests
         Assert.Equal(Error.NotFound, (await new ToothHistoryService(patients, repo, new()).GetAsync(new(1), 7, RoleCodes.Patient)).Error);
         Assert.Empty(repo.ReceivedCalls());
     }
+    [Fact]
+    public async Task GuardianReadsWardHistoryOnlyWhileRelationIsActive()
+    {
+        var patients = Substitute.For<IPatientRepository>();
+        var guardians = Substitute.For<IPatientGuardianRepository>();
+        var repo = Substitute.For<IToothHistoryRepository>();
+        var request = new ToothHistoryRequest(12);
+        var page = PagedResult<ToothHistoryItemResponse>.Create([], 0, 1, 20);
+        patients.GetByIdAsync(12, Arg.Any<CancellationToken>()).Returns(new Patient { PatientId = 12 });
+        guardians.HasActiveGuardianshipAsync(7, 12, Arg.Any<CancellationToken>()).Returns(true, false);
+        repo.GetAsync(request, Arg.Any<CancellationToken>()).Returns(page);
+        var service = new ToothHistoryService(patients, repo, new(), guardians);
+
+        Assert.Same(page, (await service.GetAsync(request, 7, RoleCodes.Patient)).Value);
+        Assert.Equal(Error.NotFound, (await service.GetAsync(request, 7, RoleCodes.Patient)).Error);
+        await repo.Received(1).GetAsync(request, Arg.Any<CancellationToken>());
+    }
     [Fact] public async Task MissingPatientReturnsNotFound()
     {
         var repo = Substitute.For<IToothHistoryRepository>();

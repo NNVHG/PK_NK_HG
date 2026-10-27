@@ -9,7 +9,7 @@ namespace Dental.Application.Features.MOD_FDI.Services;
 
 public sealed class ToothConditionService(IVisitRepository visits, IPatientRepository patients,
     IToothConditionRepository conditions, IUnitOfWork unitOfWork, IAuditLogger audit,
-    ToothConditionRequestValidator validator)
+    ToothConditionRequestValidator validator, IPatientGuardianRepository? guardians = null)
 {
     public static readonly Error VisitClosed = new("FDI_003", "Chỉ ghi tình trạng răng khi lần khám đang diễn ra và chưa khóa.");
 
@@ -23,7 +23,8 @@ public sealed class ToothConditionService(IVisitRepository visits, IPatientRepos
         if (role == RoleCodes.Patient)
         {
             var patient = await patients.GetByIdAsync(visit.PatientId, ct);
-            if (patient?.UserId != userId)
+            if (patient is null || patient.UserId != userId &&
+                (guardians is null || !await guardians.HasActiveGuardianshipAsync(userId, visit.PatientId, ct)))
                 return Result<IReadOnlyList<ToothConditionResponse>>.Failure(Error.NotFound);
         }
         var rows = await conditions.GetForVisitAsync(visitId, ct);
@@ -37,7 +38,8 @@ public sealed class ToothConditionService(IVisitRepository visits, IPatientRepos
         if (role != RoleCodes.Patient && !RoleCodes.StaffRoles.Contains(role))
             return Result<IReadOnlyList<LatestToothConditionResponse>>.Failure(Error.Forbidden);
         var patient = await patients.GetByIdAsync(patientId, ct);
-        if (patient is null || role == RoleCodes.Patient && patient.UserId != userId)
+        if (patient is null || role == RoleCodes.Patient && patient.UserId != userId &&
+            (guardians is null || !await guardians.HasActiveGuardianshipAsync(userId, patientId, ct)))
             return Result<IReadOnlyList<LatestToothConditionResponse>>.Failure(Error.NotFound);
         return Result<IReadOnlyList<LatestToothConditionResponse>>.Success(
             await conditions.GetLatestForPatientAsync(patientId, ct));

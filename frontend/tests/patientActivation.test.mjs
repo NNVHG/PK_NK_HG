@@ -13,7 +13,7 @@ function fixture(routeQuery = {}){
   vue:{defineComponent:x=>x,ref:value=>({value}),watch:(_g,fn)=>hooks.watch.push(fn),onMounted:fn=>fn(),onUnmounted:fn=>hooks.unmount=fn},
   'vue-router':{useRoute:()=>({query:routeQuery}),useRouter:()=>({push:(target)=>calls.push(['route',target])}),RouterLink:{}},
   '@/stores/auth':{useAuthStore:()=>auth},
-  '@/services/patientActivation':{patientActivationService:{
+  '@/services/patientActivation':{takeActivationPrefill:()=>null,patientActivationService:{
     request:async(...args)=>{calls.push(['request',...args]);return await request();},
     verify:async(...args)=>{calls.push(['verify',...args]);return await verify();},
     complete:async(...args)=>{calls.push(['complete',...args]);return await complete();}
@@ -39,3 +39,4 @@ test('changing password choice clears password drafts and confirmation',async()=
 test('invalid challenge never advances and failed request clears password',async()=>{const f=fixture();f.setRequest(()=>({...challenge,challengeId:'-'.repeat(36)}));f.c.phone.value='0967000000';f.c.password.value='0967000000';await f.c.requestCode();assert.equal(f.c.challenge.value,null);assert.equal(f.c.password.value,'');assert.ok(f.c.error.value);});
 test('accessible native forms and memory only secrets',()=>{assert.match(source,/<legend>/);assert.match(source,/autocomplete="one-time-code"/);assert.match(source,/role="status" aria-live="polite"/);assert.match(source,/role="alert"/);assert.ok(!/localStorage|sessionStorage|console\.log/.test(source));});
 test('legacy registration route redirects to booking intake',async()=>{const router=await readFile(new URL('../src/router/index.ts',import.meta.url),'utf8');assert.match(router,/path: '\/register'[\s\S]{0,120}redirect: \{ name: 'guest-booking' \}/);const service=await readFile(new URL('../src/services/patientActivation.ts',import.meta.url),'utf8');assert.ok(!/localStorage|sessionStorage|console\./.test(service));assert.doesNotMatch(service, /\/auth\/activation\/(?:request|verify|complete)\?/);});
+

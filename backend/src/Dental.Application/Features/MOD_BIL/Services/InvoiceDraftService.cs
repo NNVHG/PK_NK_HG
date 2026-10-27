@@ -8,7 +8,7 @@ using Dental.Domain.Entities;
 namespace Dental.Application.Features.MOD_BIL.Services;
 
 public sealed class InvoiceDraftService(IInvoiceRepository invoices, IVisitRepository visits,
-    IPatientRepository patients, IAuditLogger audit, VietnamClock clock) : IInvoiceDraftGenerator
+    IPatientRepository patients, IAuditLogger audit, VietnamClock clock, IPatientGuardianRepository? guardians = null) : IInvoiceDraftGenerator
 {
     public Task<Result> CancelDraftAsync(int invoiceId, int userId, string? role,
         CancelInvoiceDraftRequest request, string? ip, CancellationToken ct = default)
@@ -49,8 +49,13 @@ public sealed class InvoiceDraftService(IInvoiceRepository invoices, IVisitRepos
             return Result<InvoiceResponse>.Failure(Error.Forbidden);
         var visit = await visits.GetByIdAsync(visitId, ct);
         if (visit is null) return Result<InvoiceResponse>.Failure(Error.NotFound);
-        if (role == RoleCodes.Patient && (await patients.GetByIdAsync(visit.PatientId, ct))?.UserId != userId)
-            return Result<InvoiceResponse>.Failure(Error.NotFound);
+        if (role == RoleCodes.Patient)
+        {
+            var patient = await patients.GetByIdAsync(visit.PatientId, ct);
+            if (patient is null || patient.UserId != userId &&
+                (guardians is null || !await guardians.HasActiveGuardianshipAsync(userId, visit.PatientId, ct)))
+                return Result<InvoiceResponse>.Failure(Error.NotFound);
+        }
         Invoice? invoice;
         if (VisitStatuses.IsEditable(visit.Status) && !visit.IsLocked)
         {

@@ -10,7 +10,7 @@ namespace Dental.Application.Features.MOD_FDI.Services;
 
 public sealed class FdiServiceAssignmentService(IVisitRepository visits, IPatientRepository patients,
     IServiceCatalogRepository catalog, IVisitServiceRepository assignments, IUnitOfWork unitOfWork,
-    IAuditLogger audit, AssignServicesRequestValidator validator)
+    IAuditLogger audit, AssignServicesRequestValidator validator, IPatientGuardianRepository? guardians = null)
 {
     public static readonly Error Closed = new("FDI_041", "Chỉ chỉ định dịch vụ khi lần khám đang diễn ra và chưa khóa.");
     public static readonly Error PriceUnavailable = new("FDI_042", "Dịch vụ không hoạt động hoặc chưa có giá hiệu lực.");
@@ -23,8 +23,13 @@ public sealed class FdiServiceAssignmentService(IVisitRepository visits, IPatien
             return Result<IReadOnlyList<AssignedServiceResponse>>.Failure(Error.Forbidden);
         var visit = await visits.GetByIdAsync(visitId, ct);
         if (visit is null) return Result<IReadOnlyList<AssignedServiceResponse>>.Failure(Error.NotFound);
-        if (role == RoleCodes.Patient && (await patients.GetByIdAsync(visit.PatientId, ct))?.UserId != userId)
-            return Result<IReadOnlyList<AssignedServiceResponse>>.Failure(Error.NotFound);
+        if (role == RoleCodes.Patient)
+        {
+            var patient = await patients.GetByIdAsync(visit.PatientId, ct);
+            if (patient is null || patient.UserId != userId &&
+                (guardians is null || !await guardians.HasActiveGuardianshipAsync(userId, visit.PatientId, ct)))
+                return Result<IReadOnlyList<AssignedServiceResponse>>.Failure(Error.NotFound);
+        }
         return Result<IReadOnlyList<AssignedServiceResponse>>.Success(
             (await assignments.GetForVisitAsync(visitId, ct)).Select(Map).ToArray());
     }
