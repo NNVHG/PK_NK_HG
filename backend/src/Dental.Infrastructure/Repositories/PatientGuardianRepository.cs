@@ -12,7 +12,7 @@ using Npgsql;
 
 namespace Dental.Infrastructure.Repositories;
 
-public sealed class PatientGuardianRepository(DentalDbContext db, IPasswordHasher passwordHasher) : IPatientGuardianRepository
+public sealed class PatientGuardianRepository(DentalDbContext db, IPasswordHasher passwordHasher, IKeyedIdentityHasher identityHasher) : IPatientGuardianRepository
 {
     public async Task<PatientGuardian?> GetActiveByWardPatientIdAsync(int wardPatientId, CancellationToken ct = default)
     {
@@ -228,8 +228,10 @@ public sealed class PatientGuardianRepository(DentalDbContext db, IPasswordHashe
             if (ward.UserId.HasValue)
                 return Result<PatientResponse>.Failure(new Error("PAT_WARD_ALREADY_INDEPENDENT", "Bệnh nhân này đã có tài khoản người dùng độc lập."));
 
-            var citizenIdHash = CitizenIdIdentity.Hash(request.RawCitizenId);
-            if (await db.Patients.AnyAsync(p => p.PatientId != wardPatientId && p.CitizenIdHash == citizenIdHash, ct))
+            var citizenIdHash = identityHasher.Hash(request.RawCitizenId);
+            var legacyHash = CitizenIdIdentity.Hash(request.RawCitizenId);
+            if (await db.Patients.AnyAsync(p => p.PatientId != wardPatientId &&
+                (p.CitizenIdHash == citizenIdHash || p.CitizenIdHash == legacyHash), ct))
             {
                 return Result<PatientResponse>.Failure(new Error("PAT_CITIZEN_ID_DUPLICATE", "CCCD này đã được liên kết với một hồ sơ bệnh nhân khác."));
             }
@@ -263,7 +265,7 @@ public sealed class PatientGuardianRepository(DentalDbContext db, IPasswordHashe
             ward.UserId = newUser.UserId;
             ward.Phone = phoneToUse;
             ward.CitizenIdHash = citizenIdHash;
-            ward.CitizenIdMasked = CitizenIdIdentity.Mask(request.RawCitizenId);
+            ward.CitizenIdMasked = identityHasher.Mask(request.RawCitizenId);
             ward.CitizenIdVersion++;
             ward.UpdatedAt = DateTime.UtcNow;
 

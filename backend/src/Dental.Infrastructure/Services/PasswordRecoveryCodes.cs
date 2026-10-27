@@ -41,7 +41,7 @@ public sealed class PasswordRecoveryCodes(TimeProvider clock) : IPasswordRecover
         }
     }
 
-    public RecoveryAccount? Consume(Guid challengeId, string phone, string code, string? citizenIdHash)
+    public RecoveryAccount? Consume(Guid challengeId, string phone, string code, string? citizenIdHash, string? legacyCitizenIdHash = null)
     {
         lock (gate)
         {
@@ -54,7 +54,9 @@ public sealed class PasswordRecoveryCodes(TimeProvider clock) : IPasswordRecover
             var expectedHash = current.Account?.CitizenIdHash;
             var validIdentity = expectedHash is null
                 ? citizenIdHash is null
-                : citizenIdHash is not null && CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(expectedHash), Encoding.ASCII.GetBytes(citizenIdHash));
+                : citizenIdHash is not null &&
+                    (CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(expectedHash), Encoding.ASCII.GetBytes(citizenIdHash)) ||
+                     legacyCitizenIdHash is not null && CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(expectedHash), Encoding.ASCII.GetBytes(legacyCitizenIdHash)));
             if (!validCode || !validIdentity) return null;
             current.Consumed = true;
             return current.Account;

@@ -61,6 +61,7 @@ internal static class PasswordRecoveryHttpSmoke
         builder.Services.AddScoped<IAuditLogger>(sp => new Audit(sp.GetRequiredService<AuditLogger>(), failure));
         builder.Services.AddScoped<IPasswordRecoveryRepository, PasswordRecoveryRepository>();
         builder.Services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
+        builder.Services.AddSingleton<IKeyedIdentityHasher>(new KeyedIdentityHasher(new byte[32]));
         builder.Services.AddScoped<PasswordRecoveryService>();
         builder.Services.AddControllers().AddApplicationPart(typeof(PasswordRecoveryController).Assembly);
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(jwt =>

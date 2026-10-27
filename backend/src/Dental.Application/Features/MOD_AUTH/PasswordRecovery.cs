@@ -31,7 +31,7 @@ public interface IPasswordRecoveryDelivery
 public interface IPasswordRecoveryCodes
 {
     Result<RecoveryCode> Issue(string phone, RecoveryAccount? account);
-    RecoveryAccount? Consume(Guid challengeId, string phone, string code, string? citizenIdHash);
+    RecoveryAccount? Consume(Guid challengeId, string phone, string code, string? citizenIdHash, string? legacyCitizenIdHash = null);
     void Revoke(string phone, Guid challengeId);
     bool IsCurrent(string phone, Guid challengeId);
 }
@@ -60,7 +60,7 @@ public sealed class ResetPasswordRequestValidator : AbstractValidator<ResetPassw
 }
 
 public sealed class PasswordRecoveryService(IPasswordRecoveryRepository repository, IPasswordRecoveryCodes codes,
-    IPasswordRecoveryDelivery sms, IPasswordHasher passwords)
+    IPasswordRecoveryDelivery sms, IPasswordHasher passwords, IKeyedIdentityHasher identityHasher)
 {
     public static readonly Error Unavailable = new("AUTH_060", "Khôi phục mật khẩu qua SMS chưa sẵn sàng. Vui lòng liên hệ phòng khám.");
     public static readonly Error InvalidCode = new("AUTH_061", "Mã không đúng, đã hết hạn hoặc đã sử dụng. Vui lòng yêu cầu mã mới khi cần.");
@@ -86,10 +86,9 @@ public sealed class PasswordRecoveryService(IPasswordRecoveryRepository reposito
     {
         if (!new ResetPasswordRequestValidator().Validate(request).IsValid)
             return Result<bool>.Failure(Error.Validation);
-        var citizenIdHash = string.IsNullOrEmpty(request.CitizenId)
-            ? null
-            : Dental.Application.Features.MOD_PAT.CitizenIdIdentity.Hash(request.CitizenId);
-        var account = codes.Consume(request.ChallengeId, request.Phone, request.Code, citizenIdHash);
+        var citizenIdHash = string.IsNullOrEmpty(request.CitizenId) ? null : identityHasher.Hash(request.CitizenId);
+        var legacyHash = string.IsNullOrEmpty(request.CitizenId) ? null : Dental.Application.Features.MOD_PAT.CitizenIdIdentity.Hash(request.CitizenId);
+        var account = codes.Consume(request.ChallengeId, request.Phone, request.Code, citizenIdHash, legacyHash);
         if (account is null) return Result<bool>.Failure(InvalidCode);
         // Consume before writing: concurrent replays can never reset twice, even if an audit/database write fails.
         return await repository.ResetAsync(account, passwords.Hash(request.NewPassword), ct)

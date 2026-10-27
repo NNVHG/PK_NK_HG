@@ -7,15 +7,16 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Dental.Infrastructure.Repositories;
 
-public sealed class PasswordRecoveryRepository(DentalDbContext db, IAuditLogger audit, TimeProvider clock) : IPasswordRecoveryRepository
+public sealed class PasswordRecoveryRepository(DentalDbContext db, IAuditLogger audit, TimeProvider clock, IKeyedIdentityHasher identityHasher) : IPasswordRecoveryRepository
 {
     public async Task<RecoveryAccount?> FindActiveAsync(string phone, string? citizenId, CancellationToken ct)
     {
         if (!string.IsNullOrEmpty(citizenId))
         {
-            var hash = Dental.Application.Features.MOD_PAT.CitizenIdIdentity.Hash(citizenId);
+            var hash = identityHasher.Hash(citizenId);
+            var legacyHash = Dental.Application.Features.MOD_PAT.CitizenIdIdentity.Hash(citizenId);
             var matches = await db.Patients.AsNoTracking()
-                .Where(p => p.CitizenIdHash == hash && p.Phone == phone && p.User != null && p.User.IsActive &&
+                .Where(p => (p.CitizenIdHash == hash || p.CitizenIdHash == legacyHash) && p.Phone == phone && p.User != null && p.User.IsActive &&
                             p.User.Role.RoleCode == RoleCodes.Patient)
                 .Select(p => new RecoveryAccount(p.User!.UserId, p.User.PasswordHash, p.User.Phone, p.CitizenIdHash))
                 .Take(2).ToListAsync(ct);

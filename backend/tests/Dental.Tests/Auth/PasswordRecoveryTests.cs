@@ -29,7 +29,7 @@ public sealed class PasswordRecoveryTests
         public DateTimeOffset Now { get; set; } = new(2026, 10, 19, 0, 0, 0, TimeSpan.Zero);
         public override DateTimeOffset GetUtcNow() => Now;
     }
-    private PasswordRecoveryService Service(IPasswordRecoveryCodes codes) => new(repository, codes, sms, passwords);
+    private PasswordRecoveryService Service(IPasswordRecoveryCodes codes) => new(repository, codes, sms, passwords, new KeyedIdentityHasher(new byte[32]));
 
     [Fact]
     public async Task MissingConfigurationNeverQueriesAccountOrReturnsCode()
@@ -141,6 +141,25 @@ public sealed class PasswordRecoveryTests
         Assert.Equal("AUTH_061", (await Service(codes).ResetAsync(request)).Error.Code);
         Assert.Equal("AUTH_061", (await Service(codes).ResetAsync(request)).Error.Code);
         await repository.Received(1).ResetAsync(Account, "new-hash", Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ResetAcceptsKeyedAndLegacyPatientIdentity(bool legacy)
+    {
+        const string citizenId = "987654321098";
+        var hasher = new KeyedIdentityHasher(new byte[32]);
+        var storedHash = legacy ? Dental.Application.Features.MOD_PAT.CitizenIdIdentity.Hash(citizenId) : hasher.Hash(citizenId);
+        var account = new RecoveryAccount(7, "stored-hash", Phone, storedHash);
+        using var codes = new PasswordRecoveryCodes(clock);
+        var issued = codes.Issue(Phone, account).Value!;
+        passwords.Hash("Newpass1").Returns("new-hash");
+        repository.ResetAsync(account, "new-hash", Arg.Any<CancellationToken>()).Returns(true);
+
+        var result = await Service(codes).ResetAsync(new(issued.ChallengeId, Phone, issued.Code, "Newpass1", citizenId));
+        Assert.True(result.IsSuccess);
+        await repository.Received(1).ResetAsync(account, "new-hash", Arg.Any<CancellationToken>());
     }
 
     [Theory] [InlineData("weak")] [InlineData("NoDigits")] [InlineData("nodigits1")] [InlineData("NOLOWER1")]

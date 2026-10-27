@@ -58,6 +58,7 @@ internal static class PatientActivationHttpSmoke
         builder.Logging.ClearProviders();builder.WebHost.UseUrls("http://127.0.0.1:0");
         var secret=Convert.ToHexString(RandomNumberGenerator.GetBytes(32));builder.Configuration["Jwt:Secret"]=secret;
         builder.Services.AddSingleton<TimeProvider>(clock);builder.Services.AddSingleton<VietnamClock>();
+        builder.Services.AddSingleton<IKeyedIdentityHasher>(new KeyedIdentityHasher(new byte[32]));
         builder.Services.AddSingleton<IPatientActivationDelivery>(sms);builder.Services.AddSingleton<IPatientActivationProofs,PatientActivationProofs>();
         builder.Services.AddScoped(_=>new DentalDbContext(dbOptions));builder.Services.AddScoped<IPatientActivationRepository,PatientActivationRepository>();
         builder.Services.AddScoped<PatientActivationService>();builder.Services.AddScoped<IPasswordHasher,BCryptPasswordHasher>();

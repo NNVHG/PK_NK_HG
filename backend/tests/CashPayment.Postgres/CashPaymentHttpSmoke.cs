@@ -45,6 +45,7 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddScoped<Dental.Application.Features.Staff.Validators.CreateStaffRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Staff.Validators.UpdateStaffRequestValidator>();
         builder.Services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
+        builder.Services.AddSingleton<IKeyedIdentityHasher>(new KeyedIdentityHasher(new byte[32]));
         builder.Services.AddScoped<IClinicPrintSettingsRepository, ClinicPrintSettingsRepository>();
         builder.Services.AddScoped<Dental.Application.Features.MOD_MST.Services.ClinicPrintSettingsService>();
         builder.Services.AddScoped<IDoctorSignatureRepository, DoctorSignatureRepository>();

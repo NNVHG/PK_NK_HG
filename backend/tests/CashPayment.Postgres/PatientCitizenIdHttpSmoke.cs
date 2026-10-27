@@ -5,6 +5,7 @@ using Dental.Domain.Constants;
 using Dental.Domain.Entities;
 using Dental.Infrastructure.Data;
 using Dental.Infrastructure.Repositories;
+using Dental.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
@@ -12,6 +13,7 @@ internal static class PatientCitizenIdHttpSmoke
 {
  public static async Task RunAsync(HttpClient client, DbContextOptions<DentalDbContext> options, int cashierId, Action<string, int> authenticate, Action<bool, string> check)
  {
+  var identityHasher = new KeyedIdentityHasher(new byte[32]);
   await using var db = new DentalDbContext(options);
   async Task<User> Actor(string code)
   {
@@ -36,7 +38,7 @@ internal static class PatientCitizenIdHttpSmoke
   using (var r = await client.PutAsJsonAsync(path, body))
   { var text = await r.Content.ReadAsStringAsync(); var status = await r.Content.ReadFromJsonAsync<CitizenIdStatus>(); check(r.StatusCode == HttpStatusCode.OK && status!.Masked == "987******098" && status.Version == 1 && !text.Contains(body.CitizenId) && !text.Contains(CitizenIdIdentity.Hash(body.CitizenId)), "Cashier saves identity with masked-only response200"); }
   var stored = await db.Patients.AsNoTracking().SingleAsync(p => p.PatientId == patient.PatientId);
-  check(stored.CitizenIdHash == CitizenIdIdentity.Hash(body.CitizenId) && stored.CitizenIdHash.Length == 64, "Only SHA256 and masked identity persisted");
+  check(stored.CitizenIdHash == identityHasher.Hash(body.CitizenId) && stored.CitizenIdHash.Length == 64, "Only keyed HMAC and masked identity persisted");
   check(await db.AuditLogs.AnyAsync(a => a.EntityId == patient.PatientId && a.Action == "MOD_PAT_CITIZEN_ID_UPDATED") &&
    await db.AuditLogs.AllAsync(a => a.Detail == null || !a.Detail.Contains(body.CitizenId) && !a.Detail.Contains(stored.CitizenIdHash!)), "Atomic audit contains no identity or hash");
   using (var r = await client.PutAsJsonAsync(path, body)) check(r.StatusCode == HttpStatusCode.Conflict, "Lost response replay fails version guard409");
@@ -45,11 +47,11 @@ internal static class PatientCitizenIdHttpSmoke
   authenticate(RoleCodes.Patient, other.UserId); using (var r = await client.GetAsync(path)) check(r.StatusCode == HttpStatusCode.NotFound, "Foreign patient identity read IDOR404");
   var faultOptions = new DbContextOptionsBuilder<DentalDbContext>(options).AddInterceptors(new FailIdentityAudit()).Options; var failed = false;
   await using (var fault = new DentalDbContext(faultOptions))
-   try { await new PatientCitizenIdRepository(fault).SaveAsync(patient.PatientId, cashierId, RoleCodes.Receptionist, new("987654321099", 1), null, default); }
+   try { await new PatientCitizenIdRepository(fault, identityHasher).SaveAsync(patient.PatientId, cashierId, RoleCodes.Receptionist, new("987654321099", 1), null, default); }
    catch (InvalidOperationException e) when (e.Message == "Synthetic identity audit fault") { failed = true; }
   check(failed && await db.Patients.AnyAsync(p => p.PatientId == patient.PatientId && p.CitizenIdVersion == 1 && p.CitizenIdHash == stored.CitizenIdHash), "Required audit failure rolls back identity and version");
   async Task<bool> Race(string citizenId)
-  { await using var ctx = new DentalDbContext(options); return (await new PatientCitizenIdRepository(ctx).SaveAsync(patient.PatientId, admin.UserId, RoleCodes.Admin, new(citizenId, 1), null, default)).IsSuccess; }
+  { await using var ctx = new DentalDbContext(options); return (await new PatientCitizenIdRepository(ctx, identityHasher).SaveAsync(patient.PatientId, admin.UserId, RoleCodes.Admin, new(citizenId, 1), null, default)).IsSuccess; }
   check((await Task.WhenAll(Race("987654321096"), Race("987654321097"))).Count(x => x) == 1, "Concurrent identity replacements have one winner");
   check(await db.Patients.AnyAsync(p => p.PatientId == patient.PatientId && p.CitizenIdVersion == 2) && await db.AuditLogs.CountAsync(a => a.Action == "MOD_PAT_CITIZEN_ID_UPDATED") == 2, "Only committed identity replacement has new version and audit");
   db.ChangeTracker.Clear(); var actor = await db.Users.FindAsync(cashierId); actor!.IsActive = false; await db.SaveChangesAsync(); db.ChangeTracker.Clear();

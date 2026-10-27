@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
 namespace Dental.Infrastructure.Repositories;
-public sealed class PatientCitizenIdRepository(DentalDbContext db) : IPatientCitizenIdRepository
+public sealed class PatientCitizenIdRepository(DentalDbContext db, IKeyedIdentityHasher identityHasher) : IPatientCitizenIdRepository
 {
     public async Task<Result<CitizenIdStatus>> ReadAsync(int patientId, int actorId, string role, CancellationToken ct)
     {
@@ -30,10 +30,12 @@ public sealed class PatientCitizenIdRepository(DentalDbContext db) : IPatientCit
             var p = await db.Patients.SingleOrDefaultAsync(p => p.PatientId == patientId, ct);
             if (p is null) return Result<CitizenIdStatus>.Failure(Error.NotFound);
             if (p.CitizenIdVersion != request.ExpectedVersion) return Conflict();
-            var hash = CitizenIdIdentity.Hash(request.CitizenId);
-            if (await db.Patients.AnyAsync(x => x.PatientId != patientId && x.CitizenIdHash == hash, ct))
+            var hash = identityHasher.Hash(request.CitizenId);
+            var legacyHash = CitizenIdIdentity.Hash(request.CitizenId);
+            if (await db.Patients.AnyAsync(x => x.PatientId != patientId &&
+                (x.CitizenIdHash == hash || x.CitizenIdHash == legacyHash), ct))
                 return Result<CitizenIdStatus>.Failure(new Error("PAT_ID_DUPLICATE", "CCCD đã thuộc hồ sơ khác. Kiểm tra hồ sơ trước khi lưu."));
-            p.CitizenIdHash = hash; p.CitizenIdMasked = CitizenIdIdentity.Mask(request.CitizenId); p.CitizenIdVersion++;
+            p.CitizenIdHash = hash; p.CitizenIdMasked = identityHasher.Mask(request.CitizenId); p.CitizenIdVersion++;
             p.UpdatedAt = DateTime.UtcNow;
             db.AuditLogs.Add(new AuditLog { UserId = actorId, EntityType = "Patient", EntityId = patientId,
                 Action = "MOD_PAT_CITIZEN_ID_UPDATED", CreatedAt = DateTime.UtcNow, IpAddress = ip,
