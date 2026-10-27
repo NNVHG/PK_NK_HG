@@ -1,5 +1,15 @@
 import { apiClient } from './api';
 
+interface ActivationPrefill { identifier: string; documentType: 'cccd' | 'passport'; nationalityCode: string }
+let activationPrefill: ActivationPrefill | null = null;
+
+export function stageActivationPrefill(value: ActivationPrefill) { activationPrefill = { ...value }; }
+export function takeActivationPrefill(): ActivationPrefill | null {
+  const value = activationPrefill;
+  activationPrefill = null;
+  return value;
+}
+
 export interface ActivationChallenge { challengeId: string; expiresInSeconds: number; resendAfterSeconds: number; developmentCode?: string | null }
 export interface ActivationGrant { completionToken: string; expiresInSeconds: number; mustChangePassword: boolean }
 export const patientActivationService = {

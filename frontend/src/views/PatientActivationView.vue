@@ -55,11 +55,10 @@
 </template>
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue';
-import { RouterLink, useRoute } from 'vue-router';
+import { RouterLink } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
-import { patientActivationService, type ActivationChallenge, type ActivationGrant } from '@/services/patientActivation';
+import { patientActivationService, takeActivationPrefill, type ActivationChallenge, type ActivationGrant } from '@/services/patientActivation';
 
-const route = useRoute();
 const auth = useAuthStore();
 const loginMode = ref<'cccd' | 'passport'>('cccd');
 const nationalityCode = ref('VN');
@@ -71,15 +70,11 @@ const identity = () => `${auth.user?.userId}/${auth.role}`;
 const alive = (t: number, owner: string) => !disposed && t === generation && owner === identity();
 
 onMounted(() => {
-  if (route.query.identifier && typeof route.query.identifier === 'string') {
-    phone.value = route.query.identifier;
-  }
-  if (route.query.docType === 'passport') {
-    loginMode.value = 'passport';
-  }
-  if (route.query.country && typeof route.query.country === 'string') {
-    nationalityCode.value = route.query.country;
-  }
+  const prefill = takeActivationPrefill();
+  if (!prefill) return;
+  phone.value = prefill.identifier;
+  loginMode.value = prefill.documentType;
+  nationalityCode.value = prefill.nationalityCode;
 });
 
 function clear() { phone.value = ''; password.value = ''; code.value = ''; newPassword.value = ''; repeatPassword.value = ''; challenge.value = null; grant.value = null; confirmed.value = false; choice.value = 'new'; }

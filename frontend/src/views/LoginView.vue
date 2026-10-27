@@ -78,6 +78,7 @@
 import { computed, ref } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { RouterLink, useRouter, useRoute } from 'vue-router';
+import { stageActivationPrefill } from '@/services/patientActivation';
 
 const authStore = useAuthStore();
 const router = useRouter();
@@ -106,14 +107,12 @@ async function handleSubmit() {
     router.push(redirect);
   } catch (err: any) {
     if (err.response?.status === 401 && err.response?.data?.code === 'AUTH_ACTIVATION_REQUIRED') {
-      router.push({
-        path: '/activate-account',
-        query: {
-          identifier: phone.value,
-          docType: loginMode.value === 'passport' ? 'passport' : undefined,
-          country: loginMode.value === 'passport' ? nationalityCode.value.trim().toUpperCase() : undefined
-        }
+      stageActivationPrefill({
+        identifier: phone.value,
+        documentType: loginMode.value,
+        nationalityCode: loginMode.value === 'passport' ? nationalityCode.value.trim().toUpperCase() : 'VN'
       });
+      router.push('/activate-account');
       return;
     }
 

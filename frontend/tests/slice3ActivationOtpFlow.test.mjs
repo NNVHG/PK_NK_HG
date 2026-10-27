@@ -8,17 +8,18 @@ test('LoginView redirects to activation on AUTH_ACTIVATION_REQUIRED', async () =
   // Kiểm tra bắt mã lỗi AUTH_ACTIVATION_REQUIRED và redirect
   assert.match(loginSrc, /AUTH_ACTIVATION_REQUIRED/);
   assert.match(loginSrc, /\/activate-account/);
-  assert.match(loginSrc, /identifier:\s*phone\.value/);
+  assert.match(loginSrc, /stageActivationPrefill/);
+  assert.doesNotMatch(loginSrc, /query:\s*\{\s*identifier/);
 });
 
-test('PatientActivationView supports CCCD, SĐT and Passport with prefilled query', async () => {
+test('PatientActivationView supports CCCD, SĐT and Passport without identity in URL', async () => {
   const actSrc = await readFile(new URL('../src/views/PatientActivationView.vue', import.meta.url), 'utf8');
 
   assert.match(actSrc, /loginMode/);
   assert.match(actSrc, /passport/);
   assert.match(actSrc, /nationalityCode/);
-  assert.match(actSrc, /route\.query\.identifier/);
-  assert.match(actSrc, /route\.query\.country/);
+  assert.match(actSrc, /takeActivationPrefill\(\)/);
+  assert.doesNotMatch(actSrc, /route\.query\.(identifier|country)/);
   assert.match(actSrc, /patientActivationService\.request\(val,\s*password\.value,\s*docType,\s*country\)/);
 });
 
