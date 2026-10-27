@@ -9,6 +9,7 @@ public sealed class PatientTimelineService
 {
     private readonly IPatientRepository _patientRepository;
     private readonly IVisitRepository _visitRepository;
+    private readonly IPatientGuardianRepository? _guardianRepository;
 
     public PatientTimelineService(
         IPatientRepository patientRepository,
@@ -16,6 +17,16 @@ public sealed class PatientTimelineService
     {
         _patientRepository = patientRepository;
         _visitRepository = visitRepository;
+    }
+
+    public PatientTimelineService(
+        IPatientRepository patientRepository,
+        IVisitRepository visitRepository,
+        IPatientGuardianRepository guardianRepository)
+    {
+        _patientRepository = patientRepository;
+        _visitRepository = visitRepository;
+        _guardianRepository = guardianRepository;
     }
 
     public async Task<Result<PagedResult<PatientTimelineItemResponse>>> GetAsync(
@@ -26,10 +37,24 @@ public sealed class PatientTimelineService
         CancellationToken ct = default)
     {
         var patient = await _patientRepository.GetByIdAsync(patientId, ct);
-        if (patient is null ||
-            (currentRoleCode == RoleCodes.Patient && patient.UserId != currentUserId))
+        if (patient is null)
         {
             return Result<PagedResult<PatientTimelineItemResponse>>.Failure(Error.NotFound);
+        }
+
+        if (currentRoleCode == RoleCodes.Patient)
+        {
+            var isSelf = patient.UserId == currentUserId;
+            var isGuardian = false;
+            if (!isSelf && _guardianRepository is not null)
+            {
+                isGuardian = await _guardianRepository.HasActiveGuardianshipAsync(currentUserId, patientId, ct);
+            }
+
+            if (!isSelf && !isGuardian)
+            {
+                return Result<PagedResult<PatientTimelineItemResponse>>.Failure(Error.NotFound);
+            }
         }
 
         var timeline = await _visitRepository.GetPatientTimelineAsync(

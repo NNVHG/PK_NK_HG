@@ -121,6 +121,12 @@ builder.Services.AddScoped<Dental.Application.Features.MOD_MST.Services.Diagnosi
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 builder.Services.AddScoped<IPatientRepository, PatientRepository>();
+builder.Services.AddScoped<IPatientGuardianRepository, PatientGuardianRepository>();
+builder.Services.AddScoped<PatientGuardianService>();
+builder.Services.AddScoped<FluentValidation.IValidator<Dental.Application.Features.Patients.DTOs.AssignPatientGuardianRequest>, Dental.Application.Features.Patients.Validators.AssignPatientGuardianRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<Dental.Application.Features.Patients.DTOs.RevokePatientGuardianRequest>, Dental.Application.Features.Patients.Validators.RevokePatientGuardianRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<Dental.Application.Features.Patients.DTOs.PromoteWardRequest>, Dental.Application.Features.Patients.Validators.PromoteWardRequestValidator>();
+
 builder.Services.AddScoped<IPatientCitizenIdRepository, PatientCitizenIdRepository>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_APP.IBookingRequestRepository, BookingRequestRepository>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_APP.BookingRequestService>();

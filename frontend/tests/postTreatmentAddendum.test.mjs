@@ -38,6 +38,8 @@ function fixture(role = 'DENTIST', userId = 5) {
     '@/components/PatientCitizenId.vue': { default: {} },
     '@/components/DentalImageAttachments.vue': { default: {} },
     '@/components/PatientPrescriptionHistory.vue': { default: {} },
+    '@/components/PatientGuardianPanel.vue': { default: {} },
+
     '@/services/visits': {
       visitsService: {
         getPostTreatmentNotes: async (visitId) => { calls.push(['getNotes', visitId]); if (readDeferred) await readDeferred.promise; return [...notes]; },

@@ -19,14 +19,15 @@ public sealed class InvoicePortalRepository(DentalDbContext db) : IInvoicePortal
     }
     public async Task<bool> OwnsPatientAsync(int patientId, int userId, CancellationToken ct = default)
     {
-        var patientIds = await db.Patients.AsNoTracking().Where(p => p.UserId == userId)
-            .OrderBy(p => p.PatientId).Select(p => p.PatientId).Take(2).ToListAsync(ct);
-        return patientIds.Count == 1 && patientIds[0] == patientId;
+        var isOwner = await db.Patients.AsNoTracking().AnyAsync(p => p.PatientId == patientId && p.UserId == userId, ct);
+        if (isOwner) return true;
+
+        return await db.PatientGuardians.AsNoTracking().AnyAsync(g => g.WardPatientId == patientId && g.IsActive && g.GuardianPatient!.UserId == userId, ct);
     }
     public async Task<PagedResult<InvoiceLookupResponse>> GetInvoicesAsync(int patientId, int userId, int page, int pageSize, int? status = null, DateTime? fromUtc = null, DateTime? untilUtc = null, CancellationToken ct = default)
     {
-        // Ownership stays in both SQL queries, independent of the earlier service check.
-        var query = db.Invoices.AsNoTracking().Where(i => i.Visit.PatientId == patientId && i.Visit.Patient.UserId == userId);
+        var query = db.Invoices.AsNoTracking().Where(i => i.Visit.PatientId == patientId &&
+            (i.Visit.Patient.UserId == userId || db.PatientGuardians.Any(g => g.WardPatientId == patientId && g.IsActive && g.GuardianPatient!.UserId == userId)));
         if (status is int state) query = query.Where(i => (int)i.Status == state);
         if (fromUtc is DateTime from) query = query.Where(i => i.CreatedAt >= from);
         if (untilUtc is DateTime until) query = query.Where(i => i.CreatedAt < until);
@@ -40,9 +41,13 @@ public sealed class InvoicePortalRepository(DentalDbContext db) : IInvoicePortal
     }
     public async Task<PagedResult<InvoicePortalPaymentResponse>?> GetPaymentsAsync(int invoiceId, int patientId, int userId, int page, int pageSize, CancellationToken ct = default)
     {
-        if (!await db.Invoices.AsNoTracking().AnyAsync(i => i.Id == invoiceId && i.Visit.PatientId == patientId && i.Visit.Patient.UserId == userId, ct)) return null;
+        var hasAccess = await db.Invoices.AsNoTracking().AnyAsync(i => i.Id == invoiceId && i.Visit.PatientId == patientId &&
+            (i.Visit.Patient.UserId == userId || db.PatientGuardians.Any(g => g.WardPatientId == patientId && g.IsActive && g.GuardianPatient!.UserId == userId)), ct);
+        if (!hasAccess) return null;
+
         var query = db.PaymentTransactions.AsNoTracking().Where(p => p.InvoiceId == invoiceId &&
-            p.Invoice.Visit.PatientId == patientId && p.Invoice.Visit.Patient.UserId == userId);
+            p.Invoice.Visit.PatientId == patientId &&
+            (p.Invoice.Visit.Patient.UserId == userId || db.PatientGuardians.Any(g => g.WardPatientId == patientId && g.IsActive && g.GuardianPatient!.UserId == userId)));
         var count = await query.CountAsync(ct);
         var rows = await query.OrderByDescending(p => p.PaidAt).ThenByDescending(p => p.Id).Skip((page - 1) * pageSize).Take(pageSize)
             .Select(p => new InvoicePortalPaymentResponse(p.Id, p.InvoiceId, p.Amount, p.PaymentMethod, p.PaidAt, p.Source == "Simulation")).ToListAsync(ct);
@@ -50,10 +55,13 @@ public sealed class InvoicePortalRepository(DentalDbContext db) : IInvoicePortal
     }
     public async Task<PagedResult<InvoicePortalItemResponse>?> GetItemsAsync(int invoiceId, int patientId, int userId, int page, int pageSize, CancellationToken ct = default)
     {
-        if (!await db.Invoices.AsNoTracking().AnyAsync(i => i.Id == invoiceId && i.Visit.PatientId == patientId && i.Visit.Patient.UserId == userId, ct)) return null;
-        // Repeat ownership for count and rows; use stored invoice snapshots, not current catalogue prices.
+        var hasAccess = await db.Invoices.AsNoTracking().AnyAsync(i => i.Id == invoiceId && i.Visit.PatientId == patientId &&
+            (i.Visit.Patient.UserId == userId || db.PatientGuardians.Any(g => g.WardPatientId == patientId && g.IsActive && g.GuardianPatient!.UserId == userId)), ct);
+        if (!hasAccess) return null;
+
         var query = db.InvoiceItems.AsNoTracking().Where(item => item.InvoiceId == invoiceId &&
-            item.Invoice.Visit.PatientId == patientId && item.Invoice.Visit.Patient.UserId == userId);
+            item.Invoice.Visit.PatientId == patientId &&
+            (item.Invoice.Visit.Patient.UserId == userId || db.PatientGuardians.Any(g => g.WardPatientId == patientId && g.IsActive && g.GuardianPatient!.UserId == userId)));
         var count = await query.CountAsync(ct);
         var rows = await query.OrderBy(item => item.Id).Skip((page - 1) * pageSize).Take(pageSize)
             .Select(item => new InvoicePortalItemResponse(item.Id, item.Code, item.Name, item.Quantity, item.UnitPrice, item.TotalAmount)).ToListAsync(ct);

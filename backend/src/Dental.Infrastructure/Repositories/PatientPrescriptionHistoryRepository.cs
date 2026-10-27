@@ -24,7 +24,7 @@ public sealed partial class PrescriptionRepository
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
         if (role is not (RoleCodes.Admin or RoleCodes.Dentist or RoleCodes.Receptionist or RoleCodes.Assistant or RoleCodes.Patient) ||
             !await db.Users.AnyAsync(u => u.UserId == actorId && u.IsActive && u.Role.RoleCode == role, ct) ||
-            !await db.Patients.AnyAsync(p => p.PatientId == patientId && (role != RoleCodes.Patient || p.UserId == actorId), ct))
+            !await db.Patients.AnyAsync(p => p.PatientId == patientId && (role != RoleCodes.Patient || p.UserId == actorId || db.PatientGuardians.Any(g => g.WardPatientId == patientId && g.IsActive && g.GuardianPatient!.UserId == actorId)), ct))
             return Result<PagedResult<PatientPrescriptionSummary>>.Failure(Error.NotFound);
         var all = role != RoleCodes.Dentist || await HasCurrentHistoryVisitAsync(patientId, actorId, ct);
         var rows = db.Prescriptions.AsNoTracking().Where(p => p.Visit.PatientId == patientId && (all || p.Visit.DentistId == actorId));

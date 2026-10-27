@@ -148,7 +148,7 @@ namespace Dental.Infrastructure.Migrations
                     b.HasIndex("UserId", "CreatedAt")
                         .HasDatabaseName("IX_AuditLogs_User");
 
-                    b.ToTable("AuditLogs", (string)null);
+                    b.ToTable("AuditLogs");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.BookingRequest", b =>
@@ -569,7 +569,7 @@ namespace Dental.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_DentalServices_Code");
 
-                    b.ToTable("DentalServices", (string)null);
+                    b.ToTable("DentalServices");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.DiscountPreset", b =>
@@ -1062,7 +1062,7 @@ namespace Dental.Infrastructure.Migrations
                     b.HasIndex("RecordId")
                         .HasDatabaseName("IX_MedicalHistoryItems_RecordId");
 
-                    b.ToTable("MedicalHistoryItems", (string)null);
+                    b.ToTable("MedicalHistoryItems");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.MedicalHistoryRecord", b =>
@@ -1103,7 +1103,7 @@ namespace Dental.Infrastructure.Migrations
                     b.HasIndex("PatientId", "CreatedAt")
                         .HasDatabaseName("IX_MedicalHistoryRecords_PatientId_CreatedAt");
 
-                    b.ToTable("MedicalHistoryRecords", (string)null);
+                    b.ToTable("MedicalHistoryRecords");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.MedicalSupply", b =>
@@ -1541,7 +1541,70 @@ namespace Dental.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_Patients_UserId");
 
-                    b.ToTable("Patients", (string)null);
+                    b.ToTable("Patients");
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.PatientGuardian", b =>
+                {
+                    b.Property<int>("PatientGuardianId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("PatientGuardianId"));
+
+                    b.Property<DateTime>("AssignedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<int>("AssignedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<int>("GuardianPatientId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Relationship")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<int?>("RevokedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<int>("WardPatientId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("PatientGuardianId");
+
+                    b.HasIndex("AssignedByUserId");
+
+                    b.HasIndex("GuardianPatientId")
+                        .HasDatabaseName("IX_PatientGuardians_GuardianPatientId");
+
+                    b.HasIndex("RevokedByUserId");
+
+                    b.HasIndex("WardPatientId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_PatientGuardians_WardPatientId_Active")
+                        .HasFilter("\"IsActive\" = true");
+
+                    b.ToTable("PatientGuardians");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.PatientPhoneChangeRequest", b =>
@@ -2098,7 +2161,7 @@ namespace Dental.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_Roles_RoleName");
 
-                    b.ToTable("Roles", (string)null);
+                    b.ToTable("Roles");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.ServicePrice", b =>
@@ -2136,7 +2199,7 @@ namespace Dental.Infrastructure.Migrations
                     b.HasIndex("ServiceId", "EffectiveFrom", "ServicePriceId")
                         .HasDatabaseName("IX_ServicePrices_ServiceId_EffectiveFrom_ServicePriceId");
 
-                    b.ToTable("ServicePrices", (string)null);
+                    b.ToTable("ServicePrices");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.StaffWorkspace", b =>
@@ -2538,7 +2601,7 @@ namespace Dental.Infrastructure.Migrations
 
                     b.HasIndex("RoleId");
 
-                    b.ToTable("Users", (string)null);
+                    b.ToTable("Users");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.Visit", b =>
@@ -2611,7 +2674,7 @@ namespace Dental.Infrastructure.Migrations
                     b.HasIndex("PatientId", "CreatedAt")
                         .HasDatabaseName("IX_Visits_PatientId_CreatedAt");
 
-                    b.ToTable("Visits", (string)null);
+                    b.ToTable("Visits");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.VisitService", b =>
@@ -2760,7 +2823,7 @@ namespace Dental.Infrastructure.Migrations
                     b.HasIndex("PatientId", "CreatedAt")
                         .HasDatabaseName("IX_VitalSignRecords_PatientId_CreatedAt");
 
-                    b.ToTable("VitalSignRecords", (string)null);
+                    b.ToTable("VitalSignRecords");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.Appointment", b =>
@@ -3164,6 +3227,40 @@ namespace Dental.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.PatientGuardian", b =>
+                {
+                    b.HasOne("Dental.Domain.Entities.User", "AssignedByUser")
+                        .WithMany()
+                        .HasForeignKey("AssignedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.Patient", "GuardianPatient")
+                        .WithMany()
+                        .HasForeignKey("GuardianPatientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.User", "RevokedByUser")
+                        .WithMany()
+                        .HasForeignKey("RevokedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Dental.Domain.Entities.Patient", "WardPatient")
+                        .WithMany()
+                        .HasForeignKey("WardPatientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("AssignedByUser");
+
+                    b.Navigation("GuardianPatient");
+
+                    b.Navigation("RevokedByUser");
+
+                    b.Navigation("WardPatient");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.PatientPhoneChangeRequest", b =>

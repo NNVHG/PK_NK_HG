@@ -18,6 +18,8 @@ public sealed class DentalDbContext : DbContext
     public DbSet<PatientPhoneChangeRequest> PatientPhoneChangeRequests => Set<PatientPhoneChangeRequest>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<Patient> Patients => Set<Patient>();
+    public DbSet<PatientGuardian> PatientGuardians => Set<PatientGuardian>();
+
     public DbSet<Visit> Visits => Set<Visit>();
     public DbSet<VisitUnlockRecord> VisitUnlockRecords => Set<VisitUnlockRecord>();
     public DbSet<ToothCondition> ToothConditions => Set<ToothCondition>();
@@ -71,6 +73,8 @@ public sealed class DentalDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.ApplyConfiguration(new PatientGuardianConfiguration());
+
         modelBuilder.ApplyConfiguration(new PatientPhoneChangeRequestConfiguration());
         modelBuilder.ApplyConfiguration(new DentalImageConfiguration());
         modelBuilder.ApplyConfiguration(new DentalImageClinicalAddendumConfiguration());

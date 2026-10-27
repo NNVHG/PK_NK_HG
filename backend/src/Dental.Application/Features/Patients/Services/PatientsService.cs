@@ -14,6 +14,8 @@ public sealed class PatientsService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IAuditLogger _auditLogger;
 
+    private readonly IPatientGuardianRepository? _guardianRepository;
+
     public PatientsService(
         IPatientRepository patientRepository,
         IUnitOfWork unitOfWork,
@@ -23,6 +25,18 @@ public sealed class PatientsService
         _unitOfWork = unitOfWork;
         _auditLogger = auditLogger;
     }
+    public PatientsService(
+        IPatientRepository patientRepository,
+        IUnitOfWork unitOfWork,
+        IAuditLogger auditLogger,
+        IPatientGuardianRepository guardianRepository)
+    {
+        _patientRepository = patientRepository;
+        _unitOfWork = unitOfWork;
+        _auditLogger = auditLogger;
+        _guardianRepository = guardianRepository;
+    }
+
 
     public async Task<Result<IReadOnlyList<PatientDuplicateInfo>>> CheckDuplicatesAsync(
         PatientDuplicateCheckRequest request,
@@ -129,11 +143,22 @@ public sealed class PatientsService
         CancellationToken ct = default)
     {
         var patient = await _patientRepository.GetByIdAsync(patientId, ct);
-        if (patient is null ||
-            (currentRoleCode == RoleCodes.Patient &&
-             (!currentUserId.HasValue || patient.UserId != currentUserId.Value)))
-        {
+        if (patient is null)
             return Result<PatientResponse>.Failure(Error.NotFound);
+
+        if (currentRoleCode == RoleCodes.Patient)
+        {
+            var isSelf = currentUserId.HasValue && patient.UserId == currentUserId.Value;
+            var isGuardian = false;
+            if (!isSelf && currentUserId.HasValue && _guardianRepository is not null)
+            {
+                isGuardian = await _guardianRepository.HasActiveGuardianshipAsync(currentUserId.Value, patientId, ct);
+            }
+
+            if (!isSelf && !isGuardian)
+            {
+                return Result<PatientResponse>.Failure(Error.NotFound);
+            }
         }
 
         return Result<PatientResponse>.Success(ToResponse(patient));

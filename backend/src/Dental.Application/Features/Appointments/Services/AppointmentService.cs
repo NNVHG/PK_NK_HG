@@ -16,6 +16,8 @@ public sealed class AppointmentService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IAuditLogger _auditLogger;
     private readonly VietnamClock _vietnamClock;
+    private readonly IPatientGuardianRepository? _guardianRepository;
+
 
     public AppointmentService(
         IAppointmentRepository appointmentRepository,
@@ -31,6 +33,24 @@ public sealed class AppointmentService
         _unitOfWork = unitOfWork;
         _auditLogger = auditLogger;
         _vietnamClock = vietnamClock;
+    }
+
+    public AppointmentService(
+        IAppointmentRepository appointmentRepository,
+        IPatientRepository patientRepository,
+        IUserRepository userRepository,
+        IUnitOfWork unitOfWork,
+        IAuditLogger auditLogger,
+        VietnamClock vietnamClock,
+        IPatientGuardianRepository guardianRepository)
+    {
+        _appointmentRepository = appointmentRepository;
+        _patientRepository = patientRepository;
+        _userRepository = userRepository;
+        _unitOfWork = unitOfWork;
+        _auditLogger = auditLogger;
+        _vietnamClock = vietnamClock;
+        _guardianRepository = guardianRepository;
     }
 
     public async Task<Result<AppointmentResponse>> CreateAppointmentAsync(
@@ -66,8 +86,20 @@ public sealed class AppointmentService
         var patient = await _patientRepository.GetByIdAsync(request.PatientId, ct);
         if (patient is null)
             return Result<AppointmentResponse>.Failure(Error.NotFound);
-        if (actorRoleCode == RoleCodes.Patient && patient.UserId != actorUserId)
-            return Result<AppointmentResponse>.Failure(Error.NotFound);
+        if (actorRoleCode == RoleCodes.Patient)
+        {
+            var isSelf = patient.UserId == actorUserId;
+            var isGuardian = false;
+            if (!isSelf && _guardianRepository is not null)
+            {
+                isGuardian = await _guardianRepository.HasActiveGuardianshipAsync(actorUserId, request.PatientId, ct);
+            }
+
+            if (!isSelf && !isGuardian)
+            {
+                return Result<AppointmentResponse>.Failure(Error.NotFound);
+            }
+        }
         if (!patient.IsActive)
             return Result<AppointmentResponse>.Failure(Error.PatientInactive);
 

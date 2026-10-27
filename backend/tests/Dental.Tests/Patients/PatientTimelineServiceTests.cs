@@ -70,4 +70,23 @@ public sealed class PatientTimelineServiceTests
         await _visitRepository.DidNotReceive().GetPatientTimelineAsync(
             Arg.Any<int>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
+    [Fact]
+    public async Task GetAsync_WhenActorIsActiveGuardian_ReturnsTimeline()
+    {
+        var guardianRepo = Substitute.For<IPatientGuardianRepository>();
+        var service = new PatientTimelineService(_patientRepository, _visitRepository, guardianRepo);
+
+        _patientRepository.GetByIdAsync(5, Arg.Any<CancellationToken>())
+            .Returns(new Patient { PatientId = 5, UserId = null });
+
+        guardianRepo.HasActiveGuardianshipAsync(99, 5, Arg.Any<CancellationToken>()).Returns(true);
+
+        _visitRepository.GetPatientTimelineAsync(5, 1, 20, Arg.Any<CancellationToken>())
+            .Returns(PagedResult<PatientTimelineItemResponse>.Create([], 0, 1, 20));
+
+        var result = await service.GetAsync(5, 99, RoleCodes.Patient, new PatientTimelineQueryRequest());
+
+        Assert.True(result.IsSuccess);
+    }
+
 }

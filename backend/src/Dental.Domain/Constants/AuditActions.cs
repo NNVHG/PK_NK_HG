@@ -25,4 +25,8 @@ public static class AuditActions
     public const string QueueCheckedIn = "QUEUE_CHECKED_IN";
     public const string QueueStatusChanged = "QUEUE_STATUS_CHANGED";
     public const string PostTreatmentNoteCreated = "POST_TREATMENT_NOTE_CREATED";
+    public const string PatientGuardianAssigned = "PATIENT_GUARDIAN_ASSIGNED";
+    public const string PatientGuardianRevoked = "PATIENT_GUARDIAN_REVOKED";
+    public const string PatientPromotedToIndependent = "PATIENT_PROMOTED_TO_INDEPENDENT";
+
 }

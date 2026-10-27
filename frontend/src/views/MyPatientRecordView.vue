@@ -8,6 +8,8 @@
       <h2>{{ patient.fullName }}</h2>
       <p>{{ patient.patientCode }}</p>
       <RouterLink :to="{ name: 'patient-detail', params: { id: patient.patientId } }">Xem lịch sử khám, đơn thuốc và hình ảnh</RouterLink>
+      <!-- Danh sách người được giám hộ (DL-353, DL-358) -->
+      <PatientWardsPanel />
     </section>
     <button type="button" :disabled="loading" @click="load">Tải lại hồ sơ</button>
   </main>
@@ -16,6 +18,8 @@
 import { onUnmounted, ref, watch } from 'vue';
 import { patientsService, type PatientSummary } from '@/services/patients';
 import { useAuthStore } from '@/stores/auth';
+import PatientWardsPanel from '@/components/PatientWardsPanel.vue';
+
 const auth = useAuthStore();
 const patient = ref<PatientSummary | null>(null), loading = ref(false), error = ref('');
 let revision = 0;
@@ -41,3 +45,4 @@ onUnmounted(() => { revision++; patient.value = null; error.value = ''; });
 .personal-record { max-width: 48rem; margin: auto; padding: 1rem; overflow-wrap: anywhere; }
 button { margin-top: 1rem; padding: .6rem 1rem; font: inherit; }
 </style>
+

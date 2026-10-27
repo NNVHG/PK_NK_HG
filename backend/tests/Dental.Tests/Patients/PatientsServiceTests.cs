@@ -49,6 +49,25 @@ public sealed class PatientsServiceTests
         if (allowed) Assert.Equal(41, result.Value!.PatientId);
         else Assert.Equal(Error.NotFound, result.Error);
     }
+    [Fact]
+    public async Task PatientPortalDetail_WhenActorIsActiveGuardian_AllowsAccess()
+    {
+        var guardianRepo = Substitute.For<IPatientGuardianRepository>();
+        var patientService = new PatientsService(_patientRepository, _unitOfWork, _auditLogger, guardianRepo);
+
+        _patientRepository.GetByIdAsync(41, Arg.Any<CancellationToken>()).Returns(new Patient
+        {
+            PatientId = 41, PatientNumber = 41, UserId = null, FullName = "Bé Trẻ Em",
+            DateOfBirth = new DateOnly(2015, 1, 1), Phone = "0900000000"
+        });
+
+        guardianRepo.HasActiveGuardianshipAsync(99, 41, Arg.Any<CancellationToken>()).Returns(true);
+
+        var result = await patientService.GetPatientByIdAsync(41, 99, RoleCodes.Patient);
+        Assert.True(result.IsSuccess);
+        Assert.Equal(41, result.Value!.PatientId);
+    }
+
 
     [Fact]
     public async Task CreatePatientAsync_ValidRequest_CreatesPatientAndAuditsWithoutPersonalData()

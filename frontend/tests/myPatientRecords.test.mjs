@@ -13,7 +13,8 @@ async function fixture(role = 'PATIENT') {
   const imports = { vue: { defineComponent: c => c, ref: value => ({ value }), watch: (_f, cb) => { watcher = cb; cb(); },
     onUnmounted: cb => { cleanup = cb; } }, '@/stores/auth': { useAuthStore: () => auth },
     '@/services/patients': { patientsService: { getMyPatient: async (...args) => { calls.push(args); if (deferred) return deferred;
-      if (failure) throw failure; return response; } } } };
+      if (failure) throw failure; return response; } } },
+    '@/components/PatientWardsPanel.vue': { default: {} } };
   const module = { exports: {} };
   new Function('require', 'module', 'exports', compiled)(n => imports[n], module, module.exports);
   const c = module.exports.default.setup({}, { expose() {} }); await Promise.resolve(); await Promise.resolve();

@@ -16,7 +16,7 @@ public sealed class DentalImageRepository(DentalDbContext db, IDentalImageStorag
     private static readonly Error Limit = new("IMG_008", "Ca khám đã đạt hạn mức 20 ảnh, 3 ảnh mỗi răng hoặc 100MB. Tải lại danh sách để kiểm tra.");
     private async Task<bool> Actor(int id, string role, CancellationToken ct) => id > 0 && await db.Users.AnyAsync(x => x.UserId == id && x.IsActive && x.Role.RoleCode == role, ct);
     private async Task<bool> Patient(int id, int actor, string role, CancellationToken ct) =>
-        await Actor(actor, role, ct) && await db.Patients.AnyAsync(x => x.PatientId == id && x.IsActive && (role != RoleCodes.Patient || x.UserId == actor), ct);
+        await Actor(actor, role, ct) && await db.Patients.AnyAsync(x => x.PatientId == id && x.IsActive && (role != RoleCodes.Patient || x.UserId == actor || db.PatientGuardians.Any(g => g.WardPatientId == id && g.IsActive && g.GuardianPatient!.UserId == actor)), ct);
     private static bool CanRead(string role) => role is RoleCodes.Admin or RoleCodes.Dentist or RoleCodes.Receptionist or RoleCodes.Patient;
     private static bool CanUpload(string role) => role is RoleCodes.Admin or RoleCodes.Dentist or RoleCodes.Assistant;
     public async Task<Result<ImageVisitContext>> VisitContextAsync(int visit, int actor, string role, CancellationToken ct)
@@ -25,7 +25,7 @@ public sealed class DentalImageRepository(DentalDbContext db, IDentalImageStorag
         if (!await Actor(actor, role, ct)) return Result<ImageVisitContext>.Failure(Error.NotFound);
         var context = await (from v in db.Visits.AsNoTracking()
             join p in db.Patients on v.PatientId equals p.PatientId
-            where v.VisitId == visit && p.IsActive && (role != RoleCodes.Patient || p.UserId == actor)
+            where v.VisitId == visit && p.IsActive && (role != RoleCodes.Patient || p.UserId == actor || db.PatientGuardians.Any(g => g.WardPatientId == p.PatientId && g.IsActive && g.GuardianPatient!.UserId == actor))
             select new ImageVisitContext(v.VisitId, p.PatientId)).SingleOrDefaultAsync(ct);
         return context is null ? Result<ImageVisitContext>.Failure(Error.NotFound) : Result<ImageVisitContext>.Success(context);
     }
@@ -47,7 +47,7 @@ public sealed class DentalImageRepository(DentalDbContext db, IDentalImageStorag
         if (!await Actor(actor, role, ct)) return Result<StoredDentalImage>.Failure(Error.NotFound);
         var file = await (from image in db.DentalImages.AsNoTracking()
             join patient in db.Patients on image.PatientId equals patient.PatientId
-            where image.Id == id && !image.IsDeleted && patient.IsActive && (role != RoleCodes.Patient || patient.UserId == actor)
+            where image.Id == id && !image.IsDeleted && patient.IsActive && (role != RoleCodes.Patient || patient.UserId == actor || db.PatientGuardians.Any(g => g.WardPatientId == patient.PatientId && g.IsActive && g.GuardianPatient!.UserId == actor))
             select new StoredDentalImage(image.StoragePath, image.ContentType, image.SizeBytes)).SingleOrDefaultAsync(ct);
         return file is null ? Result<StoredDentalImage>.Failure(Error.NotFound) : Result<StoredDentalImage>.Success(file);
     }

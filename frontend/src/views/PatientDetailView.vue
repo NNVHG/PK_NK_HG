@@ -46,6 +46,8 @@
           <div class="wide"><dt>Địa chỉ</dt><dd>{{ patient.address || 'Chưa cập nhật' }}</dd></div>
         </dl>
         <PatientCitizenId :patient-id="patient.patientId" />
+        <PatientGuardianPanel :patient-id="patient.patientId" @promoted="loadPatient" />
+
       </section>
 
       <section v-else-if="activeTab === 'prescriptions'" class="panel content-panel">
@@ -248,6 +250,8 @@ import SafetyAlertBanner from '@/components/SafetyAlertBanner.vue';
 import PatientPrescriptionHistory from '@/components/PatientPrescriptionHistory.vue';
 import PatientCitizenId from '@/components/PatientCitizenId.vue';
 import DentalImageAttachments from '@/components/DentalImageAttachments.vue';
+import PatientGuardianPanel from '@/components/PatientGuardianPanel.vue';
+
 import {
   patientsService,
   type MedicalHistoryRecord,

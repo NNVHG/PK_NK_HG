@@ -13,7 +13,7 @@ public sealed partial class PrescriptionRepository
         role is RoleCodes.Admin or RoleCodes.Dentist or RoleCodes.Receptionist or RoleCodes.Assistant or RoleCodes.Patient &&
         await db.Users.AnyAsync(u => u.UserId == actorId && u.IsActive && u.Role.RoleCode == role, ct) &&
         (role != RoleCodes.Dentist || visit.DentistId == actorId) &&
-        (role != RoleCodes.Patient || await db.Patients.AnyAsync(p => p.PatientId == visit.PatientId && p.UserId == actorId, ct));
+        (role != RoleCodes.Patient || await db.Patients.AnyAsync(p => p.PatientId == visit.PatientId && (p.UserId == actorId || db.PatientGuardians.Any(g => g.WardPatientId == visit.PatientId && g.IsActive && g.GuardianPatient!.UserId == actorId)), ct));
     public async Task<Result<PagedResult<PrescriptionResponse>>> HistoryAsync(int visitId, int actorId, string role, int page, int pageSize, CancellationToken ct)
     {
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
