@@ -23,6 +23,7 @@ public sealed class QueueServiceTests
     private readonly IAuditLogger _auditLogger = Substitute.For<IAuditLogger>();
     private readonly IInvoiceDraftGenerator _invoiceDraft = Substitute.For<IInvoiceDraftGenerator>();
     private readonly IVisitChairCoordinator _visitChairs = TestVisitChairs.Create();
+    private readonly IPasswordHasher _passwordHasher = Substitute.For<IPasswordHasher>();
     private readonly FixedTimeProvider _timeProvider;
     private readonly VietnamClock _vietnamClock;
 
@@ -119,7 +120,7 @@ public sealed class QueueServiceTests
     }
 
     private QueueService CreateService()
-        => new(_queueRepository, _appointmentRepository, _patientRepository, _visitRepository, _invoiceRepository, _userRepository, _unitOfWork, _auditLogger, _vietnamClock, _invoiceDraft, _visitChairs);
+        => new(_queueRepository, _appointmentRepository, _patientRepository, _visitRepository, _invoiceRepository, _userRepository, _unitOfWork, _auditLogger, _vietnamClock, _invoiceDraft, _visitChairs, _passwordHasher);
 
     [Fact]
     public async Task TransferDentist_ActiveVisitMovesAssignmentAndChairInOneTransactionalFlow()
@@ -528,6 +529,61 @@ public sealed class QueueServiceTests
             .Returns<Result<QueueEntryResponse>>(_ => throw new ConcurrentOperationException());
         var result = await CreateService().CheckInAsync(3, new CheckInRequest(1), null);
         Assert.Equal(Error.QueueConcurrent, result.Error);
+        await _queueRepository.DidNotReceive().AddAsync(Arg.Any<QueueEntry>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CheckInAsync_WithExplicitIdentityVerification_ReusesProfile_UpdatesCitizenIdAndAudits()
+    {
+        var patient = MakePatient(patientId: 2, isActive: true);
+        patient.CitizenIdHash = null;
+        patient.CitizenIdMasked = null;
+        patient.Phone = "0987654321";
+
+        _passwordHasher.Hash("0987654321").Returns("HASHED_PIN");
+        _userRepository.FindRoleByCodeAsync(RoleCodes.Patient, Arg.Any<CancellationToken>())
+            .Returns(new Role { RoleId = 10, RoleCode = RoleCodes.Patient });
+        _patientRepository.GetByIdAsync(2, Arg.Any<CancellationToken>()).Returns(patient);
+        _patientRepository.FindByCitizenIdHashAsync(Arg.Any<string>(), 2, Arg.Any<CancellationToken>()).Returns((Patient?)null);
+        _queueRepository.GetOpenQueueEntriesForPatientAsync(2, Arg.Any<CancellationToken>()).Returns(new List<QueueEntry>());
+        _visitRepository.HasOpenVisitAsync(2, Arg.Any<CancellationToken>()).Returns(false);
+        _queueRepository.GetNextQueueNumberAsync(_vietnamClock.Today, Arg.Any<CancellationToken>()).Returns(5);
+
+        var request = new CheckInRequest(
+            PatientId: 2,
+            CitizenId: "012345678901",
+            Phone: "0987654321");
+
+        var result = await CreateService().CheckInAsync(3, request, "127.0.0.1");
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(patient.CitizenIdHash);
+        Assert.Equal("012******901", patient.CitizenIdMasked);
+        Assert.Equal(1, patient.CitizenIdVersion);
+        await _auditLogger.Received(1).LogRequiredAsync(
+            AuditActions.PatientUpdated, "Patient", 2, 3,
+            Arg.Is<string>(d => d.Contains("CheckInIdentityVerification")), "127.0.0.1", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CheckInAsync_WithConflictingCitizenId_ReturnsValidationErrorWithoutCreatingQueue()
+    {
+        var patient = MakePatient(patientId: 2, isActive: true);
+        patient.CitizenIdHash = Dental.Application.Features.MOD_PAT.CitizenIdIdentity.Hash("000000000001");
+        patient.Phone = "0987654321";
+
+        _patientRepository.GetByIdAsync(2, Arg.Any<CancellationToken>()).Returns(patient);
+
+        var request = new CheckInRequest(
+            PatientId: 2,
+            CitizenId: "099999999999",
+            Phone: "0987654321");
+
+        var result = await CreateService().CheckInAsync(3, request, "127.0.0.1");
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(Error.Validation.Code, result.Error.Code);
+        Assert.Contains("CCCD không khớp hồ sơ", result.Error.Message);
         await _queueRepository.DidNotReceive().AddAsync(Arg.Any<QueueEntry>(), Arg.Any<CancellationToken>());
     }
 
