@@ -155,8 +155,8 @@ public sealed class PatientGuardianRepository(DentalDbContext db, IPasswordHashe
                 .Include(g => g.AssignedByUser)
                 .FirstOrDefaultAsync(g => g.WardPatientId == wardPatientId && g.IsActive, ct);
 
-            if (active is null)
-                return Result<PatientGuardianResponse>.Failure(new Error("PAT_GUARDIAN_NOT_ACTIVE", "Bệnh nhân hiện không có quan hệ giám hộ hiệu lực."));
+            if (active is null || active.PatientGuardianId != request.PatientGuardianId || active.AssignedAt != request.ExpectedAssignedAt.ToUniversalTime())
+                return Result<PatientGuardianResponse>.Failure(new Error("PAT_GUARDIAN_CONFLICT", "Quan hệ giám hộ đã thay đổi. Vui lòng tải lại trước khi thu hồi."));
 
             active.IsActive = false;
             active.RevokedAt = DateTime.UtcNow;

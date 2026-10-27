@@ -22,6 +22,8 @@ public sealed class RevokePatientGuardianRequestValidator : AbstractValidator<DT
 {
     public RevokePatientGuardianRequestValidator()
     {
+        RuleFor(x => x.PatientGuardianId).GreaterThan(0).WithMessage("Quan hệ giám hộ không hợp lệ.");
+        RuleFor(x => x.ExpectedAssignedAt).NotEqual(default(DateTime)).WithMessage("Thiếu phiên bản quan hệ giám hộ.");
         RuleFor(x => x.Notes)
             .MaximumLength(500).WithMessage("Ghi chú không vượt quá 500 ký tự.");
     }

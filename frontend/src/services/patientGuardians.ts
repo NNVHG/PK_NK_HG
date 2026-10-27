@@ -47,8 +47,12 @@ export const patientGuardiansService = {
     return (await apiClient.post<PatientGuardianSummary>('/patient-guardians/assign', payload)).data;
   },
 
-  async revoke(wardPatientId: number, notes?: string | null): Promise<PatientGuardianSummary> {
-    return (await apiClient.post<PatientGuardianSummary>(`/patient-guardians/wards/${wardPatientId}/revoke`, { notes })).data;
+  async revoke(wardPatientId: number, current: PatientGuardianSummary, notes?: string | null): Promise<PatientGuardianSummary> {
+    return (await apiClient.post<PatientGuardianSummary>(`/patient-guardians/wards/${wardPatientId}/revoke`, {
+      patientGuardianId: current.patientGuardianId,
+      expectedAssignedAt: current.assignedAt,
+      notes
+    })).data;
   },
 
   async promoteIndependent(wardPatientId: number, payload: PromoteWardPayload): Promise<any> {

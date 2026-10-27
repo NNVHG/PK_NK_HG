@@ -8,6 +8,8 @@ public sealed record AssignPatientGuardianRequest(
 );
 
 public sealed record RevokePatientGuardianRequest(
+    int PatientGuardianId,
+    DateTime ExpectedAssignedAt,
     string? Notes = null
 );
 

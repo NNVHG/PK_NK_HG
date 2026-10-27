@@ -59,7 +59,7 @@ public sealed class PatientGuardianServiceTests
     [Fact]
     public async Task RevokeGuardian_WhenActorIsStaff_CallsRepository()
     {
-        var request = new RevokePatientGuardianRequest("Đổi người giám hộ");
+        var request = new RevokePatientGuardianRequest(100, DateTime.UtcNow, "Đổi người giám hộ");
         var expectedResponse = new PatientGuardianResponse(
             100, 1, "BN000001", "Mẹ A", 2, "BN000002", "Con B", "Mẹ", false, DateTime.UtcNow, 1, "Lễ tân", DateTime.UtcNow, 1, "Lễ tân", "Đổi người giám hộ");
 

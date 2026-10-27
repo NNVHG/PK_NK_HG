@@ -247,11 +247,16 @@ async function submitAssign() {
 }
 
 async function submitRevoke() {
+  const current = activeGuardian.value;
+  if (!current) {
+    errorMessage.value = 'Quan hệ giám hộ đã thay đổi. Vui lòng tải lại.';
+    return;
+  }
   actionLoading.value = true;
   errorMessage.value = '';
   successMessage.value = '';
   try {
-    await patientGuardiansService.revoke(props.patientId, revokeForm.value.notes);
+    await patientGuardiansService.revoke(props.patientId, current, revokeForm.value.notes);
     successMessage.value = 'Thu hồi quyền giám hộ thành công.';
     showRevokeModal.value = false;
     revokeForm.value = { notes: '' };
