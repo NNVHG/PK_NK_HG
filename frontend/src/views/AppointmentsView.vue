@@ -6,7 +6,17 @@
     </header>
 
     <form class="booking-card" @submit.prevent="submit">
-      <p v-if="patient">Đặt lịch cho <strong>{{ patient.fullName }}</strong> · {{ patient.patientCode }}.</p>
+      <div v-if="wards.length > 0" class="profile-selection">
+        <label for="booking-target">Đặt lịch cho</label>
+        <select id="booking-target" v-model.number="selectedPatientId" :disabled="submitting || loadingProfiles">
+          <option v-if="patient" :value="patient.patientId">Bản thân: {{ patient.fullName }} ({{ patient.patientCode }})</option>
+          <option v-for="w in wards" :key="w.wardPatientId" :value="w.wardPatientId">
+            Trẻ: {{ w.fullName }} ({{ w.wardPatientCode }}) · {{ w.relationship }}
+          </option>
+        </select>
+      </div>
+
+      <p v-if="currentProfile">Hồ sơ khám: <strong>{{ currentProfile.fullName }}</strong> · {{ currentProfile.code }}.</p>
       <p v-else-if="!loadingProfiles" class="hint">Chưa tìm thấy hồ sơ cá nhân. Liên hệ Lễ tân để được hỗ trợ.</p>
 
       <label for="date">Ngày khám</label>
@@ -29,7 +39,7 @@
         Đã đặt lịch cho {{ success.patientName }} vào {{ formatDate(success.appointmentDate) }} lúc {{ success.slotTime.slice(0, 5) }}.
       </p>
 
-      <button type="submit" :disabled="submitting || loadingProfiles || !patient">
+      <button type="submit" :disabled="submitting || loadingProfiles || !selectedPatientId">
         {{ submitting ? 'Đang đặt lịch…' : 'Xác nhận đặt lịch' }}
       </button>
     </form>
@@ -41,9 +51,12 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import axios from 'axios';
 import { appointmentsService, type AppointmentResponse } from '@/services/appointments';
 import { patientsService, type PatientSummary } from '@/services/patients';
+import { patientGuardiansService, type WardSummary } from '@/services/patientGuardians';
 import { useBookingSchedule } from '@/composables/useBookingSchedule';
 
 const patient = ref<PatientSummary | null>(null);
+const wards = ref<WardSummary[]>([]);
+const selectedPatientId = ref<number>(0);
 const appointmentDate = ref('');
 const slotTime = ref('');
 const notes = ref('');
@@ -59,14 +72,41 @@ const today = computed(() => {
   return localDate.toISOString().slice(0, 10);
 });
 
+const currentProfile = computed(() => {
+  if (patient.value && selectedPatientId.value === patient.value.patientId) {
+    return { fullName: patient.value.fullName, code: patient.value.patientCode };
+  }
+  const ward = wards.value.find(w => w.wardPatientId === selectedPatientId.value);
+  if (ward) {
+    return { fullName: ward.fullName, code: ward.wardPatientCode };
+  }
+  return null;
+});
+
 const { slots, revision: scheduleRevision, duration: slotDurationMinutes, loading: scheduleLoading, error: scheduleError, load: loadSchedule } = useBookingSchedule();
 watch(scheduleRevision, () => { slotTime.value = ''; });
 
 onMounted(async () => {
   const ticket = version;
   try {
-    const result = await patientsService.getMyPatient();
-    if (ticket === version) patient.value = result;
+    const [pResult, wResult] = await Promise.allSettled([
+      patientsService.getMyPatient(),
+      patientGuardiansService.getMyWards()
+    ]);
+    if (ticket !== version) return;
+    if (pResult.status === 'fulfilled') {
+      patient.value = pResult.value;
+      selectedPatientId.value = pResult.value.patientId;
+    }
+    if (wResult.status === 'fulfilled') {
+      wards.value = wResult.value;
+      if (!selectedPatientId.value && wResult.value.length > 0) {
+        selectedPatientId.value = wResult.value[0].wardPatientId;
+      }
+    }
+    if (!patient.value && wards.value.length === 0) {
+      errorMessage.value = 'Không thể tải hồ sơ của bạn. Hãy đăng nhập lại hoặc thử sau.';
+    }
   } catch {
     if (ticket === version) errorMessage.value = 'Không thể tải hồ sơ của bạn. Hãy đăng nhập lại hoặc thử sau.';
   } finally {
@@ -79,7 +119,7 @@ async function submit() {
   errorMessage.value = '';
   success.value = null;
 
-  if (!patient.value ||
+  if (!selectedPatientId.value ||
       !appointmentDate.value || !slots.value.includes(slotTime.value) || notes.value.length > 500) {
     errorMessage.value = 'Vui lòng chọn hồ sơ, ngày và khung giờ khám.';
     return;
@@ -89,7 +129,7 @@ async function submit() {
   const ticket = version;
   try {
     const result = await appointmentsService.create({
-      patientId: patient.value.patientId,
+      patientId: selectedPatientId.value,
       appointmentDate: appointmentDate.value,
       slotTime: `${slotTime.value}:00`,
       notes: notes.value || null,
@@ -110,7 +150,7 @@ async function submit() {
     if (ticket === version) submitting.value = false;
   }
 }
-onUnmounted(() => { version++; patient.value = null; notes.value = ''; success.value = null; });
+onUnmounted(() => { version++; patient.value = null; wards.value = []; notes.value = ''; success.value = null; });
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat('vi-VN').format(new Date(`${value}T00:00:00`));

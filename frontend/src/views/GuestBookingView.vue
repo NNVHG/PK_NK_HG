@@ -23,7 +23,6 @@
     <label>Email (không bắt buộc)<input v-model="form.email" type="email" maxlength="100" autocomplete="email" /></label>
     <label>Ngày khám<input v-model="form.appointmentDate" type="date" :min="catalog.today" required /></label>
     <label>Giờ khám<select v-model="form.slot" required><option value="">Chọn khung giờ</option><option v-for="s in catalog.slots" :key="s">{{s}}</option></select></label>
-    <label>Nha sĩ<select v-model.number="form.dentistId"><option :value="0">Để phòng khám phân công</option><option v-for="d in catalog.dentists" :key="d.dentistId" :value="d.dentistId">{{d.fullName}}</option></select></label>
     <label>Nội dung đặt lịch (không bắt buộc)<textarea v-model="form.notes" maxlength="500" rows="3" /></label>
    </fieldset>
    <label><input v-model="confirmed" type="checkbox" :disabled="busy||!!retryBody" required /> Tôi đã kiểm tra thông tin và đồng ý gửi yêu cầu</label>
@@ -40,11 +39,11 @@ import {useAuthStore} from '@/stores/auth';
 import {patientsService,type PatientSummary} from '@/services/patients';
 import {bookingRequestsService,type BookingCatalog,type BookingIntent,type BookingSubmission,type BookingReceipt} from '@/services/bookingRequests';
 const auth=useAuthStore(),catalog=ref<BookingCatalog|null>(null),patient=ref<PatientSummary|null>(null),patientId=ref(0),profilesError=ref('');
-const form=reactive({fullName:'',phone:'',dateOfBirth:'',gender:'',email:'',appointmentDate:'',slot:'',dentistId:0,notes:''});
+const form=reactive({fullName:'',phone:'',dateOfBirth:'',gender:'',email:'',appointmentDate:'',slot:'',notes:''});
 const busy=ref(false),confirmed=ref(false),error=ref(''),receipt=ref<BookingReceipt|null>(null),retryBody=ref<BookingSubmission|null>(null);let snapshot:BookingIntent|null=null,generation=0,disposed=false;
 const identity=()=>`${auth.user?.userId}/${auth.role}`;
 function alive(ticket:number,owner:string){return !disposed&&ticket===generation&&owner===identity();}
-function clear(){catalog.value=null;patient.value=null;patientId.value=0;Object.assign(form,{fullName:'',phone:'',dateOfBirth:'',gender:'',email:'',appointmentDate:'',slot:'',dentistId:0,notes:''});snapshot=null;retryBody.value=null;receipt.value=null;confirmed.value=false;error.value='';profilesError.value='';}
+function clear(){catalog.value=null;patient.value=null;patientId.value=0;Object.assign(form,{fullName:'',phone:'',dateOfBirth:'',gender:'',email:'',appointmentDate:'',slot:'',notes:''});snapshot=null;retryBody.value=null;receipt.value=null;confirmed.value=false;error.value='';profilesError.value='';}
 async function load(){
  const ticket=++generation,owner=identity();clear();busy.value=true;
  try{const data=await bookingRequestsService.catalog();if(!alive(ticket,owner))return;
@@ -57,8 +56,8 @@ async function load(){
 function validDay(value:string){const d=new Date(value+'T00:00:00Z');return /^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===value;}
 function intent():BookingIntent|null{
  const s=catalog.value;if(!s)return null;const minBirth=new Date(s.today+'T00:00:00Z'),month=minBirth.getUTCMonth();minBirth.setUTCFullYear(minBirth.getUTCFullYear()-120);if(minBirth.getUTCMonth()!==month)minBirth.setUTCDate(0);
- if(!form.fullName.trim()||form.fullName.length>100||form.fullName.includes('\0')||!/^0\d{9}$/.test(form.phone)||!validDay(form.dateOfBirth)||form.dateOfBirth<minBirth.toISOString().slice(0,10)||form.dateOfBirth>s.today||!['Male','Female','Other'].includes(form.gender)||!validDay(form.appointmentDate)||form.appointmentDate<s.today||!s.slots.includes(form.slot)||form.notes.length>500||form.notes.includes('\0')||form.email.length>100||form.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)||form.dentistId!==0&&!s.dentists.some(d=>d.dentistId===form.dentistId)||patientId.value>0&&(!patient.value||patient.value.patientId!==patientId.value||patient.value.fullName!==form.fullName.trim()||patient.value.dateOfBirth!==form.dateOfBirth))return null;
- return{fullName:form.fullName.trim(),phone:form.phone,dateOfBirth:form.dateOfBirth,gender:form.gender,email:form.email.trim()||null,appointmentDate:form.appointmentDate,slotTime:form.slot+':00',dentistId:form.dentistId||null,notes:form.notes.trim()||null,scheduleRevision:s.revision,patientId:patientId.value||null};
+ if(!form.fullName.trim()||form.fullName.length>100||form.fullName.includes('\0')||!/^0\d{9}$/.test(form.phone)||!validDay(form.dateOfBirth)||form.dateOfBirth<minBirth.toISOString().slice(0,10)||form.dateOfBirth>s.today||!['Male','Female','Other'].includes(form.gender)||!validDay(form.appointmentDate)||form.appointmentDate<s.today||!s.slots.includes(form.slot)||form.notes.length>500||form.notes.includes('\0')||form.email.length>100||form.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)||patientId.value>0&&(!patient.value||patient.value.patientId!==patientId.value||patient.value.fullName!==form.fullName.trim()||patient.value.dateOfBirth!==form.dateOfBirth))return null;
+ return{fullName:form.fullName.trim(),phone:form.phone,dateOfBirth:form.dateOfBirth,gender:form.gender,email:form.email.trim()||null,appointmentDate:form.appointmentDate,slotTime:form.slot+':00',dentistId:null,notes:form.notes.trim()||null,scheduleRevision:s.revision,patientId:patientId.value||null};
 }
 async function submit(){
  if(disposed||busy.value||receipt.value)return;

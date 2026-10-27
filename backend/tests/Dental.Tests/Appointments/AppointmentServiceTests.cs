@@ -43,6 +43,11 @@ public sealed class AppointmentServiceTests
     private AppointmentService CreateService()
         => new(_appointmentRepository, _patientRepository, _userRepository, _unitOfWork, _auditLogger, _vietnamClock);
 
+    private readonly IPatientGuardianRepository _guardianRepository = Substitute.For<IPatientGuardianRepository>();
+
+    private AppointmentService CreateServiceWithGuardian()
+        => new(_appointmentRepository, _patientRepository, _userRepository, _unitOfWork, _auditLogger, _vietnamClock, _guardianRepository);
+
     private static Patient MakePatient(int patientId = 1, bool isActive = true)
         => new()
         {
@@ -137,6 +142,61 @@ public sealed class AppointmentServiceTests
         await _appointmentRepository.DidNotReceive().AddAsync(Arg.Any<Appointment>(), Arg.Any<CancellationToken>());
         await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
+    [Fact]
+    public async Task CreateAppointmentAsync_PatientBookingForActiveWard_Succeeds()
+    {
+        var tomorrow = _vietnamClock.Today.AddDays(1);
+        var slot = new TimeOnly(10, 0);
+        var wardPatient = MakePatient(patientId: 20);
+        wardPatient.UserId = null; // Ward may not have user account or have different ID
+
+        _patientRepository.GetByIdAsync(wardPatient.PatientId, Arg.Any<CancellationToken>()).Returns(wardPatient);
+        _guardianRepository.HasActiveGuardianshipAsync(2, wardPatient.PatientId, Arg.Any<CancellationToken>())
+            .Returns(true);
+        _appointmentRepository.HasActiveAppointmentOnDateAsync(wardPatient.PatientId, tomorrow, Arg.Any<CancellationToken>()).Returns(false);
+        _appointmentRepository.GetSlotBookingCountAsync(tomorrow, slot, Arg.Any<CancellationToken>(), durationMinutes: 30).Returns(0);
+        _appointmentRepository.AddAsync(Arg.Any<Appointment>(), Arg.Any<CancellationToken>()).Returns(call =>
+        {
+            call.Arg<Appointment>().AppointmentId = 25;
+            return Task.CompletedTask;
+        });
+
+        var service = CreateServiceWithGuardian();
+        var result = await service.CreateAppointmentAsync(
+            actorUserId: 2,
+            actorRoleCode: RoleCodes.Patient,
+            new CreateAppointmentRequest(wardPatient.PatientId, tomorrow, slot),
+            ipAddress: null);
+
+        Assert.True(result.IsSuccess);
+        await _appointmentRepository.Received(1).AddAsync(Arg.Is<Appointment>(a => a.PatientId == wardPatient.PatientId), Arg.Any<CancellationToken>());
+        await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateAppointmentAsync_PatientBookingForNonWard_ReturnsNotFound()
+    {
+        var tomorrow = _vietnamClock.Today.AddDays(1);
+        var otherPatient = MakePatient(patientId: 30);
+        otherPatient.UserId = null;
+
+        _patientRepository.GetByIdAsync(otherPatient.PatientId, Arg.Any<CancellationToken>()).Returns(otherPatient);
+        _guardianRepository.HasActiveGuardianshipAsync(2, otherPatient.PatientId, Arg.Any<CancellationToken>())
+            .Returns(false);
+
+        var service = CreateServiceWithGuardian();
+        var result = await service.CreateAppointmentAsync(
+            actorUserId: 2,
+            actorRoleCode: RoleCodes.Patient,
+            new CreateAppointmentRequest(otherPatient.PatientId, tomorrow, new TimeOnly(10, 0)),
+            ipAddress: null);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(Error.NotFound.Code, result.Error.Code);
+        await _appointmentRepository.DidNotReceive().AddAsync(Arg.Any<Appointment>(), Arg.Any<CancellationToken>());
+        await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
 
     [Fact]
     public async Task CreateAppointmentAsync_PastDate_ReturnsAppointmentDateInPast()
