@@ -17,6 +17,7 @@ public sealed class ToothConditionTests
     private readonly IToothConditionRepository conditions = Substitute.For<IToothConditionRepository>();
     private readonly IUnitOfWork unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly IAuditLogger audit = Substitute.For<IAuditLogger>();
+    private readonly IPatientGuardianRepository guardians = Substitute.For<IPatientGuardianRepository>();
     public ToothConditionTests()
     {
         unitOfWork.ExecuteSerializableTransactionAsync(Arg.Any<Func<CancellationToken, Task<Result<ToothConditionResponse>>>>(), Arg.Any<CancellationToken>())
@@ -24,7 +25,7 @@ public sealed class ToothConditionTests
         unitOfWork.ExecuteSerializableTransactionAsync(Arg.Any<Func<CancellationToken, Task<Result<bool>>>>(), Arg.Any<CancellationToken>())
             .Returns(c => c.Arg<Func<CancellationToken, Task<Result<bool>>>>()(CancellationToken.None));
     }
-    private ToothConditionService Service => new(visits, patients, conditions, unitOfWork, audit, new());
+    private ToothConditionService Service => new(visits, patients, conditions, unitOfWork, audit, new(), guardians);
 
     [Theory] [InlineData(null, null)] [InlineData("", null)] [InlineData("   ", null)]
     [InlineData("  Ghi chú chuyên môn\nDòng thứ hai  ", "Ghi chú chuyên môn\nDòng thứ hai")]
@@ -50,6 +51,18 @@ public sealed class ToothConditionTests
         visits.GetByIdAsync(1, Arg.Any<CancellationToken>()).Returns(new Visit { PatientId = 5 });
         conditions.GetForVisitAsync(1, Arg.Any<CancellationToken>()).Returns(new[] { new ToothCondition { Id = 3, VisitId = 1, ToothNumber = 11, ConditionCode = "CARIES", Note = "Synthetic note" } });
         Assert.Equal("Synthetic note", Assert.Single((await Service.GetAsync(1, 2, RoleCodes.Admin)).Value!).Note);
+    }
+
+    [Fact] public async Task Get_AllowsActiveGuardianAndHidesVisitAfterRevocation()
+    {
+        visits.GetByIdAsync(1, Arg.Any<CancellationToken>()).Returns(new Visit { PatientId = 5 });
+        patients.GetByIdAsync(5, Arg.Any<CancellationToken>()).Returns(new Patient { PatientId = 5 });
+        guardians.HasActiveGuardianshipAsync(7, 5, Arg.Any<CancellationToken>()).Returns(true, false);
+        conditions.GetForVisitAsync(1, Arg.Any<CancellationToken>()).Returns(Array.Empty<ToothCondition>());
+
+        Assert.True((await Service.GetAsync(1, 7, RoleCodes.Patient)).IsSuccess);
+        Assert.Equal(Error.NotFound, (await Service.GetAsync(1, 7, RoleCodes.Patient)).Error);
+        await conditions.Received(1).GetForVisitAsync(1, Arg.Any<CancellationToken>());
     }
 
     [Theory]
@@ -78,6 +91,16 @@ public sealed class ToothConditionTests
         patients.GetByIdAsync(6, Arg.Any<CancellationToken>()).Returns((Patient?)null);
         Assert.Equal(Error.NotFound, (await Service.GetLatestForPatientAsync(6, 12, RoleCodes.Patient)).Error);
         await conditions.DidNotReceiveWithAnyArgs().GetLatestForPatientAsync(default, default);
+    }
+
+    [Fact] public async Task GetLatestForPatient_AllowsActiveGuardian()
+    {
+        patients.GetByIdAsync(5, Arg.Any<CancellationToken>()).Returns(new Patient { PatientId = 5 });
+        guardians.HasActiveGuardianshipAsync(7, 5, Arg.Any<CancellationToken>()).Returns(true);
+        conditions.GetLatestForPatientAsync(5, Arg.Any<CancellationToken>()).Returns(Array.Empty<LatestToothConditionResponse>());
+
+        Assert.True((await Service.GetLatestForPatientAsync(5, 7, RoleCodes.Patient)).IsSuccess);
+        await conditions.Received(1).GetLatestForPatientAsync(5, Arg.Any<CancellationToken>());
     }
 
     [Fact] public async Task GetLatestForPatientRejectsInvalidIdsAndUnknownRoles()

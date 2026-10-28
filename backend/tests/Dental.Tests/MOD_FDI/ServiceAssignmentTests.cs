@@ -19,7 +19,8 @@ public sealed class ServiceAssignmentTests
     private readonly IVisitServiceRepository assignments = Substitute.For<IVisitServiceRepository>();
     private readonly IUnitOfWork unit = Substitute.For<IUnitOfWork>();
     private readonly IAuditLogger audit = Substitute.For<IAuditLogger>();
-    private FdiServiceAssignmentService Service => new(visits, patients, catalog, assignments, unit, audit, new());
+    private readonly IPatientGuardianRepository guardians = Substitute.For<IPatientGuardianRepository>();
+    private FdiServiceAssignmentService Service => new(visits, patients, catalog, assignments, unit, audit, new(), guardians);
 
     public ServiceAssignmentTests()
     {
@@ -207,6 +208,19 @@ public sealed class ServiceAssignmentTests
         await assignments.DidNotReceiveWithAnyArgs().GetForVisitAsync(default, default);
         assignments.GetForVisitAsync(1, Arg.Any<CancellationToken>()).Returns(new[] { new Assignment { VisitId = 1, UnitPrice = 120000, Quantity = 1 } });
         Assert.Single((await Service.GetAsync(1, 2, RoleCodes.Patient)).Value!);
+    }
+
+    [Fact]
+    public async Task Get_AllowsActiveGuardianAndHidesVisitAfterRevocation()
+    {
+        visits.GetByIdAsync(1, Arg.Any<CancellationToken>()).Returns(new Visit { PatientId = 7 });
+        patients.GetByIdAsync(7, Arg.Any<CancellationToken>()).Returns(new Patient { PatientId = 7 });
+        guardians.HasActiveGuardianshipAsync(2, 7, Arg.Any<CancellationToken>()).Returns(true, false);
+        assignments.GetForVisitAsync(1, Arg.Any<CancellationToken>()).Returns(Array.Empty<Assignment>());
+
+        Assert.True((await Service.GetAsync(1, 2, RoleCodes.Patient)).IsSuccess);
+        Assert.Equal(Error.NotFound, (await Service.GetAsync(1, 2, RoleCodes.Patient)).Error);
+        await assignments.Received(1).GetForVisitAsync(1, Arg.Any<CancellationToken>());
     }
 
     [Theory]

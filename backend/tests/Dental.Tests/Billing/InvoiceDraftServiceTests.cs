@@ -18,8 +18,9 @@ public sealed class InvoiceDraftServiceTests
     private readonly IVisitRepository visits = Substitute.For<IVisitRepository>();
     private readonly IPatientRepository patients = Substitute.For<IPatientRepository>();
     private readonly IAuditLogger audit = Substitute.For<IAuditLogger>();
+    private readonly IPatientGuardianRepository guardians = Substitute.For<IPatientGuardianRepository>();
     private InvoiceDraftService Service() => new(invoices, visits, patients, audit,
-        new VietnamClock(new FixedTimeProvider(new DateTimeOffset(2026, 10, 10, 18, 0, 0, TimeSpan.Zero))));
+        new VietnamClock(new FixedTimeProvider(new DateTimeOffset(2026, 10, 10, 18, 0, 0, TimeSpan.Zero))), guardians);
     private static Visit Completed() => new() { VisitId = 8, PatientId = 6, DentistId = 5,
         Status = VisitStatuses.Completed, IsLocked = true };
 
@@ -193,6 +194,21 @@ public sealed class InvoiceDraftServiceTests
         patients.GetByIdAsync(6, Arg.Any<CancellationToken>()).Returns(new Patient { UserId = 90 });
         Assert.Equal(Error.NotFound, (await Service().GetAsync(8, 5, RoleCodes.Patient)).Error);
         Assert.Empty(invoices.ReceivedCalls());
+    }
+
+    [Fact]
+    public async Task Get_ActiveGuardianCanReadWardInvoice()
+    {
+        visits.GetByIdAsync(8, Arg.Any<CancellationToken>()).Returns(Completed());
+        patients.GetByIdAsync(6, Arg.Any<CancellationToken>()).Returns(new Patient { PatientId = 6 });
+        guardians.HasActiveGuardianshipAsync(5, 6, Arg.Any<CancellationToken>()).Returns(true);
+        invoices.GetForVisitAsync(8, Arg.Any<CancellationToken>()).Returns(new Invoice { Id = 4, VisitId = 8,
+            Status = InvoiceStatus.PendingPayment, TotalAmount = 200000, Items = [] });
+
+        var result = await Service().GetAsync(8, 5, RoleCodes.Patient);
+
+        Assert.True(result.IsSuccess);
+        await invoices.Received(1).GetForVisitAsync(8, Arg.Any<CancellationToken>());
     }
 
     [Fact]
