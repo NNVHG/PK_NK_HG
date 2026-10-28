@@ -2233,7 +2233,6 @@ namespace Dental.Infrastructure.Migrations
                         .HasDatabaseName("IX_StaffWorkspaces_ChairId");
 
                     b.HasIndex("DentistId")
-                        .IsUnique()
                         .HasDatabaseName("IX_StaffWorkspaces_DentistId");
 
                     b.HasIndex("UpdatedByUserId");
