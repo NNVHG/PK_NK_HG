@@ -7,6 +7,7 @@ using Dental.Application.Features.Patients.Errors;
 using Dental.Application.Interfaces;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
+using Dental.Domain.Enums;
 using Dental.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -49,7 +50,9 @@ public sealed class QrPatientIntakeRepository(DentalDbContext db, VietnamClock c
             }
             var patient = new Patient { FullName = input.FullName.Trim(), DateOfBirth = input.DateOfBirth, Gender = input.Gender,
                 Phone = input.Phone, Email = input.Email?.Trim(), Address = input.Address?.Trim(), IsActive = true, CreatedAt = clock.UtcNow,
-                CitizenIdHash = hash, CitizenIdMasked = identityHasher.Mask(request.CitizenId), CitizenIdVersion = 1 };
+                CitizenIdHash = hash, CitizenIdMasked = identityHasher.Mask(request.CitizenId), CitizenIdVersion = 1,
+                DocumentType = IdentityDocumentType.CitizenId, HashScheme = IdentityHashScheme.HmacCanonical,
+                IdentityKeyVersion = IdentityDocumentConstants.CurrentHmacKeyVersion };
             db.Patients.Add(patient);
             await db.SaveChangesAsync(ct);
             // No raw QR, hash, identity fragments or demographic data in audit metadata.

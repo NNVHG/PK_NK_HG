@@ -164,7 +164,10 @@ public sealed class QueueService
             if (patient.CitizenIdHash is not null && !_identityHasher.Matches(patient.CitizenIdHash, identifier, documentType, nationalityCode))
                 return Result<QueueEntryResponse>.Failure(Error.Validation.Code,
                     $"{documentName} không khớp hồ sơ. Hãy đối soát thông tin trước khi check-in.");
-            if (patient.CitizenIdHash is null || patient.CitizenIdHash != citizenIdHash)
+            if (patient.CitizenIdHash is null || patient.CitizenIdHash != citizenIdHash ||
+                patient.DocumentType != documentType || patient.IssuingCountryCode != nationalityCode ||
+                patient.HashScheme != IdentityHashScheme.HmacCanonical ||
+                patient.IdentityKeyVersion != IdentityDocumentConstants.CurrentHmacKeyVersion)
             {
                 var duplicate = await _patientRepository.FindByCitizenIdHashAsync(citizenIdHash, patient.PatientId, ct);
                 if (documentType == IdentityDocumentType.CitizenId)
@@ -174,6 +177,10 @@ public sealed class QueueService
                         $"{documentName} đã liên kết với hồ sơ khác. Hãy đối soát thông tin trước khi check-in.");
                 patient.CitizenIdHash = citizenIdHash;
                 patient.CitizenIdMasked = _identityHasher.Mask(identifier, documentType);
+                patient.DocumentType = documentType;
+                patient.IssuingCountryCode = nationalityCode;
+                patient.HashScheme = IdentityHashScheme.HmacCanonical;
+                patient.IdentityKeyVersion = IdentityDocumentConstants.CurrentHmacKeyVersion;
                 patient.CitizenIdVersion++;
                 patient.UpdatedAt = _vietnamClock.UtcNow;
                 citizenIdChanged = true;

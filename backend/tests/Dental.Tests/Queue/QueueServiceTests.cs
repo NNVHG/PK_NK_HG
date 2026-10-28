@@ -570,6 +570,33 @@ public sealed class QueueServiceTests
     }
 
     [Fact]
+    public async Task CheckInAsync_VerifiedLegacySha256_ReplacesHashAndClassifiesIdentity()
+    {
+        var patient = MakePatient(patientId: 2, isActive: true);
+        patient.Phone = "0987654321";
+        patient.CitizenIdHash = Dental.Application.Features.MOD_PAT.CitizenIdIdentity.Hash("012345678901");
+        _patientRepository.GetByIdAsync(2, Arg.Any<CancellationToken>()).Returns(patient);
+        _patientRepository.FindByCitizenIdHashAsync(Arg.Any<string>(), 2, Arg.Any<CancellationToken>()).Returns((Patient?)null);
+        _queueRepository.GetOpenQueueEntriesForPatientAsync(2, Arg.Any<CancellationToken>()).Returns(new List<QueueEntry>());
+        _visitRepository.HasOpenVisitAsync(2, Arg.Any<CancellationToken>()).Returns(false);
+        _queueRepository.GetNextQueueNumberAsync(_vietnamClock.Today, Arg.Any<CancellationToken>()).Returns(5);
+        _userRepository.FindRoleByCodeAsync(RoleCodes.Patient, Arg.Any<CancellationToken>())
+            .Returns(new Role { RoleId = 10, RoleCode = RoleCodes.Patient });
+        _passwordHasher.Hash(patient.Phone).Returns("HASHED_PIN");
+
+        var result = await CreateService().CheckInAsync(3,
+            new CheckInRequest(2, CitizenId: "012345678901", Phone: patient.Phone), null);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(_identityHasher.Hash("012345678901"), patient.CitizenIdHash);
+        Assert.Equal(IdentityDocumentType.CitizenId, patient.DocumentType);
+        Assert.Null(patient.IssuingCountryCode);
+        Assert.Equal(IdentityHashScheme.HmacCanonical, patient.HashScheme);
+        Assert.Equal(IdentityDocumentConstants.CurrentHmacKeyVersion, patient.IdentityKeyVersion);
+        Assert.Equal(1, patient.CitizenIdVersion);
+    }
+
+    [Fact]
     public async Task CheckInAsync_WithConflictingCitizenId_ReturnsValidationErrorWithoutCreatingQueue()
     {
         var patient = MakePatient(patientId: 2, isActive: true);

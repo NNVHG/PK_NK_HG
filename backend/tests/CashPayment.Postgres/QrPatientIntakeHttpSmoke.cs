@@ -5,6 +5,7 @@ using Dental.Application.Features.MOD_PAT;
 using Dental.Application.Features.Patients.DTOs;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
+using Dental.Domain.Enums;
 using Dental.Infrastructure.Data;
 using Dental.Infrastructure.Repositories;
 using Dental.Infrastructure.Services;
@@ -40,6 +41,9 @@ internal static class QrPatientIntakeHttpSmoke
   using(var r=await client.PostAsJsonAsync(create,request)){created=(await r.Content.ReadFromJsonAsync<PatientResponse>())!;check(r.StatusCode==HttpStatusCode.Created&&created.PatientId>0&&r.Headers.CacheControl?.NoStore==true,"QR cashier creates profile atomically201 NoStore");}
   var saved=await db.Patients.AsNoTracking().SingleAsync(p=>p.PatientId==created.PatientId);
   check(saved.CitizenIdHash==identityHasher.Hash(request.CitizenId)&&saved.CitizenIdMasked==identityHasher.Mask(request.CitizenId)&&saved.CitizenIdVersion==1,"QR stores server HMAC and server mask, never raw CCCD or SHA256");
+  check(saved.DocumentType==IdentityDocumentType.CitizenId&&saved.IssuingCountryCode is null&&
+    saved.HashScheme==IdentityHashScheme.HmacCanonical&&saved.IdentityKeyVersion==IdentityDocumentConstants.CurrentHmacKeyVersion,
+    "QR profile records verified CCCD and HMAC version");
   check(!await db.QueueEntries.AnyAsync(q=>q.PatientId==created.PatientId)&&!await db.Visits.AnyAsync(v=>v.PatientId==created.PatientId)&&saved.UserId is null,"QR creation does not auto check-in or change portal ownership");
   using(var r=await client.PostAsJsonAsync(lookup,new QrIdentityLookupRequest(request.CitizenId)))
   {var data=await r.Content.ReadFromJsonAsync<QrIdentityLookupResult>();var text=await r.Content.ReadAsStringAsync();check(data!.Existing!.PatientId==created.PatientId&&!text.Contains(request.CitizenId)&&!text.Contains(saved.CitizenIdHash),"QR existing HMAC profile lookup returns no raw identity/hash");}
@@ -47,6 +51,8 @@ internal static class QrPatientIntakeHttpSmoke
   check(await db.Patients.CountAsync(p=>p.CitizenIdHash==identityHasher.Hash(request.CitizenId))==1&&await db.Patients.AnyAsync(p=>p.PatientId==created.PatientId&&p.FullName==request.Patient.FullName),"QR duplicate never rewrites existing demographics");
   var legacyPatient=new Patient{FullName="Synthetic legacy QR",Phone="0990011199",DateOfBirth=new DateOnly(1990,1,1),CitizenIdHash=CitizenIdIdentity.Hash("987654311199"),CitizenIdMasked="987******199",CreatedAt=DateTime.UtcNow};
   db.Patients.Add(legacyPatient);await db.SaveChangesAsync();
+  check(legacyPatient.DocumentType is null&&legacyPatient.HashScheme is null&&legacyPatient.IdentityKeyVersion is null,
+    "Legacy SHA256 profile remains unclassified before verified conversion");
   using(var r=await client.PostAsJsonAsync(lookup,new QrIdentityLookupRequest("987654311199")))
     check((await r.Content.ReadFromJsonAsync<QrIdentityLookupResult>())!.Existing?.PatientId==legacyPatient.PatientId,"QR lookup recognizes legacy SHA256 profile");
   using(var r=await client.PostAsJsonAsync(create,request with {CitizenId="987654311199"}))check(r.StatusCode==HttpStatusCode.Conflict,"QR cannot duplicate legacy SHA256 profile");

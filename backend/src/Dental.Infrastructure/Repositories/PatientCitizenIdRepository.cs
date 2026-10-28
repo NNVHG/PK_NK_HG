@@ -5,6 +5,7 @@ using Dental.Application.Features.MOD_PAT;
 using Dental.Application.Interfaces;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
+using Dental.Domain.Enums;
 using Dental.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -35,7 +36,10 @@ public sealed class PatientCitizenIdRepository(DentalDbContext db, IKeyedIdentit
             if (await db.Patients.AnyAsync(x => x.PatientId != patientId &&
                 (x.CitizenIdHash == hash || x.CitizenIdHash == legacyHash), ct))
                 return Result<CitizenIdStatus>.Failure(new Error("PAT_ID_DUPLICATE", "CCCD đã thuộc hồ sơ khác. Kiểm tra hồ sơ trước khi lưu."));
-            p.CitizenIdHash = hash; p.CitizenIdMasked = identityHasher.Mask(request.CitizenId); p.CitizenIdVersion++;
+            p.CitizenIdHash = hash; p.CitizenIdMasked = identityHasher.Mask(request.CitizenId);
+            p.DocumentType = IdentityDocumentType.CitizenId; p.IssuingCountryCode = null;
+            p.HashScheme = IdentityHashScheme.HmacCanonical;
+            p.IdentityKeyVersion = IdentityDocumentConstants.CurrentHmacKeyVersion; p.CitizenIdVersion++;
             p.UpdatedAt = DateTime.UtcNow;
             db.AuditLogs.Add(new AuditLog { UserId = actorId, EntityType = "Patient", EntityId = patientId,
                 Action = "MOD_PAT_CITIZEN_ID_UPDATED", CreatedAt = DateTime.UtcNow, IpAddress = ip,
