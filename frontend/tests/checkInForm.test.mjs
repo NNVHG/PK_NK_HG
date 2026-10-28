@@ -22,5 +22,14 @@ test('F_CHK_01 field details take priority over generic validation message', () 
 });
 test('F_CHK_01 supports ASP.NET validation dictionary and safe fallback', () => {
   assert.equal(checkInProblem({ errors: { Notes: ['Ghi chú quá dài.'] } }).fields.notes, 'Ghi chú quá dài.');
+  assert.equal(checkInProblem({ errors: { NationalityCode: ['Thiếu quốc gia cấp.'] } }).fields.nationalityCode, 'Thiếu quốc gia cấp.');
   assert.ok(checkInProblem(null).message); assert.ok(checkInProblem({ errors: [null, 1] }).message);
+});
+
+test('F_CHK_01 accepts passport with issuing country while preserving CCCD rules', () => {
+  assert.deepEqual(validateCheckIn('B1234567', '0900000091', '', 'passport', 'us'), {});
+  assert.equal(validateCheckIn('B1234567', '0900000091', '', 'passport').nationalityCode?.includes('quốc gia'), true);
+  assert.ok(validateCheckIn('B1234567', '0900000091', '', 'passport', 'U1').nationalityCode);
+  assert.ok(validateCheckIn('123', '0900000091', '', 'passport', 'US').citizenId);
+  assert.ok(validateCheckIn('B1234567', '0900000091', '').citizenId);
 });

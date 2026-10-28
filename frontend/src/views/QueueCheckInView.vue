@@ -2,7 +2,7 @@
   <main v-if="canCheckIn" class="page">
     <header>
       <h1>Tiếp đón và check-in</h1>
-      <p>Tìm hồ sơ, đối chiếu CCCD và số điện thoại tại quầy, sau đó xác nhận khách đã đến. Lượt chưa khám được đóng sau 23:30 giờ Việt Nam; khi quay lại sẽ nhận lượt mới.</p>
+      <p>Tìm hồ sơ, đối chiếu CCCD hoặc hộ chiếu và số điện thoại tại quầy, sau đó xác nhận khách đã đến. Lượt chưa khám được đóng sau 23:30 giờ Việt Nam; khi quay lại sẽ nhận lượt mới.</p>
     </header>
 
     <section class="card" aria-labelledby="today-title">
@@ -83,16 +83,26 @@
     <section v-if="selectedPatient" class="card checkin-card">
       <h2>{{ selectedPatient.fullName }} <small>{{ selectedPatient.patientCode }}</small></h2>
 
+      <label for="checkin-document-type">Giấy tờ đối chiếu</label>
+      <select id="checkin-document-type" v-model="documentType" @change="onDocumentTypeChanged">
+        <option value="citizenId">Căn cước công dân (CCCD)</option>
+        <option value="passport">Hộ chiếu</option>
+      </select>
       <div class="field-with-action">
-        <label for="checkin-citizen-id">CCCD của người bệnh</label>
-        <button type="button" class="link-btn" @click="openQr">Quét QR để điền</button>
+        <label for="checkin-citizen-id">{{ documentType === 'passport' ? 'Số hộ chiếu của người bệnh' : 'CCCD của người bệnh' }}</label>
+        <button v-if="documentType === 'citizenId'" type="button" class="link-btn" @click="openQr">Quét QR để điền</button>
       </div>
-      <input :aria-invalid="!!fieldErrors.citizenId" aria-describedby="citizen-error" id="checkin-citizen-id" v-model="citizenId" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="Nhập CCCD 12 chữ số" />
+      <input :aria-invalid="!!fieldErrors.citizenId" aria-describedby="citizen-error" id="checkin-citizen-id" v-model="citizenId" :inputmode="documentType === 'passport' ? 'text' : 'numeric'" autocomplete="off" maxlength="12" :placeholder="documentType === 'passport' ? 'Nhập số hộ chiếu 6–12 ký tự' : 'Nhập CCCD 12 chữ số'" />
       <p v-if="fieldErrors.citizenId" id="citizen-error" class="error">{{ fieldErrors.citizenId }}</p>
+      <template v-if="documentType === 'passport'">
+        <label for="checkin-country">Mã quốc gia cấp hộ chiếu</label>
+        <input id="checkin-country" v-model="nationalityCode" :aria-invalid="!!fieldErrors.nationalityCode" aria-describedby="country-error" autocomplete="off" maxlength="3" placeholder="Ví dụ: VN hoặc USA" />
+        <p v-if="fieldErrors.nationalityCode" id="country-error" class="error">{{ fieldErrors.nationalityCode }}</p>
+      </template>
       <label for="checkin-phone">Số điện thoại trong hồ sơ</label>
       <input :aria-invalid="!!fieldErrors.phone" aria-describedby="phone-error" id="checkin-phone" v-model="checkInPhone" inputmode="tel" autocomplete="tel" maxlength="10" placeholder="Nhập số điện thoại đã đăng ký" />
       <p v-if="fieldErrors.phone" id="phone-error" class="error">{{ fieldErrors.phone }}</p>
-      <p class="hint">Thông tin chỉ dùng để đối chiếu tại quầy. Hệ thống không lưu CCCD rõ.</p>
+      <p class="hint">Thông tin chỉ dùng để đối chiếu tại quầy. Hệ thống không lưu số giấy tờ rõ.</p>
 
       <div v-if="debtLoading" class="hint" role="status">Đang kiểm tra công nợ cũ…</div>
       <div v-else-if="debtLookupFailed" class="message debt-error" role="alert">
@@ -189,6 +199,8 @@ const appointments = ref<AppointmentResponse[]>([]);
 const appointmentId = ref<number | null>(null);
 const notes = ref('');
 const citizenId = ref('');
+const documentType = ref<'citizenId' | 'passport'>('citizenId');
+const nationalityCode = ref('');
 const checkInPhone = ref('');
 const searching = ref(false);
 const searched = ref(false);
@@ -261,7 +273,7 @@ async function selectFromDesk(row: AppointmentResponse) {
 }
 function clearSelection() {
   appointmentSequence++; debtRequestSequence++; selectionSequence++;
-  selecting.value = false; selectedPatient.value = null; citizenId.value = ''; checkInPhone.value = ''; notes.value = '';
+  selecting.value = false; selectedPatient.value = null; citizenId.value = ''; documentType.value = 'citizenId'; nationalityCode.value = ''; checkInPhone.value = ''; notes.value = '';
   appointments.value = []; appointmentId.value = null; loadingAppointments.value = false; appointmentLookupFailed.value = false;
   outstandingDebt.value = null; debtLoading.value = false; debtLookupFailed.value = false; fieldErrors.value = {}; checkInError.value = ''; ticket.value = null;
 }
@@ -333,6 +345,8 @@ async function selectPatient(patient: PatientSummary) {
   notes.value = '';
   selectedPatient.value = patient;
   citizenId.value = '';
+  documentType.value = 'citizenId';
+  nationalityCode.value = '';
   fieldErrors.value = {};
   checkInPhone.value = '';
   await Promise.all([loadAppointments(patient), loadOutstandingDebt(patient)]);
@@ -381,9 +395,16 @@ async function loadAppointments(patient: PatientSummary) {
   }
 }
 
+function onDocumentTypeChanged() {
+  citizenId.value = '';
+  nationalityCode.value = '';
+  fieldErrors.value = {};
+  checkInError.value = '';
+}
+
 async function submitCheckIn() {
   if (!canCheckIn.value || !selectedPatient.value || checkingIn.value || loadingAppointments.value || appointmentLookupFailed.value || debtLoading.value) return;
-  fieldErrors.value = validateCheckIn(citizenId.value, checkInPhone.value, notes.value);
+  fieldErrors.value = validateCheckIn(citizenId.value, checkInPhone.value, notes.value, documentType.value, nationalityCode.value);
   checkInError.value = '';
   if (Object.keys(fieldErrors.value).length) return;
   checkingIn.value = true;
@@ -395,9 +416,11 @@ async function submitCheckIn() {
       dentistId: null,
       notes: notes.value.trim() || null,
       citizenId: citizenId.value.trim(),
-      phone: checkInPhone.value.trim()
+      phone: checkInPhone.value.trim(),
+      documentType: documentType.value === 'passport' ? 2 : 1,
+      nationalityCode: documentType.value === 'passport' ? nationalityCode.value.trim().toUpperCase() : null
     });
-    notes.value = ''; citizenId.value = ''; checkInPhone.value = ''; selectedPatient.value = null;
+    notes.value = ''; citizenId.value = ''; checkInPhone.value = ''; documentType.value = 'citizenId'; nationalityCode.value = ''; selectedPatient.value = null;
     await refreshToday();
   } catch (error) {
     const response = axios.isAxiosError(error) ? error.response?.data : null;
@@ -461,6 +484,8 @@ async function processQrString(raw: string) {
       return;
     }
 
+    documentType.value = 'citizenId';
+    nationalityCode.value = '';
     citizenId.value = id12;
 
     if (!selectedPatient.value) {

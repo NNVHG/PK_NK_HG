@@ -8,6 +8,8 @@ export interface CheckInPayload {
   notes: string | null;
   citizenId: string;
   phone: string;
+  documentType?: 1 | 2;
+  nationalityCode?: string | null;
 }
 
 export interface QueueEntryResponse {

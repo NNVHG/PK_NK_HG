@@ -1,6 +1,7 @@
 using Dental.Application.Common;
 using Dental.Application.Features.Queue.DTOs;
 using Dental.Application.Features.Queue.Services;
+using Dental.Application.Features.Queue.Validators;
 using Dental.Application.Interfaces;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
@@ -588,6 +589,63 @@ public sealed class QueueServiceTests
         Assert.Equal(Error.Validation.Code, result.Error.Code);
         Assert.Contains("CCCD không khớp hồ sơ", result.Error.Message);
         await _queueRepository.DidNotReceive().AddAsync(Arg.Any<QueueEntry>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CheckInAsync_WithVerifiedPassport_StoresCountryBoundHashAndCreatesAccount()
+    {
+        var patient = MakePatient(patientId: 2, isActive: true);
+        patient.Phone = "0987654321";
+        _patientRepository.GetByIdAsync(2, Arg.Any<CancellationToken>()).Returns(patient);
+        _patientRepository.FindByCitizenIdHashAsync(Arg.Any<string>(), 2, Arg.Any<CancellationToken>()).Returns((Patient?)null);
+        _queueRepository.GetOpenQueueEntriesForPatientAsync(2, Arg.Any<CancellationToken>()).Returns(new List<QueueEntry>());
+        _visitRepository.HasOpenVisitAsync(2, Arg.Any<CancellationToken>()).Returns(false);
+        _userRepository.FindRoleByCodeAsync(RoleCodes.Patient, Arg.Any<CancellationToken>())
+            .Returns(new Role { RoleId = 10, RoleCode = RoleCodes.Patient });
+        _passwordHasher.Hash(patient.Phone).Returns("HASHED_PIN");
+        var request = new CheckInRequest(2, CitizenId: "B1234567", Phone: patient.Phone,
+            DocumentType: IdentityDocumentType.Passport, NationalityCode: "us");
+
+        var result = await CreateService().CheckInAsync(3, request, null);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(_identityHasher.Hash("B1234567", IdentityDocumentType.Passport, "US"), patient.CitizenIdHash);
+        Assert.Equal("B1****67", patient.CitizenIdMasked);
+        Assert.Equal(1, patient.CitizenIdVersion);
+        Assert.NotNull(patient.UserId);
+        await _auditLogger.Received(1).LogRequiredAsync("MOD_AUTH_PATIENT_ACCOUNT_CREATED", "User", Arg.Any<int>(), 3,
+            Arg.Is<string>(detail => detail.Contains("Passport") && !detail.Contains("B1234567")), null, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CheckInAsync_PassportWithWrongIssuingCountry_DoesNotCreateQueue()
+    {
+        var patient = MakePatient(patientId: 2, isActive: true);
+        patient.Phone = "0987654321";
+        patient.CitizenIdHash = _identityHasher.Hash("B1234567", IdentityDocumentType.Passport, "US");
+        _patientRepository.GetByIdAsync(2, Arg.Any<CancellationToken>()).Returns(patient);
+
+        var result = await CreateService().CheckInAsync(3, new CheckInRequest(2, CitizenId: "B1234567",
+            Phone: patient.Phone, DocumentType: IdentityDocumentType.Passport, NationalityCode: "VN"), null);
+
+        Assert.Equal(Error.Validation.Code, result.Error.Code);
+        Assert.Contains("Hộ chiếu không khớp", result.Error.Message);
+        await _queueRepository.DidNotReceive().AddAsync(Arg.Any<QueueEntry>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public void CheckInValidator_RequiresPassportCountryAndRejectsCountryForCitizenId()
+    {
+        var validator = new CheckInRequestValidator();
+        var passport = new CheckInRequest(2, CitizenId: "B1234567", Phone: "0987654321",
+            DocumentType: IdentityDocumentType.Passport, NationalityCode: "US");
+        Assert.True(validator.Validate(passport).IsValid);
+        Assert.False(validator.Validate(passport with { NationalityCode = null }).IsValid);
+        Assert.False(validator.Validate(passport with { NationalityCode = "U1" }).IsValid);
+        Assert.False(validator.Validate(passport with { CitizenId = "123" }).IsValid);
+        Assert.False(validator.Validate(passport with { DocumentType = (IdentityDocumentType)3 }).IsValid);
+        Assert.False(validator.Validate(passport with { DocumentType = IdentityDocumentType.CitizenId }).IsValid);
+        Assert.True(validator.Validate(new CheckInRequest(2, CitizenId: "012345678901", Phone: "0987654321")).IsValid);
     }
 
     [Fact]

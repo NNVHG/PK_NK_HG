@@ -134,33 +134,46 @@ public sealed class QueueService
         // Existing internal callers are validated at the API boundary; keep the service usable
         // by legacy queue maintenance flows that do not supply identity input.
         var citizenIdChanged = false;
-          string? verifiedCitizenId = null;
-        if (!string.IsNullOrWhiteSpace(request.CitizenId) || !string.IsNullOrWhiteSpace(request.Phone))
+        var identityVerified = false;
+        var documentType = request.DocumentType ?? IdentityDocumentType.CitizenId;
+        if (!string.IsNullOrWhiteSpace(request.CitizenId) || !string.IsNullOrWhiteSpace(request.Phone) ||
+            request.DocumentType.HasValue || !string.IsNullOrWhiteSpace(request.NationalityCode))
         {
-            // Q-358..361 / DL-340..344: staff verifies the patient's identity at the counter.
-            // Chỉ giữ CCCD và SĐT thô trong yêu cầu; lưu HMAC có khóa và số đã che.
-            if (string.IsNullOrWhiteSpace(request.CitizenId) || request.CitizenId.Length != 12 || request.CitizenId.Any(c => c is < '0' or > '9') ||
+            // DL-367: đối soát giấy tờ và số liên hệ tại quầy; chỉ lưu HMAC và số đã che.
+            var identifier = request.CitizenId?.Trim() ?? string.Empty;
+            var nationalityCode = request.NationalityCode?.Trim().ToUpperInvariant();
+            var documentName = documentType == IdentityDocumentType.Passport ? "Hộ chiếu" : "CCCD";
+            var validDocument = documentType switch
+            {
+                IdentityDocumentType.CitizenId => identifier.Length == 12 && identifier.All(c => c is >= '0' and <= '9') &&
+                    string.IsNullOrWhiteSpace(nationalityCode),
+                IdentityDocumentType.Passport => identifier.Length is >= 6 and <= 12 &&
+                    identifier.All(char.IsAsciiLetterOrDigit) && nationalityCode is { Length: 2 or 3 } &&
+                    nationalityCode.All(char.IsAsciiLetter),
+                _ => false
+            };
+            if (!validDocument ||
                 string.IsNullOrWhiteSpace(request.Phone) || request.Phone.Length != 10 || request.Phone.Any(c => c is < '0' or > '9') ||
                 !string.Equals(patient.Phone, request.Phone.Trim(), StringComparison.Ordinal))
                 return Result<QueueEntryResponse>.Failure(Error.Validation.Code,
-                    "CCCD hoặc số điện thoại không khớp hồ sơ. Hãy đối soát thông tin trước khi check-in.");
+                    $"{documentName} hoặc số điện thoại không khớp hồ sơ. Hãy đối soát thông tin trước khi check-in.");
 
-            var citizenId = request.CitizenId.Trim();
-              verifiedCitizenId = citizenId;
+            identityVerified = true;
             if (_identityHasher is null) return Result<QueueEntryResponse>.Failure(Error.ServerError);
-            var citizenIdHash = _identityHasher.Hash(citizenId);
-            if (patient.CitizenIdHash is not null && !_identityHasher.Matches(patient.CitizenIdHash, citizenId))
+            var citizenIdHash = _identityHasher.Hash(identifier, documentType, nationalityCode);
+            if (patient.CitizenIdHash is not null && !_identityHasher.Matches(patient.CitizenIdHash, identifier, documentType, nationalityCode))
                 return Result<QueueEntryResponse>.Failure(Error.Validation.Code,
-                    "CCCD không khớp hồ sơ. Hãy đối soát thông tin trước khi check-in.");
+                    $"{documentName} không khớp hồ sơ. Hãy đối soát thông tin trước khi check-in.");
             if (patient.CitizenIdHash is null || patient.CitizenIdHash != citizenIdHash)
             {
                 var duplicate = await _patientRepository.FindByCitizenIdHashAsync(citizenIdHash, patient.PatientId, ct);
-                duplicate ??= await _patientRepository.FindByCitizenIdHashAsync(CitizenIdIdentity.Hash(citizenId), patient.PatientId, ct);
+                if (documentType == IdentityDocumentType.CitizenId)
+                    duplicate ??= await _patientRepository.FindByCitizenIdHashAsync(CitizenIdIdentity.Hash(identifier), patient.PatientId, ct);
                 if (duplicate is not null)
                     return Result<QueueEntryResponse>.Failure(Error.Validation.Code,
-                        "CCCD đã liên kết với hồ sơ khác. Hãy đối soát thông tin trước khi check-in.");
+                        $"{documentName} đã liên kết với hồ sơ khác. Hãy đối soát thông tin trước khi check-in.");
                 patient.CitizenIdHash = citizenIdHash;
-                patient.CitizenIdMasked = CitizenIdIdentity.Mask(citizenId);
+                patient.CitizenIdMasked = _identityHasher.Mask(identifier, documentType);
                 patient.CitizenIdVersion++;
                 patient.UpdatedAt = _vietnamClock.UtcNow;
                 citizenIdChanged = true;
@@ -185,15 +198,15 @@ public sealed class QueueService
             await _auditLogger.LogRequiredAsync(AuditActions.PatientUpdated, "Patient", patient.PatientId, actorUserId,
                 JsonSerializer.Serialize(new { changedFields = new[] { nameof(patient.CitizenIdHash), nameof(patient.CitizenIdMasked) }, source = "CheckInIdentityVerification" }),
                 ipAddress, ct);
-          if (verifiedCitizenId is not null)
-          {
-              var accountResult = await EnsurePatientAccountAsync(patient, actorUserId, ipAddress, ct);
-              if (accountResult.IsFailure) return Result<QueueEntryResponse>.Failure(accountResult.Error);
-          }
+        if (identityVerified)
+        {
+            var accountResult = await EnsurePatientAccountAsync(patient, documentType, actorUserId, ipAddress, ct);
+            if (accountResult.IsFailure) return Result<QueueEntryResponse>.Failure(accountResult.Error);
+        }
         return await CreateCheckInAsync(actorUserId, request, today, isPriority, ipAddress, ct);
     }
 
-      private async Task<Result<bool>> EnsurePatientAccountAsync(Dental.Domain.Entities.Patient patient, int actorUserId, string? ipAddress, CancellationToken ct)
+      private async Task<Result<bool>> EnsurePatientAccountAsync(Dental.Domain.Entities.Patient patient, IdentityDocumentType documentType, int actorUserId, string? ipAddress, CancellationToken ct)
       {
           if (patient.UserId.HasValue)
           {
@@ -227,7 +240,7 @@ public sealed class QueueService
           await _unitOfWork.SaveChangesAsync(ct);
 
           await _auditLogger.LogRequiredAsync("MOD_AUTH_PATIENT_ACCOUNT_CREATED", "User", account.UserId, actorUserId,
-              JsonSerializer.Serialize(new { patientId = patient.PatientId, activationRequired = true, loginIdentifier = "CitizenId" }),
+              JsonSerializer.Serialize(new { patientId = patient.PatientId, activationRequired = true, loginIdentifier = documentType.ToString() }),
               ipAddress, ct);
           return Result<bool>.Success(true);
       }

@@ -1,9 +1,12 @@
-export type CheckInField = 'citizenId' | 'phone' | 'notes';
+export type CheckInField = 'citizenId' | 'nationalityCode' | 'phone' | 'notes';
 export type CheckInErrors = Partial<Record<CheckInField, string>>;
 
-export function validateCheckIn(citizenId: string, phone: string, notes: string): CheckInErrors {
+export function validateCheckIn(citizenId: string, phone: string, notes: string, documentType: 'citizenId' | 'passport' = 'citizenId', nationalityCode = ''): CheckInErrors {
   const errors: CheckInErrors = {};
-  if (!/^[0-9]{12}$/.test(citizenId.trim())) errors.citizenId = 'CCCD phải gồm 12 chữ số để đối chiếu tại quầy.';
+  if (documentType === 'passport') {
+    if (!/^[A-Za-z0-9]{6,12}$/.test(citizenId.trim())) errors.citizenId = 'Số hộ chiếu phải gồm 6–12 chữ cái hoặc chữ số.';
+    if (!/^[A-Za-z]{2,3}$/.test(nationalityCode.trim())) errors.nationalityCode = 'Mã quốc gia cấp hộ chiếu phải gồm 2–3 chữ cái.';
+  } else if (!/^[0-9]{12}$/.test(citizenId.trim())) errors.citizenId = 'CCCD phải gồm 12 chữ số để đối chiếu tại quầy.';
   if (!/^0[0-9]{9}$/.test(phone.trim())) errors.phone = 'Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0.';
   if (notes.length > 500) errors.notes = 'Ghi chú không được vượt quá 500 ký tự.';
   return errors;
@@ -20,6 +23,7 @@ export function checkInProblem(problem: unknown): { fields: CheckInErrors; messa
     messages.push(value);
     const field = key.toLowerCase();
     if (field === 'citizenid') fields.citizenId ??= value;
+    if (field === 'nationalitycode') fields.nationalityCode ??= value;
     if (field === 'phone') fields.phone ??= value;
     if (field === 'notes') fields.notes ??= value;
   }
