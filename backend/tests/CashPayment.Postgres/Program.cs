@@ -16,7 +16,7 @@ using Microsoft.Extensions.Logging;
 // Explicit opt-in; synthetic data and a unique disposable database, never the clinic database.
 var developmentSeederOnly = args.Length == 3 && args[2] == "--development-database-seeder-only";
 if (args.Length is not (2 or 3) || args[0] != "--isolated-config" ||
-    args.Length == 3 && !developmentSeederOnly && args[2] is not ("--invoice-refunds-only" or "--invoice-draft-cancellation-only" or "--queue-call-next-only" or "--invoice-discounts-only" or "--service-catalog-only" or "--queue-imaging-only" or "--queue-calling-only" or "--queue-absence-only" or "--queue-cleanup-only" or "--chair-catalog-only" or "--staff-workspaces-only" or "--queue-locations-only" or "--visit-corrections-only" or "--physical-chairs-only" or "--visit-cancellation-only" or "--post-treatment-notes-only" or "--diagnosis-catalog-only" or "--revenue-report-only" or "--medicine-catalog-only" or "--prescription-only" or "--patient-citizen-id-only" or "--public-prescription-only" or "--doctor-signature-only" or "--prescription-replacement-only" or "--prescription-print-only" or "--prescription-handover-only" or "--patient-prescription-history-only" or "--medical-supply-catalog-only" or "--password-recovery-only" or "--dental-images-only" or "--stock-receipts-only" or "--stock-issues-only" or "--scheduling-settings-only" or "--chair-status-only" or "--medicine-stock-only" or "--patient-activation-only" or "--staff-activation-only" or "--staff-phone-change-only" or "--password-session-policy-only" or "--manual-bank-transfer-only"))
+    args.Length == 3 && !developmentSeederOnly && args[2] is not ("--patient-guardians-only" or "--invoice-refunds-only" or "--invoice-draft-cancellation-only" or "--queue-call-next-only" or "--invoice-discounts-only" or "--service-catalog-only" or "--queue-imaging-only" or "--queue-calling-only" or "--queue-absence-only" or "--queue-cleanup-only" or "--chair-catalog-only" or "--staff-workspaces-only" or "--queue-locations-only" or "--visit-corrections-only" or "--physical-chairs-only" or "--visit-cancellation-only" or "--post-treatment-notes-only" or "--diagnosis-catalog-only" or "--revenue-report-only" or "--medicine-catalog-only" or "--prescription-only" or "--patient-citizen-id-only" or "--public-prescription-only" or "--doctor-signature-only" or "--prescription-replacement-only" or "--prescription-print-only" or "--prescription-handover-only" or "--patient-prescription-history-only" or "--medical-supply-catalog-only" or "--password-recovery-only" or "--dental-images-only" or "--stock-receipts-only" or "--stock-issues-only" or "--scheduling-settings-only" or "--chair-status-only" or "--medicine-stock-only" or "--patient-activation-only" or "--staff-activation-only" or "--staff-phone-change-only" or "--password-session-policy-only" or "--manual-bank-transfer-only"))
     throw new ArgumentException("Use --isolated-config <config.json> [--invoice-refunds-only|--invoice-draft-cancellation-only|--queue-call-next-only|--invoice-discounts-only|--service-catalog-only|--queue-imaging-only|--queue-calling-only|--queue-absence-only|--queue-cleanup-only|--chair-catalog-only|--staff-workspaces-only|--queue-locations-only|--visit-corrections-only|--physical-chairs-only|--visit-cancellation-only|--post-treatment-notes-only|--diagnosis-catalog-only|--revenue-report-only|--medicine-catalog-only|--prescription-only|--patient-citizen-id-only|--public-prescription-only|--doctor-signature-only|--prescription-replacement-only|--prescription-print-only|--prescription-handover-only|--patient-prescription-history-only|--medical-supply-catalog-only|--password-recovery-only|--dental-images-only|--stock-receipts-only|--stock-issues-only|--scheduling-settings-only|--chair-status-only|--medicine-stock-only|--patient-activation-only|--staff-activation-only|--staff-phone-change-only|--password-session-policy-only|--manual-bank-transfer-only|--development-database-seeder-only]");
 var prescriptionOnly = args.Length == 3 && args[2] is "--prescription-only" or "--patient-citizen-id-only" or "--public-prescription-only" or "--doctor-signature-only" or "--prescription-replacement-only" or "--prescription-print-only" or "--prescription-handover-only" or "--patient-prescription-history-only";
 var medicineCatalogOnly = args.Length == 3 && args[2] == "--medicine-catalog-only";
@@ -38,6 +38,7 @@ var chairCatalogOnly = args.Length == 3 && args[2] == "--chair-catalog-only";
 var queueCleanupOnly = args.Length == 3 && args[2] == "--queue-cleanup-only";
 var queueAbsenceOnly = args.Length == 3 && args[2] == "--queue-absence-only";
 var queueCallingOnly = args.Length == 3 && args[2] == "--queue-calling-only";
+var patientGuardiansOnly = args.Length == 3 && args[2] == "--patient-guardians-only";
 using var config = JsonDocument.Parse(File.ReadAllText(args[1]));
 var connection = new NpgsqlConnectionStringBuilder(config.RootElement.GetProperty("ConnectionStrings").GetProperty("Default").GetString());
 var databaseName = "dental_cash_test_" + Guid.NewGuid().ToString("N");
@@ -78,6 +79,18 @@ try
         await DatabaseSeeder.SeedAsync(setup, seedConfig, loggerFactory.CreateLogger("DevelopmentDatabaseSeederSmoke"), true);
         await DevelopmentDatabaseSeederSmoke.RunAsync(options, Check);
         Console.WriteLine($"PostgreSQL Development database seeder checks: {checks}/{checks} PASS");
+        return;
+    }
+    if (patientGuardiansOnly)
+    {
+        var guardianTestRole = new Role { RoleCode = RoleCodes.Receptionist, RoleName = "Synthetic receptionist" };
+        var receptionist = new User { Role = guardianTestRole, FullName = "Synthetic receptionist", Phone = "0999999944",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()) };
+        setup.Users.Add(receptionist);
+        await setup.SaveChangesAsync();
+        setup.ChangeTracker.Clear();
+        await CashPaymentHttpSmoke.RunAsync(options, receptionist.UserId, 0, Check, patientGuardiansOnly: true);
+        Console.WriteLine($"PostgreSQL patient guardian checks: {checks}/{checks} PASS");
         return;
     }
     if(args.Length==3&&args[2]=="--password-session-policy-only"){await PasswordSessionPolicyHttpSmoke.RunAsync(options,Check);Console.WriteLine($"PostgreSQL password session policy checks: {checks}/{checks} PASS");return;}

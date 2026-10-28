@@ -28,7 +28,7 @@ using Microsoft.IdentityModel.Tokens;
 internal static class CashPaymentHttpSmoke
 {
     public static async Task RunAsync(DbContextOptions<DentalDbContext> options, int cashierId, int patientId, Action<bool, string> check,
-        bool queueCallNextOnly = false, bool invoiceDiscountsOnly = false, bool serviceCatalogOnly = false, bool queueImagingOnly = false, bool queueCallingOnly = false, bool queueAbsenceOnly = false, bool queueCleanupOnly = false, bool chairCatalogOnly = false, bool staffWorkspacesOnly = false, bool queueLocationsOnly = false, bool visitCorrectionsOnly = false, bool physicalChairsOnly = false, bool visitCancellationOnly = false, bool postTreatmentNotesOnly = false, bool diagnosisCatalogOnly = false, bool revenueReportOnly = false, bool medicineCatalogOnly = false, bool prescriptionOnly = false, bool invoiceRefundsOnly = false, bool invoiceDraftCancellationOnly = false, bool medicalSupplyCatalogOnly = false, bool manualBankOnly = false)
+        bool queueCallNextOnly = false, bool invoiceDiscountsOnly = false, bool serviceCatalogOnly = false, bool queueImagingOnly = false, bool queueCallingOnly = false, bool queueAbsenceOnly = false, bool queueCleanupOnly = false, bool chairCatalogOnly = false, bool staffWorkspacesOnly = false, bool queueLocationsOnly = false, bool visitCorrectionsOnly = false, bool physicalChairsOnly = false, bool visitCancellationOnly = false, bool postTreatmentNotesOnly = false, bool diagnosisCatalogOnly = false, bool revenueReportOnly = false, bool medicineCatalogOnly = false, bool prescriptionOnly = false, bool invoiceRefundsOnly = false, bool invoiceDraftCancellationOnly = false, bool medicalSupplyCatalogOnly = false, bool manualBankOnly = false, bool patientGuardiansOnly = false)
     {
         // Dedicated test host validates ephemeral JWTs only. Never read clinic JWT keys/demo credentials.
         var signingKey = new SymmetricSecurityKey(RandomNumberGenerator.GetBytes(64));
@@ -166,6 +166,14 @@ internal static class CashPaymentHttpSmoke
         builder.Services.AddScoped<Dental.Application.Features.Appointments.Validators.CancelAppointmentRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Appointments.Validators.SelfCancellationEligibilityRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Patients.Services.PatientsService>();
+        builder.Services.AddScoped<IPatientGuardianRepository, PatientGuardianRepository>();
+        builder.Services.AddScoped<Dental.Application.Features.Patients.Services.PatientGuardianService>();
+        builder.Services.AddScoped<FluentValidation.IValidator<Dental.Application.Features.Patients.DTOs.AssignPatientGuardianRequest>,
+            Dental.Application.Features.Patients.Validators.AssignPatientGuardianRequestValidator>();
+        builder.Services.AddScoped<FluentValidation.IValidator<Dental.Application.Features.Patients.DTOs.RevokePatientGuardianRequest>,
+            Dental.Application.Features.Patients.Validators.RevokePatientGuardianRequestValidator>();
+        builder.Services.AddScoped<FluentValidation.IValidator<Dental.Application.Features.Patients.DTOs.PromoteWardRequest>,
+            Dental.Application.Features.Patients.Validators.PromoteWardRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Patients.Validators.CreatePatientRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Patients.Validators.PatientDuplicateCheckRequestValidator>();
         builder.Services.AddScoped<Dental.Application.Features.Patients.Validators.PatientQueryRequestValidator>();
@@ -191,6 +199,11 @@ internal static class CashPaymentHttpSmoke
         {
             using var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) };
             await using var db = new DentalDbContext(options);
+            if (patientGuardiansOnly)
+            {
+                await PatientGuardianHttpSmoke.RunAsync(client, options, cashierId, AuthenticateActor, check);
+                return;
+            }
             var invoice = new Invoice { Visit = new Visit { PatientId = patientId, CreatedByUserId = cashierId,
                 Status = VisitStatuses.Completed, IsLocked = true }, CreatedByUserId = cashierId,
                 InvoiceCode = "TEST-CASH-HTTP", TotalAmount = 100000, Status = InvoiceStatus.PendingPayment, CreatedAt = DateTime.UtcNow,
