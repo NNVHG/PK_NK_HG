@@ -67,6 +67,9 @@ public sealed class AppointmentService
             request.ConfirmedDentistConflictAppointmentId.HasValue || request.ConfirmedDentistConflictRequestId.HasValue)
             return Result<AppointmentResponse>.Failure(Error.Validation.Code,
                 "Phòng khám không tiếp nhận cấp cứu hoặc chen lịch. Chọn khung giờ khám và ghi điều cần lưu ý vào ghi chú.");
+        if (actorRoleCode == RoleCodes.Patient && request.DentistId.HasValue)
+            return Result<AppointmentResponse>.Failure(Error.Validation.Code,
+                "Bệnh nhân không chọn nha sĩ khi đặt lịch; phòng khám sẽ điều phối khi tiếp đón.");
         try
         {
             return await _unitOfWork.ExecuteSerializableTransactionAsync(
