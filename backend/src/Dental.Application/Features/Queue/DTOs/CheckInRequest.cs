@@ -1,3 +1,5 @@
+using Dental.Domain.Enums;
+
 namespace Dental.Application.Features.Queue.DTOs;
 
 public sealed record CheckInRequest(
@@ -6,5 +8,7 @@ public sealed record CheckInRequest(
     int? DentistId = null,
     string? Notes = null,
     string? CitizenId = null,
-    string? Phone = null
+    string? Phone = null,
+    IdentityDocumentType? DocumentType = null,
+    string? NationalityCode = null
 );

@@ -27,7 +27,7 @@ function fixture({ role = 'RECEPTIONIST', queryPages = [page], deskPages = [page
       hashCitizenId: async id => { calls.lookup.push(['hash', id]); return 'HASH:' + id; },
       qrPatientIntakeService: { lookup: async hash => { calls.lookup.push(['lookup', hash]); return { existing: { patientId: 7, isActive: true } }; } }
     },
-    '@/services/checkInForm': { validateCheckIn: (id, phone, notes) => { const e = {}; if (!/^\d{12}$/.test(id.trim())) e.citizenId = 'CCCD phải gồm 12 chữ số.'; if (!/^0\d{9}$/.test(phone.trim())) e.phone = 'Số điện thoại phải gồm 10 chữ số.'; if (notes.length > 500) e.notes = 'Ghi chú không được vượt quá 500 ký tự.'; return e; }, checkInProblem: problem => ({ fields: {}, message: problem?.message ?? 'Không thể tiếp đón.' }) },
+    '@/services/checkInForm': { validateCheckIn: (id, phone, notes, documentType, nationalityCode) => { const e = {}; if (documentType === 'passport') { if (!/^[A-Za-z0-9]{6,12}$/.test(id.trim())) e.citizenId = 'Số hộ chiếu không hợp lệ.'; if (!/^[A-Za-z]{2,3}$/.test(nationalityCode.trim())) e.nationalityCode = 'Mã quốc gia cấp không hợp lệ.'; } else if (!/^\d{12}$/.test(id.trim())) e.citizenId = 'CCCD phải gồm 12 chữ số.'; if (!/^0\d{9}$/.test(phone.trim())) e.phone = 'Số điện thoại phải gồm 10 chữ số.'; if (notes.length > 500) e.notes = 'Ghi chú không được vượt quá 500 ký tự.'; return e; }, checkInProblem: problem => ({ fields: {}, message: problem?.message ?? 'Không thể tiếp đón.' }) },
     '@/services/appointments': { appointmentsService: {
       getForDesk: async (...args) => { calls.desk.push(args); const value = deskPages.shift() ?? page; if (value instanceof Error) throw value; return value; },
       getScheduledForPatientOnDate: async (...args) => { calls.appointments.push(args); return { ...page, items: [appointment] }; },
@@ -107,6 +107,18 @@ test('F_CHK_01 optional blank reception note submits null and refreshes lists', 
 test('F_CHK_01 missing CCCD or phone is shown per field without sending check-in', async () => {
   const f = fixture(); await f.c.selectPatient(patient); await f.c.submitCheckIn();
   assert.deepEqual(Object.keys(f.c.fieldErrors.value).sort(), ['citizenId', 'phone']); assert.equal(f.calls.checkIn.length, 0);
+});
+test('F_CHK_01 passport check-in requires country and sends normalized document context', async () => {
+  const f = fixture(); await f.c.selectPatient(patient);
+  f.c.documentType.value = 'passport'; f.c.onDocumentTypeChanged();
+  f.c.citizenId.value = 'B1234567'; f.c.checkInPhone.value = '0900000091';
+  await f.c.submitCheckIn();
+  assert.ok(f.c.fieldErrors.value.nationalityCode); assert.equal(f.calls.checkIn.length, 0);
+  f.c.nationalityCode.value = 'us'; await f.c.submitCheckIn();
+  assert.equal(f.calls.checkIn.length, 1);
+  assert.equal(f.calls.checkIn[0].documentType, 2);
+  assert.equal(f.calls.checkIn[0].nationalityCode, 'US');
+  assert.equal(f.c.documentType.value, 'citizenId');
 });
 test('F_CHK_01 component hides check-in controls from disallowed roles and exposes field errors', () => {
   assert.match(descriptor.template.content, /v-if="canCheckIn"/); assert.match(descriptor.template.content, /aria-invalid/);
