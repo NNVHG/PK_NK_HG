@@ -13,8 +13,8 @@ public sealed class StaffWorkspaceService(IStaffWorkspaceRepository workspaces, 
     IUserRepository users, IVisitRepository visits, IQueueRepository queues, IUnitOfWork uow, IAuditLogger audit, VietnamClock clock)
 {
     public static readonly Error Changed = new("MST_061", "Vị trí đã thay đổi hoặc đang có thao tác đồng thời. Tải lại rồi xác nhận lại.");
-    public static readonly Error Busy = new("MST_062", "Nha sĩ đang có ca khám hoặc lời mời chưa xử lý; chưa thể đổi vị trí/nhóm làm việc.");
-    public static readonly Error Unavailable = new("MST_063", "Ghế/phòng chưa sẵn sàng, đã có nha sĩ khác chọn hoặc nha sĩ đã có phụ tá làm cùng.");
+    public static readonly Error Busy = new("MST_062", "Nha sĩ đang có ca khám hoặc lời mời chưa xử lý; chưa thể đổi vị trí.");
+    public static readonly Error Unavailable = new("MST_063", "Ghế/phòng chưa sẵn sàng hoặc đã có nha sĩ khác chọn.");
     public static readonly Error InvalidTarget = new("MST_064", "Nhân sự không hoạt động hoặc không đúng vai trò để chọn vị trí này.");
 
     private async Task<bool> ActorAllowed(int actorId, string? role, CancellationToken ct)
@@ -52,9 +52,8 @@ public sealed class StaffWorkspaceService(IStaffWorkspaceRepository workspaces, 
         {
             var workspace = claims.FirstOrDefault(x => x.UserId == dentist.UserId);
             var chair = allChairs.FirstOrDefault(x => x.Id == workspace?.ChairId);
-            var assistantId = claims.FirstOrDefault(x => x.DentistId == dentist.UserId)?.UserId;
-            options.Add(new(dentist.UserId, dentist.FullName, chair?.Id, chair?.ChairNumber, chair?.RoomName, assistantId,
-                chair is { IsActive: true, Status: DentalChairStatus.Available } && !await IsBusy(dentist.UserId, ct)));
+            var assistantCount = claims.Count(x => x.DentistId == dentist.UserId);
+            options.Add(new(dentist.UserId, dentist.FullName, chair?.Id, chair?.ChairNumber, chair?.RoomName, assistantCount, true));
         }
         return Result<WorkspaceOptions>.Success(new(allChairs.Select(c => new WorkspaceChairOption(c.Id, c.ChairNumber, c.RoomName,
             (int)c.Status, c.IsActive, claims.FirstOrDefault(w => w.ChairId == c.Id)?.UserId)).ToArray(), options));
@@ -84,8 +83,7 @@ public sealed class StaffWorkspaceService(IStaffWorkspaceRepository workspaces, 
                     return Result<WorkspaceSnapshot>.Failure(Error.Validation);
                 if (workspace?.ChairId == request.ChairId && workspace?.DentistId == request.DentistId)
                     return Result<WorkspaceSnapshot>.Success(await SnapshotAsync(target, transactionCt));
-                var oldDentist = workspace?.ChairId.HasValue == true || targetRole == RoleCodes.Dentist ? targetId : workspace?.DentistId;
-                if (oldDentist.HasValue && await IsBusy(oldDentist.Value, transactionCt)) return Result<WorkspaceSnapshot>.Failure(Busy);
+                if (targetRole == RoleCodes.Dentist && await IsBusy(targetId, transactionCt)) return Result<WorkspaceSnapshot>.Failure(Busy);
 
                 if (request.ChairId.HasValue)
                 {
@@ -97,11 +95,6 @@ public sealed class StaffWorkspaceService(IStaffWorkspaceRepository workspaces, 
                 {
                     var dentist = await users.FindByIdAsync(request.DentistId.Value, transactionCt);
                     if (dentist is not { IsActive: true } || dentist.Role?.RoleCode != RoleCodes.Dentist) return Result<WorkspaceSnapshot>.Failure(InvalidTarget);
-                    if (await IsBusy(dentist.UserId, transactionCt)) return Result<WorkspaceSnapshot>.Failure(Busy);
-                    var dentistWorkspace = await workspaces.FindAsync(dentist.UserId, transactionCt);
-                    var chair = dentistWorkspace?.ChairId is int chairId ? await chairs.FindAsync(chairId, transactionCt) : null;
-                    if (chair is not { IsActive: true, Status: DentalChairStatus.Available } || await workspaces.DentistPairedAsync(dentist.UserId, targetId, transactionCt))
-                        return Result<WorkspaceSnapshot>.Failure(Unavailable);
                 }
                 var oldChair = workspace?.ChairId; var previousDentist = workspace?.DentistId;
                 if (workspace is null)
@@ -135,6 +128,6 @@ public sealed class StaffWorkspaceService(IStaffWorkspaceRepository workspaces, 
         return new(target.UserId, target.FullName, target.Role?.RoleCode ?? string.Empty, target.IsActive, workspace?.Version ?? 0,
             dentistId, dentist?.FullName, chair?.Id, chair?.ChairNumber, chair?.RoomName,
             target.IsActive && target.Role?.RoleCode is (RoleCodes.Dentist or RoleCodes.Assistant) &&
-            dentist is { IsActive: true } && dentist.Role?.RoleCode == RoleCodes.Dentist && chair is { IsActive: true, Status: DentalChairStatus.Available }, !busy);
+            dentist is { IsActive: true } && dentist.Role?.RoleCode == RoleCodes.Dentist && chair is { IsActive: true, Status: DentalChairStatus.Available }, !isDentist || !busy);
     }
 }

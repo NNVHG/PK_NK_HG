@@ -99,23 +99,28 @@ public sealed class StaffWorkspaceTests
         Assert.Equal(StaffWorkspaceService.Busy,(await Service().ChangeAsync(5,RoleCodes.Dentist,5,new(2,null,1,true))).Error);
         Assert.False((await Service().GetAsync(5,RoleCodes.Dentist,5)).Value!.CanChange); Assert.Empty(audit.ReceivedCalls());
     }
-    [Fact] public async Task AssistantCannotLeaveOrJoinBusyDentist()
+    [Fact] public async Task AssistantCanLeaveOrJoinBusyDentistWithoutMovingVisit()
     {
         visits.HasActiveVisitForDentistAsync(5,Arg.Any<CancellationToken>()).Returns(true);
-        Assert.Equal(StaffWorkspaceService.Busy,(await Service().ChangeAsync(6,RoleCodes.Assistant,6,new(null,null,1,true))).Error);
-        Assert.Equal(StaffWorkspaceService.Busy,(await Service().ChangeAsync(8,RoleCodes.Assistant,8,new(null,5,0,true))).Error);
+        Assert.True((await Service().GetAsync(6,RoleCodes.Assistant,6)).Value!.CanChange);
+        Assert.True((await Service().ChangeAsync(6,RoleCodes.Assistant,6,new(null,null,1,true))).IsSuccess);
+        Assert.True((await Service().ChangeAsync(8,RoleCodes.Assistant,8,new(null,5,0,true))).IsSuccess);
+        Assert.Equal(1,assignments[5].ChairId);
     }
-    [Fact] public async Task OnlyOneAssistantCanChooseSameDentist()
+    [Fact] public async Task MultipleAssistantsCanChooseSameDentist()
     {
-        workspaces.DentistPairedAsync(5,8,Arg.Any<CancellationToken>()).Returns(true);
-        Assert.Equal(StaffWorkspaceService.Unavailable,(await Service().ChangeAsync(8,RoleCodes.Assistant,8,new(null,5,0,true))).Error);
+        Assert.True((await Service().ChangeAsync(8,RoleCodes.Assistant,8,new(null,5,0,true))).IsSuccess);
+        Assert.Equal(5,assignments[6].DentistId);
+        Assert.Equal(5,assignments[8].DentistId);
+        var options=(await Service().GetOptionsAsync(8,RoleCodes.Assistant)).Value!;
+        Assert.Equal(2,options.Dentists.Single(x=>x.DentistId==5).AssistantCount);
     }
-    [Fact] public async Task AssistantRequiresActiveDentistWithAvailableChair()
+    [Fact] public async Task AssistantRequiresActiveDentistButCanLinkBeforeRoomSelection()
     {
-        Assert.Equal(StaffWorkspaceService.Unavailable,(await Service().ChangeAsync(8,RoleCodes.Assistant,8,new(null,7,0,true))).Error);
-        staff[5].IsActive=false; Assert.Equal(StaffWorkspaceService.InvalidTarget,(await Service().ChangeAsync(8,RoleCodes.Assistant,8,new(null,5,0,true))).Error);
+        Assert.True((await Service().ChangeAsync(8,RoleCodes.Assistant,8,new(null,7,0,true))).IsSuccess);
+        staff[5].IsActive=false; Assert.Equal(StaffWorkspaceService.InvalidTarget,(await Service().ChangeAsync(8,RoleCodes.Assistant,8,new(null,5,1,true))).Error);
         staff[5].IsActive=true; locations[1].Status=DentalChairStatus.Maintenance;
-        Assert.Equal(StaffWorkspaceService.Unavailable,(await Service().ChangeAsync(8,RoleCodes.Assistant,8,new(null,5,0,true))).Error);
+        Assert.True((await Service().ChangeAsync(8,RoleCodes.Assistant,8,new(null,5,1,true))).IsSuccess);
     }
     [Fact] public async Task DentistCannotUseAssistantLink()
         => Assert.Equal(Error.Validation,(await Service().ChangeAsync(5,RoleCodes.Dentist,5,new(null,7,1,true))).Error);
@@ -160,8 +165,8 @@ public sealed class StaffWorkspaceTests
     [Fact] public async Task OptionsExposeActualChairAndPairClaimsWithoutClinicalData()
     {
         var result=(await Service().GetOptionsAsync(6,RoleCodes.Assistant)).Value!;
-        var dentist=result.Dentists.Single(x=>x.DentistId==5); Assert.Equal("Phòng 3",dentist.RoomName); Assert.Equal(6,dentist.AssistantId);
-        Assert.Equal(5,result.Chairs.Single(x=>x.Id==1).ClaimedByUserId); Assert.False(result.Dentists.Single(x=>x.DentistId==7).IsReady);
+        var dentist=result.Dentists.Single(x=>x.DentistId==5); Assert.Equal("Phòng 3",dentist.RoomName); Assert.Equal(1,dentist.AssistantCount);
+        Assert.Equal(5,result.Chairs.Single(x=>x.Id==1).ClaimedByUserId); Assert.True(result.Dentists.Single(x=>x.DentistId==7).IsReady);
     }
     [Theory] [InlineData(0,null,1,true)] [InlineData(null,0,1,true)] [InlineData(1,5,1,true)] [InlineData(1,null,-1,true)] [InlineData(1,null,1,false)]
     public async Task ValidatorRejectsInvalidRequests(int? chair,int? dentist,int version,bool confirmed)

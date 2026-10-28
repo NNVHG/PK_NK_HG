@@ -12,8 +12,8 @@ const assistant = { ...dentist, userId: 6, fullName: 'Synthetic assistant', role
 const choices = { chairs: [
   { id: 1, chairNumber: 'GHE-01', roomName: 'Phòng 3', status: 1, isActive: true, claimedByUserId: 5 },
   { id: 2, chairNumber: 'GHE-02', roomName: 'Phòng 4', status: 1, isActive: true, claimedByUserId: null }],
-  dentists: [{ dentistId: 5, dentistName: 'Synthetic dentist', chairId: 1, chairNumber: 'GHE-01', roomName: 'Phòng 3', assistantId: 6, isReady: true },
-    { dentistId: 7, dentistName: 'Synthetic dentist2', chairId: 2, chairNumber: 'GHE-02', roomName: 'Phòng 4', assistantId: null, isReady: true }] };
+  dentists: [{ dentistId: 5, dentistName: 'Synthetic dentist', chairId: 1, chairNumber: 'GHE-01', roomName: 'Phòng 3', assistantCount: 1, isReady: true },
+    { dentistId: 7, dentistName: 'Synthetic dentist2', chairId: 2, chairNumber: 'GHE-02', roomName: 'Phòng 4', assistantCount: 0, isReady: true }] };
 function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
 function fixture({ role = 'DENTIST', snapshot, options = choices, fail = false, result, read, readFailureAfter = Infinity } = {}) {
   let mount, cleanup, tick, cleared = false; const reads = [], writes = [], targets = [];
@@ -63,10 +63,14 @@ test('maintenance inactive unknown and claimed chairs cannot be submitted', asyn
   }
   const f = fixture(); await f.mount(); f.c.chairChoice.value = 99; f.c.confirmed.value = true; await f.c.save(); assert.equal(f.writes.length, 0);
 });
-test('unready or already paired dentist cannot be submitted', async () => {
-  for (const patch of [{ isReady: false }, { assistantId: 8 }]) {
-    const f = fixture({ role: 'ASSISTANT', options: { ...choices, dentists: [choices.dentists[0], { ...choices.dentists[1], ...patch }] } }); await f.mount(); f.c.dentistChoice.value = 7; f.c.confirmed.value = true; await f.c.save(); assert.equal(f.writes.length, 0);
-  }
+test('assistant can join a dentist who already has another assistant', async () => {
+  const f = fixture({ role: 'ASSISTANT', options: { ...choices, dentists: [{ ...choices.dentists[0], assistantCount: 2 }, choices.dentists[1]] } });
+  await f.mount(); f.c.dentistChoice.value = 5; f.c.confirmed.value = true; await f.c.save();
+  assert.deepEqual(f.writes[0], [6, { chairId: null, dentistId: 5, expectedVersion: 1, confirmed: true }]);
+});
+test('unready dentist cannot be submitted', async () => {
+  const f = fixture({ role: 'ASSISTANT', options: { ...choices, dentists: [choices.dentists[0], { ...choices.dentists[1], isReady: false }] } });
+  await f.mount(); f.c.dentistChoice.value = 7; f.c.confirmed.value = true; await f.c.save(); assert.equal(f.writes.length, 0);
 });
 test('explicit empty choice clears relation without copying a room', async () => {
   for (const role of ['DENTIST', 'ASSISTANT']) { const f = fixture({ role }); await f.mount(); f.c.chairChoice.value = 0; f.c.dentistChoice.value = 0; f.c.confirmed.value = true; await f.c.save(); assert.equal(f.writes[0][1].chairId, null); assert.equal(f.writes[0][1].dentistId, null); }

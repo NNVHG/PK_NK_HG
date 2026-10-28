@@ -18,4 +18,3 @@ public sealed class StaffWorkspaceConfiguration : IEntityTypeConfiguration<Staff
         b.HasOne<User>().WithMany().HasForeignKey(x => x.UpdatedByUserId).OnDelete(DeleteBehavior.Restrict);
     }
 }
-

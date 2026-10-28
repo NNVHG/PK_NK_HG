@@ -18,7 +18,7 @@
       <p v-if="store.snapshot.workingDentistId && store.snapshot.roleCode === 'ASSISTANT'">Nha sĩ làm cùng: {{ store.snapshot.dentistName }} · #{{ store.snapshot.workingDentistId }}</p>
       <p>Vị trí hiện tại: <strong>{{ store.snapshot.roomName || 'Chưa có phòng' }} · {{ store.snapshot.chairNumber || 'Chưa có ghế' }}</strong></p>
       <p v-if="store.snapshot.roleCode === 'ASSISTANT'">Phòng được lấy trực tiếp từ vị trí nha sĩ, cập nhật khi tải lại hoặc đồng bộ định kỳ. Phụ tá không chọn phòng riêng.</p>
-      <p v-if="!store.snapshot.canChange" role="alert">Nha sĩ đang có ca khám hoặc lời mời chưa xử lý. Hoàn tất bước hiện tại trước khi đổi vị trí/nhóm làm việc.</p>
+      <p v-if="!store.snapshot.canChange" role="alert">Nha sĩ đang có ca khám hoặc lời mời chưa xử lý. Hoàn tất bước hiện tại trước khi đổi vị trí.</p>
       <form @submit.prevent="save">
         <label v-if="store.snapshot.isActive && store.snapshot.roleCode === 'DENTIST'">Ghế/phòng làm việc
           <select v-model.number="chairChoice" :disabled="saving || loading || needsReview || !store.snapshot.canChange" @change="markDirty">
@@ -27,7 +27,7 @@
         </label>
         <label v-else-if="store.snapshot.isActive && store.snapshot.roleCode === 'ASSISTANT'">Nha sĩ làm cùng
           <select v-model.number="dentistChoice" :disabled="saving || loading || needsReview || !store.snapshot.canChange" @change="markDirty">
-            <option :value="0">Bỏ liên kết nha sĩ</option><option v-for="dentist in options?.dentists ?? []" :key="dentist.dentistId" :value="dentist.dentistId" :disabled="!dentist.isReady || (dentist.assistantId !== null && dentist.assistantId !== store.snapshot.userId)">{{ dentist.dentistName }} · {{ dentist.roomName || 'Chưa có phòng' }} · {{ dentist.chairNumber || 'Chưa có ghế' }}{{ !dentist.isReady ? ' · Chưa sẵn sàng' : '' }}{{ dentist.assistantId !== null && dentist.assistantId !== store.snapshot.userId ? ' · Đã có phụ tá' : '' }}</option>
+            <option :value="0">Bỏ liên kết nha sĩ</option><option v-for="dentist in options?.dentists ?? []" :key="dentist.dentistId" :value="dentist.dentistId" :disabled="!dentist.isReady">{{ dentist.dentistName }} · {{ dentist.roomName || 'Chưa có phòng' }} · {{ dentist.chairNumber || 'Chưa có ghế' }} · {{ dentist.assistantCount }} phụ tá{{ !dentist.isReady ? ' · Chưa sẵn sàng' : '' }}</option>
           </select>
         </label>
         <p v-else>Tài khoản đã khóa hoặc đã đổi vai trò. Admin chỉ có thể bỏ liên kết vị trí cũ trước khi gán người khác.</p>
@@ -84,7 +84,7 @@ async function save() {
     if (chairChoice.value) { const chair = options.value?.chairs.find(c => c.id === chairChoice.value); if (!chair || !chair.isActive || chair.status !== 1 || (chair.claimedByUserId !== null && chair.claimedByUserId !== snapshot.userId)) { error.value = 'Chọn ghế sẵn sàng chưa có nha sĩ khác sử dụng.'; return; } chairId = chairChoice.value; }
   } else if (snapshot.isActive && snapshot.roleCode === 'ASSISTANT') {
     if (!Number.isInteger(dentistChoice.value) || dentistChoice.value < 0) return;
-    if (dentistChoice.value) { const dentist = selectedDentist.value; if (!dentist || !dentist.isReady || (dentist.assistantId !== null && dentist.assistantId !== snapshot.userId)) { error.value = 'Chọn nha sĩ có vị trí sẵn sàng và chưa có phụ tá khác.'; return; } dentistId = dentistChoice.value; }
+    if (dentistChoice.value) { const dentist = selectedDentist.value; if (!dentist || !dentist.isReady) { error.value = 'Chọn nha sĩ đang hoạt động.'; return; } dentistId = dentistChoice.value; }
   } else if (auth.role !== 'ADMIN') return;
   const ticket = life, principal = auth.user?.userId; saving.value = true; error.value = ''; message.value = '';
   try {

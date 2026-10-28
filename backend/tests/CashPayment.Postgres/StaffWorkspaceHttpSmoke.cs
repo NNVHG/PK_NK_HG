@@ -64,17 +64,20 @@ internal static class StaffWorkspaceHttpSmoke
             await db.DentalChairs.AnyAsync(c=>c.Id==chair.Id && c.Status==DentalChairStatus.Available),"Workspace claim preserves Available until clinical Visit starts");
         authenticate(RoleCodes.Assistant,assistant.UserId);
         using(var r=await client.PutAsJsonAsync(endpoint+"/"+assistant.UserId,new ChangeWorkspaceRequest(chair.Id,null,0,true))) check(r.StatusCode==HttpStatusCode.BadRequest,"Assistant cannot independently select chair400");
-        using(var r=await client.PutAsJsonAsync(endpoint+"/"+assistant.UserId,new ChangeWorkspaceRequest(null,other.UserId,0,true))) check(r.StatusCode==HttpStatusCode.Conflict,"Assistant requires dentist with usable location409");
-        using(var r=await client.PutAsJsonAsync(endpoint+"/"+assistant.UserId,new ChangeWorkspaceRequest(null,doctor.UserId,0,true))) { var json=await r.Content.ReadFromJsonAsync<JsonElement>(); check(r.StatusCode==HttpStatusCode.OK && json.GetProperty("roomName").GetString()=="Phòng 3","Assistant selects dentist and immediately inherits room"); }
+        using(var r=await client.PutAsJsonAsync(endpoint+"/"+assistant.UserId,new ChangeWorkspaceRequest(null,other.UserId,0,true))) check(r.StatusCode==HttpStatusCode.OK,"Assistant may link before dentist selects a room200");
+        using(var r=await client.PutAsJsonAsync(endpoint+"/"+assistant.UserId,new ChangeWorkspaceRequest(null,doctor.UserId,1,true))) { var json=await r.Content.ReadFromJsonAsync<JsonElement>(); check(r.StatusCode==HttpStatusCode.OK && json.GetProperty("roomName").GetString()=="Phòng 3","Assistant selects dentist and immediately inherits room"); }
         check(await db.StaffWorkspaces.AnyAsync(w=>w.UserId==assistant.UserId && w.DentistId==doctor.UserId && w.ChairId==null),"Assistant persists only dentist link, never copied chair");
         authenticate(RoleCodes.Assistant,assistant2.UserId);
-        using(var r=await client.PutAsJsonAsync(endpoint+"/"+assistant2.UserId,new ChangeWorkspaceRequest(null,doctor.UserId,0,true))) check(r.StatusCode==HttpStatusCode.Conflict,"One dentist cannot have a second assistant409");
+        using(var r=await client.PutAsJsonAsync(endpoint+"/"+assistant2.UserId,new ChangeWorkspaceRequest(null,doctor.UserId,0,true))) check(r.StatusCode==HttpStatusCode.OK,"One dentist may have a second assistant200");
+        check(await db.StaffWorkspaces.CountAsync(w=>w.DentistId==doctor.UserId)==2 &&
+            await db.AuditLogs.CountAsync(a=>a.EntityType=="StaffWorkspace" && (a.EntityId==assistant.UserId || a.EntityId==assistant2.UserId))==3,
+            "Both assistant links persist with required audit");
         authenticate(RoleCodes.Dentist,other.UserId);
         using(var r=await client.PutAsJsonAsync(endpoint+"/"+other.UserId,new ChangeWorkspaceRequest(chair.Id,null,0,true))) check(r.StatusCode==HttpStatusCode.Conflict,"One chair cannot be claimed by another dentist409");
         authenticate(RoleCodes.Dentist,doctor.UserId);
         using(var r=await client.PutAsJsonAsync(endpoint+"/"+doctor.UserId,new ChangeWorkspaceRequest(second.Id,null,1,true))) check(r.StatusCode==HttpStatusCode.OK,"Dentist changes to new room200");
         authenticate(RoleCodes.Assistant,assistant.UserId);
-        using(var r=await client.GetAsync(endpoint+"/me")) { var json=await r.Content.ReadFromJsonAsync<JsonElement>(); check(json.GetProperty("roomName").GetString()=="Phòng 4" && json.GetProperty("chairId").GetInt32()==second.Id && json.GetProperty("version").GetInt32()==1,"Assistant follows moved dentist without rewriting own workspace/version"); }
+        using(var r=await client.GetAsync(endpoint+"/me")) { var json=await r.Content.ReadFromJsonAsync<JsonElement>(); check(json.GetProperty("roomName").GetString()=="Phòng 4" && json.GetProperty("chairId").GetInt32()==second.Id && json.GetProperty("version").GetInt32()==2,"Assistant follows moved dentist without rewriting own workspace/version"); }
         using(var r=await client.GetAsync(endpoint+"/options")) { var json=await r.Content.ReadFromJsonAsync<JsonElement>(); check(r.Headers.CacheControl?.NoStore==true && !json.ToString().Contains("password",StringComparison.OrdinalIgnoreCase) && !json.ToString().Contains("phone",StringComparison.OrdinalIgnoreCase),"Workspace options no-store and no contact/credential data"); }
         authenticate(RoleCodes.Admin,admin.UserId);
         using(var r=await client.GetAsync(endpoint+"/staff?page=0")) check(r.StatusCode==HttpStatusCode.BadRequest,"Admin staff query bounded400");
@@ -86,8 +89,10 @@ internal static class StaffWorkspaceHttpSmoke
         authenticate(RoleCodes.Dentist,doctor.UserId);
         using(var r=await client.PutAsJsonAsync(endpoint+"/"+doctor.UserId,new ChangeWorkspaceRequest(chair.Id,null,2,true))) check(r.StatusCode==HttpStatusCode.Conflict,"Active clinical Visit blocks dentist moving409");
         authenticate(RoleCodes.Assistant,assistant.UserId);
-        using(var r=await client.GetAsync(endpoint+"/me")) { var json=await r.Content.ReadFromJsonAsync<JsonElement>(); check(!json.GetProperty("canChange").GetBoolean(),"Assistant sees busy team cannot change"); }
-        using(var r=await client.PutAsJsonAsync(endpoint+"/"+assistant.UserId,new ChangeWorkspaceRequest(null,null,1,true))) check(r.StatusCode==HttpStatusCode.Conflict,"Assistant cannot detach during active clinical Visit409");
+        using(var r=await client.GetAsync(endpoint+"/me")) { var json=await r.Content.ReadFromJsonAsync<JsonElement>(); check(json.GetProperty("canChange").GetBoolean(),"Assistant may change support link while dentist is busy"); }
+        using(var r=await client.PutAsJsonAsync(endpoint+"/"+assistant.UserId,new ChangeWorkspaceRequest(null,null,2,true))) check(r.StatusCode==HttpStatusCode.OK,"Assistant may detach during active clinical Visit200");
+        check(await db.Visits.AnyAsync(v=>v.VisitId==visit.VisitId && v.DentistId==doctor.UserId && v.Status==VisitStatuses.InProgress),
+            "Changing assistant link leaves active patient visit with dentist");
         authenticate(RoleCodes.Admin,admin.UserId);
         using(var r=await client.PutAsJsonAsync(endpoint+"/"+doctor.UserId,new ChangeWorkspaceRequest(null,null,2,true))) check(r.StatusCode==HttpStatusCode.Conflict,"Admin cannot bypass active Visit restriction409");
         var tracked=await db.Visits.SingleAsync(v=>v.VisitId==visit.VisitId); tracked.Status=VisitStatuses.Completed; tracked.EndedAt=DateTime.UtcNow; await db.SaveChangesAsync(); db.ChangeTracker.Clear();
@@ -114,7 +119,7 @@ internal static class StaffWorkspaceHttpSmoke
             check(threw && await db.StaffWorkspaces.AsNoTracking().AnyAsync(w=>w.UserId==faultDoctor.UserId && w.ChairId==faultChair.Id && w.Version==1) &&
                 await db.AuditLogs.CountAsync(a=>a.EntityType=="StaffWorkspace" && a.EntityId==faultDoctor.UserId)==1,"Existing workspace audit failure preserves prior claim/version/audit");
         }
-        // Two dentists claiming one free chair commit once.
+        // Hai nha sĩ tranh cùng một ghế: chỉ một giao dịch được ghi.
         var left=await Staff(RoleCodes.Dentist); var right=await Staff(RoleCodes.Dentist); var shared=await Chair("Shared");
         var raceOptions=new DbContextOptionsBuilder<DentalDbContext>(options).AddInterceptors(new Rendezvous()).Options;
         async Task<Result<WorkspaceSnapshot>> Claim(User user,int chairId)
@@ -128,13 +133,22 @@ internal static class StaffWorkspaceHttpSmoke
         outcomes=await Task.WhenAll(Claim(sameDoctor,firstChoice.Id),Claim(sameDoctor,secondChoice.Id));
         check(outcomes.Count(r=>r.IsSuccess)==1 && outcomes.Count(r=>r.Error.Code=="MST_061")==1,"Two initial choices for same user resolve primary-key race to409");
         check(await db.StaffWorkspaces.CountAsync(w=>w.UserId==sameDoctor.UserId)==1 && await db.AuditLogs.CountAsync(a=>a.EntityType=="StaffWorkspace" && a.EntityId==sameDoctor.UserId)==1,"Initial workspace race creates one row and one audit");
-        // Two assistants pairing to one dentist commit once.
+        // Hai phụ tá có thể cùng liên kết với một nha sĩ khi thao tác đồng thời.
         var a1=await Staff(RoleCodes.Assistant); var a2=await Staff(RoleCodes.Assistant);
         raceOptions=new DbContextOptionsBuilder<DentalDbContext>(options).AddInterceptors(new Rendezvous()).Options;
         async Task<Result<WorkspaceSnapshot>> Pair(User user)
         { await using var context=new DentalDbContext(raceOptions); return await Service(context).ChangeAsync(user.UserId,RoleCodes.Assistant,user.UserId,new(null,winner.UserId,0,true)); }
         outcomes=await Task.WhenAll(Pair(a1),Pair(a2));
-        check(outcomes.Count(r=>r.IsSuccess)==1 && outcomes.Count(r=>r.Error.Code=="MST_061")==1 && await db.StaffWorkspaces.CountAsync(w=>w.DentistId==winner.UserId)==1,"Concurrent assistant pair enforces one-to-one");
+        check(outcomes.Count(r=>r.IsSuccess)>=1 && outcomes.All(r=>r.IsSuccess || r.Error.Code=="MST_061"),
+            "Concurrent assistant links commit or return a retryable serialization conflict");
+        if(outcomes.Count(r=>r.IsSuccess)==1)
+        {
+            raceOptions=options;
+            check((await Pair(outcomes[0].IsSuccess ? a2 : a1)).IsSuccess,"Conflicted assistant can retry after reloading");
+        }
+        check(await db.StaffWorkspaces.CountAsync(w=>w.DentistId==winner.UserId)==2 &&
+            await db.AuditLogs.CountAsync(a=>a.EntityType=="StaffWorkspace" && (a.EntityId==a1.UserId || a.EntityId==a2.UserId))==2,
+            "Both assistant links persist with required audit after contention");
         // Claim versus maintenance has a read/write cycle and must not leave an unusable assigned chair.
         var racingDoctor=await Staff(RoleCodes.Dentist); var racingChair=await Chair("Maintenance race");
         raceOptions=new DbContextOptionsBuilder<DentalDbContext>(options).AddInterceptors(new Rendezvous()).Options;
