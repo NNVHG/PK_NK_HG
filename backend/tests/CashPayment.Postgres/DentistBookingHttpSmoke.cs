@@ -74,13 +74,18 @@ internal static class DentistBookingHttpSmoke
             check(audit.UserId == actorId && audit.Detail!.Contains("DentistId") && !audit.Detail.Contains(request.Notes!), "Counter booking actor/assignment audit has no medical text");
         }
         var conflict = request with { PatientId = patients[1].PatientId };
-        foreach (var actorRole in new[] { RoleCodes.Receptionist, RoleCodes.Patient })
+        authenticate(RoleCodes.Receptionist);
+        using (var response = await client.PostAsJsonAsync("/api/appointments", conflict))
         {
-            if (actorRole == RoleCodes.Patient) authenticateActor(actorRole, conflictOwner.UserId);
-            else authenticate(actorRole);
-            using var response = await client.PostAsJsonAsync("/api/appointments", conflict);
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            check(response.StatusCode == HttpStatusCode.BadRequest && json.RootElement.GetProperty("message").GetString()!.Contains("Bác sĩ đã có lịch"), $"Booking dentist conflict {actorRole} 400");
+            check(response.StatusCode == HttpStatusCode.BadRequest && json.RootElement.GetProperty("message").GetString()!.Contains("Bác sĩ đã có lịch"), "Counter booking dentist conflict 400");
+        }
+        authenticateActor(RoleCodes.Patient, conflictOwner.UserId);
+        using (var response = await client.PostAsJsonAsync("/api/appointments", conflict))
+        {
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            check(response.StatusCode == HttpStatusCode.BadRequest && json.RootElement.GetProperty("message").GetString()!.Contains("không chọn nha sĩ"), "Patient booking cannot assign dentist 400");
+            check(!await db.Appointments.AnyAsync(a => a.PatientId == conflict.PatientId && a.AppointmentDate == target), "Rejected patient dentist assignment creates no appointment");
         }
         authenticate(RoleCodes.Receptionist);
         foreach (var bad in new[] { conflict with { DentistId = 0 }, conflict with { DentistId = -1 }, conflict with { DentistId = int.MaxValue }, conflict with { DentistId = inactive.UserId }, conflict with { DentistId = actorId }, conflict with { SlotTime = new(9, 5) } })

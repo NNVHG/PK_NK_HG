@@ -31,8 +31,8 @@ public sealed class DentistBookingTests
     private CreateAppointmentRequest Request(int? dentist = 31) => new(9, clock.Today.AddDays(1), new(9, 0), dentist, "Synthetic notes");
     private Task<Result<AppointmentResponse>> Create(CreateAppointmentRequest? request = null, string? role = RoleCodes.Receptionist)
         => Service().CreateAppointmentAsync(10, role, request ?? Request(), null);
-    [Theory] [InlineData(RoleCodes.Admin)] [InlineData(RoleCodes.Receptionist)] [InlineData(RoleCodes.Patient)]
-    public async Task SupportedActorsBookActiveDentist(string role)
+    [Theory] [InlineData(RoleCodes.Admin)] [InlineData(RoleCodes.Receptionist)]
+    public async Task StaffActorsBookActiveDentist(string role)
     {
         var result = await Create(role: role); Assert.True(result.IsSuccess); Assert.Equal(31, result.Value!.DentistId);
         await appointments.Received(1).GetDentistBookingConflictAsync(31, Request().AppointmentDate, Request().SlotTime, 0, Arg.Any<CancellationToken>(), durationMinutes: 30);
@@ -98,10 +98,23 @@ public sealed class DentistBookingTests
         Assert.True((await Create(Request(null))).IsSuccess); Assert.Empty(users.ReceivedCalls());
         await appointments.DidNotReceive().HasDentistBookingAsync(Arg.Any<int>(), Arg.Any<DateOnly>(), Arg.Any<TimeOnly>(), Arg.Any<int>(), Arg.Any<CancellationToken>(), durationMinutes: 30);
     }
-    [Fact] public async Task PatientCannotBookUnownedProfileEvenWithValidDentist()
+    [Fact] public async Task PatientCannotSelectDentistAndDoesNotStartTransaction()
+    {
+        var result = await Create(role: RoleCodes.Patient);
+        Assert.Equal(Error.Validation.Code, result.Error.Code);
+        Assert.Contains("không chọn nha sĩ", result.Error.Message);
+        Assert.Empty(uow.ReceivedCalls()); Assert.Empty(patients.ReceivedCalls()); Assert.Empty(audit.ReceivedCalls());
+    }
+    [Fact] public async Task PatientCanBookOwnProfileWithoutSelectingDentist()
+    {
+        var result = await Create(Request(null), RoleCodes.Patient);
+        Assert.True(result.IsSuccess); Assert.Null(result.Value!.DentistId);
+        Assert.Empty(users.ReceivedCalls());
+    }
+    [Fact] public async Task PatientCannotBookUnownedProfileWithoutSelectingDentist()
     {
         patients.GetByIdAsync(9, Arg.Any<CancellationToken>()).Returns(new Patient { PatientId = 9, UserId = 11, IsActive = true });
-        Assert.Equal(Error.NotFound, (await Create(role: RoleCodes.Patient)).Error); Assert.Empty(audit.ReceivedCalls());
+        Assert.Equal(Error.NotFound, (await Create(Request(null), RoleCodes.Patient)).Error); Assert.Empty(audit.ReceivedCalls());
     }
     [Fact] public async Task SerializableConflictHasBusinessResponse()
     {
