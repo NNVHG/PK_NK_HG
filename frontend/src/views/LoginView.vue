@@ -85,7 +85,7 @@ const router = useRouter();
 const route = useRoute();
 
 const loginMode = ref<'cccd' | 'passport'>('cccd');
-const nationalityCode = ref('VN');
+const nationalityCode = ref('');
 const phone = ref('');
 const password = ref('');
 const errorMessage = ref('');
@@ -96,6 +96,10 @@ const registrationNotice = computed(() => route.query.registered === '1'
 
 async function handleSubmit() {
   errorMessage.value = '';
+  if (loginMode.value === 'passport' && !/^[A-Za-z]{2,3}$/.test(nationalityCode.value.trim())) {
+    errorMessage.value = 'Nhập mã quốc gia cấp hộ chiếu gồm 2–3 chữ cái.';
+    return;
+  }
   loading.value = true;
   try {
     const docType = loginMode.value === 'passport' ? 2 : (phone.value.length === 12 ? 1 : null);
@@ -110,7 +114,7 @@ async function handleSubmit() {
       stageActivationPrefill({
         identifier: phone.value,
         documentType: loginMode.value,
-        nationalityCode: loginMode.value === 'passport' ? nationalityCode.value.trim().toUpperCase() : 'VN'
+        nationalityCode: loginMode.value === 'passport' ? nationalityCode.value.trim().toUpperCase() : ''
       });
       router.push('/activate-account');
       return;
