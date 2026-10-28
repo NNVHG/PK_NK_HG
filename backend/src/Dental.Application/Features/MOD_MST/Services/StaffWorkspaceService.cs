@@ -52,8 +52,9 @@ public sealed class StaffWorkspaceService(IStaffWorkspaceRepository workspaces, 
         {
             var workspace = claims.FirstOrDefault(x => x.UserId == dentist.UserId);
             var chair = allChairs.FirstOrDefault(x => x.Id == workspace?.ChairId);
+            var assistantId = claims.FirstOrDefault(x => x.DentistId == dentist.UserId)?.UserId;
             var assistantCount = claims.Count(x => x.DentistId == dentist.UserId);
-            options.Add(new(dentist.UserId, dentist.FullName, chair?.Id, chair?.ChairNumber, chair?.RoomName, assistantCount, true));
+            options.Add(new(dentist.UserId, dentist.FullName, chair?.Id, chair?.ChairNumber, chair?.RoomName, assistantId, true, assistantCount));
         }
         return Result<WorkspaceOptions>.Success(new(allChairs.Select(c => new WorkspaceChairOption(c.Id, c.ChairNumber, c.RoomName,
             (int)c.Status, c.IsActive, claims.FirstOrDefault(w => w.ChairId == c.Id)?.UserId)).ToArray(), options));

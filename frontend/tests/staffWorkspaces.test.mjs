@@ -12,8 +12,8 @@ const assistant = { ...dentist, userId: 6, fullName: 'Synthetic assistant', role
 const choices = { chairs: [
   { id: 1, chairNumber: 'GHE-01', roomName: 'Phòng 3', status: 1, isActive: true, claimedByUserId: 5 },
   { id: 2, chairNumber: 'GHE-02', roomName: 'Phòng 4', status: 1, isActive: true, claimedByUserId: null }],
-  dentists: [{ dentistId: 5, dentistName: 'Synthetic dentist', chairId: 1, chairNumber: 'GHE-01', roomName: 'Phòng 3', assistantCount: 1, isReady: true },
-    { dentistId: 7, dentistName: 'Synthetic dentist2', chairId: 2, chairNumber: 'GHE-02', roomName: 'Phòng 4', assistantCount: 0, isReady: true }] };
+  dentists: [{ dentistId: 5, dentistName: 'Synthetic dentist', chairId: 1, chairNumber: 'GHE-01', roomName: 'Phòng 3', assistantId: 6, assistantCount: 1, isReady: true },
+    { dentistId: 7, dentistName: 'Synthetic dentist2', chairId: 2, chairNumber: 'GHE-02', roomName: 'Phòng 4', assistantId: null, assistantCount: 0, isReady: true }] };
 function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
 function fixture({ role = 'DENTIST', snapshot, options = choices, fail = false, result, read, readFailureAfter = Infinity } = {}) {
   let mount, cleanup, tick, cleared = false; const reads = [], writes = [], targets = [];

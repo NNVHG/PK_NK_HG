@@ -114,6 +114,7 @@ public sealed class StaffWorkspaceTests
         Assert.Equal(5,assignments[8].DentistId);
         var options=(await Service().GetOptionsAsync(8,RoleCodes.Assistant)).Value!;
         Assert.Equal(2,options.Dentists.Single(x=>x.DentistId==5).AssistantCount);
+        Assert.True(new[] { 6, 8 }.Contains(options.Dentists.Single(x=>x.DentistId==5).AssistantId.GetValueOrDefault()));
     }
     [Fact] public async Task AssistantRequiresActiveDentistButCanLinkBeforeRoomSelection()
     {

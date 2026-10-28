@@ -2,7 +2,7 @@ import { apiClient } from '@/services/api';
 import type { PagedResult } from '@/services/patients';
 export interface WorkspaceSnapshot { userId: number; fullName: string; roleCode: string; isActive: boolean; version: number; workingDentistId: number | null; dentistName: string | null; chairId: number | null; chairNumber: string | null; roomName: string | null; isLocationUsable: boolean; canChange: boolean; }
 export interface WorkspaceChair { id: number; chairNumber: string; roomName: string; status: number; isActive: boolean; claimedByUserId: number | null; }
-export interface WorkspaceDentist { dentistId: number; dentistName: string; chairId: number | null; chairNumber: string | null; roomName: string | null; assistantCount: number; isReady: boolean; }
+export interface WorkspaceDentist { dentistId: number; dentistName: string; chairId: number | null; chairNumber: string | null; roomName: string | null; assistantId: number | null; assistantCount: number; isReady: boolean; }
 export interface WorkspaceOptions { chairs: WorkspaceChair[]; dentists: WorkspaceDentist[]; }
 export interface WorkspaceTarget { userId: number; fullName: string; roleCode: string; isActive: boolean; }
 export interface ChangeWorkspace { chairId: number | null; dentistId: number | null; expectedVersion: number; confirmed: boolean; }

@@ -78,7 +78,12 @@ internal static class StaffWorkspaceHttpSmoke
         using(var r=await client.PutAsJsonAsync(endpoint+"/"+doctor.UserId,new ChangeWorkspaceRequest(second.Id,null,1,true))) check(r.StatusCode==HttpStatusCode.OK,"Dentist changes to new room200");
         authenticate(RoleCodes.Assistant,assistant.UserId);
         using(var r=await client.GetAsync(endpoint+"/me")) { var json=await r.Content.ReadFromJsonAsync<JsonElement>(); check(json.GetProperty("roomName").GetString()=="Phòng 4" && json.GetProperty("chairId").GetInt32()==second.Id && json.GetProperty("version").GetInt32()==2,"Assistant follows moved dentist without rewriting own workspace/version"); }
-        using(var r=await client.GetAsync(endpoint+"/options")) { var json=await r.Content.ReadFromJsonAsync<JsonElement>(); check(r.Headers.CacheControl?.NoStore==true && !json.ToString().Contains("password",StringComparison.OrdinalIgnoreCase) && !json.ToString().Contains("phone",StringComparison.OrdinalIgnoreCase),"Workspace options no-store and no contact/credential data"); }
+        using(var r=await client.GetAsync(endpoint+"/options")) { var json=await r.Content.ReadFromJsonAsync<JsonElement>();
+            var doctorOption=json.GetProperty("dentists").EnumerateArray().Single(d=>d.GetProperty("dentistId").GetInt32()==doctor.UserId);
+            check(r.Headers.CacheControl?.NoStore==true && !json.ToString().Contains("password",StringComparison.OrdinalIgnoreCase) && !json.ToString().Contains("phone",StringComparison.OrdinalIgnoreCase),"Workspace options no-store and no contact/credential data");
+            check(doctorOption.GetProperty("assistantCount").GetInt32()==2 &&
+                (doctorOption.GetProperty("assistantId").GetInt32()==assistant.UserId || doctorOption.GetProperty("assistantId").GetInt32()==assistant2.UserId),
+                "Workspace options keep legacy assistantId and report both assistants"); }
         authenticate(RoleCodes.Admin,admin.UserId);
         using(var r=await client.GetAsync(endpoint+"/staff?page=0")) check(r.StatusCode==HttpStatusCode.BadRequest,"Admin staff query bounded400");
         using(var r=await client.GetAsync(endpoint+"/staff")) { var json=await r.Content.ReadFromJsonAsync<JsonElement>(); check(r.StatusCode==HttpStatusCode.OK && r.Headers.CacheControl?.NoStore==true && json.GetProperty("items").EnumerateArray().All(x=>x.EnumerateObject().Count()==4),"Admin staff lookup uses minimal four-field DTO/no-store"); }
