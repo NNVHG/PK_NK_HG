@@ -37,8 +37,10 @@ public sealed class KeyedIdentityHasher : IKeyedIdentityHasher
         var cleanedId = identifier?.Trim() ?? string.Empty;
         if (documentType == IdentityDocumentType.Passport)
         {
-            var country = string.IsNullOrWhiteSpace(nationalityCode) ? IdentityDocumentConstants.DefaultCountryCode : nationalityCode.Trim().ToUpperInvariant();
-            return $"PASSPORT:{country}:{cleanedId.ToUpperInvariant()}";
+            var country = nationalityCode?.Trim();
+            if (!ValidPassportCountry(country))
+                throw new ArgumentException("Mã quốc gia cấp hộ chiếu phải gồm 2–3 chữ cái.", nameof(nationalityCode));
+            return $"PASSPORT:{country!.ToUpperInvariant()}:{cleanedId.ToUpperInvariant()}";
         }
 
         return $"CCCD:{cleanedId}";
@@ -70,6 +72,8 @@ public sealed class KeyedIdentityHasher : IKeyedIdentityHasher
     {
         if (string.IsNullOrWhiteSpace(storedHash) || storedHash.Length != 64)
             return false;
+        if (documentType == IdentityDocumentType.Passport && !ValidPassportCountry(nationalityCode?.Trim()))
+            return false;
 
         var storedBytes = Encoding.ASCII.GetBytes(storedHash.ToUpperInvariant());
 
@@ -88,4 +92,7 @@ public sealed class KeyedIdentityHasher : IKeyedIdentityHasher
 
         return false;
     }
+
+    private static bool ValidPassportCountry(string? country) =>
+        country is { Length: 2 or 3 } && country.All(char.IsAsciiLetter);
 }
