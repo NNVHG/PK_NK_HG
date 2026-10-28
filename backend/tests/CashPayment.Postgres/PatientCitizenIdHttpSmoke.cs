@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using Dental.Application.Features.MOD_PAT;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
+using Dental.Domain.Enums;
 using Dental.Infrastructure.Data;
 using Dental.Infrastructure.Repositories;
 using Dental.Infrastructure.Services;
@@ -39,6 +40,9 @@ internal static class PatientCitizenIdHttpSmoke
   { var text = await r.Content.ReadAsStringAsync(); var status = await r.Content.ReadFromJsonAsync<CitizenIdStatus>(); check(r.StatusCode == HttpStatusCode.OK && status!.Masked == "987******098" && status.Version == 1 && !text.Contains(body.CitizenId) && !text.Contains(CitizenIdIdentity.Hash(body.CitizenId)), "Cashier saves identity with masked-only response200"); }
   var stored = await db.Patients.AsNoTracking().SingleAsync(p => p.PatientId == patient.PatientId);
   check(stored.CitizenIdHash == identityHasher.Hash(body.CitizenId) && stored.CitizenIdHash.Length == 64, "Only keyed HMAC and masked identity persisted");
+  check(stored.DocumentType == IdentityDocumentType.CitizenId && stored.IssuingCountryCode is null &&
+   stored.HashScheme == IdentityHashScheme.HmacCanonical && stored.IdentityKeyVersion == IdentityDocumentConstants.CurrentHmacKeyVersion,
+   "Manual CCCD write records verified document and HMAC version");
   check(await db.AuditLogs.AnyAsync(a => a.EntityId == patient.PatientId && a.Action == "MOD_PAT_CITIZEN_ID_UPDATED") &&
    await db.AuditLogs.AllAsync(a => a.Detail == null || !a.Detail.Contains(body.CitizenId) && !a.Detail.Contains(stored.CitizenIdHash!)), "Atomic audit contains no identity or hash");
   using (var r = await client.PutAsJsonAsync(path, body)) check(r.StatusCode == HttpStatusCode.Conflict, "Lost response replay fails version guard409");

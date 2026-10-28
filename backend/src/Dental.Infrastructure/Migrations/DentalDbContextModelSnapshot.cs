@@ -1486,6 +1486,9 @@ namespace Dental.Infrastructure.Migrations
                     b.Property<DateOnly>("DateOfBirth")
                         .HasColumnType("date");
 
+                    b.Property<int?>("DocumentType")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Email")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -1499,10 +1502,20 @@ namespace Dental.Infrastructure.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
 
+                    b.Property<int?>("HashScheme")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("IdentityKeyVersion")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(true);
+
+                    b.Property<string>("IssuingCountryCode")
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
 
                     b.Property<int>("PatientNumber")
                         .ValueGeneratedOnAdd()

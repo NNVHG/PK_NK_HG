@@ -6,6 +6,7 @@ using Dental.Application.Features.Patients.DTOs;
 using Dental.Application.Interfaces;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
+using Dental.Domain.Enums;
 using Dental.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -266,6 +267,10 @@ public sealed class PatientGuardianRepository(DentalDbContext db, IPasswordHashe
             ward.Phone = phoneToUse;
             ward.CitizenIdHash = citizenIdHash;
             ward.CitizenIdMasked = identityHasher.Mask(request.RawCitizenId);
+            ward.DocumentType = IdentityDocumentType.CitizenId;
+            ward.IssuingCountryCode = null;
+            ward.HashScheme = IdentityHashScheme.HmacCanonical;
+            ward.IdentityKeyVersion = IdentityDocumentConstants.CurrentHmacKeyVersion;
             ward.CitizenIdVersion++;
             ward.UpdatedAt = DateTime.UtcNow;
 

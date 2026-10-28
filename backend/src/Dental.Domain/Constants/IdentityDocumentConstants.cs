@@ -10,4 +10,5 @@ public static class IdentityDocumentConstants
     public const string NationalityCodeRegex = @"^[A-Za-z]{2,3}$";
 
     public const string DefaultCountryCode = "VN";
+    public const int CurrentHmacKeyVersion = 1;
 }

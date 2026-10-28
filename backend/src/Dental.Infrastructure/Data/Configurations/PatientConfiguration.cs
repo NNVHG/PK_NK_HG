@@ -38,6 +38,7 @@ public sealed class PatientConfiguration : IEntityTypeConfiguration<Patient>
             .HasMaxLength(500);
         builder.Property(patient => patient.CitizenIdHash).HasMaxLength(64);
         builder.Property(patient => patient.CitizenIdMasked).HasMaxLength(20);
+        builder.Property(patient => patient.IssuingCountryCode).HasMaxLength(3);
         builder.Property(patient => patient.CitizenIdVersion).IsConcurrencyToken();
         builder.HasIndex(patient => patient.CitizenIdHash).IsUnique();
 

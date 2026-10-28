@@ -74,6 +74,10 @@ internal static class PassportCheckInHttpSmoke
                 "F_CHK_01 ticket response excludes raw passport");
         }
         var persistedBound = await db.Patients.AsNoTracking().SingleAsync(patient => patient.PatientId == bound.PatientId);
+        check(persistedBound.DocumentType == IdentityDocumentType.Passport && persistedBound.IssuingCountryCode == "US" &&
+            persistedBound.HashScheme == IdentityHashScheme.HmacCanonical &&
+            persistedBound.IdentityKeyVersion == IdentityDocumentConstants.CurrentHmacKeyVersion,
+            "Verified existing passport receives explicit identity metadata");
         var account = await db.Users.AsNoTracking().SingleAsync(user => user.UserId == persistedBound.UserId);
         check(account.RoleId == patientRole.RoleId && account.RequiresPhoneActivation && account.LoginByCitizenId &&
             BCrypt.Net.BCrypt.Verify(bound.Phone, account.PasswordHash), "Verified passport creates one pending personal Patient account");
@@ -87,6 +91,10 @@ internal static class PassportCheckInHttpSmoke
         check(persistedUnbound.CitizenIdHash == hasher.Hash("C9876543", IdentityDocumentType.Passport, "GB") &&
             persistedUnbound.CitizenIdMasked == "C9****43" && persistedUnbound.CitizenIdVersion == 1 &&
             persistedUnbound.UserId.HasValue, "F_PAT_01 stores country-bound HMAC and masked passport only");
+        check(persistedUnbound.DocumentType == IdentityDocumentType.Passport && persistedUnbound.IssuingCountryCode == "GB" &&
+            persistedUnbound.HashScheme == IdentityHashScheme.HmacCanonical &&
+            persistedUnbound.IdentityKeyVersion == IdentityDocumentConstants.CurrentHmacKeyVersion,
+            "Verified new passport stores issuing country and HMAC key version");
 
         var duplicate = new Patient
         {

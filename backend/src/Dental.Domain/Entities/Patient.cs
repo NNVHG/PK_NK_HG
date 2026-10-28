@@ -1,5 +1,6 @@
 using System.Globalization;
 using Dental.Domain.Common;
+using Dental.Domain.Enums;
 
 namespace Dental.Domain.Entities;
 
@@ -23,6 +24,10 @@ public sealed class Patient : BaseEntity
     public string? Address { get; set; }
     public string? CitizenIdHash { get; set; }
     public string? CitizenIdMasked { get; set; }
+    public IdentityDocumentType? DocumentType { get; set; }
+    public string? IssuingCountryCode { get; set; }
+    public IdentityHashScheme? HashScheme { get; set; }
+    public int? IdentityKeyVersion { get; set; }
     public int CitizenIdVersion { get; set; }
     public int? UserId { get; set; }
     public bool IsActive { get; set; } = true;
