@@ -22,10 +22,9 @@ function fixture({ role = 'RECEPTIONIST', queryPages = [page], deskPages = [page
       decodeCitizenQr: async raw => {
         if (rejectQr) throw new Error('Mã QR không hợp lệ.');
         const parts = raw.split('|');
-        return { citizenIdHash: 'HASH:' + parts[0], citizenIdMasked: parts[0].slice(0, 3) + '***', fullName: parts[2] || '', dateOfBirth: '1990-01-01', gender: 'Male', address: '' };
+        return { citizenId: parts[0], citizenIdMasked: parts[0].slice(0, 3) + '***', fullName: parts[2] || '', dateOfBirth: '1990-01-01', gender: 'Male', address: '' };
       },
-      hashCitizenId: async id => { calls.lookup.push(['hash', id]); return 'HASH:' + id; },
-      qrPatientIntakeService: { lookup: async hash => { calls.lookup.push(['lookup', hash]); return { existing: { patientId: 7, isActive: true } }; } }
+      qrPatientIntakeService: { lookup: async citizenId => { calls.lookup.push(['lookup', citizenId]); return { existing: { patientId: 7, isActive: true } }; } }
     },
     '@/services/checkInForm': { validateCheckIn: (id, phone, notes, documentType, nationalityCode) => { const e = {}; if (documentType === 'passport') { if (!/^[A-Za-z0-9]{6,12}$/.test(id.trim())) e.citizenId = 'Số hộ chiếu không hợp lệ.'; if (!/^[A-Za-z]{2,3}$/.test(nationalityCode.trim())) e.nationalityCode = 'Mã quốc gia cấp không hợp lệ.'; } else if (!/^\d{12}$/.test(id.trim())) e.citizenId = 'CCCD phải gồm 12 chữ số.'; if (!/^0\d{9}$/.test(phone.trim())) e.phone = 'Số điện thoại phải gồm 10 chữ số.'; if (notes.length > 500) e.notes = 'Ghi chú không được vượt quá 500 ký tự.'; return e; }, checkInProblem: problem => ({ fields: {}, message: problem?.message ?? 'Không thể tiếp đón.' }) },
     '@/services/appointments': { appointmentsService: {
@@ -59,12 +58,12 @@ test('F_CHK_01 searches name, phone and patient code with server pagination', as
   const f = fixture(); f.c.keyword.value = 'BN000007'; await f.c.searchPatients(2);
   assert.deepEqual(f.calls.search, [[{ keyword: 'BN000007', page: 2, pageSize: 20 }]]); assert.equal(f.c.searchNext.value, true);
 });
-test('F_CHK_01 hashes CCCD before server lookup and never queries with the raw identifier', async () => {
+test('F_CHK_01 sends CCCD only in authenticated lookup body, not search URL', async () => {
   const f = fixture(); f.c.keyword.value = '000000000901'; await f.c.searchPatients();
-  assert.deepEqual(f.calls.lookup, [['hash', '000000000901'], ['lookup', 'HASH:000000000901']]);
+  assert.deepEqual(f.calls.lookup, [['lookup', '000000000901']]);
   assert.equal(f.calls.patient[0], 7); assert.equal(f.calls.search.length, 0);
 });
-test('F_CHK_01 parses raw CCCD QR string, looks up hashed CCCD, selects patient and populates citizenId', async () => {
+test('F_CHK_01 parses QR locally, looks up CCCD, selects patient and populates citizenId', async () => {
   const f = fixture(); f.c.keyword.value = '000000000901||Nguyen Van A|01011990|Nam|Ha Noi|01012021'; await f.c.searchPatients();
   assert.equal(f.calls.patient[0], 7);
   assert.equal(f.c.citizenId.value, '000000000901');

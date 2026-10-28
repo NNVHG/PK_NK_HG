@@ -63,7 +63,7 @@ async function scan(value?:string) {
  const input=value??raw.value,ticket=++generation,owner=actor();stopCamera();clear();busy.value=true;
  try {
   const decoded=await decodeCitizenQr(input);if(!alive(ticket,owner))return;
-  const result=await qrPatientIntakeService.lookup(decoded.citizenIdHash);if(!alive(ticket,owner))return;
+  const result=await qrPatientIntakeService.lookup(decoded.citizenId);if(!alive(ticket,owner))return;
   if(!result || !('existing' in result) || result.existing===undefined)throw Error();
   if(result.existing) {const item=result.existing;if(!Number.isSafeInteger(item.patientId)||item.patientId<=0||!/^BN\d+$/.test(item.patientCode)||typeof item.fullName!=='string'||!/^\d{3}\*{6}\d{3}$/.test(item.masked)||typeof item.isActive!=='boolean')throw Error();existing.value=item;}
   else {identity.value=decoded;Object.assign(form,{fullName:decoded.fullName,dateOfBirth:decoded.dateOfBirth,gender:decoded.gender,address:decoded.address,phone:''});await nextTick();if(alive(ticket,owner))phoneInput.value?.focus();}

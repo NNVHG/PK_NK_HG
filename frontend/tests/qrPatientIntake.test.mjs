@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {createHash} from 'node:crypto';
 import {parse,compileScript} from '@vue/compiler-sfc';
 import ts from 'typescript';
 const transpile=s=>ts.transpileModule(s,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
@@ -10,11 +9,11 @@ const apiCalls=[],helperModule={exports:{}};
 new Function('require','module','exports',transpile(helper))(()=>({apiClient:{post:async(...a)=>{apiCalls.push(a);return{data:{existing:null}};}}}),helperModule,helperModule.exports);
 const {decodeCitizenQr,validQrBirthDate,qrPatientIntakeService}=helperModule.exports;
 const raw='987654311101||Synthetic QR Patient|29021992|Nam|Synthetic address|01012020';
-const decoded=()=>({citizenIdHash:'A'.repeat(64),citizenIdMasked:'987******101',fullName:'Synthetic',dateOfBirth:'1992-02-29',gender:'Male',address:'Synthetic address'});
-test('strict seven-field parser maps ISO/gender and hashes with existing uppercase SHA256',async()=>{const d=await decodeCitizenQr(raw);assert.equal(d.citizenIdHash,createHash('sha256').update('987654311101').digest('hex').toUpperCase());assert.equal(d.citizenIdMasked,'987******101');assert.equal(d.dateOfBirth,'1992-02-29');assert.equal(d.gender,'Male');assert.doesNotMatch(JSON.stringify(d),/987654311101|01012020/);});
+const decoded=()=>({citizenId:'987654311101',citizenIdMasked:'987******101',fullName:'Synthetic',dateOfBirth:'1992-02-29',gender:'Male',address:'Synthetic address'});
+test('strict seven-field parser keeps only CCCD needed for secured lookup',async()=>{const d=await decodeCitizenQr(raw);assert.equal(d.citizenId,'987654311101');assert.equal(d.citizenIdMasked,'987******101');assert.equal(d.dateOfBirth,'1992-02-29');assert.doesNotMatch(JSON.stringify(d),/01012020|987654311101\|/);});
 test('female and optional old ID/issue date accepted',async()=>{assert.equal((await decodeCitizenQr(raw.replace('|Nam|','|Nữ|').replace('||','|123456789|').replace('|01012020','|'))).gender,'Female');});
 for(const [label,value] of [['wrong field count',raw+'|x'],['raw ID only','987654311101'],['non-ASCII digits',raw.replace('987654311101','９８７６５４３１１１０１')],['bad old ID',raw.replace('||','|abc|')],['missing name',raw.replace('Synthetic QR Patient','')],['invalid leap day',raw.replace('29021992','29021991')],['future birth',raw.replace('29021992','01012999')],['invalid gender',raw.replace('|Nam|','|Other|')],['missing address',raw.replace('Synthetic address','')],['issue before birth',raw.replace('01012020','01011900')],['future issue',raw.replace('01012020','01012999')],['control character',raw+'\n'],['oversized','x'.repeat(1025)]])test('rejects '+label+' without leaking scanned input',async()=>{await assert.rejects(decodeCitizenQr(value),e=>e.message.includes('Mã QR không đúng')&&!e.message.includes('987654311101'));});
-test('lookup and create service whitelist hashed identity and never send raw scan',async()=>{apiCalls.length=0;await qrPatientIntakeService.lookup('A'.repeat(64));await qrPatientIntakeService.create(decoded(),{fullName:'Synthetic',phone:'0990011101'});assert.deepEqual(apiCalls[0],['/patients/check-cccd',{citizenIdHash:'A'.repeat(64)}]);assert.deepEqual(Object.keys(apiCalls[1][1]).sort(),['citizenIdHash','citizenIdMasked','confirmed','patient']);assert.doesNotMatch(JSON.stringify(apiCalls),/987654311101|01012020/);});
+test('lookup and create send CCCD only in authenticated request body, never QR text',async()=>{apiCalls.length=0;await qrPatientIntakeService.lookup('987654311101');await qrPatientIntakeService.create(decoded(),{fullName:'Synthetic',phone:'0990011101'});assert.deepEqual(apiCalls[0],['/patients/check-cccd',{citizenId:'987654311101'}]);assert.deepEqual(Object.keys(apiCalls[1][1]).sort(),['citizenId','confirmed','patient']);assert.equal(apiCalls[1][1].citizenId,'987654311101');assert.doesNotMatch(JSON.stringify(apiCalls),/01012020|987654311101\|/);assert.ok(apiCalls.every(([url])=>!url.includes('987654311101')));});
 const source=await readFile(new URL('../src/components/QrPatientIntake.vue',import.meta.url),'utf8');
 const compiled=transpile(compileScript(parse(source).descriptor,{id:'qr-intake'}).content);
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return{promise,resolve};};
@@ -42,7 +41,7 @@ test('camera delayed grant after close stops tracks and never renders a stream',
  try{const f=fixture();await f.c.toggle();const pending=f.c.startCamera();await Promise.resolve();await Promise.resolve();f.c.close();d.resolve({getTracks:()=>[{stop(){stopped++;}}]});await pending;assert.equal(stopped,1);assert.equal(f.c.cameraOn.value,false);}finally{delete globalThis.BarcodeDetector;if(saved)Object.defineProperty(globalThis,'navigator',saved);else delete globalThis.navigator;}
 });
 test('UI labels scan/password/manual phone and has no raw HTML, persistent storage, logs or external QR service',()=>{assert.match(source,/type="password" maxlength="1024"/);assert.match(source,/SĐT \(nhập tay\)/);assert.match(source,/Mở hồ sơ &amp; tiếp đón/);assert.doesNotMatch(source+helper,/v-html|localStorage|sessionStorage|console\.|https:\/\//);});
-test('native camera decoded frame closes stream and reuses hash-only lookup',async()=>{const saved=Object.getOwnPropertyDescriptor(globalThis,'navigator');let stopped=0;
+test('native camera decoded frame closes stream and reuses secured lookup',async()=>{const saved=Object.getOwnPropertyDescriptor(globalThis,'navigator');let stopped=0;
  globalThis.BarcodeDetector=class{static async getSupportedFormats(){return['qr_code'];}async detect(){return[{rawValue:raw}];}};
  Object.defineProperty(globalThis,'navigator',{configurable:true,value:{mediaDevices:{getUserMedia:async()=>({getTracks:()=>[{stop(){stopped++;}}]})}}});
  try{const f=fixture();await f.c.toggle();f.c.video.value={readyState:2,srcObject:null,play:async()=>{}};await f.c.startCamera();for(let i=0;i<8;i++)await Promise.resolve();assert.equal(stopped,1);assert.equal(f.c.cameraOn.value,false);assert.equal(f.c.identity.value.citizenIdMasked,'987******101');assert.equal(f.calls.filter(c=>c[0]==='lookup').length,1);f.cleanup();}

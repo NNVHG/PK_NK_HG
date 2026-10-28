@@ -184,7 +184,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import axios from 'axios';
 import { useAuthStore } from '@/stores/auth';
-import { decodeCitizenQr, hashCitizenId, qrPatientIntakeService } from '@/services/qrPatientIntake';
+import { decodeCitizenQr, qrPatientIntakeService } from '@/services/qrPatientIntake';
 import { validateCheckIn, checkInProblem, type CheckInErrors } from '@/services/checkInForm';
 import { appointmentsService, type AppointmentResponse } from '@/services/appointments';
 import { patientsService, type PatientSummary } from '@/services/patients';
@@ -286,9 +286,9 @@ async function searchPatients(page = 1) {
   searching.value = true;
   try {
     if (value.includes('|')) {
-      let hash: string;
+      let scannedCitizenId: string;
       try {
-        hash = (await decodeCitizenQr(value)).citizenIdHash;
+        scannedCitizenId = (await decodeCitizenQr(value)).citizenId;
       } catch {
         if (sequence === searchSequence && !disposed) {
           searchError.value = 'Mã QR CCCD không hợp lệ. Vui lòng quét lại hoặc nhập CCCD 12 chữ số.';
@@ -296,7 +296,7 @@ async function searchPatients(page = 1) {
         return;
       }
       if (sequence !== searchSequence || disposed) return;
-      const lookup = await qrPatientIntakeService.lookup(hash);
+      const lookup = await qrPatientIntakeService.lookup(scannedCitizenId);
       if (sequence !== searchSequence || disposed) return;
       const patient = lookup.existing?.isActive ? await patientsService.getById(lookup.existing.patientId) : null;
       if (sequence !== searchSequence || disposed) return;
@@ -317,9 +317,7 @@ async function searchPatients(page = 1) {
       }
     }
     if (/^[0-9]{12}$/.test(value)) {
-      const hash = await hashCitizenId(value);
-      if (sequence !== searchSequence || disposed) return;
-      const lookup = await qrPatientIntakeService.lookup(hash);
+      const lookup = await qrPatientIntakeService.lookup(value);
       if (sequence !== searchSequence || disposed) return;
       const patient = lookup.existing?.isActive ? await patientsService.getById(lookup.existing.patientId) : null;
       if (sequence !== searchSequence || disposed) return;
@@ -471,14 +469,11 @@ async function processQrString(raw: string) {
   qrMessage.value = '';
   try {
     let id12 = '';
-    let hash = '';
     if (value.includes('|')) {
       const decoded = await decodeCitizenQr(value);
-      id12 = value.split('|')[0].trim();
-      hash = decoded.citizenIdHash;
+      id12 = decoded.citizenId;
     } else if (/^[0-9]{12}$/.test(value)) {
       id12 = value;
-      hash = await hashCitizenId(value);
     } else {
       qrError.value = 'Mã không đúng định dạng QR CCCD gắn chip hoặc 12 số CCCD.';
       return;
@@ -489,7 +484,7 @@ async function processQrString(raw: string) {
     citizenId.value = id12;
 
     if (!selectedPatient.value) {
-      const lookup = await qrPatientIntakeService.lookup(hash);
+      const lookup = await qrPatientIntakeService.lookup(id12);
       const patient = lookup.existing?.isActive ? await patientsService.getById(lookup.existing.patientId) : null;
       if (patient) {
         await selectPatient(patient);
