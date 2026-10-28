@@ -3,7 +3,14 @@
     <h1>Hóa đơn của tôi</h1>
     <button :disabled="profilesBusy" @click="loadProfiles">Tải lại hồ sơ</button>
     <p v-if="profileError" role="alert">{{ profileError }}</p>
-    <p v-if="validProfile">Hồ sơ của tôi: {{ profiles[0].fullName }} · {{ birth(profiles[0].dateOfBirth) }} · {{ profiles[0].patientCode }}{{ profiles[0].isActive ? '' : ' · Đã ngừng hoạt động' }}</p>
+    <label v-if="profiles.length > 1">Chọn hồ sơ để xem hóa đơn
+      <select v-model.number="patientId" :disabled="profilesBusy || invoicesBusy" @change="selectProfile">
+        <option v-for="profile in profiles" :key="profile.patientId" :value="profile.patientId">
+          {{ profile.fullName }} · {{ profile.patientCode }}
+        </option>
+      </select>
+    </label>
+    <p v-if="validProfile && selectedProfile">Hồ sơ đã chọn: {{ selectedProfile.fullName }} · {{ birth(selectedProfile.dateOfBirth) }} · {{ selectedProfile.patientCode }}{{ selectedProfile.isActive ? '' : ' · Đã ngừng hoạt động' }}</p>
     <p v-if="!profilesBusy && !profileError && !profiles.length">Tài khoản chưa có hồ sơ bệnh nhân.</p>
     <form @submit.prevent="searchInvoices">
       <label>Trạng thái
@@ -81,7 +88,8 @@ const auth = useAuthStore();
 const allowed = computed(() => auth.role === 'PATIENT');
 const profiles = ref<PortalInvoiceProfile[]>([]);
 const patientId = ref(0), profilesBusy = ref(false), profileError = ref('');
-const validProfile = computed(() => allowed.value && profiles.value.length === 1 && Number.isInteger(patientId.value) && patientId.value > 0 && profiles.value[0].patientId === patientId.value);
+const selectedProfile = computed(() => profiles.value.find(p => p.patientId === patientId.value));
+const validProfile = computed(() => allowed.value && Number.isInteger(patientId.value) && patientId.value > 0 && !!selectedProfile.value);
 const invoices = ref<InvoiceLookupResponse[]>([]), invoicePage = ref(1), invoicePages = ref(0), invoiceTotal = ref(0);
 const invoicesBusy = ref(false), invoicesLoaded = ref(false), invoiceError = ref('');
 const status = ref(''), fromDate = ref(''), toDate = ref('');
@@ -99,6 +107,7 @@ function clearItems() { itemVersion++; items.value = []; itemsBusy.value = false
 function clearPayments() { clearItems(); paymentVersion++; selected.value = null; payments.value = []; paymentsBusy.value = false; paymentsLoaded.value = false; paymentTotal.value = 0; paymentPages.value = 0; paymentPage.value = 1; paymentError.value = ''; }
 function clearInvoices() { invoiceVersion++; invoices.value = []; invoicesBusy.value = false; invoicesLoaded.value = false; invoiceTotal.value = 0; invoicePages.value = 0; invoicePage.value = 1; invoiceError.value = ''; clearPayments(); }
 function clearFilters() { status.value = ''; fromDate.value = ''; toDate.value = ''; applied.value = {}; }
+function selectProfile() { clearFilters(); clearInvoices(); }
 function validDate(value: string) {
   if (!value) return true;
   if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value) || value < '0001-01-01') return false;
@@ -128,8 +137,9 @@ async function loadProfiles() { clearFilters();
   try {
     const rows = await invoicePortalApi.profiles();
     if (ticket === profileVersion && allowed.value) {
-      if (rows.length > 1) profileError.value = 'Tài khoản không gắn duy nhất một hồ sơ. Vui lòng liên hệ lễ tân.';
-      else if (rows.length === 1) {
+      if (rows.length > 0 && new Set(rows.map(p => p.patientId)).size !== rows.length)
+        profileError.value = 'Danh sách hồ sơ không hợp lệ. Vui lòng tải lại.';
+      else if (rows.length > 0) {
         profiles.value = rows.map(p => ({ patientId: p.patientId, patientCode: p.patientCode, fullName: p.fullName, dateOfBirth: p.dateOfBirth, isActive: p.isActive }));
         patientId.value = rows[0].patientId;
       }

@@ -33,10 +33,24 @@ test('mount loads only the account profile; financial list is scoped when reques
   const f = fixture(); await f.mount(); assert.equal(f.calls.profiles, 1); assert.equal(f.calls.lists.length, 0); assert.equal(f.c.patientId.value, 1);
   assert.equal(f.c.profiles.value[0].phone, undefined); await f.choose(1); assert.deepEqual(f.calls.lists[0], [1, 1, {}]);
 });
-test('patient billing page shows one own profile without a profile selector', async () => {
+test('patient billing page offers profile selection for active guardian wards', async () => {
   const source = await readFile(new URL('../src/views/PatientInvoicesView.vue', import.meta.url), 'utf8');
-  assert.doesNotMatch(source, /<select[^>]*patientId|Chọn hồ sơ|gia đình/i);
-  assert.match(source, /Hồ sơ của tôi/);
+  assert.match(source, /Chọn hồ sơ để xem hóa đơn/);
+  assert.match(source, /v-model\.number="patientId"/);
+});
+test('guardian selection scopes reads and clears financial data on profile switch', async () => {
+  const f = fixture();
+  f.profilesPending(Promise.resolve([
+    { patientId: 1, fullName: 'Synthetic owner', patientCode: 'BN000001', dateOfBirth: '2000-01-02', isActive: true },
+    { patientId: 2, fullName: 'Synthetic ward', patientCode: 'BN000002', dateOfBirth: '2019-01-02', isActive: true }
+  ]));
+  await f.mount();
+  await f.choose(1); await f.c.selectInvoice(10);
+  f.c.patientId.value = 2; f.c.selectProfile();
+  assert.equal(f.c.selected.value, null);
+  assert.deepEqual(f.c.payments.value, []);
+  await f.c.loadInvoices(1);
+  assert.deepEqual(f.calls.lists.at(-1), [2, 1, {}]);
 });
 test('unknown or missing profile never sends a broad query', async () => {
   const f = fixture(); await f.mount(); await f.choose(0); await f.choose(999); assert.equal(f.calls.lists.length, 0);

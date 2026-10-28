@@ -14,7 +14,13 @@ public sealed class InvoicePortalRepository(DentalDbContext db) : IInvoicePortal
             .OrderByDescending(p => p.IsActive).ThenBy(p => p.PatientNumber).ThenBy(p => p.PatientId)
             .Select(p => new { p.PatientId, p.PatientNumber, p.FullName, p.DateOfBirth, p.IsActive }).Take(2).ToListAsync(ct);
         if (rows.Count != 1) return [];
-        return rows.Select(p => new InvoicePortalProfileResponse(p.PatientId,
+        var wards = await db.PatientGuardians.AsNoTracking()
+            .Where(g => g.IsActive && g.GuardianPatient!.UserId == userId && g.WardPatient!.IsActive)
+            .OrderBy(g => g.WardPatient!.PatientNumber).ThenBy(g => g.WardPatientId)
+            .Select(g => new { g.WardPatient!.PatientId, g.WardPatient.PatientNumber,
+                g.WardPatient.FullName, g.WardPatient.DateOfBirth, g.WardPatient.IsActive })
+            .ToListAsync(ct);
+        return rows.Concat(wards).Select(p => new InvoicePortalProfileResponse(p.PatientId,
             "BN" + p.PatientNumber.ToString("D6", CultureInfo.InvariantCulture), p.FullName, p.DateOfBirth, p.IsActive)).ToList();
     }
     public async Task<bool> OwnsPatientAsync(int patientId, int userId, CancellationToken ct = default)
