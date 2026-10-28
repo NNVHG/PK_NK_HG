@@ -67,6 +67,27 @@ public sealed class IdentityAndLockoutSecurityTests
         Assert.False(_identityHasher.Matches(legacySha256, "079090000002", IdentityDocumentType.CitizenId));
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("V")]
+    [InlineData("VN1")]
+    [InlineData("VNMN")]
+    public void KeyedHasher_PassportRequiresValidIssuingCountry(string? country)
+    {
+        var passportHash = _identityHasher.Hash("B1234567", IdentityDocumentType.Passport, "VN");
+        Assert.Throws<ArgumentException>(() => _identityHasher.Hash("B1234567", IdentityDocumentType.Passport, country));
+        Assert.False(_identityHasher.Matches(passportHash, "B1234567", IdentityDocumentType.Passport, country));
+    }
+
+    [Fact]
+    public void KeyedHasher_NormalizesPassportCountryWithoutImplicitDefault()
+    {
+        var expected = _identityHasher.Hash("B1234567", IdentityDocumentType.Passport, "VN");
+        Assert.Equal(expected, _identityHasher.Hash("b1234567", IdentityDocumentType.Passport, " vn "));
+        Assert.False(_identityHasher.Matches(expected, "B1234567", IdentityDocumentType.Passport));
+    }
+
     [Fact]
     public void KeyedHasher_RequiresConfiguredSecret()
     {
