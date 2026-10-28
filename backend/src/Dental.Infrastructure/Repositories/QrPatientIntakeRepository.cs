@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
 namespace Dental.Infrastructure.Repositories;
-public sealed class QrPatientIntakeRepository(DentalDbContext db, VietnamClock clock) : IQrPatientIntakeRepository
+public sealed class QrPatientIntakeRepository(DentalDbContext db, VietnamClock clock, IKeyedIdentityHasher identityHasher) : IQrPatientIntakeRepository
 {
     private Task<bool> Allowed(int actorId, string role, CancellationToken ct) =>
         role is RoleCodes.Admin or RoleCodes.Receptionist
@@ -22,8 +22,9 @@ public sealed class QrPatientIntakeRepository(DentalDbContext db, VietnamClock c
     {
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
         if (!await Allowed(actorId, role, ct)) return Result<QrIdentityLookupResult>.Failure(Error.Forbidden);
-        var hash = request.CitizenIdHash.ToUpperInvariant();
-        var patient = await db.Patients.AsNoTracking().SingleOrDefaultAsync(p => p.CitizenIdHash == hash, ct);
+        var hash = identityHasher.Hash(request.CitizenId);
+        var legacyHash = CitizenIdIdentity.Hash(request.CitizenId);
+        var patient = await db.Patients.AsNoTracking().SingleOrDefaultAsync(p => p.CitizenIdHash == hash || p.CitizenIdHash == legacyHash, ct);
         var existing = patient is null ? null : new QrExistingPatient(patient.PatientId, patient.PatientCode, patient.FullName, patient.CitizenIdMasked, patient.IsActive);
         await tx.CommitAsync(ct);
         return Result<QrIdentityLookupResult>.Success(new(existing));
@@ -35,9 +36,10 @@ public sealed class QrPatientIntakeRepository(DentalDbContext db, VietnamClock c
         try
         {
             if (!await Allowed(actorId, role, ct)) return Result<PatientResponse>.Failure(Error.Forbidden);
-            var hash = request.CitizenIdHash.ToUpperInvariant();
+            var hash = identityHasher.Hash(request.CitizenId);
+            var legacyHash = CitizenIdIdentity.Hash(request.CitizenId);
             // Includes archived profiles: a shared phone confirmation never overrides identity uniqueness.
-            if (await db.Patients.AnyAsync(p => p.CitizenIdHash == hash, ct))
+            if (await db.Patients.AnyAsync(p => p.CitizenIdHash == hash || p.CitizenIdHash == legacyHash, ct))
                 return Result<PatientResponse>.Failure(new("PAT_QR_EXISTS", "CCCD đã có hồ sơ. Quét lại để mở hồ sơ cũ; không tạo mới."));
             var input = request.Patient;
             if (!input.ConfirmNotDuplicate)
@@ -47,7 +49,7 @@ public sealed class QrPatientIntakeRepository(DentalDbContext db, VietnamClock c
             }
             var patient = new Patient { FullName = input.FullName.Trim(), DateOfBirth = input.DateOfBirth, Gender = input.Gender,
                 Phone = input.Phone, Email = input.Email?.Trim(), Address = input.Address?.Trim(), IsActive = true, CreatedAt = clock.UtcNow,
-                CitizenIdHash = hash, CitizenIdMasked = request.CitizenIdMasked, CitizenIdVersion = 1 };
+                CitizenIdHash = hash, CitizenIdMasked = identityHasher.Mask(request.CitizenId), CitizenIdVersion = 1 };
             db.Patients.Add(patient);
             await db.SaveChangesAsync(ct);
             // No raw QR, hash, identity fragments or demographic data in audit metadata.

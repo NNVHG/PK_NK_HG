@@ -1,6 +1,6 @@
 import { apiClient } from '@/services/api';
 import type { PatientDetails, PatientPayload } from './patients';
-export interface ScannedIdentity { citizenIdHash: string; citizenIdMasked: string; fullName: string; dateOfBirth: string; gender: 'Male' | 'Female'; address: string }
+export interface ScannedIdentity { citizenId: string; citizenIdMasked: string; fullName: string; dateOfBirth: string; gender: 'Male' | 'Female'; address: string }
 export interface QrExistingPatient { patientId: number; patientCode: string; fullName: string; masked: string; isActive: boolean }
 const invalid = () => Error('Mã QR không đúng định dạng CCCD gắn chip. Vui lòng quét lại hoặc nhập tay.');
 function isoDate(value: string): string {
@@ -28,18 +28,11 @@ export async function decodeCitizenQr(raw: string): Promise<ScannedIdentity> {
  const dateOfBirth=isoDate(birth), today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Ho_Chi_Minh'});
  if (!validQrBirthDate(dateOfBirth)) throw invalid();
  if (issued && (isoDate(issued)<dateOfBirth || isoDate(issued)>today)) throw invalid();
- const citizenIdHash=await hashCitizenId(id);
- return { citizenIdHash,citizenIdMasked:id.slice(0,3)+'******'+id.slice(-3),fullName:name,dateOfBirth,gender:gender==='Nam'?'Male':'Female',address };
-}
-export async function hashCitizenId(id: string): Promise<string> {
- if (id.length !== 12 || !/^[0-9]{12}$/.test(id)) throw Error('CCCD phải gồm 12 chữ số.');
- if (!globalThis.crypto?.subtle) throw Error('Trình duyệt cần HTTPS hoặc localhost để bảo vệ CCCD.');
- const digest=await globalThis.crypto.subtle.digest('SHA-256',new TextEncoder().encode(id));
- return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('').toUpperCase();
+ return { citizenId:id,citizenIdMasked:id.slice(0,3)+'******'+id.slice(-3),fullName:name,dateOfBirth,gender:gender==='Nam'?'Male':'Female',address };
 }
 export const qrPatientIntakeService={
- async lookup(citizenIdHash: string): Promise<{existing:QrExistingPatient|null}> { return (await apiClient.post('/patients/check-cccd',{citizenIdHash})).data; },
+ async lookup(citizenId: string): Promise<{existing:QrExistingPatient|null}> { return (await apiClient.post('/patients/check-cccd',{citizenId})).data; },
  async create(identity:ScannedIdentity,patient:PatientPayload): Promise<PatientDetails> {
-  return (await apiClient.post('/patients/qr-intake',{citizenIdHash:identity.citizenIdHash,citizenIdMasked:identity.citizenIdMasked,patient,confirmed:true})).data;
+  return (await apiClient.post('/patients/qr-intake',{citizenId:identity.citizenId,patient,confirmed:true})).data;
  }
 };

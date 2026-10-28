@@ -7,20 +7,19 @@ using FluentValidation;
 
 namespace Dental.Application.Features.MOD_PAT;
 
-public sealed record QrIdentityLookupRequest(string CitizenIdHash);
+public sealed record QrIdentityLookupRequest(string CitizenId);
 public sealed record QrExistingPatient(int PatientId, string PatientCode, string FullName, string? Masked, bool IsActive);
 public sealed record QrIdentityLookupResult(QrExistingPatient? Existing);
-public sealed record QrPatientIntakeRequest(string CitizenIdHash, string CitizenIdMasked, CreatePatientRequest Patient, bool Confirmed);
+public sealed record QrPatientIntakeRequest(string CitizenId, CreatePatientRequest Patient, bool Confirmed);
 public sealed class QrIdentityLookupValidator : AbstractValidator<QrIdentityLookupRequest>
 {
-    public QrIdentityLookupValidator() => RuleFor(x => x.CitizenIdHash).NotEmpty().Length(64).Matches("^[A-Fa-f0-9]{64}$");
+    public QrIdentityLookupValidator() => RuleFor(x => x.CitizenId).NotEmpty().Length(12).Matches("^[0-9]{12}$");
 }
 public sealed class QrPatientIntakeValidator : AbstractValidator<QrPatientIntakeRequest>
 {
     public QrPatientIntakeValidator(VietnamClock clock)
     {
-        RuleFor(x => x.CitizenIdHash).NotEmpty().Length(64).Matches("^[A-Fa-f0-9]{64}$");
-        RuleFor(x => x.CitizenIdMasked).NotEmpty().Length(12).Matches(@"^[0-9]{3}\*{6}[0-9]{3}$");
+        RuleFor(x => x.CitizenId).NotEmpty().Length(12).Matches("^[0-9]{12}$");
         RuleFor(x => x.Confirmed).Equal(true);
         RuleFor(x => x.Patient).NotNull().SetValidator(new CreatePatientRequestValidator(clock));
         When(x => x.Patient is not null, () => RuleFor(x => x.Patient.Phone).NotEmpty().Length(10).Matches("^0[0-9]{9}$"));
