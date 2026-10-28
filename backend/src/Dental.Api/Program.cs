@@ -346,6 +346,9 @@ if (builder.Environment.IsDevelopment())
 // ===== Build =====
 var app = builder.Build();
 
+// Dừng trước migration/seed nếu khóa HMAC định danh chưa được cấu hình hợp lệ.
+app.Services.GetRequiredService<IKeyedIdentityHasher>();
+
 // ===== Middleware pipeline =====
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
