@@ -233,6 +233,35 @@ internal static class InvoicePortalHttpSmoke
         check(await repo.GetItemsAsync(archived.Id, inactive.PatientId, archivedOwner.UserId, 1, 20) is null, "Portal financial read rejects stale archived selector after owner change");
         await db.Patients.Where(p => p.PatientId == inactive.PatientId).ExecuteUpdateAsync(s => s.SetProperty(p => p.UserId, (int?)archivedOwner.UserId));
         check(await db.Patients.Where(p => p.PatientId == inactive.PatientId).AnyAsync(p => !p.IsActive), "Portal read never reactivates archived profile");
+        var ward = new Patient { FullName = "Synthetic guardian ward", Phone = sharedPhone,
+            DateOfBirth = new DateOnly(2018, 1, 1), IsActive = true };
+        db.Patients.Add(ward); await db.SaveChangesAsync();
+        var link = new PatientGuardian { GuardianPatientId = a.PatientId, WardPatientId = ward.PatientId,
+            Relationship = "Người giám hộ", IsActive = true, AssignedByUserId = actor, AssignedAt = DateTime.UtcNow };
+        var wardInvoice = Make("-W", ward, InvoiceStatus.PendingPayment);
+        db.PatientGuardians.Add(link); db.Invoices.Add(wardInvoice); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
+        invoiceCount++;
+        authenticateActor(RoleCodes.Patient, owner.UserId);
+        using (var r = await client.GetAsync("/api/portal/invoices/profiles"))
+        {
+            var rows = (await r.Content.ReadFromJsonAsync<List<InvoicePortalProfileResponse>>())!;
+            check(r.StatusCode == HttpStatusCode.OK && r.Headers.CacheControl?.NoStore == true &&
+                rows.Select(p => p.PatientId).SequenceEqual(new[] { a.PatientId, ward.PatientId }),
+                "Portal profile selector includes owned profile and active ward only");
+        }
+        using (var r = await client.GetAsync(List(ward.PatientId)))
+        { var page = await r.Content.ReadFromJsonAsync<PagedResult<InvoiceLookupResponse>>();
+            check(r.StatusCode == HttpStatusCode.OK && page?.Items.Single().InvoiceId == wardInvoice.Id,
+                "Guardian may read ward invoice through scoped portal API"); }
+        authenticateActor(RoleCodes.Patient, other.UserId);
+        using (var r = await client.GetAsync(List(ward.PatientId))) check(r.StatusCode == HttpStatusCode.Forbidden,"Unrelated patient cannot read ward invoice403");
+        await db.PatientGuardians.Where(g => g.PatientGuardianId == link.PatientGuardianId)
+            .ExecuteUpdateAsync(s => s.SetProperty(g => g.IsActive, false).SetProperty(g => g.RevokedAt, DateTime.UtcNow));
+        authenticateActor(RoleCodes.Patient, owner.UserId);
+        using (var r = await client.GetAsync(List(ward.PatientId))) check(r.StatusCode == HttpStatusCode.Forbidden,"Revoked guardian loses ward invoice access on next request403");
+        using (var r = await client.GetAsync("/api/portal/invoices/profiles"))
+        { var rows = await r.Content.ReadFromJsonAsync<List<InvoicePortalProfileResponse>>();
+            check(rows?.Count == 1 && rows[0].PatientId == a.PatientId,"Revoked ward disappears from portal profile selector"); }
         check(await db.AuditLogs.CountAsync() == audits && await db.PaymentTransactions.CountAsync() == transactions &&
             await db.Invoices.CountAsync() == invoiceCount, "Portal reads never mutate financial records or audit");
         await InvoicePortalFilterHttpSmoke.RunAsync(client, options, actor, filterOwner.UserId, filterOther.UserId, emptyOwner.UserId, authenticateActor, check);
