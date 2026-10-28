@@ -1,6 +1,6 @@
 <template>
   <div class="layout">
-    <header v-if="authStore.isAuthenticated && !isTvRoute" class="navbar" :class="isPatient ? 'navbar-patient' : 'navbar-staff'">
+    <header v-if="authStore.isAuthenticated && isPortalRoute" class="navbar" :class="isPatient ? 'navbar-patient' : 'navbar-staff'">
       <div class="brand">
         <router-link :to="isPatient ? '/patient/my-record' : '/management/dashboard'" class="brand-link">
           <img src="/logo-icon-nen-toi.svg" alt="Nha Khoa Hoàng Gia" class="brand-logo" width="28" height="28" />
@@ -10,36 +10,36 @@
         <span v-else class="area-tag staff-tag">Khu Quản Lý</span>
       </div>
       <nav class="nav-links" aria-label="Điều hướng chính">
-        <router-link to="/dashboard">Bảng điều khiển</router-link>
-        <router-link v-if="['ADMIN','RECEPTIONIST'].includes(authStore.role)" to="/appointments/requests">Yêu cầu đặt lịch</router-link>
+        <router-link :to="isPatient ? '/patient/dashboard' : '/management/dashboard'">Bảng điều khiển</router-link>
+        <router-link v-if="['ADMIN','RECEPTIONIST'].includes(authStore.role)" to="/management/appointments/requests">Yêu cầu đặt lịch</router-link>
         <router-link v-if="authStore.role === 'PATIENT'" to="/book-appointment">Gửi yêu cầu đặt lịch</router-link>
-        <router-link v-if="authStore.role === 'PATIENT'" to="/appointments">Đặt lịch khám</router-link>
-        <router-link v-if="['ADMIN', 'RECEPTIONIST'].includes(authStore.role ?? '')" to="/appointments/counter">Đặt lịch tại quầy</router-link>
-        <router-link v-if="authStore.role === 'PATIENT'" to="/my-record">Hồ sơ của tôi</router-link>
-        <router-link v-if="authStore.role === 'PATIENT'" to="/appointments/mine">Lịch hẹn của tôi</router-link>
-        <router-link v-if="authStore.role === 'PATIENT'" to="/invoices/mine">Hóa đơn của tôi</router-link>
-        <router-link v-if="['ADMIN', 'RECEPTIONIST'].includes(authStore.role ?? '')" to="/appointments/desk">Lịch hẹn tại quầy</router-link>
-        <router-link v-if="['ADMIN', 'RECEPTIONIST'].includes(authStore.role ?? '')" to="/invoices">Tra cứu hóa đơn</router-link>
+        <router-link v-if="authStore.role === 'PATIENT'" to="/patient/appointments">Đặt lịch khám</router-link>
+        <router-link v-if="['ADMIN', 'RECEPTIONIST'].includes(authStore.role ?? '')" to="/management/appointments/counter">Đặt lịch tại quầy</router-link>
+        <router-link v-if="authStore.role === 'PATIENT'" to="/patient/my-record">Hồ sơ của tôi</router-link>
+        <router-link v-if="authStore.role === 'PATIENT'" to="/patient/appointments/mine">Lịch hẹn của tôi</router-link>
+        <router-link v-if="authStore.role === 'PATIENT'" to="/patient/invoices/mine">Hóa đơn của tôi</router-link>
+        <router-link v-if="['ADMIN', 'RECEPTIONIST'].includes(authStore.role ?? '')" to="/management/appointments/desk">Lịch hẹn tại quầy</router-link>
+        <router-link v-if="['ADMIN', 'RECEPTIONIST'].includes(authStore.role ?? '')" to="/management/invoices">Tra cứu hóa đơn</router-link>
         <template v-if="isStaff">
-          <router-link to="/queue/today">Hàng đợi hôm nay</router-link>
-          <router-link to="/patients">Bệnh nhân</router-link>
+          <router-link to="/management/queue/today">Hàng đợi hôm nay</router-link>
+          <router-link to="/management/patients">Bệnh nhân</router-link>
         </template>
-        <router-link v-if="isAdmin" to="/admin/clinic-print-settings">Thông tin phòng khám trên bản in</router-link>
-        <router-link v-if="isAdmin" to="/admin/scheduling-settings">Giờ làm việc & khung hẹn</router-link>
-        <router-link v-if="isAdmin" to="/admin/staff">Tài khoản nhân viên</router-link>
-        <router-link v-if="isAdmin" to="/admin/reports/revenue">Báo cáo doanh thu</router-link>
-        <router-link v-if="isAdmin" to="/admin/role-permissions">Ma trận quyền</router-link>
-        <router-link v-if="['ADMIN', 'DENTIST', 'ASSISTANT'].includes(authStore.role)" to="/staff/workspace">Vị trí nha sĩ/phụ tá</router-link>
-        <router-link v-if="['ADMIN', 'ASSISTANT'].includes(authStore.role)" to="/staff/chair-status">Trạng thái ghế</router-link>
-        <router-link v-if="isAdmin" to="/admin/medicines">Danh mục thuốc</router-link>
-        <router-link v-if="isAdmin" to="/admin/medicine-stock">Nhập & tồn thuốc</router-link>
-        <router-link v-if="isAdmin" to="/admin/medical-supplies">Danh mục vật tư</router-link>
-        <router-link v-if="['ADMIN', 'ASSISTANT', 'DENTIST'].includes(authStore.role)" to="/inventory/receipts">Tồn kho & nhập kho</router-link>
-        <router-link v-if="['ADMIN', 'ASSISTANT'].includes(authStore.role)" to="/inventory/issues">Tiêu hao theo ca</router-link>
-        <router-link v-if="isAdmin" to="/admin/diagnoses">Danh mục chẩn đoán</router-link>
-        <router-link v-if="isAdmin" to="/admin/chairs">Phòng & ghế nha khoa</router-link>
-        <router-link v-if="isAdmin" to="/admin/services">Dịch vụ & bảng giá</router-link>
-        <router-link v-if="isAdmin" to="/admin/audit-logs">Nhật ký thao tác</router-link>
+        <router-link v-if="isAdmin" to="/management/admin/clinic-print-settings">Thông tin phòng khám trên bản in</router-link>
+        <router-link v-if="isAdmin" to="/management/admin/scheduling-settings">Giờ làm việc & khung hẹn</router-link>
+        <router-link v-if="isAdmin" to="/management/admin/staff">Tài khoản nhân viên</router-link>
+        <router-link v-if="isAdmin" to="/management/admin/reports/revenue">Báo cáo doanh thu</router-link>
+        <router-link v-if="isAdmin" to="/management/admin/role-permissions">Ma trận quyền</router-link>
+        <router-link v-if="['ADMIN', 'DENTIST', 'ASSISTANT'].includes(authStore.role)" to="/management/staff/workspace">Vị trí nha sĩ/phụ tá</router-link>
+        <router-link v-if="['ADMIN', 'ASSISTANT'].includes(authStore.role)" to="/management/staff/chair-status">Trạng thái ghế</router-link>
+        <router-link v-if="isAdmin" to="/management/admin/medicines">Danh mục thuốc</router-link>
+        <router-link v-if="isAdmin" to="/management/admin/medicine-stock">Nhập & tồn thuốc</router-link>
+        <router-link v-if="isAdmin" to="/management/admin/medical-supplies">Danh mục vật tư</router-link>
+        <router-link v-if="['ADMIN', 'ASSISTANT', 'DENTIST'].includes(authStore.role)" to="/management/inventory/receipts">Tồn kho & nhập kho</router-link>
+        <router-link v-if="['ADMIN', 'ASSISTANT'].includes(authStore.role)" to="/management/inventory/issues">Tiêu hao theo ca</router-link>
+        <router-link v-if="isAdmin" to="/management/admin/diagnoses">Danh mục chẩn đoán</router-link>
+        <router-link v-if="isAdmin" to="/management/admin/chairs">Phòng & ghế nha khoa</router-link>
+        <router-link v-if="isAdmin" to="/management/admin/services">Dịch vụ & bảng giá</router-link>
+        <router-link v-if="isAdmin" to="/management/admin/audit-logs">Nhật ký thao tác</router-link>
       </nav>
       <div class="user-menu">
         <span>{{ authStore.user?.fullName }} (<strong>{{ authStore.user?.roleName }}</strong>)</span>
@@ -68,10 +68,7 @@ const isStaff = computed(() => {
 });
 const isAdmin = computed(() => authStore.role === 'ADMIN');
 const isPatient = computed(() => authStore.role === 'PATIENT');
-const isTvRoute = computed(() => {
-  const path = route.path || '';
-  return path.startsWith('/queue/display') || path.startsWith('/queue/public-monitor');
-});
+const isPortalRoute = computed(() => route.path.startsWith('/patient/') || route.path.startsWith('/management/'));
 
 async function handleLogout() {
   await authStore.logout();

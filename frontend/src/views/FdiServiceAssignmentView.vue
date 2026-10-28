@@ -1,9 +1,9 @@
 <template>
   <main class="assignment-page">
-    <RouterLink :to="`/clinical/visits/${visitId}/fdi`">← Sơ đồ và tình trạng răng</RouterLink>
-    <p v-if="visit?.status === 'Correcting'">Đang đính chính hồ sơ ngoài ca khám. <RouterLink :to="`/clinical/visits/${visitId}/invoice-draft`">Trở lại để hoàn tất và khóa đính chính</RouterLink></p>
+    <RouterLink :to="`${portalPrefix}/clinical/visits/${visitId}/fdi`">← Sơ đồ và tình trạng răng</RouterLink>
+    <p v-if="visit?.status === 'Correcting'">Đang đính chính hồ sơ ngoài ca khám. <RouterLink :to="`${portalPrefix}/clinical/visits/${visitId}/invoice-draft`">Trở lại để hoàn tất và khóa đính chính</RouterLink></p>
     <h1>Chỉ định dịch vụ · Lần khám #{{ visitId }}</h1>
-    <RouterLink v-if="!busy && ['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(auth.role)" :to="`/clinical/visits/${visitId}/invoice-draft`">Hoàn tất khám / Xem hóa đơn nháp</RouterLink>
+    <RouterLink v-if="!busy && ['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(auth.role)" :to="`${portalPrefix}/clinical/visits/${visitId}/invoice-draft`">Hoàn tất khám / Xem hóa đơn nháp</RouterLink>
     <button type="button" :disabled="busy" @click="load">Tải lại hồ sơ</button>
     <p v-if="busy" role="status">Đang xử lý…</p>
     <p v-if="error" role="alert" class="error">{{ error }}</p>
@@ -93,6 +93,7 @@ import { useVisitServicesStore } from '@/stores/visitServices';
 
 const route = useRoute();
 const auth = useAuthStore();
+const portalPrefix = computed(() => auth.role === 'PATIENT' ? '/patient' : '/management');
 const store = useVisitServicesStore();
 const { rows } = storeToRefs(store);
 const visitId = computed(() => Number(route.params.visitId));

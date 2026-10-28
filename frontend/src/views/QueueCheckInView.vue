@@ -37,7 +37,7 @@
         <span>Trang {{ waitingPage }} · {{ waitingTotal }} lượt</span>
         <button class="secondary" :disabled="waitingLoading || !waitingNext" @click="loadWaiting(waitingPage + 1)">Sau</button>
       </nav>
-      <RouterLink to="/queue/today">Mở hàng đợi để gọi số</RouterLink>
+      <RouterLink to="/management/queue/today">Mở hàng đợi để gọi số</RouterLink>
     </section>
 
     <section class="card">
@@ -71,7 +71,7 @@
           <span v-if="selectedPatient?.patientId === patient.patientId">Đã chọn</span>
         </button>
       </div>
-      <p v-else-if="searched && !searching && !searchError" class="hint">Không tìm thấy hồ sơ phù hợp. <RouterLink to="/patients">Mở hồ sơ bệnh nhân để đối soát hoặc tạo mới</RouterLink>.</p>
+      <p v-else-if="searched && !searching && !searchError" class="hint">Không tìm thấy hồ sơ phù hợp. <RouterLink to="/management/patients">Mở hồ sơ bệnh nhân để đối soát hoặc tạo mới</RouterLink>.</p>
       <nav v-if="searched && !searchError" class="pagination" aria-label="Phân trang kết quả tìm">
         <button class="secondary" :disabled="searching || searchPage <= 1" @click="searchPatients(searchPage - 1)">Trước</button>
         <span>Trang {{ searchPage }} · {{ searchTotal }} hồ sơ</span>

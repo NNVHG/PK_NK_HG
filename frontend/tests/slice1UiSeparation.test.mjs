@@ -197,7 +197,7 @@ test('navigation guard isolates Patient and Staff zones for all 5 roles', async 
   );
 });
 
-test('App.vue layout renders area tags, zone-specific branding and hides nav on TV monitor routes', async () => {
+test('App.vue layout renders portal navigation only inside the matching patient or staff zone', async () => {
   const appSrc = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8');
   const { descriptor } = parse(appSrc);
   const css = descriptor.styles.map(s => s.content).join('\n');
@@ -209,11 +209,14 @@ test('App.vue layout renders area tags, zone-specific branding and hides nav on 
   // Navbar zone classes
   assert.match(descriptor.template.content, /:class="isPatient \? 'navbar-patient' : 'navbar-staff'"/);
 
-  // TV route suppression
-  assert.match(descriptor.template.content, /v-if="authStore\.isAuthenticated && !isTvRoute"/);
+  // Public pages and TV routes do not inherit an authenticated portal menu.
+  assert.match(descriptor.template.content, /v-if="authStore\.isAuthenticated && isPortalRoute"/);
+  assert.match(descriptor.scriptSetup.content, /route\.path\.startsWith\('\/patient\/'\) \|\| route\.path\.startsWith\('\/management\/'\)/);
 
   // Brand link destinations
   assert.match(descriptor.template.content, /:to="isPatient \? '\/patient\/my-record' : '\/management\/dashboard'"/);
+  assert.match(descriptor.template.content, /to="\/patient\/appointments"/);
+  assert.match(descriptor.template.content, /to="\/management\/queue\/today"/);
 
   // CSS contains area tags and borders
   assert.match(css, /\.navbar-patient\s*\{[^}]*border-bottom:\s*3px solid/s);

@@ -8,7 +8,7 @@
           <p class="code">Mã BN: {{ ward.wardPatientCode }}</p>
           <p>Quan hệ: <strong>{{ ward.relationship }}</strong> | Ngày sinh: {{ ward.dateOfBirth }}</p>
         </div>
-        <RouterLink class="action-btn" :to="{ name: 'patient-detail', params: { id: ward.wardPatientId } }">
+        <RouterLink class="action-btn" :to="{ name: 'patient-portal-patient-detail', params: { id: ward.wardPatientId } }">
           Xem hồ sơ bệnh nhi
         </RouterLink>
       </div>

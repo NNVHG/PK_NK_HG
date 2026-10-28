@@ -62,6 +62,6 @@ test('quick filters are read-only until load and year range is bounded', () => {
 });
 test('UI route/nav and debt/settlement explanations preserve decision scope', async () => {
   const routes = await readFile(new URL('../src/router/index.ts', import.meta.url), 'utf8'); const app = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8');
-  assert.match(routes, /path: '\/admin\/reports\/revenue'.*roles: \['ADMIN'\]/); assert.match(app, /v-if="isAdmin" to="\/admin\/reports\/revenue"/);
+  assert.match(routes, /path: '\/management\/admin\/reports\/revenue'.*roles: \['ADMIN'\]/); assert.match(app, /v-if="isAdmin" to="\/management\/admin\/reports\/revenue"/);
   assert.match(source, /Tổng nợ hiện tại toàn phòng khám/); assert.match(source, /Không phải số dư nợ lịch sử cuối kỳ/); assert.match(source, /cơ cấu kỳ cũ được cập nhật/);
 });

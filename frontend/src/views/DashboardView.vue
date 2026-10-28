@@ -14,20 +14,20 @@
       <div class="profile-card">
         <h3>Hồ sơ cá nhân</h3>
         <p>Cập nhật thông tin liên hệ và đổi mật khẩu của bạn.</p>
-        <RouterLink class="btn-profile" to="/profile">Hồ sơ cá nhân</RouterLink>
+        <RouterLink class="btn-profile" :to="isStaff ? '/management/profile' : '/patient/profile'">Hồ sơ cá nhân</RouterLink>
       </div>
     </div>
 
     <div v-if="isStaff" class="modules-grid">
-      <div class="card" @click="goTo('/patients')">
+      <div class="card" @click="goTo('/management/patients')">
         <h3>Bệnh Nhân (MOD_PAT)</h3>
         <p>Hồ sơ hành chính bệnh nhân, tiền sử bệnh lý toàn thân và liên hệ.</p>
       </div>
-      <div v-if="canCheckIn" class="card" @click="goTo('/queue/check-in')">
+      <div v-if="canCheckIn" class="card" @click="goTo('/management/queue/check-in')">
         <h3>Tiếp đón & Check-in (MOD_CHK)</h3>
         <p>Xác nhận khách đã đến, liên kết lịch hẹn trong ngày và cấp số thứ tự.</p>
       </div>
-      <RouterLink v-if="canDiagnose" class="card" to="/clinical/diagnosis">
+      <RouterLink v-if="canDiagnose" class="card" to="/management/clinical/diagnosis">
         <h3>Khám & chẩn đoán</h3>
         <p>Chọn lượt khám hôm nay, bắt đầu khám và lưu kết quả lâm sàng.</p>
       </RouterLink>
@@ -35,8 +35,8 @@
     <div v-else class="patient-banner">
       <h3>Cổng Thông Tin Dành Cho Bệnh Nhân</h3>
       <p>Xem hồ sơ điều trị cá nhân và lịch sử khám của bạn.</p>
-      <RouterLink class="btn-profile" to="/my-record">Xem hồ sơ điều trị của tôi</RouterLink>
-      <RouterLink class="btn-appointment" to="/appointments">Đặt lịch khám</RouterLink>
+      <RouterLink class="btn-profile" to="/patient/my-record">Xem hồ sơ điều trị của tôi</RouterLink>
+      <RouterLink class="btn-appointment" to="/patient/appointments">Đặt lịch khám</RouterLink>
     </div>
   </div>
 </template>

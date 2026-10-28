@@ -92,6 +92,6 @@ test('clinical screen shows actual destination and links to ready workspace befo
   const source = await readFile(new URL('../src/views/ClinicalDiagnosisView.vue', import.meta.url), 'utf8');
   assert.ok(source.includes("selected.roomName || 'Chưa có phòng'"));
   assert.ok(source.includes("selected.chairNumber || 'Chưa có ghế'"));
-  assert.ok(source.includes('to="/staff/workspace"'));
+  assert.ok(source.includes('to="/management/staff/workspace"'));
   assert.ok(source.includes('Bắt đầu khám sẽ chiếm ghế'));
 });

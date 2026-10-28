@@ -114,5 +114,5 @@ test('unmount ignores late create and clears local draft and store', async () =>
 test('management route and navigation are limited to Admin', async () => {
   const router = await readFile(new URL('../src/router/index.ts', import.meta.url), 'utf8');
   assert.match(router, /path: '\/admin\/services'[\s\S]*?roles: \['ADMIN'\]/);
-  const app = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8'); assert.match(app, /v-if="isAdmin" to="\/admin\/services"/);
+  const app = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8'); assert.match(app, /v-if="isAdmin" to="\/management\/admin\/services"/);
 });

@@ -110,9 +110,9 @@ test('editor focus and cancel focus return use native elements', async () => {
 test('route/menu restrict status management while catalog stays Admin-only', async () => {
   const router = await readFile(new URL('../src/router/index.ts', import.meta.url), 'utf8'); const app = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8');
   assert.match(router, /path: '\/staff\/chair-status'[^\n]*roles: \['ADMIN', 'ASSISTANT'\]/);
-  assert.match(app, /v-if="\['ADMIN', 'ASSISTANT'\].includes\(authStore.role\)" to="\/staff\/chair-status"/);
+  assert.match(app, /v-if="\['ADMIN', 'ASSISTANT'\].includes\(authStore.role\)" to="\/management\/staff\/chair-status"/);
   assert.match(router, /path: '\/admin\/chairs'[^\n]*roles: \['ADMIN'\]/);
-  assert.match(source, /to="\/staff\/workspace"/); assert.match(source, /@change="confirmed = false"/);
+  assert.match(source, /to="\/management\/staff\/workspace"/); assert.match(source, /@change="confirmed = false"/);
 });
 test('service sends only status DTO to protected operational route', async () => {
   const calls = []; const imports = { '@/services/api': { apiClient: { get: async (...a) => { calls.push(['GET', ...a]); return { data: page() }; }, put: async (...a) => { calls.push(['PUT', ...a]); return { data: row }; } } } };

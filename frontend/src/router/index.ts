@@ -1,6 +1,49 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 
+const legacyDestinations: Record<string, string> = {
+  'my-patient-record': 'patient-portal-my-record',
+  'booking-request-review': 'management-booking-request-review',
+  'medicine-stock': 'management-medicine-stock',
+  'chair-status': 'management-chair-status',
+  'scheduling-settings': 'management-scheduling-settings',
+  'stock-issues': 'management-stock-issues',
+  'stock-receipts': 'management-stock-receipts',
+  'clinic-print-settings': 'management-clinic-print-settings',
+  'doctor-signature': 'management-doctor-signature',
+  'medicine-catalog': 'management-medicine-catalog',
+  'revenue-report': 'management-revenue-report',
+  'medical-supply-catalog': 'management-medical-supplies',
+  'diagnosis-catalog': 'management-diagnoses',
+  'role-permissions': 'management-role-permissions',
+  'staff-workspace': 'management-staff-workspace',
+  'dental-chairs': 'management-dental-chairs',
+  'service-catalog': 'management-service-catalog',
+  'patient-invoices': 'patient-portal-invoices',
+  'invoice-desk': 'management-invoices',
+  'counter-booking': 'management-counter-booking',
+  'daily-queue': 'management-daily-queue',
+  'appointment-desk': 'management-appointment-desk',
+  'patient-appointment-history': 'patient-portal-appointments-history',
+  'admin-staff': 'management-admin-staff',
+  'admin-audit-logs': 'management-audit-logs',
+  'appointments': 'patient-portal-appointments',
+  'queue-check-in': 'management-queue-check-in',
+  'patients': 'management-patients',
+  'clinical-diagnosis': 'management-clinical-diagnosis'
+};
+
+const sharedLegacyDestinations: Record<string, [string, string]> = {
+  'dashboard': ['patient-portal-dashboard', 'management-dashboard'],
+  'profile': ['patient-portal-profile', 'management-profile'],
+  'patient-detail': ['patient-portal-patient-detail', 'management-patient-detail'],
+  'tooth-image-lookup': ['patient-portal-visit-images', 'management-tooth-images'],
+  'prescription': ['patient-portal-visit-prescription', 'management-prescription'],
+  'invoice-draft': ['patient-portal-invoice-draft', 'management-invoice-draft'],
+  'fdi-service-assignment': ['patient-portal-fdi-services', 'management-fdi-services'],
+  'fdi-condition': ['patient-portal-fdi-condition', 'management-fdi-condition']
+};
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -222,7 +265,7 @@ const router = createRouter({
     {
       path: '/my-records',
       name: 'my-patient-records',
-      redirect: { name: 'my-patient-record' },
+      redirect: { name: 'patient-portal-my-record' },
       meta: { requiresAuth: true, roles: ['PATIENT'] }
     },
     {
@@ -288,6 +331,15 @@ router.beforeEach((to, _from, next) => {
           return next({ path: '/patient/my-record' });
         }
         return next({ path: '/management/dashboard' });
+      }
+    }
+
+    // Chuyển URL cũ sang khu vực đúng vai trò sau khi đã kiểm tra quyền.
+    if (typeof to.name === 'string') {
+      const destination = legacyDestinations[to.name]
+        ?? sharedLegacyDestinations[to.name]?.[isPatient ? 0 : 1];
+      if (destination) {
+        return next({ name: destination, params: to.params, query: to.query, hash: to.hash, replace: true });
       }
     }
   }

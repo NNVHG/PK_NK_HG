@@ -3,7 +3,7 @@
     <h1 id="chair-status-title">Trạng thái ghế và phòng điều trị</h1>
     <p>Chọn ghế để chuyển Sẵn sàng, Bảo trì hoặc Ngừng sử dụng. Phòng hiển thị theo từng ghế.</p>
     <p>Ghế đã được nha sĩ chọn cần được nha sĩ/Admin bỏ hoặc đổi vị trí trước.
-      <router-link to="/staff/workspace">Mở vị trí nha sĩ/phụ tá</router-link>
+      <router-link to="/management/staff/workspace">Mở vị trí nha sĩ/phụ tá</router-link>
     </p>
     <p>Ghế Đang phục vụ chỉ được giải phóng khi kết thúc hoặc hủy ca hợp lệ.</p>
     <form class="filters" @submit.prevent="load(1)">

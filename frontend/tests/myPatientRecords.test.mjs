@@ -52,16 +52,16 @@ test('empty profile response is an honest empty state', async () => {
   assert.match(source, /Chưa có hồ sơ đang hoạt động/);
 });
 test('portal links only to server-returned profile ids, with no create or edit action', () => {
-  assert.match(source, /name: 'patient-detail', params: \{ id: patient.patientId \}/);
+  assert.match(source, /name: 'patient-portal-patient-detail', params: \{ id: patient.patientId \}/);
   assert.doesNotMatch(source, /createVisit|updatePatient|localStorage|console\.log/);
 });
 test('router and back link make current-user records reachable without opening the staff list', async () => {
   const router = await readFile(new URL('../src/router/index.ts', import.meta.url), 'utf8');
   const detail = await readFile(new URL('../src/views/PatientDetailView.vue', import.meta.url), 'utf8');
-  assert.match(router, /name: 'my-patient-record',[\s\S]*?roles: \['PATIENT'\]/);
-  assert.match(router, /name: 'my-patient-records',[\s\S]*?redirect: \{ name: 'my-patient-record' \}/);
-  assert.match(router, /name: 'patient-detail',[\s\S]*?roles: \['ADMIN', 'RECEPTIONIST', 'DENTIST', 'ASSISTANT', 'PATIENT'\]/);
-  assert.match(detail, /authStore.role === 'PATIENT' \? 'my-patient-record' : 'patients'/);
+  assert.match(router, /name: 'patient-portal-my-record',[\s\S]*?roles: \['PATIENT'\]/);
+  assert.match(router, /name: 'my-patient-records',[\s\S]*?redirect: \{ name: 'patient-portal-my-record' \}/);
+  assert.match(router, /name: 'patient-portal-patient-detail',[\s\S]*?roles: \['PATIENT'\]/);
+  assert.match(detail, /authStore.role === 'PATIENT' \? 'patient-portal-my-record' : 'management-patients'/);
   assert.match(detail, /canEdit = computed\(\(\) => \['ADMIN', 'RECEPTIONIST'\]/);
   assert.match(detail, /SafetyAlertBanner v-if="authStore.role !== 'PATIENT'"/);
 });

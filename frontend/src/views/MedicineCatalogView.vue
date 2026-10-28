@@ -1,7 +1,7 @@
 <template>
   <section v-if="auth.role === 'ADMIN'" class="catalog">
     <h1>Danh mục thuốc</h1>
-    <router-link to="/admin/medicine-stock">Nhập và xem tồn thuốc thực tế</router-link>
+    <router-link to="/management/admin/medicine-stock">Nhập và xem tồn thuốc thực tế</router-link>
     <p>Thuốc khởi tạo đang ngừng hoạt động và chưa thiết lập giá. Kiểm tra tên sản phẩm, hàm lượng, đơn vị và giá bán rồi kích hoạt để dùng khi kê đơn.</p>
     <form class="search" @submit.prevent="load(1)">
       <label>Tìm mã / tên / hoạt chất / hàm lượng<input v-model="keyword" maxlength="200" :disabled="saving" /></label>

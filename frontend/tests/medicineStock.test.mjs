@@ -114,7 +114,7 @@ test('short stock is a soft warning and quantity edits need no extra request', a
 });
 test('new route/menu remains Admin-only; draft composition includes stock notice', async () => {
   const router = await readFile(new URL('../src/router/index.ts', import.meta.url), 'utf8'), app = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8'), rx = await readFile(new URL('../src/views/PrescriptionView.vue', import.meta.url), 'utf8');
-  assert.match(router, /path: '\/admin\/medicine-stock'[^\n]*roles: \['ADMIN'\]/); assert.match(app, /v-if="isAdmin" to="\/admin\/medicine-stock"/); assert.match(rx, /<PrescriptionStockNotice :visit-id="visitId"/);
+  assert.match(router, /path: '\/management\/admin\/medicine-stock'[^\n]*roles: \['ADMIN'\]/); assert.match(app, /v-if="isAdmin" to="\/management\/admin\/medicine-stock"/); assert.match(rx, /<PrescriptionStockNotice :visit-id="visitId"/);
 });
 test('typed stock API uses repeated medicineIds and no mutation from availability', async () => {
   const calls = [], module = { exports: {} }, code = transpile(await readFile(new URL('../src/services/medicineStock.ts', import.meta.url), 'utf8'));

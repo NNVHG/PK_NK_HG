@@ -17,7 +17,7 @@
    <div v-if="existing">
     <p>{{ existing.fullName }} · {{ existing.patientCode }} đã có hồ sơ ({{ existing.masked }}).</p>
     <p v-if="!existing.isActive">Hồ sơ đang ngừng hoạt động; mở hồ sơ để đối chiếu, không tạo trùng.</p>
-    <RouterLink :to="{name:'patient-detail',params:{id:existing.patientId}}" @click="close">Mở hồ sơ &amp; tiếp đón</RouterLink>
+    <RouterLink :to="{name:'management-patient-detail',params:{id:existing.patientId}}" @click="close">Mở hồ sơ &amp; tiếp đón</RouterLink>
     <button type="button" @click="close">Hủy</button>
    </div>
    <form v-if="identity && !existing" @submit.prevent="save">

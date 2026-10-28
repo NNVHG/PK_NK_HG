@@ -77,5 +77,5 @@ test('Admin role loss before submitting prevents writes', async () => {
 });
 test('route and navigation restrict catalog to Admin', async () => {
   const router = await readFile(new URL('../src/router/index.ts', import.meta.url), 'utf8'); const app = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8');
-  assert.match(router, /path: '\/admin\/chairs'[\s\S]*?roles: \['ADMIN'\]/); assert.match(app, /v-if="isAdmin" to="\/admin\/chairs"/);
+  assert.match(router, /path: '\/management\/admin\/chairs'[\s\S]*?roles: \['ADMIN'\]/); assert.match(app, /v-if="isAdmin" to="\/management\/admin\/chairs"/);
 });

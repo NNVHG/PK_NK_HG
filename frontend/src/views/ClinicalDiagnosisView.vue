@@ -1,7 +1,7 @@
 <template>
   <main class="clinical-page">
     <header>
-      <RouterLink to="/">← Trang chủ</RouterLink>
+      <RouterLink to="/management/dashboard">← Bảng điều khiển</RouterLink>
       <h1>Khám và chẩn đoán</h1>
       <p>Chọn bệnh nhân đã check-in để ghi kết quả lâm sàng của lần khám.</p>
     </header>
@@ -37,17 +37,17 @@
         <template v-else>
           <h2>{{ selected.patientName }} · {{ selected.patientCode }}</h2>
           <p>Ngày tiếp đón: {{ selected.queueDate }} · Lần khám #{{ selected.visitId }}</p>
-          <p v-if="visit?.status !== 'Correcting'">Vị trí khám: {{ selected.roomName || 'Chưa có phòng' }} · {{ selected.chairNumber || 'Chưa có ghế' }}. <RouterLink to="/staff/workspace">Kiểm tra vị trí làm việc</RouterLink></p>
+          <p v-if="visit?.status !== 'Correcting'">Vị trí khám: {{ selected.roomName || 'Chưa có phòng' }} · {{ selected.chairNumber || 'Chưa có ghế' }}. <RouterLink to="/management/staff/workspace">Kiểm tra vị trí làm việc</RouterLink></p>
           <p v-if="loadingVisit" role="status">Đang tải hồ sơ khám…</p>
           <p v-if="visitError" class="error" role="alert">{{ visitError }}</p>
           <button type="button" :disabled="busy" @click="reloadVisit">
             {{ dirty ? 'Bỏ thay đổi và tải lại' : 'Tải lại hồ sơ' }}
           </button>
           <template v-if="visit">
-            <RouterLink v-if="!dirty && !busy" :to="`/clinical/visits/${visit.visitId}/fdi`">Mở sơ đồ và ghi tình trạng răng</RouterLink>
-            <RouterLink v-if="!dirty && !busy" :to="`/clinical/visits/${visit.visitId}/prescription`">Kê / xem đơn thuốc</RouterLink>
+            <RouterLink v-if="!dirty && !busy" :to="`/management/clinical/visits/${visit.visitId}/fdi`">Mở sơ đồ và ghi tình trạng răng</RouterLink>
+            <RouterLink v-if="!dirty && !busy" :to="`/management/clinical/visits/${visit.visitId}/prescription`">Kê / xem đơn thuốc</RouterLink>
             <p>Trạng thái: {{ visitStatusLabel }}</p>
-            <p v-if="visit.status === 'Correcting'">Đang đính chính ngoài ca khám. <RouterLink :to="`/clinical/visits/${visit.visitId}/invoice-draft`">Hoàn tất và khóa đính chính</RouterLink></p>
+            <p v-if="visit.status === 'Correcting'">Đang đính chính ngoài ca khám. <RouterLink :to="`/management/clinical/visits/${visit.visitId}/invoice-draft`">Hoàn tất và khóa đính chính</RouterLink></p>
             <template v-if="auth.role === 'ADMIN' && [1, 6].includes(selected.status) && !visit.isLocked">
               <label for="start-dentist">Nha sĩ phụ trách</label>
               <select id="start-dentist" v-model.number="startDentistId" :disabled="busy || dentistsLoading">

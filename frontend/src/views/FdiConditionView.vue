@@ -1,9 +1,9 @@
 <template>
   <main class="fdi-page">
-    <RouterLink to="/clinical/diagnosis">← Khám và chẩn đoán</RouterLink>
-    <p v-if="visit?.status === 'Correcting'">Đang đính chính hồ sơ ngoài ca khám. <RouterLink :to="`/clinical/visits/${visitId}/invoice-draft`">Trở lại để hoàn tất và khóa đính chính</RouterLink></p>
+    <RouterLink v-if="auth.role !== 'PATIENT'" to="/management/clinical/diagnosis">← Khám và chẩn đoán</RouterLink>
+    <p v-if="visit?.status === 'Correcting'">Đang đính chính hồ sơ ngoài ca khám. <RouterLink :to="`${portalPrefix}/clinical/visits/${visitId}/invoice-draft`">Trở lại để hoàn tất và khóa đính chính</RouterLink></p>
     <h1>Tình trạng răng · Lần khám #{{ visitId }}</h1>
-    <RouterLink v-if="!busy" :to="`/clinical/visits/${visitId}/services`">Chỉ định dịch vụ theo răng</RouterLink>
+    <RouterLink v-if="!busy" :to="`${portalPrefix}/clinical/visits/${visitId}/services`">Chỉ định dịch vụ theo răng</RouterLink>
     <button :disabled="busy" @click="load">Tải lại hồ sơ</button>
     <p v-if="busy" role="status">Đang xử lý…</p>
     <p v-if="error" role="alert" class="error">{{ error }}</p>
@@ -15,10 +15,10 @@
       <FdiDentalChart v-model="selection" v-model:dentition-type="dentition" :latest-conditions="latestConditions" :multiple="false" :readonly="busy" @select="openHistory" @update:model-value="clearSuggestion" />
       <ToothHistoryDrawer ref="history" :patient-id="visit.patientId">
         <template #actions="{toothNumber,allJaw}">
-          <RouterLink v-if="toothNumber && ['ADMIN','DENTIST','RECEPTIONIST','PATIENT'].includes(auth.role)" :to="{name:'tooth-image-lookup',params:{visitId},query:{toothNumber:allJaw?undefined:toothNumber}}">{{ allJaw ? 'Xem ảnh hồ sơ bệnh nhân' : `Xem ảnh răng ${toothNumber}` }}</RouterLink>
+          <RouterLink v-if="toothNumber && ['ADMIN','DENTIST','RECEPTIONIST','PATIENT'].includes(auth.role)" :to="{name:auth.role === 'PATIENT' ? 'patient-portal-visit-images' : 'management-tooth-images',params:{visitId},query:{toothNumber:allJaw?undefined:toothNumber}}">{{ allJaw ? 'Xem ảnh hồ sơ bệnh nhân' : `Xem ảnh răng ${toothNumber}` }}</RouterLink>
         </template>
       </ToothHistoryDrawer>
-      <RouterLink v-if="selection[0] && ['ADMIN','DENTIST','RECEPTIONIST','PATIENT'].includes(auth.role)" :to="{name:'tooth-image-lookup',params:{visitId},query:{toothNumber:selection[0].toothNumber}}">Xem ảnh răng {{ selection[0].toothNumber }} qua các lần khám</RouterLink>
+      <RouterLink v-if="selection[0] && ['ADMIN','DENTIST','RECEPTIONIST','PATIENT'].includes(auth.role)" :to="{name:auth.role === 'PATIENT' ? 'patient-portal-visit-images' : 'management-tooth-images',params:{visitId},query:{toothNumber:selection[0].toothNumber}}">Xem ảnh răng {{ selection[0].toothNumber }} qua các lần khám</RouterLink>
       <form v-if="canEdit" @submit.prevent="save">
         <p v-if="selection[0]">Răng {{ selection[0].toothNumber }} · {{ selection[0].surface ? SURFACE_METADATA[selection[0].surface].nameVi : 'Toàn răng' }}</p>
         <p v-else>Chọn một răng hoặc mặt răng trên sơ đồ.</p>
@@ -86,6 +86,7 @@ import { visitServicesApi, type CatalogOption } from '@/services/visitServices';
 
 const route = useRoute();
 const auth = useAuthStore();
+const portalPrefix = computed(() => auth.role === 'PATIENT' ? '/patient' : '/management');
 const visitId = computed(() => Number(route.params.visitId));
 const visit = ref<VisitDetails | null>(null);
 const fdiStore = useFdiStore();

@@ -1,9 +1,9 @@
 <template>
   <section class="staff-page">
     <nav aria-label="Quản lý tài khoản và quyền">
-      <RouterLink to="/admin/staff" aria-current="page">Tài khoản nhân viên</RouterLink>
+      <RouterLink to="/management/admin/staff" aria-current="page">Tài khoản nhân viên</RouterLink>
       <span aria-hidden="true"> · </span>
-      <RouterLink to="/admin/role-permissions">Ma trận quyền (chỉ đọc)</RouterLink>
+      <RouterLink to="/management/admin/role-permissions">Ma trận quyền (chỉ đọc)</RouterLink>
     </nav>
     <header class="page-heading">
       <div>
@@ -76,7 +76,7 @@
                 <small v-if="staff.requiresPhoneActivation">Chờ xác minh OTP lần đầu</small>
               </td>
               <td class="row-actions">
-                <RouterLink v-if="staff.roleCode === 'DENTIST' && staff.isActive" :to="'/staff/signatures/' + staff.userId">Ảnh chữ ký</RouterLink>
+                <RouterLink v-if="staff.roleCode === 'DENTIST' && staff.isActive" :to="'/management/staff/signatures/' + staff.userId">Ảnh chữ ký</RouterLink>
                 <button class="text-button" type="button" @click="openEditForm(staff)">Sửa</button>
                 <button v-if="staff.isActive && !staff.requiresPhoneActivation" type="button" @click="phoneChangeStaff = staff">Đổi SĐT qua OTP</button>
                 <button

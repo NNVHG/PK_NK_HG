@@ -7,7 +7,7 @@
     <section v-else-if="patient">
       <h2>{{ patient.fullName }}</h2>
       <p>{{ patient.patientCode }}</p>
-      <RouterLink :to="{ name: 'patient-detail', params: { id: patient.patientId } }">Xem lịch sử khám, đơn thuốc và hình ảnh</RouterLink>
+      <RouterLink :to="{ name: 'patient-portal-patient-detail', params: { id: patient.patientId } }">Xem lịch sử khám, đơn thuốc và hình ảnh</RouterLink>
       <!-- Danh sách người được giám hộ (DL-353, DL-358) -->
       <PatientWardsPanel />
     </section>

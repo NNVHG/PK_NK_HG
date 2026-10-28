@@ -10,7 +10,7 @@
    <PrescriptionQr v-if="context.prescription && !context.prescription.isCancelled" :visit-id="visitId" :prescription-version="context.prescription.version" />
    <PrescriptionLifecycle :visit-id="visitId" :prescription="context.prescription" :can-cancel="context.canCancel === true" :blocked="busy || needsReview" @changed="load" />
    <p>Ca khám: {{ context.visitStatus }} · {{ context.invoiceCode || 'Chưa có hóa đơn' }} · {{ context.invoiceStatus || '' }}</p>
-   <RouterLink v-if="!busy && ['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(auth.role)" :to="`/clinical/visits/${visitId}/invoice-draft`">Đối chiếu hóa đơn dịch vụ và thuốc</RouterLink>
+   <RouterLink v-if="!busy && ['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(auth.role)" :to="`${portalPrefix}/clinical/visits/${visitId}/invoice-draft`">Đối chiếu hóa đơn dịch vụ và thuốc</RouterLink>
    <section v-if="!editable && context.prescription" aria-label="Đơn thuốc đã lưu">
     <h2>{{ context.prescription.prescriptionCode }}</h2><p v-if="context.prescription.isCancelled" class="error">Đơn đã hủy; không dùng để cấp phát hoặc tra cứu QR.</p>
     <p>Chẩn đoán: {{ context.prescription.diagnosis }}</p>
@@ -73,6 +73,7 @@ import { useAuthStore } from '@/stores/auth';
 import { prescriptionsService, type RxContext, type RxMedicine, type RxPreview, type RxRequest } from '@/services/prescriptions';
 interface DraftLine { medicineId: number; medicineVersion: number; code: string; name: string; activeIngredient: string | null; strength: string | null; unit: string; unitPrice: string; quantity: string | number; usageInstructions: string; treatmentDays: string | number; active: boolean }
 const route = useRoute(), auth = useAuthStore();
+const portalPrefix = computed(() => auth.role === 'PATIENT' ? '/patient' : '/management');
 const visitId = computed(() => { const text = String(route.params.visitId ?? ''); const id = Number(text); return /^\d+$/.test(text) && Number.isSafeInteger(id) && id > 0 && id <= 2147483647 ? id : 0; });
 const context = ref<RxContext | null>(null), draft = ref<DraftLine[]>([]), medicines = ref<RxMedicine[]>([]), keyword = ref(''), medicinePage = ref(1), hasNext = ref(false);
 const busy = ref(false), error = ref(''), message = ref(''), needsReview = ref(false), preview = ref<RxPreview | null>(null), previewKey = ref(''), confirmed = ref(false), duplicateConfirmed = ref(false);

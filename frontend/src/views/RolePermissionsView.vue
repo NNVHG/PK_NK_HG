@@ -1,12 +1,12 @@
 <template>
   <main v-if="auth.role === 'ADMIN'" class="permissions-page">
     <nav aria-label="Quản lý tài khoản và quyền">
-      <RouterLink to="/admin/staff">Tài khoản nhân viên</RouterLink>
+      <RouterLink to="/management/admin/staff">Tài khoản nhân viên</RouterLink>
       <span aria-hidden="true"> · </span>
-      <RouterLink to="/admin/role-permissions" aria-current="page">Ma trận quyền (chỉ đọc)</RouterLink>
+      <RouterLink to="/management/admin/role-permissions" aria-current="page">Ma trận quyền (chỉ đọc)</RouterLink>
     </nav>
     <h1>Ma trận quyền theo vai trò</h1>
-    <p>Phase 1 sử dụng 5 vai trò cố định. Bảng này chỉ đọc; gán vai trò cho nhân viên tại <RouterLink to="/admin/staff">Tài khoản nhân viên</RouterLink>.</p>
+    <p>Phase 1 sử dụng 5 vai trò cố định. Bảng này chỉ đọc; gán vai trò cho nhân viên tại <RouterLink to="/management/admin/staff">Tài khoản nhân viên</RouterLink>.</p>
     <p>“Có theo vai trò” vẫn cần đáp ứng điều kiện của hồ sơ, nha sĩ phụ trách và trạng thái nghiệp vụ. Quyền của từng bước chuyển hàng đợi được kiểm tra riêng.</p>
     <button :disabled="loading" @click="load">{{ loading ? 'Đang tải…' : 'Tải lại ma trận quyền' }}</button>
     <p v-if="loading" role="status">Đang đọc cấu hình quyền hiện hành…</p>

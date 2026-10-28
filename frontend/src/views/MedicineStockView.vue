@@ -3,7 +3,7 @@
     <h1 id="medicine-stock-title">Nhập và tồn thuốc</h1>
     <p>Nhập số lượng thuốc đã nhận thực tế theo đúng đơn vị danh mục. Phiếu chỉ cộng tồn sau xác nhận, không sửa giá bán hoặc hóa đơn.</p>
     <p>Thuốc được kiểm và trừ tồn khi xác nhận giao cho bệnh nhân. Không tự cộng lại kho khi hoàn tác bàn giao hoặc hoàn tiền.</p>
-    <router-link to="/admin/medicines">Quản lý tên, đơn vị và giá thuốc</router-link>
+    <router-link to="/management/admin/medicines">Quản lý tên, đơn vị và giá thuốc</router-link>
     <form class="filters" @submit.prevent="search(1)">
       <label>Tìm thuốc<input v-model="keyword" maxlength="200" :disabled="busy || !!store.pending" /></label>
       <button :disabled="busy || listLoading || !!store.pending">Tìm / Tải danh mục</button>

@@ -18,7 +18,7 @@ onUnmounted(() => { confirmed.value = false; Object.assign(form, { workStartTime
   <section class="settings-page">
     <h1 ref="heading" tabindex="-1">Giờ làm việc & khung hẹn</h1>
     <p>Cấu hình mới dùng cho lần đặt hoặc đổi lịch tiếp theo. Ngày, giờ và phần chỗ của lịch đã hẹn được giữ nguyên.</p>
-    <p><RouterLink to="/admin/clinic-print-settings">Thông tin phòng khám trên bản in</RouterLink></p>
+    <p><RouterLink to="/management/admin/clinic-print-settings">Thông tin phòng khám trên bản in</RouterLink></p>
     <button type="button" :disabled="store.busy" @click="store.load">Tải lại cấu hình (thay nội dung đang nhập)</button>
     <p v-if="store.busy" role="status">Đang xử lý…</p><p v-if="store.error" role="alert">{{ store.error }}</p><p v-if="error" role="alert">{{ error }}</p><p v-if="store.message" role="status">{{ store.message }}</p>
     <p v-if="store.current?.usingFallback">Chưa có đủ cấu hình hợp lệ; hệ thống đang dùng giá trị dự phòng an toàn. Kiểm tra các giờ dưới đây trước khi lưu.</p>

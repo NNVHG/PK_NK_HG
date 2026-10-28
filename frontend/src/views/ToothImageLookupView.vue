@@ -1,6 +1,6 @@
 <template>
   <main class="tooth-images">
-    <RouterLink v-if="visitId" :to="`/clinical/visits/${visitId}/fdi`">← Trở lại sơ đồ răng</RouterLink>
+    <RouterLink v-if="visitId" :to="`${portalPrefix}/clinical/visits/${visitId}/fdi`">← Trở lại sơ đồ răng</RouterLink>
     <h1>Tra cứu ảnh theo răng</h1>
     <form @submit.prevent="applyFilter">
       <label for="lookup-tooth">Răng FDI (bỏ trống để xem mọi răng)</label>
@@ -22,6 +22,7 @@ import {useAuthStore} from '@/stores/auth';
 import {dentalImagesService,validImageTooth,type ImageVisitContext} from '@/services/dentalImages';
 import DentalImageAttachments from '@/components/DentalImageAttachments.vue';
 const route=useRoute(),router=useRouter(),auth=useAuthStore();
+const portalPrefix=computed(()=>auth.role==='PATIENT'?'/patient':'/management');
 const visitId=computed(()=>Number(route.params.visitId)),visit=ref<ImageVisitContext|null>(null),appliedTooth=ref<number|null>(null),filterInput=ref('');
 const loading=ref(false),error=ref(''),filterError=ref('');let generation=0,disposed=false;
 const identity=()=>`${route.params.visitId}/${JSON.stringify(route.query.toothNumber)}/${auth.role}/${auth.user?.userId}`;

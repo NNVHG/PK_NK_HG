@@ -61,7 +61,7 @@ test('Admin role loss before a response cannot expose permissions', async () => 
   const f = fixture(); const done = f.defer(); const first = f.c.load(); f.auth.role = 'PATIENT'; done(data()); await first; assert.equal(f.matrix.value, null);
 });
 test('page is read only, links to staff assignment and explains conditional permissions', async () => {
-  assert.match(source, /to="\/admin\/staff"/); assert.match(source, /nha sĩ phụ trách/); assert.match(source, /scope="row"/);
+  assert.match(source, /to="\/management\/admin\/staff"/); assert.match(source, /nha sĩ phụ trách/); assert.match(source, /scope="row"/);
   assert.doesNotMatch(source, /type="checkbox"|@submit|\.post\(|\.put\(|\.delete\(/);
   const api = await readFile(new URL('../src/services/rolePermissions.ts', import.meta.url), 'utf8');
   assert.match(api, /apiClient\.get/); assert.doesNotMatch(api, /apiClient\.(post|put|delete|patch)/);
@@ -69,7 +69,7 @@ test('page is read only, links to staff assignment and explains conditional perm
 test('route and navigation restrict management matrix to Admin', async () => {
   const router = await readFile(new URL('../src/router/index.ts', import.meta.url), 'utf8');
   assert.match(router, /path: '\/admin\/role-permissions'[\s\S]*?roles: \['ADMIN'\]/);
-  const app = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8'); assert.match(app, /v-if="isAdmin" to="\/admin\/role-permissions"/);
+  const app = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8'); assert.match(app, /v-if="isAdmin" to="\/management\/admin\/role-permissions"/);
   const staff = await readFile(new URL('../src/views/StaffView.vue', import.meta.url), 'utf8');
-  assert.match(staff, /aria-label="Quản lý tài khoản và quyền"/); assert.match(staff, /to="\/admin\/role-permissions"/);
+  assert.match(staff, /aria-label="Quản lý tài khoản và quyền"/); assert.match(staff, /to="\/management\/admin\/role-permissions"/);
 });

@@ -55,7 +55,7 @@ onMounted(() => { void loadTargets(); void loadStock(); if (visitId.value > 0) v
 <template>
   <section class="issue-page">
     <h1>Vật tư tiêu hao theo ca</h1><p>Nhập số lượng thực tế cho từng phiếu. Chỉ trừ tồn sau xác nhận; chưa gợi ý định mức.</p>
-    <RouterLink to="/inventory/receipts">Xem tồn & nhập kho</RouterLink>
+    <RouterLink to="/management/inventory/receipts">Xem tồn & nhập kho</RouterLink>
     <h2>1. Chọn ca đã hoàn tất</h2>
     <form class="toolbar" @submit.prevent="loadTargets()"><label>Mã ca (để trống để xem gần nhất)<input v-model.number="visitFilter" type="number" min="1" max="2147483647" step="1" :disabled="locked" /></label><button :disabled="locked || targetBusy">Tìm ca</button></form>
     <p v-if="targetError" role="alert">{{ targetError }}</p><p v-if="targetBusy" role="status">Đang tải ca…</p>

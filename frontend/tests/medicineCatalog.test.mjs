@@ -63,5 +63,5 @@ test('auth change and unmount ignore late writes and clear drug form', async () 
  const g = fixture(), e = deferred(); g.list(e.promise); const read = g.c.load(); g.cleanup(); e.resolve({ items: [item], page: 1, totalCount: 1, hasNextPage: false }); await read; assert.equal(g.c.items.value.length, 0);
 });
 test('route and navigation only Admin and no inventory controls', async () => {
- const route = await readFile(new URL('../src/router/index.ts', import.meta.url), 'utf8'); const app = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8'); assert.match(route, /path: '\/admin\/medicines'.*roles: \['ADMIN'\]/); assert.match(app, /v-if="isAdmin" to="\/admin\/medicines"/); assert.doesNotMatch(source, /StockQuantity|StockIssue|tồn kho/);
+ const route = await readFile(new URL('../src/router/index.ts', import.meta.url), 'utf8'); const app = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8'); assert.match(route, /path: '\/management\/admin\/medicines'.*roles: \['ADMIN'\]/); assert.match(app, /v-if="isAdmin" to="\/management\/admin\/medicines"/); assert.doesNotMatch(source, /StockQuantity|StockIssue|tồn kho/);
 });

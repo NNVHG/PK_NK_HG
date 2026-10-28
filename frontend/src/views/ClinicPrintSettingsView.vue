@@ -7,7 +7,7 @@
  <button :disabled="busy || !allowed" @click="load">Tải lại thông tin</button>
  <form v-if="loaded" @submit.prevent="save"><label>Địa chỉ<input v-model="address" maxlength="500" required :disabled="busy || needsReview" /></label><label>Hotline<input v-model="phone" maxlength="30" required type="tel" :disabled="busy || needsReview" /></label>
  <label><input v-model="confirmed" type="checkbox" :disabled="busy || needsReview" /> Tôi đã đối chiếu thông tin phòng khám</label><button :disabled="busy || needsReview || !confirmed">Lưu thông tin in</button></form>
- <RouterLink to="/admin/staff">Khai báo học hàm/học vị và ảnh chữ ký bác sĩ</RouterLink>
+ <RouterLink to="/management/admin/staff">Khai báo học hàm/học vị và ảnh chữ ký bác sĩ</RouterLink>
  </main></template>
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';

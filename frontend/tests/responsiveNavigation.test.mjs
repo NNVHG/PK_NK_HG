@@ -8,8 +8,8 @@ const css = descriptor.styles.map(s => s.content).join('\n');
 test('root navigation remains native, named and free of new permission logic', () => {
   assert.deepEqual(errors, []);
   assert.match(descriptor.template.content, /<nav class="nav-links" aria-label="Điều hướng chính">/);
-  assert.match(descriptor.template.content, /v-if="authStore.role === 'PATIENT'" to="\/appointments"/);
-  assert.match(descriptor.template.content, /v-if="isAdmin" to="\/admin\/staff"/);
+  assert.match(descriptor.template.content, /v-if="authStore.role === 'PATIENT'" to="\/patient\/appointments"/);
+  assert.match(descriptor.template.content, /v-if="isAdmin" to="\/management\/admin\/staff"/);
 });
 test('header and navigation allow wrapping without breaking words in links', () => {
   assert.match(css, /\.navbar\s*\{[^}]*flex-wrap:\s*wrap/s);

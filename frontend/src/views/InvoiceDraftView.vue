@@ -2,7 +2,7 @@
   <main class="invoice-page">
     <RouterLink to="/">← Trang chủ</RouterLink>
     <h1>Hóa đơn nháp · Lần khám #{{ visitId }}</h1>
-    <RouterLink v-if="!busy && !discountBusy" :to="`/clinical/visits/${visitId}/prescription`">Xem / kiểm tra đơn thuốc</RouterLink>
+    <RouterLink v-if="!busy && !discountBusy" :to="`${portalPrefix}/clinical/visits/${visitId}/prescription`">Xem / kiểm tra đơn thuốc</RouterLink>
     <button :disabled="busy || discountBusy" @click="load">Tải lại hồ sơ</button>
     <p v-if="busy" role="status">Đang xử lý…</p>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
@@ -28,10 +28,10 @@
           <button :disabled="busy || discountBusy || !correctionDirty">Lưu đính chính chẩn đoán</button>
         </form>
         <p v-if="correctionNeedsReview" role="alert">Tải lại hồ sơ và đối chiếu trước khi tiếp tục đính chính.</p>
-        <RouterLink v-if="canCorrect && !busy && !correctionDirty" :to="`/clinical/visits/${visitId}/fdi`">Đính chính tình trạng răng</RouterLink>
+        <RouterLink v-if="canCorrect && !busy && !correctionDirty" :to="`${portalPrefix}/clinical/visits/${visitId}/fdi`">Đính chính tình trạng răng</RouterLink>
       </section>
       <template v-if="canComplete">
-        <RouterLink v-if="!busy && !discountBusy" :to="`/clinical/visits/${visitId}/services`">Kiểm tra dịch vụ đã chỉ định</RouterLink>
+        <RouterLink v-if="!busy && !discountBusy" :to="`${portalPrefix}/clinical/visits/${visitId}/services`">Kiểm tra dịch vụ đã chỉ định</RouterLink>
         <p>{{ isCorrection ? 'Hoàn tất đính chính sẽ khóa lại hồ sơ và chốt hóa đơn mới.' : 'Kết thúc khám sẽ khóa hồ sơ và chốt hóa đơn nháp từ các dịch vụ đã ghi nhận.' }}</p>
         <label><input v-model="confirmed" type="checkbox" :disabled="busy || discountBusy" /> {{ isCorrection ? 'Tôi đã kiểm tra nội dung và xác nhận hoàn tất đính chính' : 'Tôi đã kiểm tra chỉ định và xác nhận hoàn tất khám' }}</label>
         <button :disabled="busy || discountBusy || !confirmed" @click="complete">{{ isCorrection ? 'Hoàn tất đính chính và khóa hồ sơ' : 'Kết thúc khám và tạo hóa đơn nháp' }}</button>
@@ -110,6 +110,7 @@ import type { VisitDetails } from '@/services/patients';
 
 const route = useRoute();
 const auth = useAuthStore();
+const portalPrefix = computed(() => auth.role === 'PATIENT' ? '/patient' : '/management');
 const store = useInvoiceDraftStore();
 const { invoice } = storeToRefs(store);
 const visitId = computed(() => Number(route.params.visitId));

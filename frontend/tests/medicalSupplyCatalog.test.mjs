@@ -200,6 +200,6 @@ test('route and navigation only Admin and no UnitPrice or StockIssue controls', 
   const route = await readFile(new URL('../src/router/index.ts', import.meta.url), 'utf8');
   const app = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8');
   assert.match(route, /path: '\/admin\/medical-supplies'.*roles: \['ADMIN'\]/);
-  assert.match(app, /v-if="isAdmin" to="\/admin\/medical-supplies"/);
+  assert.match(app, /v-if="isAdmin" to="\/management\/admin\/medical-supplies"/);
   assert.doesNotMatch(source, /unitPrice|StockQuantity|StockIssue/);
 });

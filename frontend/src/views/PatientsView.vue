@@ -61,7 +61,7 @@
               <td class="row-actions">
                 <router-link
                   class="text-button"
-                  :to="{ name: 'patient-detail', params: { id: patient.patientId } }"
+                  :to="{ name: 'management-patient-detail', params: { id: patient.patientId } }"
                 >
                   Chi tiết
                 </router-link>

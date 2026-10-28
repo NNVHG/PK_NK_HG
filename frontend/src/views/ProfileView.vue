@@ -2,11 +2,11 @@
   <section class="profile-page">
     <header class="page-heading">
       <div>
-        <RouterLink class="back-link" to="/">← Bảng điều khiển</RouterLink>
+        <RouterLink class="back-link" :to="authStore.role === 'PATIENT' ? '/patient/dashboard' : '/management/dashboard'">← Bảng điều khiển</RouterLink>
         <p class="eyebrow">F_AUTH_03</p>
         <h1>Hồ sơ cá nhân</h1>
         <p class="subtitle">Quản lý thông tin cá nhân và bảo mật tài khoản.</p>
-        <RouterLink v-if="authStore.role === 'DENTIST' && authStore.user" :to="'/staff/signatures/' + authStore.user.userId">Quản lý ảnh chữ ký của tôi</RouterLink>
+        <RouterLink v-if="authStore.role === 'DENTIST' && authStore.user" :to="'/management/staff/signatures/' + authStore.user.userId">Quản lý ảnh chữ ký của tôi</RouterLink>
       </div>
     </header>
 
