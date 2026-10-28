@@ -61,7 +61,7 @@ import { patientActivationService, takeActivationPrefill, type ActivationChallen
 
 const auth = useAuthStore();
 const loginMode = ref<'cccd' | 'passport'>('cccd');
-const nationalityCode = ref('VN');
+const nationalityCode = ref('');
 const phone = ref(''), password = ref(''), code = ref(''), newPassword = ref(''), repeatPassword = ref('');
 const choice = ref('new'), confirmed = ref(false), busy = ref(false), done = ref(false), uncertain = ref(false);
 const challenge = ref<ActivationChallenge | null>(null), grant = ref<ActivationGrant | null>(null), error = ref(''), message = ref('');
@@ -77,7 +77,7 @@ onMounted(() => {
   nationalityCode.value = prefill.nationalityCode;
 });
 
-function clear() { phone.value = ''; password.value = ''; code.value = ''; newPassword.value = ''; repeatPassword.value = ''; challenge.value = null; grant.value = null; confirmed.value = false; choice.value = 'new'; }
+function clear() { phone.value = ''; password.value = ''; nationalityCode.value = ''; code.value = ''; newPassword.value = ''; repeatPassword.value = ''; challenge.value = null; grant.value = null; confirmed.value = false; choice.value = 'new'; }
 function restart() { if (disposed || busy.value) return; generation++; clear(); done.value = false; uncertain.value = false; error.value = ''; message.value = ''; }
 function failure(cause: unknown, fallback: string) { const data = (cause as { response?: { data?: { message?: unknown } } })?.response?.data; return typeof data?.message === 'string' ? data.message : fallback; }
 async function requestCode() {
