@@ -8,6 +8,7 @@ using Dental.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.Extensions.Configuration;
 
 internal static class IdentityMigrationSmoke
 {
@@ -83,7 +84,12 @@ internal static class IdentityMigrationSmoke
         };
         db.Users.Add(actor);
         await db.SaveChangesAsync();
-        var hasher = new KeyedIdentityHasher(new byte[32]);
+        const string testKey = "SyntheticIdentityKeyForRecoverySmoke2026";
+        var keyConfig = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["IdentitySecurity:HmacKey"] = testKey
+        }).Build();
+        var hasher = new KeyedIdentityHasher(keyConfig);
         await using (var verified = new DentalDbContext(options))
         {
             var result = await new PatientCitizenIdRepository(verified, hasher).SaveAsync(
@@ -98,6 +104,23 @@ internal static class IdentityMigrationSmoke
             after.DocumentType == IdentityDocumentType.CitizenId && after.HashScheme == IdentityHashScheme.HmacCanonical &&
             after.IdentityKeyVersion == IdentityDocumentConstants.CurrentHmacKeyVersion && after.IssuingCountryCode is null,
             "Verified conversion stores only canonical HMAC, mask and key version");
+        await using (var restored = new DentalDbContext(options))
+        {
+            // Tạo lại dịch vụ và DbContext như sau khi phục hồi cấu hình/CSDL.
+            var restoredHasher = new KeyedIdentityHasher(keyConfig);
+            check(await restored.Patients.AsNoTracking().AnyAsync(patient => patient.PatientId == patientId &&
+                patient.CitizenIdHash == restoredHasher.Hash(citizenId) &&
+                patient.IdentityKeyVersion == IdentityDocumentConstants.CurrentHmacKeyVersion),
+                "Restored configuration key resolves the converted identity in a new database context");
+
+            var changedKeyConfig = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["IdentitySecurity:HmacKey"] = "DifferentSyntheticIdentityKeyForSmoke2026"
+            }).Build();
+            var changedKeyHasher = new KeyedIdentityHasher(changedKeyConfig);
+            check(!changedKeyHasher.Matches(after.CitizenIdHash, citizenId),
+                "An unbacked replacement key cannot resolve the converted identity");
+        }
         check(await db.AuditLogs.AsNoTracking().CountAsync(log => log.EntityId == patientId &&
             log.Action == "MOD_PAT_CITIZEN_ID_UPDATED" && log.Detail != null &&
             !log.Detail.Contains(citizenId) && !log.Detail.Contains(oldHash) && !log.Detail.Contains(after.CitizenIdHash!)) == 1,
