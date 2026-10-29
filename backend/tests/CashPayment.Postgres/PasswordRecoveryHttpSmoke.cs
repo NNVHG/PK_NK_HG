@@ -10,6 +10,7 @@ using Dental.Application.Features.MOD_AUTH;
 using Dental.Application.Features.MOD_PAT;
 using Dental.Application.Interfaces;
 using Dental.Domain.Entities;
+using Dental.Domain.Enums;
 using Dental.Infrastructure.Data;
 using Dental.Infrastructure.Repositories;
 using Dental.Infrastructure.Services;
@@ -89,13 +90,13 @@ internal static class PasswordRecoveryHttpSmoke
         }
         await db.SaveChangesAsync();
         const string patientCitizenId = "012345678901";
-        db.Patients.Add(new Patient { UserId = users[^1].UserId, FullName = "Synthetic recovery patient", Phone = users[^1].Phone,
+        db.Patients.Add(new Patient { UserId = users[^1].UserId, FullName = "Synthetic recovery patient", Phone = "0970000088",
             DateOfBirth = new(1990, 1, 1), CitizenIdHash = CitizenIdIdentity.Hash(patientCitizenId), CitizenIdMasked = CitizenIdIdentity.Mask(patientCitizenId) });
         await db.SaveChangesAsync();
         const string root = "/api/auth/password-recovery/";
-        async Task<RecoveryResponse> Issue(string phone, string? citizenId = null)
+        async Task<RecoveryResponse> Issue(string phone, string? citizenId = null, IdentityDocumentType? documentType = null, string? country = null)
         {
-            using var response = await client.PostAsJsonAsync(root + "request", new RecoveryRequest(phone, citizenId));
+            using var response = await client.PostAsJsonAsync(root + "request", new RecoveryRequest(phone, citizenId, documentType, country));
             check(response.StatusCode == HttpStatusCode.Accepted && response.Headers.CacheControl?.NoStore == true, "Recovery request accepted/no-store");
             var json = await response.Content.ReadAsStringAsync();
             check(!json.Contains(phone) && !json.Contains("passwordHash", StringComparison.OrdinalIgnoreCase) && !json.Contains("\"code\"", StringComparison.OrdinalIgnoreCase), "Recovery response contains only challenge metadata");
@@ -120,6 +121,7 @@ internal static class PasswordRecoveryHttpSmoke
             client.DefaultRequestHeaders.Authorization = null;
             var citizenId = user.Role.RoleCode == "PATIENT" ? patientCitizenId : null;
             var challenge = await Issue(user.Phone, citizenId);
+            check(sms.Codes.ContainsKey(user.Phone), "OTP sent to registered account phone even when patient contact differs");
             foreach(var password in new[]{"Aa1234","Aa12345"})
             {
                 using var weak=await client.PostAsJsonAsync(root+"reset",new ResetPasswordRequest(challenge.ChallengeId,user.Phone,sms.Codes[user.Phone],password,citizenId));
@@ -168,6 +170,80 @@ internal static class PasswordRecoveryHttpSmoke
         var staleUser = users[2]; var stale = await Issue(staleUser.Phone);
         await db.Users.Where(x => x.UserId == staleUser.UserId).ExecuteUpdateAsync(x => x.SetProperty(u => u.PasswordHash, hasher.Hash("Changed3")));
         check(await Reset(stale, staleUser) == HttpStatusCode.BadRequest, "Password change after SMS invalidates pending recovery grant");
+        // Cùng SĐT, cùng số hộ chiếu, khác quốc gia: chỉ đúng tài khoản được khôi phục.
+        var identityHasher = new KeyedIdentityHasher(new byte[32]);
+        const string passport = "AB123456";
+        var passportPatients = new List<Patient>();
+        foreach (var country in new[] { "US", "CA" })
+        {
+            var passportUser = new User { Role = users[^1].Role, FullName = "Synthetic passport account",
+                Phone = users[^1].Phone, LoginByCitizenId = true, PasswordHash = oldHash };
+            var passportPatient = new Patient { User = passportUser, FullName = "Synthetic passport patient", Phone = "0970000088",
+                DateOfBirth = new(1990, 1, 1), DocumentType = IdentityDocumentType.Passport, IssuingCountryCode = country,
+                CitizenIdHash = identityHasher.Hash(passport, IdentityDocumentType.Passport, country),
+                CitizenIdMasked = identityHasher.Mask(passport, IdentityDocumentType.Passport), HashScheme = IdentityHashScheme.HmacCanonical, IdentityKeyVersion = 1 };
+            db.Patients.Add(passportPatient); passportPatients.Add(passportPatient);
+        }
+        await db.SaveChangesAsync();
+        async Task<HttpStatusCode> ResetDocument(RecoveryResponse challenge, string phone, string id, IdentityDocumentType type, string? country)
+        {
+            using var response = await client.PostAsJsonAsync(root + "reset", new ResetPasswordRequest(challenge.ChallengeId, phone,
+                sms.Codes[phone], "Recovered4", id, type, country));
+            return response.StatusCode;
+        }
+        clock.Now = clock.Now.AddMinutes(6);
+        var sends = sms.Codes.Count;
+        await Issue("0970000088", patientCitizenId);
+        check(sms.Codes.Count == sends, "Patient contact number alone is not the registered recovery destination");
+        foreach (var patient in passportPatients)
+        {
+            clock.Now = clock.Now.AddSeconds(60);
+            var phone = patient.User!.Phone;
+            var current = await Issue(phone, passport.ToLowerInvariant(), IdentityDocumentType.Passport, patient.IssuingCountryCode!.ToLowerInvariant());
+            var otherCountry = patient.IssuingCountryCode == "US" ? "CA" : "US";
+            check(await ResetDocument(current, phone, passport, IdentityDocumentType.Passport, otherCountry) == HttpStatusCode.BadRequest,
+                "Proof cannot switch passport country even when both accounts share phone");
+            check(await ResetDocument(current, phone, passport.ToLowerInvariant(), IdentityDocumentType.Passport, patient.IssuingCountryCode) == HttpStatusCode.OK,
+                "Passport recovery accepts canonical identity with independent contact phone");
+            check(await ResetDocument(current, phone, passport, IdentityDocumentType.Passport, patient.IssuingCountryCode) == HttpStatusCode.BadRequest,
+                "Passport proof cannot be replayed");
+            await db.Entry(patient.User).ReloadAsync();
+            check(patient.User.TokenVersion == 1 && hasher.Verify("Recovered4", patient.User.PasswordHash), "Selected passport account changed exactly once");
+            await db.Entry(users[^1]).ReloadAsync();
+            check(users[^1].TokenVersion == 1 && hasher.Verify("Newpass2", users[^1].PasswordHash), "CCCD account sharing phone remains unchanged");
+            var otherPatient = passportPatients.Single(p => p != patient);
+            await db.Entry(otherPatient.User!).ReloadAsync();
+            check(otherPatient.User!.TokenVersion == (patient.IssuingCountryCode == "US" ? 0 : 1), "Other passport country account remains unchanged");
+        }
+        var target = passportPatients[0];
+        clock.Now = clock.Now.AddSeconds(60);
+        var beforePhoneChange = await Issue(target.User!.Phone, passport, IdentityDocumentType.Passport, "US");
+        await db.Users.Where(u => u.UserId == target.User.UserId).ExecuteUpdateAsync(x => x.SetProperty(u => u.Phone, "0970000077"));
+        check(await ResetDocument(beforePhoneChange, target.User.Phone, passport, IdentityDocumentType.Passport, "US") == HttpStatusCode.BadRequest,
+            "Changing registered phone invalidates pending recovery");
+        await db.Users.Where(u => u.UserId == target.User.UserId).ExecuteUpdateAsync(x => x.SetProperty(u => u.Phone, target.User.Phone));
+        clock.Now = clock.Now.AddSeconds(60);
+        var beforeVersionChange = await Issue(target.User.Phone, passport, IdentityDocumentType.Passport, "US");
+        await db.Users.Where(u => u.UserId == target.User.UserId).ExecuteUpdateAsync(x => x.SetProperty(u => u.TokenVersion, u => u.TokenVersion + 1));
+        check(await ResetDocument(beforeVersionChange, target.User.Phone, passport, IdentityDocumentType.Passport, "US") == HttpStatusCode.BadRequest,
+            "Credential version change invalidates proof even when phone and password are unchanged");
+        clock.Now = clock.Now.AddSeconds(60);
+        var beforeIdentityChange = await Issue(target.User.Phone, passport, IdentityDocumentType.Passport, "US");
+        await db.Patients.Where(p => p.PatientId == target.PatientId).ExecuteUpdateAsync(x => x.SetProperty(p => p.IssuingCountryCode, "GB"));
+        check(await ResetDocument(beforeIdentityChange, target.User.Phone, passport, IdentityDocumentType.Passport, "US") == HttpStatusCode.BadRequest,
+            "Changed document metadata invalidates pending recovery");
+        await db.Patients.Where(p => p.PatientId == target.PatientId).ExecuteUpdateAsync(x => x.SetProperty(p => p.IssuingCountryCode, "US"));
+        clock.Now = clock.Now.AddSeconds(60);
+        await db.Users.Where(u => u.UserId == target.User.UserId).ExecuteUpdateAsync(x => x.SetProperty(u => u.RequiresPhoneActivation, true).SetProperty(u => u.PhoneActivationReason, PhoneActivationReason.PhoneChange));
+        var contactChange = await Issue(target.User.Phone, passport, IdentityDocumentType.Passport, "US");
+        await db.Patients.Where(p => p.PatientId == target.PatientId).ExecuteUpdateAsync(x => x.SetProperty(p => p.Phone, "0970000066"));
+        check(await ResetDocument(contactChange, target.User.Phone, passport, IdentityDocumentType.Passport, "US") == HttpStatusCode.OK,
+            "Contact-only update does not change recovery authority");
+        await db.Entry(target.User).ReloadAsync();
+        check(target.User.RequiresPhoneActivation && target.User.PhoneVerifiedAtUtc == null && target.User.PhoneActivationReason == PhoneActivationReason.PhoneChange, "Recovery does not bypass activation or fabricate phone verification");
+        check(await db.AuditLogs.CountAsync(x => x.Action == "MOD_AUTH_PASSWORD_RECOVERED") == 8, "Only successful recoveries commit audit entries");
+        check(await db.AuditLogs.AllAsync(x => x.Detail == null || !x.Detail.Contains(passport) && !x.Detail.Contains(patientCitizenId)),
+            "Recovery audit excludes identity documents");
         using (var invalid = await client.PostAsJsonAsync(root + "request", new RecoveryRequest("invalid")))
             check(invalid.StatusCode == HttpStatusCode.BadRequest, "Invalid phone rejected at HTTP boundary");
         var throttled = false;

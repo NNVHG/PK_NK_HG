@@ -22,15 +22,15 @@ function fixture() {
   const c = module.exports.default.setup({}, { expose() {} }); hooks.mount();
   return { c, calls, controls, store, cleanup: hooks.unmount };
 }
-async function ready(f) { f.c.phone.value = '0999999998'; f.c.citizenId.value = '123456789012'; await f.c.submit(); f.c.code.value = '123456'; f.c.password.value = f.c.confirmPassword.value = 'Newpass1'; }
+async function ready(f) { f.c.accountType.value = 'staff'; f.c.phone.value = '0999999998'; f.c.accountType.value = 'patient'; f.c.citizenId.value = '123456789012'; await f.c.submit(); f.c.code.value = '123456'; f.c.password.value = f.c.confirmPassword.value = 'Newpass1'; }
 
 for (const password of ['Aa1234','Aa12345','Strong1\0x','Aa1'+'Đ'.repeat(35)]) test('recovery rejects policy-invalid password without sending OTP '+JSON.stringify(password),async()=>{
   const f=fixture();await ready(f);f.c.password.value=f.c.confirmPassword.value=password;await f.c.submit();assert.equal(f.calls.length,1);assert.equal(f.c.code.value,'123456');assert.match(f.c.error.value,/8 ký tự/);
 });
 test('request sends registered phone and only stores transient challenge metadata', async () => {
-  const f = fixture(); f.c.phone.value = '0999999998'; await f.c.submit();
-  assert.deepEqual(f.calls, [['request','0999999998','']]); assert.deepEqual(f.store.challenge, challenge);
-  assert.match(f.c.message.value, /Nếu số điện thoại/); assert.equal(f.c.code.value, '');
+  const f = fixture(); f.c.accountType.value = 'staff'; f.c.phone.value = '0999999998'; await f.c.submit();
+  assert.deepEqual(f.calls, [['request','0999999998','',undefined,undefined]]); assert.deepEqual(f.store.challenge, challenge);
+  assert.match(f.c.message.value, /Nếu thông tin khớp/); assert.equal(f.c.code.value, '');
 });
 test('invalid phone, weak password and mismatched confirmation never write', async () => {
   const f = fixture(); f.c.phone.value = '1'; await f.c.submit(); assert.equal(f.calls.length, 0);
@@ -43,13 +43,13 @@ test('local cooldown blocks resends until exactly sixty seconds', async () => {
 });
 test('successful reset clears secrets and offers login without creating a session', async () => {
   const f = fixture(); await ready(f); await f.c.submit();
-  assert.deepEqual(f.calls[1], ['reset',challenge.challengeId,'0999999998','123456','Newpass1','123456789012']);
+  assert.deepEqual(f.calls[1], ['reset',challenge.challengeId,'0999999998','123456','Newpass1','123456789012',1,undefined]);
   assert.equal(f.c.done.value, true); assert.equal(f.store.challenge, null);
   for (const field of ['phone','code','password','confirmPassword']) assert.equal(f.c[field].value, '');
   await f.c.submit(); assert.equal(f.calls.length, 2);
 });
 test('double clicks never send duplicate request or reset', async () => {
-  const f = fixture(), pending = deferred(); f.controls.response = pending.promise; f.c.phone.value = '0999999998';
+  const f = fixture(), pending = deferred(); f.controls.response = pending.promise; f.c.accountType.value = 'staff'; f.c.phone.value = '0999999998';
   const first = f.c.submit(); await f.c.submit(); assert.equal(f.calls.length, 1); pending.resolve(challenge); await first;
   f.c.code.value = '123456'; f.c.password.value = f.c.confirmPassword.value = 'Newpass1';
   const next = deferred(); f.controls.reset = next.promise;
@@ -57,7 +57,7 @@ test('double clicks never send duplicate request or reset', async () => {
 });
 test('unavailable service is explicit and does not claim that SMS was sent', async () => {
   const f = fixture(); f.controls.requestError = { response: { data: { message: 'Khôi phục qua SMS chưa sẵn sàng.' } } };
-  f.c.phone.value = '0999999998'; await f.c.submit(); assert.equal(f.store.challenge,null); assert.equal(f.c.message.value,''); assert.match(f.c.error.value,/chưa sẵn sàng/);
+  f.c.accountType.value = 'staff'; f.c.phone.value = '0999999998'; await f.c.submit(); assert.equal(f.store.challenge,null); assert.equal(f.c.message.value,''); assert.match(f.c.error.value,/chưa sẵn sàng/);
 });
 test('failed or unknown reset clears all authentication secrets and never retries automatically', async () => {
   const f = fixture(); await ready(f); f.controls.resetError = Error('Synthetic network fault'); await f.c.submit();
@@ -66,7 +66,7 @@ test('failed or unknown reset clears all authentication secrets and never retrie
   assert.match(f.c.error.value,/Chưa xác định/);
 });
 test('unmount clears secrets and ignores late request/reset responses', async () => {
-  const f = fixture(), pending = deferred(); f.controls.response = pending.promise; f.c.phone.value = '0999999998';
+  const f = fixture(), pending = deferred(); f.controls.response = pending.promise; f.c.accountType.value = 'staff'; f.c.phone.value = '0999999998';
   const request = f.c.submit(); f.cleanup(); pending.resolve(challenge); await request;
   assert.equal(f.store.challenge,null); assert.equal(f.c.phone.value,''); assert.equal(f.c.message.value,'');
   const g = fixture(); await ready(g); const resetPending = deferred(); g.controls.reset = resetPending.promise;
@@ -84,4 +84,22 @@ test('form labels, notices and public entry exist without persistent secret stor
   assert.match(source,/autocomplete="one-time-code"/); assert.match(source,/role="alert"/); assert.match(source,/role="status"/);
   assert.doesNotMatch(source+client+store,/localStorage|sessionStorage|console\./);
   assert.match(router,/path: '\/forgot-password'.*guestOnly: true/); assert.match(login,/to="\/forgot-password"/);
+});
+
+test('patient identity is required; passport country and normalized identity accompany both steps', async () => {
+  const f = fixture(); f.c.phone.value = '0999999998'; await f.c.submit();
+  assert.equal(f.calls.length,0); assert.equal(f.c.invalidField.value,'citizenId');
+  f.c.documentType.value = 2; f.c.citizenId.value = ' ab123456 '; await f.c.submit();
+  assert.equal(f.calls.length,0); assert.equal(f.c.invalidField.value,'country');
+  f.c.nationalityCode.value = ' us '; await f.c.submit();
+  assert.deepEqual(f.calls[0],['request','0999999998','AB123456',2,'US']);
+  f.c.code.value='123456'; f.c.password.value=f.c.confirmPassword.value='Newpass1'; await f.c.submit();
+  assert.deepEqual(f.calls[1],['reset',challenge.challengeId,'0999999998','123456','Newpass1','AB123456',2,'US']);
+  assert.equal(f.c.nationalityCode.value,''); assert.equal(f.c.citizenId.value,'');
+});
+test('changing account/document clears identity and staff never submits patient identity', async () => {
+  const f=fixture(); f.c.documentType.value=2; f.c.citizenId.value='AB123456'; f.c.nationalityCode.value='US';
+  f.c.changeDocument(); assert.equal(f.c.citizenId.value,''); assert.equal(f.c.nationalityCode.value,'');
+  f.c.accountType.value='staff'; f.c.phone.value='0999999998'; f.c.citizenId.value='AB123456'; f.c.nationalityCode.value='US';
+  await f.c.submit(); assert.deepEqual(f.calls[0],['request','0999999998','',undefined,undefined]);
 });

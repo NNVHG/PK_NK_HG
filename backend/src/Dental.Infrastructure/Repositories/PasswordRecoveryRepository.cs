@@ -1,4 +1,5 @@
 using System.Data;
+using Dental.Domain.Enums;
 using Dental.Application.Features.MOD_AUTH;
 using Dental.Application.Interfaces;
 using Dental.Domain.Constants;
@@ -9,23 +10,29 @@ namespace Dental.Infrastructure.Repositories;
 
 public sealed class PasswordRecoveryRepository(DentalDbContext db, IAuditLogger audit, TimeProvider clock, IKeyedIdentityHasher identityHasher) : IPasswordRecoveryRepository
 {
-    public async Task<RecoveryAccount?> FindActiveAsync(string phone, string? citizenId, CancellationToken ct)
+    public async Task<RecoveryAccount?> FindActiveAsync(string phone, string? citizenId, CancellationToken ct, IdentityDocumentType documentType = IdentityDocumentType.CitizenId, string? nationalityCode = null)
     {
         if (!string.IsNullOrEmpty(citizenId))
         {
-            var hash = identityHasher.Hash(citizenId);
-            var legacyHash = Dental.Application.Features.MOD_PAT.CitizenIdIdentity.Hash(citizenId);
+            var hash = identityHasher.Hash(citizenId, documentType, nationalityCode);
+            var country = nationalityCode?.Trim().ToUpperInvariant();
+            var legacyHash = documentType == IdentityDocumentType.CitizenId
+                ? Dental.Application.Features.MOD_PAT.CitizenIdIdentity.Hash(citizenId.Trim()) : null;
             var matches = await db.Patients.AsNoTracking()
-                .Where(p => (p.CitizenIdHash == hash || p.CitizenIdHash == legacyHash) && p.Phone == phone && p.User != null && p.User.IsActive &&
+                .Where(p => (p.CitizenIdHash == hash || legacyHash != null && p.CitizenIdHash == legacyHash) &&
+                            (documentType == IdentityDocumentType.Passport
+                                ? p.DocumentType == IdentityDocumentType.Passport && p.IssuingCountryCode == country
+                                : p.DocumentType == null || p.DocumentType == IdentityDocumentType.CitizenId) &&
+                            p.User != null && p.User.Phone == phone && p.User.IsActive &&
                             p.User.Role.RoleCode == RoleCodes.Patient)
-                .Select(p => new RecoveryAccount(p.User!.UserId, p.User.PasswordHash, p.User.Phone, p.CitizenIdHash))
+                .Select(p => new RecoveryAccount(p.User!.UserId, p.User.PasswordHash, p.User.Phone, p.CitizenIdHash, p.User.TokenVersion, p.DocumentType, p.IssuingCountryCode))
                 .Take(2).ToListAsync(ct);
             return matches.Count == 1 ? matches[0] : null;
         }
 
         var staff = await db.Users.AsNoTracking()
             .Where(u => u.Phone == phone && u.IsActive && RoleCodes.StaffRoles.Contains(u.Role.RoleCode))
-            .Select(u => new RecoveryAccount(u.UserId, u.PasswordHash, u.Phone, null))
+            .Select(u => new RecoveryAccount(u.UserId, u.PasswordHash, u.Phone, null, u.TokenVersion, null, null))
             .Take(2).ToListAsync(ct);
         return staff.Count == 1 ? staff[0] : null;
     }
@@ -34,10 +41,11 @@ public sealed class PasswordRecoveryRepository(DentalDbContext db, IAuditLogger 
     {
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
         // Atomic compare-and-set also invalidates a code after a normal password change, role lock or competing reset.
-        var changed = await db.Users.Where(x => x.UserId == account.UserId && x.IsActive && x.Phone == account.Phone && x.PasswordHash == account.PasswordHash &&
+        var changed = await db.Users.Where(x => x.UserId == account.UserId && x.IsActive && x.Phone == account.Phone && x.PasswordHash == account.PasswordHash && x.TokenVersion == account.TokenVersion &&
                 (account.CitizenIdHash == null
                     ? RoleCodes.StaffRoles.Contains(x.Role.RoleCode)
-                    : x.Role.RoleCode == RoleCodes.Patient && db.Patients.Any(p => p.UserId == x.UserId && p.Phone == account.Phone && p.CitizenIdHash == account.CitizenIdHash)))
+                    : x.Role.RoleCode == RoleCodes.Patient && db.Patients.Any(p => p.UserId == x.UserId && p.CitizenIdHash == account.CitizenIdHash &&
+                        p.DocumentType == account.DocumentType && p.IssuingCountryCode == account.IssuingCountryCode)))
             .ExecuteUpdateAsync(update => update.SetProperty(x => x.PasswordHash, passwordHash)
                 .SetProperty(x => x.TokenVersion, x => x.TokenVersion + 1)
                 .SetProperty(x => x.UpdatedAt, clock.GetUtcNow().UtcDateTime), ct);

@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Configuration;
 using NSubstitute;
 using Xunit;
+using Dental.Domain.Enums;
 
 namespace Dental.Tests.Auth;
 
@@ -248,5 +249,44 @@ public sealed class PasswordRecoveryTests
         Assert.True(sender.IsConfigured); Assert.Equal(expected, await sender.SendAsync(Phone,"123456",CancellationToken.None));
         Assert.Contains("To=%2B84999999998",handler.Body); Assert.Contains("123456",handler.Body);
         Assert.DoesNotContain(Phone,handler.Uri); Assert.DoesNotContain("123456",handler.Uri);
+    }
+
+    [Theory]
+    [InlineData(null, null, null, true)]
+    [InlineData("012345678901", null, null, true)]
+    [InlineData("012345678901", IdentityDocumentType.CitizenId, null, true)]
+    [InlineData("ab123456", IdentityDocumentType.Passport, "us", true)]
+    [InlineData("012345678901", IdentityDocumentType.Passport, "VN", true)]
+    [InlineData("AB123456", IdentityDocumentType.Passport, null, false)]
+    [InlineData("AB123456", IdentityDocumentType.Passport, "1A", false)]
+    [InlineData("AB-123456", IdentityDocumentType.Passport, "US", false)]
+    [InlineData(null, IdentityDocumentType.Passport, "US", false)]
+    [InlineData(null, IdentityDocumentType.CitizenId, null, false)]
+    [InlineData("012345678901", (IdentityDocumentType)99, null, false)]
+    [InlineData("012345678901", IdentityDocumentType.CitizenId, "US", false)]
+    public void RequestAndResetUseTheSameDocumentRules(string? id, IdentityDocumentType? type, string? country, bool valid)
+    {
+        Assert.Equal(valid, new RecoveryRequestValidator().Validate(new RecoveryRequest(Phone, id, type, country)).IsValid);
+        Assert.Equal(valid, new ResetPasswordRequestValidator().Validate(new ResetPasswordRequest(Guid.NewGuid(), Phone, "123456", "Newpass1", id, type, country)).IsValid);
+    }
+
+    [Fact]
+    public async Task PassportProofBindsCountryAndNeverFallsBackToUnkeyedHash()
+    {
+        const string id = "012345678901";
+        var hasher = new KeyedIdentityHasher(new byte[32]);
+        var account = new RecoveryAccount(7, "stored-hash", Phone, hasher.Hash(id, IdentityDocumentType.Passport, "US"));
+        using var codes = new PasswordRecoveryCodes(clock);
+        var issued = codes.Issue(Phone, account).Value!;
+        passwords.Hash("Newpass1").Returns("new-hash");
+        repository.ResetAsync(account, "new-hash", Arg.Any<CancellationToken>()).Returns(true);
+        Assert.True((await Service(codes).ResetAsync(new(issued.ChallengeId, Phone, issued.Code, "Newpass1", id, IdentityDocumentType.Passport, "CA"))).IsFailure);
+        Assert.True((await Service(codes).ResetAsync(new(issued.ChallengeId, Phone, issued.Code, "Newpass1", id))).IsFailure);
+        Assert.Empty(repository.ReceivedCalls());
+        Assert.True((await Service(codes).ResetAsync(new(issued.ChallengeId, Phone, issued.Code, "Newpass1", id, IdentityDocumentType.Passport, "us"))).IsSuccess);
+        clock.Now = clock.Now.AddMinutes(1);
+        var legacy = codes.Issue(Phone, account with { CitizenIdHash = Dental.Application.Features.MOD_PAT.CitizenIdIdentity.Hash(id) }).Value!;
+        Assert.True((await Service(codes).ResetAsync(new(legacy.ChallengeId, Phone, legacy.Code, "Newpass1", id, IdentityDocumentType.Passport, "US"))).IsFailure);
+        await repository.Received(1).ResetAsync(account, "new-hash", Arg.Any<CancellationToken>());
     }
 }
