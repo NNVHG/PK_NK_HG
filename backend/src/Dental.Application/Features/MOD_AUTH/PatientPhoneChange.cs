@@ -5,6 +5,7 @@ namespace Dental.Application.Features.MOD_AUTH;
 
 public sealed record PatientPhonePreviewRequest(string NewPhone);
 public sealed record PatientPhonePreview(int PatientId, string PatientName, string CurrentPhone, string NewPhone, bool ContactWillUpdate, string ReviewStamp);
+public sealed record PatientPhoneChangeCommand(string NewPhone, string ReviewStamp, bool Confirmed, string CurrentPassword);
 public sealed record PatientPhoneRequest(string NewPhone, string ReviewStamp, bool Confirmed);
 public sealed record PatientPhoneConfirmation(Guid ChallengeId, string Code, string ReviewStamp, bool Confirmed);
 public sealed record PatientPhonePending(Guid ChallengeId, string NewPhone, DateTimeOffset ExpiresAtUtc);
@@ -16,8 +17,7 @@ public sealed record PatientPhoneDispatch(PatientPhonePending Pending, string Co
 public interface IPatientPhoneChangeRepository
 {
     Task<Result<PatientPhonePreview>> PreviewAsync(int userId, string newPhone, CancellationToken ct);
-    Task<Result<PatientPhoneTarget>> PrepareAsync(int userId, PatientPhoneRequest request, string? ip, CancellationToken ct);
-    Task<Result<PatientPhoneCompleted>> CompleteAsync(PatientPhoneTarget target, string? ip, CancellationToken ct);
+    Task<Result<PatientPhoneCompleted>> ChangeAsync(int userId, PatientPhoneChangeCommand request, string? ip, CancellationToken ct);
 }
 public interface IPatientPhoneChangeProofs
 {
@@ -53,38 +53,34 @@ public sealed class PatientPhoneConfirmationValidator : AbstractValidator<Patien
         RuleFor(x => x.Confirmed).Equal(true);
     }
 }
-public sealed class PatientPhoneChangeService(IPatientPhoneChangeRepository repository, IPatientPhoneChangeProofs proofs, IPatientPhoneChangeSms sms)
+public sealed class PatientPhoneChangeValidator : AbstractValidator<PatientPhoneChangeCommand>
 {
-    public static readonly Error Invalid = new("PAT_PHONE_PROOF", "Mã hoặc yêu cầu không hợp lệ, đã dùng hoặc hết hạn. Xem lại danh sách và xin OTP mới.");
+    public PatientPhoneChangeValidator()
+    {
+        RuleFor(x => x.NewPhone).NotEmpty().Length(10).Matches("^0[0-9]{9}$");
+        RuleFor(x => x.ReviewStamp).NotEmpty().Length(64).Matches("^[A-F0-9]{64}$");
+        RuleFor(x => x.Confirmed).Equal(true);
+        // Xác thực mật khẩu hiện tại, không áp quy tắc độ mạnh của mật khẩu mới.
+        RuleFor(x => x.CurrentPassword).NotEmpty().Must(p => p is not null &&
+            !p.Contains('\0') && System.Text.Encoding.UTF8.GetByteCount(p) <= 72);
+    }
+}
+public sealed class PatientPhoneChangeService(IPatientPhoneChangeRepository repository, IPatientActivationDelivery delivery)
+{
+    public static readonly Error Invalid = new("PAT_PHONE_PROOF", "Yêu cầu không hợp lệ hoặc đã hết hạn.");
     public static readonly Error Stale = new("PAT_PHONE_STALE", "Tài khoản hoặc hồ sơ đã thay đổi. Vui lòng tải lại và xác nhận thông tin mới.");
-    public static readonly Error NumberUnavailable = new("PAT_PHONE_NUMBER", "Không thể sử dụng số này để đổi đăng nhập. Vui lòng kiểm tra lại.");
-    public static readonly Error Unavailable = new("PAT_PHONE_SMS_UNAVAILABLE", "Kênh SMS đổi SĐT chưa sẵn sàng. Số và thông tin hồ sơ hiện tại được giữ nguyên.");
+    public static readonly Error NumberUnavailable = new("PAT_PHONE_NUMBER", "Không thể sử dụng số này. Vui lòng kiểm tra lại.");
+    public static readonly Error Unavailable = new("PAT_PHONE_SMS_UNAVAILABLE", "Kênh xác minh OTP chưa sẵn sàng. Số và thông tin hồ sơ hiện tại được giữ nguyên.");
+    public static readonly Error WrongPassword = new("PAT_PHONE_PASSWORD", "Mật khẩu hiện tại không đúng.");
     public Task<Result<PatientPhonePreview>> PreviewAsync(int userId, PatientPhonePreviewRequest request, CancellationToken ct)
         => new PatientPhonePreviewValidator().Validate(request).IsValid
             ? repository.PreviewAsync(userId, request.NewPhone, ct)
             : Task.FromResult(Result<PatientPhonePreview>.Failure(Error.Validation));
-    public async Task<Result<PatientPhonePending>> RequestAsync(int userId, PatientPhoneRequest request, string? ip, CancellationToken ct)
+    public Task<Result<PatientPhoneCompleted>> ChangeAsync(int userId, PatientPhoneChangeCommand request, string? ip, CancellationToken ct)
     {
-        if (!new PatientPhoneRequestValidator().Validate(request).IsValid) return Result<PatientPhonePending>.Failure(Error.Validation);
-        var target = await repository.PrepareAsync(userId, request, ip, ct);
-        if (target.IsFailure) return Result<PatientPhonePending>.Failure(target.Error);
-        if (!sms.IsConfigured) return Result<PatientPhonePending>.Failure(Unavailable);
-        var result = proofs.Issue(target.Value!);
-        if (result.IsFailure) return Result<PatientPhonePending>.Failure(result.Error);
-        var dispatch = result.Value!;
-        var delivered = false;
-        try
-        {
-            delivered = await sms.SendAsync(request.NewPhone, dispatch.Code, ct);
-            return delivered ? Result<PatientPhonePending>.Success(dispatch.Pending) : Result<PatientPhonePending>.Failure(Unavailable);
-        }
-        catch (Exception) when (!ct.IsCancellationRequested) { return Result<PatientPhonePending>.Failure(Unavailable); }
-        finally { if (!delivered) proofs.Revoke(userId, dispatch.Pending.ChallengeId); }
-    }
-    public Task<Result<PatientPhoneCompleted>> ConfirmAsync(int userId, PatientPhoneConfirmation request, string? ip, CancellationToken ct)
-    {
-        if (!new PatientPhoneConfirmationValidator().Validate(request).IsValid) return Task.FromResult(Result<PatientPhoneCompleted>.Failure(Error.Validation));
-        var target = proofs.Consume(userId, request);
-        return target is null ? Task.FromResult(Result<PatientPhoneCompleted>.Failure(Invalid)) : repository.CompleteAsync(target, ip, ct);
+        if (!new PatientPhoneChangeValidator().Validate(request).IsValid)
+            return Task.FromResult(Result<PatientPhoneCompleted>.Failure(Error.Validation));
+        if (!delivery.IsConfigured) return Task.FromResult(Result<PatientPhoneCompleted>.Failure(Unavailable));
+        return repository.ChangeAsync(userId, request, ip, ct);
     }
 }

@@ -202,9 +202,6 @@ builder.Services.AddScoped<Dental.Application.Features.MOD_AUTH.IPatientPhoneCha
 builder.Services.AddScoped<Dental.Application.Features.MOD_AUTH.PatientPhoneChangeService>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_AUTH.ICounterPatientPhoneRepository, CounterPatientPhoneRepository>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_AUTH.CounterPatientPhoneService>();
-builder.Services.AddSingleton<Dental.Application.Features.MOD_AUTH.IPatientPhoneChangeProofs, PatientPhoneChangeProofs>();
-builder.Services.AddHttpClient<Dental.Application.Features.MOD_AUTH.IPatientPhoneChangeSms, PatientPhoneChangeSms>(client => client.Timeout = TimeSpan.FromSeconds(10))
-    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false }).RemoveAllLoggers();
 builder.Services.AddScoped<StaffService>();
 builder.Services.AddScoped<PatientsService>();
 builder.Services.AddScoped<PatientTimelineService>();

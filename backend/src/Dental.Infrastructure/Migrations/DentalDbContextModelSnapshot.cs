@@ -2578,6 +2578,11 @@ namespace Dental.Infrastructure.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<string>("PhoneActivationReason")
+                        .IsConcurrencyToken()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
                     b.Property<DateTime?>("PhoneVerifiedAtUtc")
                         .HasColumnType("timestamptz");
 

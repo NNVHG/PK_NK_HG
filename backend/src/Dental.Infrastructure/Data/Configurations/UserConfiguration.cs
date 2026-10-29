@@ -11,6 +11,7 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.HasKey(u => u.UserId);
         builder.Property(u => u.TokenVersion).HasDefaultValue(0).IsConcurrencyToken();
         builder.Property(u => u.RequiresPhoneActivation).HasDefaultValue(false).IsConcurrencyToken();
+        builder.Property(u => u.PhoneActivationReason).HasConversion<string>().HasMaxLength(24).IsConcurrencyToken();
         builder.Property(u => u.PhoneVerifiedAtUtc).HasColumnType("timestamptz");
 
         builder.Property(u => u.Phone)

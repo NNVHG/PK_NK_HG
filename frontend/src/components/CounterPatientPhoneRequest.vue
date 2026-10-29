@@ -1,7 +1,7 @@
 <template>
   <section aria-labelledby="counter-phone-title">
-    <h2 id="counter-phone-title">Yêu cầu đổi SĐT đăng nhập</h2>
-    <p>Chỉ khởi tạo cho tài khoản gắn hồ sơ của lịch #{{ appointmentId }} vừa đặt. Chủ tài khoản tự đăng nhập bằng số/mật khẩu hiện tại, mở Hồ sơ cá nhân và xác nhận danh sách cùng OTP số mới. Số hiện tại được giữ trong lúc chờ.</p>
+    <h2 id="counter-phone-title">Yêu cầu đổi SĐT liên hệ tài khoản</h2>
+    <p>Chỉ khởi tạo cho tài khoản gắn hồ sơ của lịch #{{ appointmentId }} vừa đặt. Chủ tài khoản tự đăng nhập bằng giấy tờ và mật khẩu hiện tại, mở Hồ sơ cá nhân để kiểm tra phạm vi và nhập mật khẩu lưu số mới. OTP được yêu cầu ở lần đăng nhập tiếp theo. Đề nghị tại quầy chưa làm thay đổi số.</p>
     <form @submit.prevent="submit">
       <label for="counter-phone-new">SĐT mới chủ tài khoản đề nghị</label>
       <input id="counter-phone-new" v-model="phone" name="newPhone" type="tel" inputmode="numeric" autocomplete="off" maxlength="10" :disabled="busy || sent || uncertain" required />
@@ -34,7 +34,7 @@ async function submit() {
     if (!alive || ticket !== revision || auth.user?.userId !== actor) return;
     if (!result || result.requiresOwnerConfirmation !== true || typeof result.requestId !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(result.requestId)) throw new Error('Unknown result');
     sent.value = true; phone.value = ''; confirmed.value = false;
-    message.value = 'Đã khởi tạo. Hướng dẫn chủ tài khoản tự đăng nhập và xác nhận OTP/phạm vi tại Hồ sơ cá nhân. Nhân viên không nhận hoặc nhập OTP thay.';
+    message.value = 'Đã khởi tạo. Hướng dẫn chủ tài khoản tự đăng nhập, kiểm tra phạm vi và nhập mật khẩu tại Hồ sơ cá nhân để lưu số mới; xác minh OTP khi đăng nhập lại. Nhân viên không nhận hoặc nhập OTP thay; chủ tài khoản tự xác nhận.';
   } catch (e: any) {
     if (!alive || ticket !== revision || auth.user?.userId !== actor) return;
     confirmed.value = false;

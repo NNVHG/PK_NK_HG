@@ -48,6 +48,7 @@ internal static class StaffActivationHttpSmoke
         var b=WebApplication.CreateBuilder(new WebApplicationOptions{Args=[],EnvironmentName="Testing"});b.Logging.ClearProviders();b.WebHost.UseUrls("http://127.0.0.1:0");
         var secret=Convert.ToHexString(RandomNumberGenerator.GetBytes(32));b.Configuration["Jwt:Secret"]=secret;
         b.Services.AddSingleton<TimeProvider>(clock);b.Services.AddSingleton<VietnamClock>();b.Services.AddSingleton<IPatientActivationDelivery>(sms);b.Services.AddSingleton<IPatientActivationProofs,PatientActivationProofs>();
+        b.Services.AddSingleton<IKeyedIdentityHasher>(new KeyedIdentityHasher(new byte[32])); // Explicit synthetic test key, never a production fallback.
         b.Services.AddScoped(_=>new DentalDbContext(dbOptions));b.Services.AddScoped<IPatientActivationRepository,PatientActivationRepository>();b.Services.AddScoped<PatientActivationService>();
         b.Services.AddScoped<IPasswordHasher,BCryptPasswordHasher>();b.Services.AddScoped<IUserRepository,UserRepository>();b.Services.AddScoped<IPatientRepository,PatientRepository>();b.Services.AddScoped<IUnitOfWork,UnitOfWork>();b.Services.AddScoped<IAuditLogger,AuditLogger>();b.Services.AddScoped<ITokenService,JwtTokenService>();
         b.Services.AddScoped<AuthService>();b.Services.AddScoped<LoginRequestValidator>();b.Services.AddScoped<StaffService>();b.Services.AddScoped<CreateStaffRequestValidator>();b.Services.AddScoped<StaffQueryRequestValidator>();b.Services.AddScoped<UpdateStaffRequestValidator>();

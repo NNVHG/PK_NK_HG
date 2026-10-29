@@ -10,5 +10,6 @@ public sealed record MeResponse(
     string? Gender,
     string RoleCode,
     string RoleName,
-    bool IsActive
+    bool IsActive,
+    bool PhoneVerified = false
 );

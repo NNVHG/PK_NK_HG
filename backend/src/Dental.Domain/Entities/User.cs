@@ -1,4 +1,5 @@
 using Dental.Domain.Common;
+using Dental.Domain.Enums;
 
 namespace Dental.Domain.Entities;
 
@@ -27,6 +28,8 @@ public class User : BaseEntity
     /// <summary>New approved patients and newly created staff must complete first-login OTP before receiving a JWT.</summary>
     public bool RequiresPhoneActivation { get; set; }
     public DateTime? PhoneVerifiedAtUtc { get; set; }
+    // Giá trị null giữ hợp đồng kích hoạt lần đầu của tài khoản đang chờ từ trước.
+    public PhoneActivationReason? PhoneActivationReason { get; set; }
 
     public string FullName { get; set; } = string.Empty;
     public string? AcademicTitle { get; set; }
