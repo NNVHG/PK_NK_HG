@@ -8,7 +8,7 @@
       <p class="subtitle">Nha Khoa Hoàng Gia</p>
       <div v-if="registrationNotice" class="success-alert">{{ registrationNotice }}</div>
 
-      <p v-if="$route.query.phoneChanged === '1'" role="status">Đã xác minh và đổi SĐT. Nhân viên đăng nhập bằng số mới; bệnh nhân tiếp tục đăng nhập bằng CCCD/Hộ chiếu. Mật khẩu được giữ nguyên.</p>
+      <p v-if="$route.query.phoneChanged === '1'" role="status">Đã đổi SĐT. Nhân viên đăng nhập bằng số mới. Bệnh nhân đăng nhập bằng CCCD/Hộ chiếu và mật khẩu hiện tại, sau đó xác minh OTP gửi tới số mới.</p>
 
       <div class="document-type-selector">
         <label class="doc-radio">

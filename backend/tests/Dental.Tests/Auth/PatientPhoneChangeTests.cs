@@ -57,55 +57,39 @@ public sealed class PatientPhoneChangeTests
         var d=staff.Issue(new(7,4,"0967000001","actor","user")).Value!;
         Assert.Null(patient.Consume(4,new(d.Pending.ChallengeId,d.Code,Stamp,true)));
     }
-    private static (PatientPhoneChangeService Service,IPatientPhoneChangeRepository Repo,IPatientPhoneChangeSms Sms,PatientPhoneChangeProofs Proofs) Setup()
+
+    [Theory][InlineData("")][InlineData("abc\0def")]
+    public void ChangeRejectsInvalidCurrentPassword(string password) => Assert.False(
+        new PatientPhoneChangeValidator().Validate(new PatientPhoneChangeCommand("0967000001",Stamp,true,password)).IsValid);
+    [Fact] public void CurrentPasswordUsesBcryptByteBoundaryAndAllowsLegacyStrength()
     {
-        var repo=Substitute.For<IPatientPhoneChangeRepository>();var sms=Substitute.For<IPatientPhoneChangeSms>();var proofs=new PatientPhoneChangeProofs(new Clock());
-        repo.PrepareAsync(4,Arg.Any<PatientPhoneRequest>(),null,Arg.Any<CancellationToken>()).Returns(Result<PatientPhoneTarget>.Success(Target()));
-        sms.IsConfigured.Returns(true);sms.SendAsync(Arg.Any<string>(),Arg.Any<string>(),Arg.Any<CancellationToken>()).Returns(true);
-        return(new(repo,proofs,sms),repo,sms,proofs);
+        var validator=new PatientPhoneChangeValidator();
+        Assert.True(validator.Validate(new PatientPhoneChangeCommand("0967000001",Stamp,true,"Aa1234")).IsValid);
+        Assert.False(validator.Validate(new PatientPhoneChangeCommand("0967000001",Stamp,true,new string('Đ',37))).IsValid);
+        Assert.False(validator.Validate(new PatientPhoneChangeCommand("0967000001",Stamp,false,"Aa1234")).IsValid);
     }
-    [Fact] public async Task InvalidInputsDoNotReachDataOrConsumeProof()
+    [Fact] public async Task InvalidInputDoesNotReachRepositoryOrDelivery()
     {
-        var f=Setup();using var p=f.Proofs;
-        Assert.True((await f.Service.PreviewAsync(4,new("bad"),default)).IsFailure);
-        Assert.True((await f.Service.RequestAsync(4,new("0967000001",Stamp,false),null,default)).IsFailure);
-        Assert.True((await f.Service.ConfirmAsync(4,new(Guid.Empty,"123456",Stamp,true),null,default)).IsFailure);
-        Assert.Empty(f.Repo.ReceivedCalls());Assert.Empty(f.Sms.ReceivedCalls());
+        var repo=Substitute.For<IPatientPhoneChangeRepository>();var delivery=Substitute.For<IPatientActivationDelivery>();
+        var service=new PatientPhoneChangeService(repo,delivery);
+        Assert.True((await service.ChangeAsync(4,new("0967000001",Stamp,false,"Aa1234"),null,default)).IsFailure);
+        Assert.True((await service.PreviewAsync(4,new("bad"),default)).IsFailure);
+        Assert.Empty(repo.ReceivedCalls());Assert.Empty(delivery.ReceivedCalls());
     }
-    [Fact] public async Task StaleScopeDoesNotDispatchSms()
+    [Fact] public async Task UnconfiguredActivationProviderPreventsMutation()
     {
-        var f=Setup();using var p=f.Proofs;f.Repo.PrepareAsync(4,Arg.Any<PatientPhoneRequest>(),null,default).Returns(Result<PatientPhoneTarget>.Failure(PatientPhoneChangeService.Stale));
-        Assert.Equal(PatientPhoneChangeService.Stale,(await f.Service.RequestAsync(4,new("0967000001",Stamp,true),null,default)).Error);
-        await f.Sms.DidNotReceive().SendAsync(Arg.Any<string>(),Arg.Any<string>(),default);
+        var repo=Substitute.For<IPatientPhoneChangeRepository>();var delivery=Substitute.For<IPatientActivationDelivery>();
+        var service=new PatientPhoneChangeService(repo,delivery);
+        Assert.Equal(PatientPhoneChangeService.Unavailable,(await service.ChangeAsync(4,new("0967000001",Stamp,true,"Aa1234"),null,default)).Error);
+        Assert.Empty(repo.ReceivedCalls());
     }
-    [Theory][InlineData(false)][InlineData(true)] public async Task FailedDeliveryRevokesProof(bool throws)
+    [Fact] public async Task ChangeCallsAtomicRepositoryWithoutSendingOtp()
     {
-        var repo=Substitute.For<IPatientPhoneChangeRepository>();var proofs=Substitute.For<IPatientPhoneChangeProofs>();var sms=Substitute.For<IPatientPhoneChangeSms>();
-        var d=new PatientPhoneDispatch(new(Guid.NewGuid(),"0967000001",DateTimeOffset.UtcNow.AddMinutes(5)),"123456");
-        repo.PrepareAsync(4,Arg.Any<PatientPhoneRequest>(),null,default).Returns(Result<PatientPhoneTarget>.Success(Target()));
-        proofs.Issue(Target()).Returns(Result<PatientPhoneDispatch>.Success(d));sms.IsConfigured.Returns(true);
-        sms.SendAsync(Arg.Any<string>(),Arg.Any<string>(),default).Returns(_=>throws?throw new HttpRequestException("Synthetic failure"):Task.FromResult(false));
-        var service=new PatientPhoneChangeService(repo,proofs,sms);
-        Assert.Equal(PatientPhoneChangeService.Unavailable,(await service.RequestAsync(4,new("0967000001",Stamp,true),null,default)).Error);
-        proofs.Received(1).Revoke(4,d.Pending.ChallengeId);await repo.DidNotReceive().CompleteAsync(Arg.Any<PatientPhoneTarget>(),null,default);
-    }
-    [Fact] public async Task UnconfiguredProviderDoesNotIssueOrSend()
-    {
-        var f=Setup();using var p=f.Proofs;f.Sms.IsConfigured.Returns(false);
-        Assert.Equal(PatientPhoneChangeService.Unavailable,(await f.Service.RequestAsync(4,new("0967000001",Stamp,true),null,default)).Error);
-        await f.Sms.DidNotReceive().SendAsync(Arg.Any<string>(),Arg.Any<string>(),default);
-        Assert.True(p.Issue(Target()).IsSuccess);
-    }
-    [Fact] public void ExplicitRevokeInvalidatesIssuedCode()
-    {
-        using var p=new PatientPhoneChangeProofs(new Clock());var d=p.Issue(Target()).Value!;p.Revoke(4,d.Pending.ChallengeId);
-        Assert.Null(p.Consume(4,new(d.Pending.ChallengeId,d.Code,Stamp,true)));
-    }
-    [Fact] public async Task SuccessOnlyCallsAtomicRepositoryOnce()
-    {
-        var f=Setup();using var p=f.Proofs;var d=p.Issue(Target()).Value!;f.Repo.CompleteAsync(Target(),null,default).Returns(Result<PatientPhoneCompleted>.Success(new(true,true)));
-        var request=new PatientPhoneConfirmation(d.Pending.ChallengeId,d.Code,Stamp,true);
-        Assert.True((await f.Service.ConfirmAsync(4,request,null,default)).Value!.PatientContactUpdated);
-        Assert.True((await f.Service.ConfirmAsync(4,request,null,default)).IsFailure);await f.Repo.Received(1).CompleteAsync(Target(),null,default);
+        var repo=Substitute.For<IPatientPhoneChangeRepository>();var delivery=Substitute.For<IPatientActivationDelivery>();
+        delivery.IsConfigured.Returns(true);var request=new PatientPhoneChangeCommand("0967000001",Stamp,true,"Aa1234");
+        repo.ChangeAsync(4,request,null,default).Returns(Result<PatientPhoneCompleted>.Success(new(true,true)));
+        var result=await new PatientPhoneChangeService(repo,delivery).ChangeAsync(4,request,null,default);
+        Assert.True(result.Value!.Completed);await repo.Received(1).ChangeAsync(4,request,null,default);
+        delivery.DidNotReceive().Enqueue(Arg.Any<ActivationDispatch>());
     }
 }

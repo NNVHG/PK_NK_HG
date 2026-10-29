@@ -153,7 +153,7 @@ public sealed class AuthService
         _lockoutService?.ResetAttempts(lockoutKey);
 
         if (user.RequiresPhoneActivation)
-            return Result<LoginResponse>.Failure(new Error("AUTH_ACTIVATION_REQUIRED", "Cần xác minh OTP lần đầu trước khi đăng nhập."));
+            return Result<LoginResponse>.Failure(new Error("AUTH_ACTIVATION_REQUIRED", "Cần xác minh số điện thoại bằng OTP trước khi đăng nhập."));
 
         // Đăng nhập thành công
         var token = _tokenService.GenerateAccessToken(user);
@@ -195,7 +195,8 @@ public sealed class AuthService
             Gender: user.Gender,
             RoleCode: user.Role.RoleCode,
             RoleName: user.Role.RoleName,
-            IsActive: user.IsActive
+            IsActive: user.IsActive,
+            PhoneVerified: user.PhoneVerifiedAtUtc.HasValue && !user.RequiresPhoneActivation
         );
 
         return Result<MeResponse>.Success(response);
@@ -275,7 +276,8 @@ public sealed class AuthService
             Gender: user.Gender,
             RoleCode: user.Role.RoleCode,
             RoleName: user.Role.RoleName,
-            IsActive: user.IsActive
+            IsActive: user.IsActive,
+            PhoneVerified: user.PhoneVerifiedAtUtc.HasValue && !user.RequiresPhoneActivation
         );
 
         return Result<MeResponse>.Success(response);

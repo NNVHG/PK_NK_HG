@@ -17,6 +17,7 @@ using Dental.Application.Features.Queue.Services;
 using Dental.Application.Interfaces;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
+using Dental.Domain.Enums;
 using Dental.Infrastructure.Data;
 using Dental.Infrastructure.Repositories;
 using Dental.Infrastructure.Services;
@@ -46,7 +47,7 @@ internal static class PatientActivationHttpSmoke
         public bool Fail;
         public override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData data,InterceptionResult<int> result,CancellationToken ct=default)
         {
-            if(Fail&&data.Context!.ChangeTracker.Entries<AuditLog>().Any(x=>x.State==EntityState.Added&&x.Entity.Action=="MOD_AUTH_PATIENT_ACTIVATED")) throw new InvalidOperationException("Synthetic activation audit failure");
+            if(Fail&&data.Context!.ChangeTracker.Entries<AuditLog>().Any(x=>x.State==EntityState.Added&&(x.Entity.Action=="MOD_AUTH_PATIENT_ACTIVATED"||x.Entity.Action=="MOD_AUTH_PATIENT_PHONE_CHANGED"))) throw new InvalidOperationException("Synthetic activation audit failure");
             return base.SavingChangesAsync(data,result,ct);
         }
     }
@@ -61,6 +62,7 @@ internal static class PatientActivationHttpSmoke
         builder.Services.AddSingleton<IKeyedIdentityHasher>(new KeyedIdentityHasher(new byte[32]));
         builder.Services.AddSingleton<IPatientActivationDelivery>(sms);builder.Services.AddSingleton<IPatientActivationProofs,PatientActivationProofs>();
         builder.Services.AddScoped(_=>new DentalDbContext(dbOptions));builder.Services.AddScoped<IPatientActivationRepository,PatientActivationRepository>();
+        builder.Services.AddScoped<IPatientPhoneChangeRepository,PatientPhoneChangeRepository>();builder.Services.AddScoped<PatientPhoneChangeService>();
         builder.Services.AddScoped<PatientActivationService>();builder.Services.AddScoped<IPasswordHasher,BCryptPasswordHasher>();
         builder.Services.AddScoped<IUserRepository,UserRepository>();builder.Services.AddScoped<IPatientRepository,PatientRepository>();builder.Services.AddScoped<IUnitOfWork,UnitOfWork>();
         builder.Services.AddScoped<IAuditLogger,AuditLogger>();builder.Services.AddScoped<ITokenService,JwtTokenService>();builder.Services.AddScoped<AuthService>();builder.Services.AddScoped<LoginRequestValidator>();builder.Services.AddScoped<ChangePasswordRequestValidator>();
@@ -70,7 +72,7 @@ internal static class PatientActivationHttpSmoke
             jwt.TokenValidationParameters=new TokenValidationParameters{ValidateIssuer=true,ValidIssuer="DentalClinic",ValidateAudience=true,ValidAudience="DentalClinicClient",IssuerSigningKey=new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret)),ClockSkew=TimeSpan.Zero};
             jwt.Events=new JwtBearerEvents{OnTokenValidated=AccessTokenVersionValidation.ValidateAsync};
         });
-        builder.Services.AddAuthorization();builder.Services.AddRateLimiter(o=>{AuthRateLimitPolicies.Configure(o,builder.Configuration);PatientActivationRateLimits.Configure(o);});
+        builder.Services.AddAuthorization(o=>o.AddPolicy(Dental.Api.Policies.Policies.PatientPhoneChange,p=>p.RequireRole(RoleCodes.Patient)));builder.Services.AddRateLimiter(o=>{AuthRateLimitPolicies.Configure(o,builder.Configuration);PatientActivationRateLimits.Configure(o);PatientPhoneChangeRateLimits.Configure(o);});
         await using var app=builder.Build();var ipSequence=0;
         // Synthetic IPs isolate individual scenarios; one explicit header value tests a shared real limiter partition.
         app.Use(async(c,next)=>{c.Connection.RemoteIpAddress=IPAddress.Parse(c.Request.Headers["X-Test-IP"].FirstOrDefault()??$"10.0.{Interlocked.Increment(ref ipSequence)/250}.{ipSequence%250+1}");try{await next(c);}catch{c.Response.StatusCode=500;}});
@@ -182,6 +184,64 @@ internal static class PatientActivationHttpSmoke
         using(var r=await Login(oldCredential,"Aa123456"))check(r.StatusCode==HttpStatusCode.OK,"Password chosen at boundary logs in");
         using(var r=await Login(oldCredential,"Aa1234"))check(r.StatusCode==HttpStatusCode.Unauthorized,"Replaced legacy password no longer logs in");
         var rateStatuses=new List<HttpStatusCode>();for(var n=0;n<11;n++){using var r=await Send(root+"request",new ActivationRequest("09679"+n.ToString("D5"),"Invalid123"),"10.99.99.99");rateStatuses.Add(r.StatusCode);}check(rateStatuses.Take(10).All(s=>s==HttpStatusCode.Accepted)&&rateStatuses[10]==HttpStatusCode.TooManyRequests,"Actual IP limiter rejects eleventh activation request across different numbers");
+        // DL355/367: save with current password, then verify the new phone at next login.
+        const string phoneRoot="/api/auth/patient-phone-change/";
+        await db.Entry(account).ReloadAsync();
+        var beforePhone=account.Phone;var beforeHash=account.PasswordHash;var beforeVersion=account.TokenVersion;
+        var owner=await db.Patients.SingleAsync(p=>p.UserId==account.UserId);
+        var ward=new Patient{FullName="Synthetic ward",Phone=beforePhone,DateOfBirth=new(2018,1,1)};
+        db.Patients.Add(ward);await db.SaveChangesAsync();
+        db.PatientGuardians.Add(new PatientGuardian{GuardianPatientId=owner.PatientId,WardPatientId=ward.PatientId,
+            AssignedByUserId=admin.UserId,Relationship="Guardian",AssignedAt=clock.Now.UtcDateTime});
+        var shared=new User{Role=roles[RoleCodes.Patient],LoginByCitizenId=true,FullName="Synthetic shared phone",Phone="0967400001",PasswordHash=oldHash};
+        db.Users.Add(shared);await db.SaveChangesAsync();
+        var phoneToken=tokens.GenerateAccessToken(account);
+        async Task<HttpResponseMessage> PhoneSend(string path,object body,string? token=null){using var req=new HttpRequestMessage(HttpMethod.Post,phoneRoot+path){Content=JsonContent.Create(body)};if(token is not null)req.Headers.Authorization=new("Bearer",token);return await client.SendAsync(req);}
+        async Task<PatientPhonePreview> PreviewPhone(string phone,string token){using var r=await PhoneSend("preview",new PatientPhonePreviewRequest(phone),token);check(r.StatusCode==HttpStatusCode.OK&&r.Headers.CacheControl?.NoStore==true,"Phone preview is authorized and NoStore");return(await r.Content.ReadFromJsonAsync<PatientPhonePreview>())!;}
+        using(var r=await PhoneSend("preview",new PatientPhonePreviewRequest(shared.Phone)))check(r.StatusCode==HttpStatusCode.Unauthorized,"Phone preview requires JWT");
+        using(var r=await PhoneSend("preview",new PatientPhonePreviewRequest(shared.Phone),tokens.GenerateAccessToken(admin)))check(r.StatusCode==HttpStatusCode.Forbidden,"Admin cannot change a Patient phone through owner endpoint");
+        foreach(var retired in new[]{"request","confirm"}){using var r=await PhoneSend(retired,new{},phoneToken);check(r.StatusCode==HttpStatusCode.Gone&&r.Headers.CacheControl?.NoStore==true,"Old phone endpoint is retired without OTP or writes");}
+        var reviewed=await PreviewPhone(shared.Phone,phoneToken);
+        check(reviewed.PatientId==owner.PatientId&&reviewed.ContactWillUpdate,"Phone scope includes only own matching contact");
+        var phoneCommand=new PatientPhoneChangeCommand(shared.Phone,reviewed.ReviewStamp,true,"Strong123");
+        using(var r=await PhoneSend("change",phoneCommand with{CurrentPassword="Wrong123"},phoneToken))check(r.StatusCode==HttpStatusCode.BadRequest&&(await r.Content.ReadAsStringAsync()).Contains("PAT_PHONE_PASSWORD"),"Wrong current password rejects phone change");
+        using(var r=await PhoneSend("change",phoneCommand with{Confirmed=false},phoneToken))check(r.StatusCode==HttpStatusCode.BadRequest,"Phone change requires explicit scope consent");
+        using(var r=await PhoneSend("change",phoneCommand with{ReviewStamp=new string('F',64)},phoneToken))check(r.StatusCode==HttpStatusCode.Conflict,"Stale phone review is rejected");
+        sms.IsConfigured=false;using(var r=await PhoneSend("change",phoneCommand,phoneToken))check(r.StatusCode==HttpStatusCode.ServiceUnavailable,"Unavailable activation delivery blocks phone save");sms.IsConfigured=true;
+        await db.Entry(account).ReloadAsync();await db.Entry(owner).ReloadAsync();
+        check(account.Phone==beforePhone&&owner.Phone==beforePhone&&account.TokenVersion==beforeVersion&&account.PhoneVerifiedAtUtc.HasValue,"Rejected phone changes preserve contact verification and session");
+        var appointmentId=await db.Appointments.Where(a=>a.PatientId==owner.PatientId).Select(a=>a.AppointmentId).FirstAsync();
+        var counter=new PatientPhoneChangeRequest{Id=Guid.NewGuid(),UserId=account.UserId,AppointmentId=appointmentId,CreatedByUserId=admin.UserId,
+            CurrentPhone=beforePhone,NewPhone=shared.Phone,TokenVersion=beforeVersion,CreatedAtUtc=clock.Now.UtcDateTime};
+        db.PatientPhoneChangeRequests.Add(counter);await db.SaveChangesAsync();
+        failure.Fail=true;using(var r=await PhoneSend("change",phoneCommand,phoneToken))check(r.StatusCode==HttpStatusCode.InternalServerError,"Required phone audit failure aborts transaction");failure.Fail=false;
+        await db.Entry(account).ReloadAsync();await db.Entry(owner).ReloadAsync();await db.Entry(counter).ReloadAsync();
+        check(account.Phone==beforePhone&&owner.Phone==beforePhone&&counter.CompletedAtUtc==null&&account.TokenVersion==beforeVersion,"Phone audit rollback includes contact counter request and session");
+        var dispatched=sms.Codes.Count;
+        var competing=await Task.WhenAll(PhoneSend("change",phoneCommand,phoneToken),PhoneSend("change",phoneCommand,phoneToken));
+        check(competing.Count(r=>r.StatusCode==HttpStatusCode.OK)==1&&competing.All(r=>r.StatusCode is HttpStatusCode.OK or HttpStatusCode.Conflict or HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized),"Concurrent phone saves commit exactly once");foreach(var r in competing)r.Dispose();
+        await db.Entry(account).ReloadAsync();await db.Entry(owner).ReloadAsync();await db.Entry(counter).ReloadAsync();await db.Entry(ward).ReloadAsync();await db.Entry(shared).ReloadAsync();
+        check(account.Phone==shared.Phone&&account.PhoneVerifiedAtUtc==null&&account.RequiresPhoneActivation&&account.PhoneActivationReason==PhoneActivationReason.PhoneChange&&account.TokenVersion==beforeVersion+1&&account.PasswordHash==beforeHash,"Phone save clears verification requires OTP revokes sessions and retains password");
+        check(owner.Phone==account.Phone&&ward.Phone==beforePhone&&shared.PasswordHash==oldHash&&shared.TokenVersion==0&&counter.CompletedAtUtc.HasValue,"Phone save updates own matching contact and counter request only, not ward or shared-phone account");
+        check(sms.Codes.Count==dispatched,"Phone save does not send OTP until next login");
+        check(await Probe(phoneToken)==HttpStatusCode.Unauthorized,"Previous JWT immediately loses access after phone save");
+        using(var r=await PhoneSend("change",phoneCommand,phoneToken))check(r.StatusCode==HttpStatusCode.Unauthorized,"Old JWT cannot replay phone save");
+        using(var r=await Login(account,"Strong123"))check(r.StatusCode==HttpStatusCode.Unauthorized&&(await r.Content.ReadAsStringAsync()).Contains("AUTH_ACTIVATION_REQUIRED"),"Existing password routes next login to OTP without JWT");
+        clock.Now+=TimeSpan.FromSeconds(61);var reverify=await Issue(account,"Strong123");
+        check(sms.Codes[account.Phone].ChallengeId==reverify.ChallengeId,"Reverification dispatch matches the requested challenge");
+        check(await Verify(reverify,sms.Codes[account.Phone].Code=="000000"?"000001":"000000")==HttpStatusCode.BadRequest,"Wrong reverification OTP is rejected");
+        ActivationGrant regrant;using(var r=await Send(root+"verify",new ActivationVerification(reverify.ChallengeId,sms.Codes[account.Phone].Code))){check(r.StatusCode==HttpStatusCode.OK,"Correct reverification OTP issues completion proof");regrant=(await r.Content.ReadFromJsonAsync<ActivationGrant>())!;}
+        check(!regrant.MustChangePassword,"Phone reverification does not force password replacement");
+        check(await Finish(regrant,true,null)==HttpStatusCode.OK&&await Finish(regrant,true,null)==HttpStatusCode.BadRequest,"Reverification completion is single-use and accepts current password");
+        await db.Entry(account).ReloadAsync();check(account.PasswordHash==beforeHash&&account.PhoneVerifiedAtUtc.HasValue&&!account.RequiresPhoneActivation&&account.PhoneActivationReason==null,"Reverification preserves password and clears pending reason");
+        string renewedToken;using(var r=await Login(account,"Strong123")){check(r.StatusCode==HttpStatusCode.OK,"Reverified account logs in with its unchanged password");renewedToken=(await r.Content.ReadFromJsonAsync<LoginResponse>())!.AccessToken;}
+        using(var req=new HttpRequestMessage(HttpMethod.Get,"/api/auth/me")){req.Headers.Authorization=new("Bearer",renewedToken);using var r=await client.SendAsync(req);check(r.StatusCode==HttpStatusCode.OK&&(await r.Content.ReadFromJsonAsync<MeResponse>())!.PhoneVerified,"Account response exposes verified phone status after OTP");}
+        owner.Phone="0967400009";await db.SaveChangesAsync();
+        var retained=await PreviewPhone("0967400002",renewedToken);check(!retained.ContactWillUpdate,"Separate own contact is excluded from phone review");
+        using(var r=await PhoneSend("change",new PatientPhoneChangeCommand(retained.NewPhone,retained.ReviewStamp,true,"Strong123"),renewedToken))check(r.StatusCode==HttpStatusCode.OK&&!(await r.Content.ReadFromJsonAsync<PatientPhoneCompleted>())!.PatientContactUpdated,"Second change retains a separate contact");
+        await db.Entry(owner).ReloadAsync();check(owner.Phone=="0967400009","Separate own contact remains unchanged in database");
+        check(await db.AuditLogs.CountAsync(x=>x.Action=="MOD_AUTH_PATIENT_PHONE_CHANGED"&&x.UserId==account.UserId)==2,"Exactly one phone audit per committed change");
+        check(await db.AuditLogs.Where(x=>x.Action=="MOD_AUTH_PATIENT_PHONE_CHANGED").AllAsync(x=>x.Detail!=null&&!x.Detail.Contains("0967")&&!x.Detail.Contains("Strong123")&&!x.Detail.Contains("reviewStamp")),"Phone audit excludes phone password and review proof");
         await app.StopAsync();
     }
 }

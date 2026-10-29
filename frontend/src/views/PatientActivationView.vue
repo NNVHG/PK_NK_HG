@@ -3,8 +3,8 @@
     <div class="activation-brand">
       <img src="/logo-icon.svg" alt="Nha Khoa Hoàng Gia" class="brand-logo" width="40" height="40" />
     </div>
-    <h1>Kích hoạt tài khoản mới</h1>
-    <p>Dành cho bệnh nhân mới sau khi Lễ tân xác nhận lịch và nhân viên mới do Admin tạo. Tài khoản cũ tiếp tục đăng nhập như trước.</p>
+    <h1>Xác minh số điện thoại</h1>
+    <p>Dành cho bệnh nhân mới sau khi Lễ tân đối soát tại quầy, nhân viên mới do Admin tạo và bệnh nhân cần xác minh lại sau khi đổi SĐT. Tài khoản cũ tiếp tục đăng nhập theo trạng thái xác minh hiện tại.</p>
     <p role="status" aria-live="polite">{{ message }}</p>
     <p v-if="error" role="alert">{{ error }}</p>
     <form v-if="!challenge && !grant && !done && !uncertain" @submit.prevent="requestCode" novalidate>
@@ -121,7 +121,7 @@ async function verifyCode() {
     const data = await patientActivationService.verify(challenge.value.challengeId, code.value);
     if (!alive(t, owner)) return;
     if (!/^[A-F0-9]{64}$/.test(data.completionToken) || data.expiresInSeconds !== 300 || typeof data.mustChangePassword !== 'boolean') throw Error();
-    grant.value = data; challenge.value = null; choice.value = 'new'; message.value = data.mustChangePassword ? 'Đã xác minh OTP. Bệnh nhân cần đổi mật khẩu trước khi đăng nhập.' : 'Đã xác minh OTP. Chọn đổi hoặc giữ mật khẩu để hoàn tất.';
+    grant.value = data; challenge.value = null; choice.value = data.mustChangePassword ? 'new' : 'default'; message.value = data.mustChangePassword ? 'Đã xác minh OTP. Bệnh nhân cần đổi mật khẩu trước khi đăng nhập.' : 'Đã xác minh OTP. Chọn đổi hoặc giữ mật khẩu để hoàn tất.';
   } catch (cause) { if (alive(t, owner)) error.value = failure(cause, 'Chưa xác minh được mã. Nếu mã đã dùng hoặc hết hạn, xin mã mới.'); }
   finally { if (alive(t, owner)) { busy.value = false; code.value = ''; } }
 }

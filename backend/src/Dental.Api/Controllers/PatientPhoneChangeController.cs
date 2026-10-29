@@ -24,22 +24,19 @@ public sealed class PatientPhoneChangeController(PatientPhoneChangeService servi
         var result = await service.PreviewAsync(userId, request, ct);
         return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
     }
-    [HttpPost("request")]
-    [EnableRateLimiting(PatientPhoneChangeRateLimits.Request)]
-    public async Task<IActionResult> RequestChange(PatientPhoneRequest request, CancellationToken ct)
-    {
-        if (current.UserId is not int userId) return Unauthorized();
-        var result = await service.RequestAsync(userId, request, HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
-        return result.IsFailure ? Failure(result.Error) : Accepted(result.Value);
-    }
-    [HttpPost("confirm")]
+    [HttpPost("change")]
     [EnableRateLimiting(PatientPhoneChangeRateLimits.Confirm)]
-    public async Task<IActionResult> Confirm(PatientPhoneConfirmation request, CancellationToken ct)
+    public async Task<IActionResult> Change(PatientPhoneChangeCommand request, CancellationToken ct)
     {
         if (current.UserId is not int userId) return Unauthorized();
-        var result = await service.ConfirmAsync(userId, request, HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
+        var result = await service.ChangeAsync(userId, request, HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
         return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
     }
+    // Old clients must reload: the retired OTP-before-save flow cannot bypass current-password confirmation.
+    [HttpPost("request")]
+    [HttpPost("confirm")]
+    [EnableRateLimiting(PatientPhoneChangeRateLimits.Confirm)]
+    public IActionResult Retired() => StatusCode(410, new { code = "PAT_PHONE_FLOW_RETIRED", message = "Vui lòng tải lại trang để đổi SĐT bằng mật khẩu hiện tại." });
     private IActionResult Failure(Error error) => StatusCode(error.Code switch {
         "PAT_PHONE_SMS_UNAVAILABLE" => 503, "PAT_PHONE_RATE" => 429,
         "PAT_PHONE_STALE" or "PAT_PHONE_NUMBER" => 409,

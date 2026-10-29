@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import { apiClient, setAccessToken } from '@/services/api';
 
 export interface UserInfo {
+  phoneVerified?: boolean;
   userId: number;
   fullName: string;
   roleCode: string;

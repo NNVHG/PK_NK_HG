@@ -1,7 +1,7 @@
 <template>
   <section aria-labelledby="counter-suggestion-title">
     <h3 id="counter-suggestion-title">Yêu cầu đổi số từ quầy</h3>
-    <p v-if="suggestion">Lịch #{{ suggestion.appointmentId }} có đề nghị đổi sang {{ suggestion.newPhone }}. Đây chưa phải thay đổi đã được chấp thuận. Bạn tự kiểm tra số, xem danh sách hồ sơ và xác nhận OTP ở bước dưới.</p>
+    <p v-if="suggestion">Lịch #{{ suggestion.appointmentId }} có đề nghị đổi sang {{ suggestion.newPhone }}. Đây chưa phải thay đổi đã được chấp thuận. Bạn tự kiểm tra số và phạm vi, nhập mật khẩu để lưu. OTP được yêu cầu ở lần đăng nhập tiếp theo.</p>
     <p v-else-if="loaded">Không có yêu cầu hiện hành từ quầy.</p>
     <button v-if="suggestion" type="button" :disabled="busy || disabled" @click="useSuggestion">Dùng số đề nghị để xem lại phạm vi</button>
     <button type="button" :disabled="busy || disabled" @click="load">{{ busy ? 'Đang tải yêu cầu…' : 'Tải yêu cầu từ quầy' }}</button>
