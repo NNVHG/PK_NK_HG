@@ -60,7 +60,7 @@ public sealed class PatientPhoneChangeValidator : AbstractValidator<PatientPhone
         RuleFor(x => x.NewPhone).NotEmpty().Length(10).Matches("^0[0-9]{9}$");
         RuleFor(x => x.ReviewStamp).NotEmpty().Length(64).Matches("^[A-F0-9]{64}$");
         RuleFor(x => x.Confirmed).Equal(true);
-        // Authenticate the existing password; do not apply new-password strength rules.
+        // Xác thực mật khẩu hiện tại, không áp quy tắc độ mạnh của mật khẩu mới.
         RuleFor(x => x.CurrentPassword).NotEmpty().Must(p => p is not null &&
             !p.Contains('\0') && System.Text.Encoding.UTF8.GetByteCount(p) <= 72);
     }

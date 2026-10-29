@@ -28,7 +28,7 @@ public class User : BaseEntity
     /// <summary>New approved patients and newly created staff must complete first-login OTP before receiving a JWT.</summary>
     public bool RequiresPhoneActivation { get; set; }
     public DateTime? PhoneVerifiedAtUtc { get; set; }
-    // Null preserves the initial-activation contract for existing pending accounts.
+    // Giá trị null giữ hợp đồng kích hoạt lần đầu của tài khoản đang chờ từ trước.
     public PhoneActivationReason? PhoneActivationReason { get; set; }
 
     public string FullName { get; set; } = string.Empty;

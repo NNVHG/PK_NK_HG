@@ -32,7 +32,7 @@ public sealed class PatientPhoneChangeController(PatientPhoneChangeService servi
         var result = await service.ChangeAsync(userId, request, HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
         return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
     }
-    // Old clients must reload: the retired OTP-before-save flow cannot bypass current-password confirmation.
+    // Client cũ phải tải lại trang; luồng OTP trước khi lưu không được bỏ qua bước xác nhận mật khẩu hiện tại.
     [HttpPost("request")]
     [HttpPost("confirm")]
     [EnableRateLimiting(PatientPhoneChangeRateLimits.Confirm)]

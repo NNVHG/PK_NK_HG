@@ -184,7 +184,7 @@ internal static class PatientActivationHttpSmoke
         using(var r=await Login(oldCredential,"Aa123456"))check(r.StatusCode==HttpStatusCode.OK,"Password chosen at boundary logs in");
         using(var r=await Login(oldCredential,"Aa1234"))check(r.StatusCode==HttpStatusCode.Unauthorized,"Replaced legacy password no longer logs in");
         var rateStatuses=new List<HttpStatusCode>();for(var n=0;n<11;n++){using var r=await Send(root+"request",new ActivationRequest("09679"+n.ToString("D5"),"Invalid123"),"10.99.99.99");rateStatuses.Add(r.StatusCode);}check(rateStatuses.Take(10).All(s=>s==HttpStatusCode.Accepted)&&rateStatuses[10]==HttpStatusCode.TooManyRequests,"Actual IP limiter rejects eleventh activation request across different numbers");
-        // DL355/367: save with current password, then verify the new phone at next login.
+        // DL-355/367: lưu bằng mật khẩu hiện tại rồi xác minh số mới ở lần đăng nhập kế tiếp.
         const string phoneRoot="/api/auth/patient-phone-change/";
         await db.Entry(account).ReloadAsync();
         var beforePhone=account.Phone;var beforeHash=account.PasswordHash;var beforeVersion=account.TokenVersion;
