@@ -153,5 +153,91 @@ internal static class IdentityMigrationSmoke
             "Inventory does not track patient entities or write audit records");
         check((await db.Database.GetPendingMigrationsAsync()).Any() == false,
             "Upgraded database has no pending migration");
+
+        // --- Slice C3: IdentityMigrationRunner tests ---
+        // 1. Guard production database
+        var prodDbNameOptions = new DbContextOptionsBuilder<DentalDbContext>()
+            .UseNpgsql("Host=localhost;Database=dental_db;Username=postgres;Password=postgres").Options;
+        await using (var prodDb = new DentalDbContext(prodDbNameOptions))
+        {
+            var blocked = false;
+            try
+            {
+                IdentityMigrationRunner.AssertNotProductionDatabase(prodDb);
+            }
+            catch (InvalidOperationException)
+            {
+                blocked = true;
+            }
+            check(blocked, "Production database 'dental_db' is guarded and rejected by IdentityMigrationRunner");
+        }
+
+        // 2. Safe inspect
+        var safeInventory = await IdentityMigrationRunner.InspectSafeAsync(db);
+        check(safeInventory.TotalPatients == 5, "InspectSafeAsync executes successfully on isolated test database");
+
+        // 3. Batch conversion: Prepare a legacy patient to convert
+        const string citizenIdToMigrate = "012345678901";
+        var legacySha = CitizenIdIdentity.Hash(citizenIdToMigrate);
+        var pToMigrate = new Patient
+        {
+            FullName = "Synthetic patient for migration runner",
+            DateOfBirth = new(1995, 5, 5),
+            Phone = "0990000785",
+            CitizenIdHash = legacySha,
+            CitizenIdMasked = "012******901",
+            CitizenIdVersion = 0
+        };
+        db.Patients.Add(pToMigrate);
+        await db.SaveChangesAsync();
+
+        var batchItem = new IdentityMigrationRunner.VerifiedIdentityItem(
+            pToMigrate.PatientId,
+            citizenIdToMigrate,
+            IdentityDocumentType.CitizenId,
+            null);
+
+        // Dry-run
+        var dryRunResult = await IdentityMigrationRunner.ConvertVerifiedBatchAsync(
+            db, hasher, actor.UserId, [batchItem], isDryRun: true);
+        check(dryRunResult is { TotalProcessed: 1, ConvertedCount: 1, AlreadyUpToDateCount: 0, IsDryRun: true },
+            "Dry-run predicts 1 conversion without mutating state");
+
+        var pBeforeConvert = await db.Patients.AsNoTracking().SingleAsync(p => p.PatientId == pToMigrate.PatientId);
+        check(pBeforeConvert.CitizenIdHash == legacySha && pBeforeConvert.CitizenIdVersion == 0,
+            "Dry-run left database patient record unchanged");
+
+        // Execute conversion
+        var execResult = await IdentityMigrationRunner.ConvertVerifiedBatchAsync(
+            db, hasher, actor.UserId, [batchItem], isDryRun: false);
+        check(execResult is { TotalProcessed: 1, ConvertedCount: 1, AlreadyUpToDateCount: 0, IsDryRun: false },
+            "Execution converted 1 record to HMAC canonical");
+
+        var pAfterConvert = await db.Patients.AsNoTracking().SingleAsync(p => p.PatientId == pToMigrate.PatientId);
+        check(pAfterConvert.CitizenIdHash == hasher.Hash(citizenIdToMigrate) &&
+              pAfterConvert.CitizenIdVersion == 1 &&
+              pAfterConvert.HashScheme == IdentityHashScheme.HmacCanonical &&
+              pAfterConvert.IdentityKeyVersion == IdentityDocumentConstants.CurrentHmacKeyVersion,
+            "Executed conversion upgraded patient to canonical HMAC and incremented version");
+
+        // Idempotency: execute again with same batch
+        var rerunResult = await IdentityMigrationRunner.ConvertVerifiedBatchAsync(
+            db, hasher, actor.UserId, [batchItem], isDryRun: false);
+        check(rerunResult is { TotalProcessed: 1, ConvertedCount: 0, AlreadyUpToDateCount: 1, IsDryRun: false },
+            "Idempotency: Re-running conversion skips already upgraded record with 0 conversions");
+
+        var pAfterRerun = await db.Patients.AsNoTracking().SingleAsync(p => p.PatientId == pToMigrate.PatientId);
+        check(pAfterRerun.CitizenIdVersion == 1 && pAfterRerun.CitizenIdHash == pAfterConvert.CitizenIdHash,
+            "Idempotency: Patient version and hash remained identical without extra mutation");
+
+        // Audit check: Verify MOD_PAT_IDENTITY_MIGRATED exists and contains no plaintext or hash
+        var migrationAudit = await db.AuditLogs.AsNoTracking()
+            .SingleOrDefaultAsync(log => log.EntityId == pToMigrate.PatientId && log.Action == "MOD_PAT_IDENTITY_MIGRATED");
+        check(migrationAudit != null &&
+              !migrationAudit.Detail!.Contains(citizenIdToMigrate) &&
+              !migrationAudit.Detail.Contains(legacySha) &&
+              !migrationAudit.Detail.Contains(pAfterConvert.CitizenIdHash!),
+            "Migration runner logs audit entry without exposing plaintext identifier or raw hash");
+
     }
 }
