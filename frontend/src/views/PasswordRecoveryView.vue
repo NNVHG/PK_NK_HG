@@ -4,15 +4,34 @@
       <img src="/logo-icon.svg" alt="Nha Khoa Hoàng Gia" class="brand-logo" width="40" height="40" />
     </div>
     <h1 id="recovery-title">Khôi phục mật khẩu</h1>
-    <p>Bệnh nhân nhập CCCD và số điện thoại đã đăng ký. Nhân viên chỉ cần số điện thoại. Mã xác minh được gửi qua SMS.</p>
+    <p>Bệnh nhân/người giám hộ nhập giấy tờ của chính mình và số điện thoại đăng ký tài khoản. Nhân viên dùng số điện thoại đăng ký. Mã xác minh được gửi qua SMS.</p>
     <p class="notice" role="status">{{ message }}</p>
     <form v-if="!done" @submit.prevent="submit" novalidate :aria-busy="busy">
+      <label for="recovery-account">Loại tài khoản</label>
+      <select id="recovery-account" v-model="accountType" :disabled="busy || !!store.challenge" @change="changeDocument">
+        <option value="patient">Bệnh nhân / người giám hộ</option>
+        <option value="staff">Nhân viên</option>
+      </select>
       <label for="recovery-phone">Số điện thoại đã đăng ký</label>
       <input id="recovery-phone" ref="phoneInput" v-model="phone" type="tel" name="phone" inputmode="numeric"
         autocomplete="tel" maxlength="10" :disabled="busy || !!store.challenge" :aria-invalid="invalidField === 'phone'" aria-describedby="recovery-error" />
-      <label for="recovery-citizen-id">CCCD của bệnh nhân (nhân viên để trống)</label>
-      <input id="recovery-citizen-id" ref="citizenIdInput" v-model="citizenId" type="text" name="citizen-id" inputmode="numeric"
-        autocomplete="off" maxlength="12" :disabled="busy || !!store.challenge" :aria-invalid="invalidField === 'citizenId'" aria-describedby="recovery-error" />
+      <template v-if="accountType === 'patient'">
+        <label for="recovery-document">Giấy tờ đăng nhập</label>
+        <select id="recovery-document" v-model="documentType" :disabled="busy || !!store.challenge" @change="changeDocument">
+          <option :value="1">CCCD</option><option :value="2">Hộ chiếu</option>
+        </select>
+        <label for="recovery-citizen-id">{{ documentType === 2 ? 'Số hộ chiếu' : 'Số CCCD' }}</label>
+        <input id="recovery-citizen-id" ref="citizenIdInput" v-model="citizenId" type="text" name="identity-document"
+          :inputmode="documentType === 2 ? 'text' : 'numeric'" autocomplete="off" maxlength="12"
+          :disabled="busy || !!store.challenge" :aria-invalid="invalidField === 'citizenId'" aria-describedby="recovery-error" />
+        <template v-if="documentType === 2">
+          <label for="recovery-country">Mã quốc gia cấp hộ chiếu</label>
+          <input id="recovery-country" ref="countryInput" v-model="nationalityCode" type="text" name="issuing-country"
+            autocomplete="off" maxlength="3" :disabled="busy || !!store.challenge"
+            :aria-invalid="invalidField === 'country'" aria-describedby="country-help recovery-error" />
+          <p id="country-help">Nhập mã 2–3 chữ cái đã đối soát tại quầy, ví dụ US.</p>
+        </template>
+      </template>
       <template v-if="store.challenge">
         <p>Mã gồm 6 chữ số, có hiệu lực 5 phút và tối đa 5 lần nhập sai. Có thể yêu cầu mã mới sau 60 giây.</p>
         <label for="recovery-code">Mã OTP từ SMS</label>
@@ -44,6 +63,8 @@ import { passwordRecoveryService } from '@/services/passwordRecovery';
 import { usePasswordRecoveryStore } from '@/stores/passwordRecovery';
 
 const store = usePasswordRecoveryStore();
+const accountType = ref<'patient' | 'staff'>('patient'), documentType = ref<1 | 2>(1), nationalityCode = ref('');
+const countryInput = ref<HTMLInputElement | null>(null);
 const phone = ref(''), citizenId = ref(''), code = ref(''), password = ref(''), confirmPassword = ref('');
 const error = ref(''), message = ref(''), invalidField = ref(''), busy = ref(false), done = ref(false);
 const phoneInput = ref<HTMLInputElement | null>(null), codeInput = ref<HTMLInputElement | null>(null);
@@ -53,22 +74,36 @@ let active = true, requestVersion = 0, resendAt = 0;
 
 function reject(field: string, text: string) {
   invalidField.value = field; error.value = text;
-  ({ phone: phoneInput, citizenId: citizenIdInput, code: codeInput, password: passwordInput, confirm: confirmInput }[field])?.value?.focus();
+  ({ phone: phoneInput, citizenId: citizenIdInput, country: countryInput, code: codeInput, password: passwordInput, confirm: confirmInput }[field])?.value?.focus();
+}
+function identityArguments(): [string, 1 | 2 | undefined, string | undefined] {
+  return accountType.value === 'patient'
+    ? [citizenId.value, documentType.value, documentType.value === 2 ? nationalityCode.value : undefined]
+    : ['', undefined, undefined];
+}
+function changeDocument() {
+  citizenId.value = ''; nationalityCode.value = ''; error.value = ''; invalidField.value = '';
 }
 function clearSecrets() { code.value = ''; password.value = ''; confirmPassword.value = ''; }
 async function requestCode() {
   if (busy.value || !active || done.value) return;
   error.value = ''; invalidField.value = '';
   if (!/^0[0-9]{9}$/.test(phone.value)) return reject('phone', 'Nhập số điện thoại gồm 10 chữ số, bắt đầu bằng 0.');
-  if (citizenId.value && !/^[0-9]{12}$/.test(citizenId.value)) return reject('citizenId', 'CCCD phải gồm đúng 12 chữ số.');
+  if (accountType.value === 'patient') {
+    citizenId.value = citizenId.value.trim().toUpperCase();
+    nationalityCode.value = nationalityCode.value.trim().toUpperCase();
+    if (documentType.value === 1 && !/^[0-9]{12}$/.test(citizenId.value)) return reject('citizenId', 'CCCD phải gồm đúng 12 chữ số.');
+    if (documentType.value === 2 && !/^[A-Z0-9]{6,12}$/.test(citizenId.value)) return reject('citizenId', 'Hộ chiếu phải gồm 6–12 chữ cái hoặc chữ số.');
+    if (documentType.value === 2 && !/^[A-Z]{2,3}$/.test(nationalityCode.value)) return reject('country', 'Nhập mã quốc gia cấp hộ chiếu gồm 2–3 chữ cái.');
+  }
   if (Date.now() < resendAt) { error.value = 'Vui lòng chờ đủ 60 giây trước khi yêu cầu mã mới.'; return; }
   busy.value = true;
   const version = ++requestVersion;
   try {
-    const response = await passwordRecoveryService.request(phone.value, citizenId.value);
+    const response = await passwordRecoveryService.request(phone.value, ...identityArguments());
     if (!active || version !== requestVersion) return;
     store.set(response); clearSecrets(); resendAt = Date.now() + response.resendAfterSeconds * 1000;
-    message.value = 'Nếu số điện thoại thuộc tài khoản đang hoạt động, bạn sẽ nhận được mã SMS. Nếu chưa nhận được, kiểm tra số điện thoại hoặc liên hệ phòng khám.';
+    message.value = 'Nếu thông tin khớp tài khoản đang hoạt động, bạn sẽ nhận được mã SMS. Nếu chưa nhận được, kiểm tra giấy tờ và số điện thoại đăng ký hoặc liên hệ phòng khám.';
     await nextTick(); if (active) codeInput.value?.focus();
   } catch (err: any) {
     if (active && version === requestVersion) { clearSecrets(); error.value = err.response?.data?.message || 'Chưa thể yêu cầu mã. Vui lòng thử lại hoặc liên hệ phòng khám.'; }
@@ -86,9 +121,9 @@ async function submit() {
   busy.value = true;
   const version = ++requestVersion;
   try {
-    await passwordRecoveryService.reset(store.challenge.challengeId, phone.value, code.value, password.value, citizenId.value);
+    await passwordRecoveryService.reset(store.challenge.challengeId, phone.value, code.value, password.value, ...identityArguments());
     if (!active || version !== requestVersion) return;
-    store.clear(); phone.value = ''; citizenId.value = ''; clearSecrets(); done.value = true;
+    store.clear(); phone.value = ''; citizenId.value = ''; nationalityCode.value = ''; clearSecrets(); done.value = true;
     message.value = 'Đã đặt mật khẩu mới. Vui lòng đăng nhập lại bằng mật khẩu mới.';
   } catch (err: any) {
     if (active && version === requestVersion) { clearSecrets(); error.value = err.response?.data?.message || 'Chưa xác định được kết quả. Hãy thử đăng nhập bằng mật khẩu mới hoặc yêu cầu mã khác.'; }
@@ -96,12 +131,12 @@ async function submit() {
 }
 function changeIdentity() {
   if (busy.value) return;
-  ++requestVersion; store.clear(); clearSecrets(); phone.value = ''; citizenId.value = ''; error.value = ''; message.value = ''; invalidField.value = '';
+  ++requestVersion; store.clear(); clearSecrets(); phone.value = ''; citizenId.value = ''; nationalityCode.value = ''; error.value = ''; message.value = ''; invalidField.value = '';
   // Keep the local resend deadline; changing the form must not bypass the server cooldown.
   nextTick(() => phoneInput.value?.focus());
 }
 onMounted(() => { store.clear(); phoneInput.value?.focus(); });
-onUnmounted(() => { active = false; ++requestVersion; store.clear(); clearSecrets(); phone.value = ''; citizenId.value = ''; message.value = ''; });
+onUnmounted(() => { active = false; ++requestVersion; store.clear(); clearSecrets(); phone.value = ''; citizenId.value = ''; nationalityCode.value = ''; message.value = ''; });
 </script>
 
 <style scoped>
@@ -109,12 +144,13 @@ onUnmounted(() => { active = false; ++requestVersion; store.clear(); clearSecret
 .recovery-brand { display: flex; justify-content: center; margin-bottom: 0.75rem; }
 .brand-logo { display: block; }
 label { display: block; margin: 1rem 0 .4rem; font-weight: 600; }
-input { box-sizing: border-box; width: 100%; padding: .65rem; font-size: 1rem; border: 1px solid #7b8791; border-radius: 4px; }
+input, select { box-sizing: border-box; width: 100%; padding: .65rem; font-size: 1rem; border: 1px solid #7b8791; border-radius: 4px; }
 button { min-height: 40px; padding: .6rem 1rem; cursor: pointer; }
 button:disabled { cursor: wait; }
 .actions { display: flex; flex-wrap: wrap; gap: .5rem; margin: .75rem 0; }
 [role=alert] { color: #a51d20; }
 .notice { color: #18552d; }
 :focus-visible { outline: 2px solid #185eac; outline-offset: 2px; }
-p { line-height: 1.5; }
+p { line-height: 1.5; overflow-wrap: anywhere; }
+@media (max-width: 440px) { .recovery-card { margin: 1rem 0; padding: 1rem; min-width: 0; } }
 </style>
