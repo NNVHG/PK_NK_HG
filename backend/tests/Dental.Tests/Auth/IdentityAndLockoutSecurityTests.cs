@@ -95,6 +95,52 @@ public sealed class IdentityAndLockoutSecurityTests
         Assert.Throws<InvalidOperationException>(() => new KeyedIdentityHasher(config));
         Assert.Throws<ArgumentException>(() => new KeyedIdentityHasher(new byte[31]));
     }
+    [Fact]
+    public void KeyedHasher_SupportsConfiguredKeyVersions_AndPinning()
+    {
+        var key1 = "SyntheticIdentityKeyVersion1Test_2026!#*";
+        var key2 = "SyntheticIdentityKeyVersion2Test_2026!#*";
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["IdentitySecurity:Keys:1"] = key1,
+            ["IdentitySecurity:Keys:2"] = key2,
+            ["IdentitySecurity:CurrentVersion"] = "2"
+        }).Build();
+
+        var multiHasher = new KeyedIdentityHasher(config);
+        Assert.Equal(2, multiHasher.CurrentVersion);
+
+        const string cccd = "001200000001";
+        var hashV1 = multiHasher.Hash(cccd, IdentityDocumentType.CitizenId, keyVersion: 1);
+        var hashV2 = multiHasher.Hash(cccd, IdentityDocumentType.CitizenId); // defaults to CurrentVersion = 2
+        var hashV2Explicit = multiHasher.Hash(cccd, IdentityDocumentType.CitizenId, keyVersion: 2);
+
+        Assert.Equal(hashV2, hashV2Explicit);
+        Assert.NotEqual(hashV1, hashV2);
+
+        // Matches without expectedKeyVersion matches both versions
+        Assert.True(multiHasher.Matches(hashV1, cccd, IdentityDocumentType.CitizenId));
+        Assert.True(multiHasher.Matches(hashV2, cccd, IdentityDocumentType.CitizenId));
+
+        // Matches with pinned expectedKeyVersion verifies only the designated key
+        Assert.True(multiHasher.Matches(hashV1, cccd, IdentityDocumentType.CitizenId, expectedKeyVersion: 1));
+        Assert.False(multiHasher.Matches(hashV1, cccd, IdentityDocumentType.CitizenId, expectedKeyVersion: 2));
+        Assert.True(multiHasher.Matches(hashV2, cccd, IdentityDocumentType.CitizenId, expectedKeyVersion: 2));
+        Assert.False(multiHasher.Matches(hashV2, cccd, IdentityDocumentType.CitizenId, expectedKeyVersion: 1));
+
+        // Invalid version throws
+        Assert.Throws<InvalidOperationException>(() => multiHasher.Hash(cccd, IdentityDocumentType.CitizenId, keyVersion: 3));
+    }
+
+    [Fact]
+    public void KeyedHasher_VersionConstructorValidatesArguments()
+    {
+        Assert.Throws<ArgumentException>(() => new KeyedIdentityHasher(new byte[32], version: 0));
+        Assert.Throws<ArgumentException>(() => new KeyedIdentityHasher(new Dictionary<int, byte[]>()));
+        Assert.Throws<ArgumentException>(() => new KeyedIdentityHasher(new Dictionary<int, byte[]> { [1] = new byte[31] }));
+        Assert.Throws<ArgumentException>(() => new KeyedIdentityHasher(new Dictionary<int, byte[]> { [1] = new byte[32] }, currentVersion: 2));
+    }
+
 
     [Fact]
     public void LoginRequestValidator_AcceptsCitizenIdAndPassport()
