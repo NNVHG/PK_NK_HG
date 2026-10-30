@@ -68,9 +68,15 @@ public sealed class PatientActivationRepository(DentalDbContext db, VietnamClock
             user.PhoneActivationReason = null;
             user.RequiresPhoneActivation = false; user.PhoneVerifiedAtUtc = clock.UtcNow; user.TokenVersion++; user.UpdatedAt = clock.UtcNow;
             var staff = RoleCodes.StaffRoles.Contains(user.Role.RoleCode);
+            var decision = reason switch
+            {
+                PhoneActivationReason.PhoneChange => "DL-355/DL-367",
+                PhoneActivationReason.LegacyVerification => "DL-366/DL-367",
+                _ => staff ? "DL-331" : "DL-330"
+            };
             db.AuditLogs.Add(new AuditLog { UserId = user.UserId, EntityType = "User", EntityId = user.UserId,
                 Action = staff ? "MOD_AUTH_STAFF_ACTIVATED" : "MOD_AUTH_PATIENT_ACTIVATED", CreatedAt = clock.UtcNow, IpAddress = ip,
-                Detail = JsonSerializer.Serialize(new { phoneVerified = true, activationReason = reason, changedPassword = passwordHash is not null, decision = reason == PhoneActivationReason.PhoneChange ? "DL-355/DL-367" : staff ? "DL-331" : "DL-330" }) });
+                Detail = JsonSerializer.Serialize(new { phoneVerified = true, activationReason = reason, changedPassword = passwordHash is not null, decision }) });
             await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); committed = true; return true;
         }
         catch (Exception e) when (IsConflict(e)) { return false; }
