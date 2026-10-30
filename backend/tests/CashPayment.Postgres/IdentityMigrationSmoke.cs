@@ -75,6 +75,10 @@ internal static class IdentityMigrationSmoke
             before.CitizenIdVersion == 0 && before.DocumentType is null && before.HashScheme is null &&
             before.IdentityKeyVersion is null && before.IssuingCountryCode is null,
             "Migration preserves legacy SHA-256 and leaves unverified metadata unset");
+        var legacyInventory = await IdentityMigrationPreflight.InspectAsync(db);
+        check(legacyInventory is { TotalPatients: 1, UnclassifiedHash: 1, CurrentHmac: 0,
+            MissingHash: 0, MalformedHash: 0, DuplicateHashGroups: 0 },
+            "Read-only inventory treats a legacy 64-character hash as unclassified, not verified HMAC");
 
         var role = new Role { RoleCode = RoleCodes.Receptionist, RoleName = "Synthetic receptionist" };
         var actor = new User
@@ -125,6 +129,28 @@ internal static class IdentityMigrationSmoke
             log.Action == "MOD_PAT_CITIZEN_ID_UPDATED" && log.Detail != null &&
             !log.Detail.Contains(citizenId) && !log.Detail.Contains(oldHash) && !log.Detail.Contains(after.CitizenIdHash!)) == 1,
             "Conversion commits one audit entry without clear identifier or hash");
+        db.Patients.AddRange(
+            new Patient { FullName = "Synthetic missing identity", DateOfBirth = new(1990, 1, 1), Phone = "0990000781" },
+            new Patient { FullName = "Synthetic malformed identity", DateOfBirth = new(1990, 1, 1), Phone = "0990000782",
+                CitizenIdHash = "INVALID" },
+            new Patient { FullName = "Synthetic incomplete passport", DateOfBirth = new(1990, 1, 1), Phone = "0990000783",
+                CitizenIdHash = new string('A', 64), CitizenIdMasked = "AB****12",
+                DocumentType = IdentityDocumentType.Passport, HashScheme = IdentityHashScheme.HmacCanonical,
+                IdentityKeyVersion = IdentityDocumentConstants.CurrentHmacKeyVersion },
+            new Patient { FullName = "Synthetic other key version", DateOfBirth = new(1990, 1, 1), Phone = "0990000784",
+                CitizenIdHash = new string('B', 64), CitizenIdMasked = "987******124",
+                DocumentType = IdentityDocumentType.CitizenId, HashScheme = IdentityHashScheme.HmacCanonical,
+                IdentityKeyVersion = IdentityDocumentConstants.CurrentHmacKeyVersion + 1 });
+        await db.SaveChangesAsync();
+        var trackedBefore = db.ChangeTracker.Entries<Patient>().Count();
+        var auditBefore = await db.AuditLogs.CountAsync();
+        var inventory = await IdentityMigrationPreflight.InspectAsync(db);
+        check(inventory is { TotalPatients: 5, CurrentHmac: 1, UnclassifiedHash: 0, MissingHash: 1,
+            MalformedHash: 1, InvalidMetadata: 1, DuplicateHashGroups: 0, NonCurrentKeyVersion: 1 },
+            "Inventory counts incomplete identities and other key versions without returning identifiers");
+        check(db.ChangeTracker.Entries<Patient>().Count() == trackedBefore &&
+            await db.AuditLogs.CountAsync() == auditBefore,
+            "Inventory does not track patient entities or write audit records");
         check((await db.Database.GetPendingMigrationsAsync()).Any() == false,
             "Upgraded database has no pending migration");
     }
