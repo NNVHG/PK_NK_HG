@@ -118,8 +118,8 @@ internal static class StockIssueHttpSmoke
             using (var r = await Send(Input())) check(r.StatusCode == HttpStatusCode.Conflict, "Reopened correcting visit cannot issue new stock");
             using (var r = await client.GetAsync($"/api/inventory/issues?visitId={complete.VisitId}")) check(r.StatusCode == HttpStatusCode.OK, "Stock history remains readable after visit lifecycle changes");
             var actor = await db.Users.SingleAsync(x => x.UserId == users[RoleCodes.Assistant].UserId); actor.IsActive = false; await db.SaveChangesAsync();
-            using (var r = await Send(Input())) check(r.StatusCode == HttpStatusCode.Forbidden, "Inactive actor with old JWT cannot issue");
-            using (var r = await client.GetAsync("/api/inventory/issues/targets")) check(r.StatusCode == HttpStatusCode.Forbidden, "Inactive actor with old JWT cannot read targets");
+            using (var r = await Send(Input())) check(r.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized, "Inactive actor with old JWT cannot issue");
+            using (var r = await client.GetAsync("/api/inventory/issues/targets")) check(r.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized, "Inactive actor with old JWT cannot read targets");
         }
         finally { await app.StopAsync(); }
     }

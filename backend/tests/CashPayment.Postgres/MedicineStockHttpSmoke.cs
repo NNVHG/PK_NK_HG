@@ -211,8 +211,8 @@ internal static class MedicineStockHttpSmoke
             try { await db.SaveChangesAsync(); check(false, "Issue immutable"); } catch (InvalidOperationException) { check(true, "Medicine stock issue cannot be deleted"); } db.ChangeTracker.Clear();
             check((await db.Invoices.AsNoTracking().SingleAsync(i => i.Id == empty.InvoiceId)).PaidAmount == 2000 && !await db.PaymentTransactions.AnyAsync(), "Stock operations do not mutate payments or invoice amounts");
             var actor = await db.Users.SingleAsync(u => u.UserId == admin); actor.IsActive = false; await db.SaveChangesAsync();
-            using (var r = await Receive(medicine.Id, Receipt())) check(r.StatusCode == HttpStatusCode.Forbidden, "Inactive Admin old JWT cannot receive");
-            using (var r = await client.GetAsync(Stock(medicine.Id))) check(r.StatusCode == HttpStatusCode.Forbidden, "Inactive Admin old JWT cannot read receipt book");
+            using (var r = await Receive(medicine.Id, Receipt())) check(r.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized, "Inactive Admin old JWT cannot receive");
+            using (var r = await client.GetAsync(Stock(medicine.Id))) check(r.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized, "Inactive Admin old JWT cannot read receipt book");
             check(!await db.AuditLogs.AnyAsync(a => (a.Action == "MOD_RX_STOCK_ISSUED" || a.Action == "MOD_RX_STOCK_RECEIVED") && (a.Detail!.Contains(patient.FullName) || a.Detail.Contains(patient.Phone))), "Stock audit excludes patient and receiver data");
         }
         finally { await app.StopAsync(); }

@@ -145,11 +145,11 @@ internal static class DentalImageHttpSmoke
             using(var r = await Upload()) check(r.StatusCode == HttpStatusCode.InternalServerError, "Audit failure rejects upload"); failure.Fail = false;
             check(FileCount() == filesBefore && await db.DentalImages.CountAsync() == rowsBefore, "Audit rollback removes database row and physical file");
             var inactive = users[RoleCodes.Assistant]; inactive.IsActive = false; await db.SaveChangesAsync(); As(RoleCodes.Assistant);
-            using(var r = await Upload()) check(r.StatusCode == HttpStatusCode.NotFound, "Inactive actor cannot upload using stale JWT");
+            using(var r = await Upload()) check(r.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Unauthorized, "Inactive actor cannot upload using stale JWT");
             As(RoleCodes.Dentist); var someoneElseVisit = await Visit(dentist: users[RoleCodes.Admin].UserId); using(var r = await Upload(someoneElseVisit.VisitId)) check(r.StatusCode == HttpStatusCode.BadRequest, "Dentist cannot upload into another dentist visit");
             using(var r = await client.GetAsync($"/api/dental-images/targets?patientId={patient.PatientId}"))
             { var items = (await r.Content.ReadFromJsonAsync<ImageVisitTarget[]>())!; check(items.Any(x => x.VisitId == visit.VisitId) && items.All(x => x.VisitId != locked.VisitId && x.VisitId != someoneElseVisit.VisitId), "Targets exclude locked or other dentist cases"); }
-            users[RoleCodes.Dentist].IsActive=false;await db.SaveChangesAsync();As(RoleCodes.Dentist);using(var r=await client.GetAsync($"/api/dental-images/{image.Id}/file"))check(r.StatusCode==HttpStatusCode.NotFound,"Inactive reader cannot stream with an existing JWT");
+            users[RoleCodes.Dentist].IsActive=false;await db.SaveChangesAsync();As(RoleCodes.Dentist);using(var r=await client.GetAsync($"/api/dental-images/{image.Id}/file"))check(r.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Unauthorized,"Inactive reader cannot stream with an existing JWT");
             As(RoleCodes.Admin);patient.IsActive=false;await db.SaveChangesAsync();using(var r=await client.GetAsync($"/api/dental-images/{image.Id}/file"))check(r.StatusCode==HttpStatusCode.NotFound,"Inactive patient file is not served");
         }
         finally

@@ -216,6 +216,36 @@ internal static class FiveRoleHttpSmoke
         var replayPayment = await Api("Cash request is idempotent", "POST", $"/api/invoices/{invoiceId}/payments", "RECEPTIONIST", payment);
         check(paid.GetProperty("id").GetInt32() == replayPayment.GetProperty("id").GetInt32(), "No duplicate receipt on replay");
         check(await db.PaymentTransactions.CountAsync(x => x.InvoiceId == invoiceId) == 1, "Exactly one persisted payment");
+        var guardianAssign = await Api("Reception assigns guardian relationship", "POST", "/api/patient-guardians/assign", "RECEPTIONIST",
+            new { guardianPatientId = patientId, wardPatientId = another.GetProperty("patientId").GetInt32(), relationship = "Người giám hộ" });
+        var guardianId = guardianAssign.GetProperty("patientGuardianId").GetInt32();
+        var assignedAt = guardianAssign.GetProperty("assignedAt").GetDateTime();
+        await Api("Reception revokes guardian relationship", "POST", $"/api/patient-guardians/wards/{another.GetProperty("patientId").GetInt32()}/revoke", "RECEPTIONIST",
+            new { patientGuardianId = guardianId, expectedAssignedAt = assignedAt, notes = "Smoke test revoke" });
+        check(!await db.PatientGuardians.AsNoTracking().AnyAsync(g => g.WardPatientId == another.GetProperty("patientId").GetInt32() && g.IsActive), "Ward leaves no active guardian after revoke");
+        var supply = await Api("Admin creates medical supply for intake", "POST", "/api/master/medical-supplies", "ADMIN",
+            new { code = "VT_SMOKE_5R", name = "Vật tư Five Role", unit = "Cái", minimumThreshold = 5, isActive = true }, 201);
+        var supplyId = supply.GetProperty("id").GetInt32();
+        var supplyVer = supply.GetProperty("version").GetInt32();
+        var receiptBody = new
+        {
+            requestId = Guid.NewGuid(),
+            confirmed = true,
+            supplierName = "Nhà cung cấp Five Role",
+            notes = "Nhập thử nghiệm runner B",
+            lines = new[] { new { medicalSupplyId = supplyId, quantity = 10, expectedSupplyVersion = supplyVer } }
+        };
+        await Api("Assistant records stock receipt", "POST", "/api/inventory/receipts", "ASSISTANT", receiptBody, 201);
+        var issueBody = new
+        {
+            requestId = Guid.NewGuid(),
+            confirmed = true,
+            visitId,
+            notes = "Tiêu hao thực tế ca khám",
+            lines = new[] { new { medicalSupplyId = supplyId, quantity = 2, expectedSupplyVersion = supplyVer } }
+        };
+        await Api("Assistant confirms stock issue on completed visit", "POST", "/api/inventory/issues", "ASSISTANT", issueBody, 201);
+        check(await db.StockBalances.AsNoTracking().Where(s => s.MedicalSupplyId == supplyId).Select(s => s.OnHand).SingleAsync() == 8, "Stock correctly incremented and decremented for visit");
         await Api("Patient reads own clinical timeline", "GET", $"/api/patients/{patientId}/timeline", "PATIENT");
         await Api("Patient reads own prescription", "GET", $"/api/visits/{visitId}/prescription", "PATIENT");
         await Api("Patient cannot edit prescription", "PUT", $"/api/visits/{visitId}/prescription", "PATIENT", new { }, 403);

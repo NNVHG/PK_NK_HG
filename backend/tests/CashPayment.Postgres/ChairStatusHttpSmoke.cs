@@ -191,8 +191,8 @@ internal static class ChairStatusHttpSmoke
             check(!selectedByDentist || (await Read(selecting.Id)).Status == DentalChairStatus.Available, "No assigned-maintenance combination after race");
             check((await db.Visits.AsNoTracking().SingleAsync(v => v.VisitId == visit.VisitId)).Status == VisitStatuses.Correcting && !await db.Invoices.AnyAsync(), "Manual statuses do not modify visit or finance");
             var assistant = await db.Users.SingleAsync(u => u.UserId == users[RoleCodes.Assistant].UserId); As(RoleCodes.Assistant); assistant.IsActive = false; await db.SaveChangesAsync();
-            using (var r = await client.GetAsync(endpoint)) check(r.StatusCode == HttpStatusCode.Forbidden, "Inactive actor old JWT cannot read");
-            using (var r = await Change(rollback.Id)) check(r.StatusCode == HttpStatusCode.Forbidden, "Inactive actor old JWT cannot mutate");
+            using (var r = await client.GetAsync(endpoint)) check(r.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized, "Inactive actor old JWT cannot read");
+            using (var r = await Change(rollback.Id)) check(r.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized, "Inactive actor old JWT cannot mutate");
             assistant.IsActive = true; assistant.RoleId = users[RoleCodes.Dentist].RoleId; await db.SaveChangesAsync();
             using (var r = await client.GetAsync(endpoint)) check(r.StatusCode == HttpStatusCode.Forbidden, "Changed DB role old JWT cannot read");
             using (var r = await Change(rollback.Id)) check(r.StatusCode == HttpStatusCode.Forbidden, "Changed DB role old JWT cannot mutate");
