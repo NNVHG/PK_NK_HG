@@ -1,3 +1,4 @@
+using Dental.Application.Common;
 using Dental.Application.Features.Auth.DTOs;
 using Dental.Application.Features.Auth.Services;
 using Dental.Application.Features.MOD_AUTH;
@@ -97,5 +98,55 @@ public sealed class LegacyAdminOtpPrepTests
         Assert.Equal("AUTH_ACTIVATION_REQUIRED", result.Error.Code);
         Assert.Null(admin.PhoneVerifiedAtUtc);
         _tokenService.DidNotReceive().GenerateAccessToken(Arg.Any<User>());
+    }
+
+    [Fact]
+    public async Task LegacyPhoneVerificationTransitionRunner_GuardRejectsProductionDatabaseAndInvalidActor()
+    {
+        await using var prodDb = new DentalDbContext(
+            new DbContextOptionsBuilder<DentalDbContext>()
+                .UseNpgsql("Host=localhost;Database=dental_db;Username=postgres")
+                .Options);
+        Assert.Throws<InvalidOperationException>(() =>
+            LegacyPhoneVerificationTransitionRunner.AssertNotProductionDatabase(prodDb));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            LegacyPhoneVerificationTransitionRunner.PreviewAsync(prodDb));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            LegacyPhoneVerificationTransitionRunner.TransitionLegacyAccountsAsync(prodDb, 1));
+
+        await using var cloneDb = new DentalDbContext(
+            new DbContextOptionsBuilder<DentalDbContext>()
+                .UseNpgsql("Host=localhost;Database=dental_cash_test_clone;Username=postgres")
+                .Options);
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            LegacyPhoneVerificationTransitionRunner.TransitionLegacyAccountsAsync(cloneDb, 0));
+    }
+
+    [Theory]
+    [InlineData(RoleCodes.Admin)]
+    [InlineData(RoleCodes.Receptionist)]
+    [InlineData(RoleCodes.Dentist)]
+    [InlineData(RoleCodes.Assistant)]
+    [InlineData(RoleCodes.Patient)]
+    public async Task PatientActivationService_AllowsKeepingExistingPassword_ForAllRolesInLegacyVerification(string roleCode)
+    {
+        var repo = Substitute.For<IPatientActivationRepository>();
+        var proofs = Substitute.For<IPatientActivationProofs>();
+        var delivery = Substitute.For<IPatientActivationDelivery>();
+        var passwords = Substitute.For<IPasswordHasher>();
+        var svc = new PatientActivationService(repo, proofs, delivery, passwords);
+
+        var target = new ActivationTarget(UserId: 42, Stamp: "STAMP_" + roleCode, MustChangePassword: false);
+        var token = new string('A', 64);
+        proofs.ConsumeGrant(token).Returns(target);
+        repo.CompleteAsync(target, null, "127.0.0.1", Arg.Any<CancellationToken>()).Returns(true);
+
+        var result = await svc.CompleteAsync(
+            new ActivationCompletion(token, KeepDefaultPassword: true, NewPassword: null, Confirmed: true),
+            "127.0.0.1");
+
+        Assert.True(result.IsSuccess);
+        passwords.DidNotReceive().Hash(Arg.Any<string>());
+        await repo.Received(1).CompleteAsync(target, null, "127.0.0.1", Arg.Any<CancellationToken>());
     }
 }
