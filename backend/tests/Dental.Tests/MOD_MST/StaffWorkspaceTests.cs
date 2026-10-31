@@ -31,7 +31,7 @@ public sealed class StaffWorkspaceTests
             staff[id] = new User { UserId=id, FullName="Synthetic staff " + id, IsActive=true, Role=new Role { RoleCode=role } };
         locations[1]=new() { Id=1, ChairNumber="GHE-01", RoomName="Phòng 3", Status=DentalChairStatus.Available, IsActive=true };
         locations[2]=new() { Id=2, ChairNumber="GHE-02", RoomName="Phòng 4", Status=DentalChairStatus.Available, IsActive=true };
-        assignments[5]=new() { UserId=5, ChairId=1, Version=1 }; assignments[6]=new() { UserId=6, DentistId=5, Version=1 };
+        assignments[5]=new() { UserId=5, ChairId=1, WorkDate=clock.Today, Version=1 }; assignments[6]=new() { UserId=6, DentistId=5, Version=1 };
         users.FindByIdAsync(Arg.Any<int>(),Arg.Any<CancellationToken>()).Returns(c=>staff.GetValueOrDefault(c.Arg<int>()));
         users.GetActiveDentistsAsync(Arg.Any<CancellationToken>()).Returns(new[] { staff[5],staff[7] });
         workspaces.FindAsync(Arg.Any<int>(),Arg.Any<CancellationToken>()).Returns(c=>assignments.GetValueOrDefault(c.Arg<int>()));
@@ -187,5 +187,53 @@ public sealed class StaffWorkspaceTests
         audit.LogRequiredAsync(Arg.Any<string>(),Arg.Any<string>(),Arg.Any<int?>(),Arg.Any<int?>(),Arg.Any<string?>(),Arg.Any<string?>(),Arg.Any<CancellationToken>())
             .Returns(Task.FromException(new InvalidOperationException("Synthetic workspace audit failure")));
         await Assert.ThrowsAsync<InvalidOperationException>(()=>Service().ChangeAsync(5,RoleCodes.Dentist,5,new(2,null,1,true)));
+    }
+    [Fact] public async Task PriorDayDentistWorkspaceRequiresReconfirmationAndHidesStaleRoomUntilConfirmed()
+    {
+        assignments[5].WorkDate = clock.Today.AddDays(-1);
+        var dentistBefore = (await Service().GetAsync(5, RoleCodes.Dentist, 5)).Value!;
+        Assert.Null(dentistBefore.ChairId);
+        Assert.Null(dentistBefore.RoomName);
+        Assert.False(dentistBefore.IsLocationUsable);
+
+        var assistantBefore = (await Service().GetAsync(6, RoleCodes.Assistant, 6)).Value!;
+        Assert.Equal(5, assistantBefore.WorkingDentistId);
+        Assert.Null(assistantBefore.ChairId);
+        Assert.Null(assistantBefore.RoomName);
+        Assert.False(assistantBefore.IsLocationUsable);
+
+        var optionsBefore = (await Service().GetOptionsAsync(6, RoleCodes.Assistant)).Value!;
+        var dentistOpt = optionsBefore.Dentists.Single(x => x.DentistId == 5);
+        Assert.Null(dentistOpt.ChairId);
+        Assert.Null(dentistOpt.RoomName);
+        Assert.True(dentistOpt.IsReady);
+        Assert.Null(optionsBefore.Chairs.Single(x => x.Id == 1).ClaimedByUserId);
+
+        var reconfirmed = await Service().ChangeAsync(5, RoleCodes.Dentist, 5, new(1, null, 1, true));
+        Assert.True(reconfirmed.IsSuccess);
+        Assert.Equal(1, reconfirmed.Value!.ChairId);
+        Assert.Equal("Phòng 3", reconfirmed.Value.RoomName);
+        Assert.True(reconfirmed.Value.IsLocationUsable);
+        Assert.Equal(clock.Today, assignments[5].WorkDate);
+        Assert.Equal(2, assignments[5].Version);
+        await workspaces.Received(1).ReleaseStaleChairClaimsAsync(1, 5, clock.Today, 5, Arg.Any<DateTime>(), Arg.Any<CancellationToken>());
+        await audit.Received(1).LogRequiredAsync("MOD_MST_WORKSPACE_CHANGED", "StaffWorkspace", 5, 5, Arg.Is<string>(s => s.Contains("\"workDate\"")), null, Arg.Any<CancellationToken>());
+
+        var assistantAfter = (await Service().GetAsync(6, RoleCodes.Assistant, 6)).Value!;
+        Assert.Equal(1, assistantAfter.ChairId);
+        Assert.Equal("Phòng 3", assistantAfter.RoomName);
+        Assert.True(assistantAfter.IsLocationUsable);
+    }
+    [Fact] public async Task VietnamMidnightBoundaryDeterminesWorkDate()
+    {
+        var beforeMidnightClock = new VietnamClock(new FixedTimeProvider(new DateTimeOffset(2026, 10, 16, 16, 59, 59, TimeSpan.Zero)));
+        var afterMidnightClock = new VietnamClock(new FixedTimeProvider(new DateTimeOffset(2026, 10, 16, 17, 0, 0, TimeSpan.Zero)));
+
+        assignments[5].WorkDate = new DateOnly(2026, 10, 16);
+        var beforeService = new StaffWorkspaceService(workspaces, chairs, users, visits, queues, uow, audit, beforeMidnightClock);
+        var afterService = new StaffWorkspaceService(workspaces, chairs, users, visits, queues, uow, audit, afterMidnightClock);
+
+        Assert.Equal("Phòng 3", (await beforeService.GetAsync(5, RoleCodes.Dentist, 5)).Value!.RoomName);
+        Assert.Null((await afterService.GetAsync(5, RoleCodes.Dentist, 5)).Value!.RoomName);
     }
 }

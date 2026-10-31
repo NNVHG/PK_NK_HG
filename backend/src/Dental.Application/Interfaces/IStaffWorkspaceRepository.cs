@@ -5,5 +5,6 @@ public interface IStaffWorkspaceRepository
     Task<StaffWorkspace?> FindAsync(int userId, CancellationToken ct = default);
     Task<IReadOnlyList<StaffWorkspace>> GetAllAsync(CancellationToken ct = default);
     Task<bool> ChairClaimedAsync(int chairId, int exceptUserId, CancellationToken ct = default);
+    Task<bool> ReleaseStaleChairClaimsAsync(int chairId, int exceptUserId, DateOnly workDate, int actorId, DateTime updatedAtUtc, CancellationToken ct = default);
     Task AddAsync(StaffWorkspace workspace, CancellationToken ct = default);
 }

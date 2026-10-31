@@ -29,7 +29,8 @@ internal static class QueueLocationHttpSmoke
             var chair = new DentalChair { ChairNumber = "QL-" + Guid.NewGuid().ToString("N"), RoomName = room,
                 Status = status, IsActive = status != DentalChairStatus.Inactive, CreatedByUserId = actorId };
             db.DentalChairs.Add(chair); await db.SaveChangesAsync();
-            db.StaffWorkspaces.Add(new() { UserId = dentist.UserId, ChairId = chair.Id, UpdatedByUserId = actorId });
+            var workDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "SE Asia Standard Time"));
+            db.StaffWorkspaces.Add(new() { UserId = dentist.UserId, ChairId = chair.Id, WorkDate = workDate, UpdatedByUserId = actorId });
             await db.SaveChangesAsync(); db.ChangeTracker.Clear(); return chair;
         }
         var doctorA = await Staff(RoleCodes.Dentist); var doctorB = await Staff(RoleCodes.Dentist);
