@@ -113,7 +113,7 @@ internal static class QueueTransferHttpSmoke
         check((await Chair(source)).Status == DentalChairStatus.Available && (await Chair(source)).Version == oldChair.Version + 1 &&
             (await Chair(target)).Status == DentalChairStatus.Occupied && (await Chair(target)).Version == newChair.Version + 1,
             "Transfer updates both chair statuses and versions atomically");
-        check(await db.Visits.AsNoTracking().AnyAsync(v => v.VisitId == row.VisitId && v.ChairId == newChair.Id && v.DentistId == target.UserId && v.Status == VisitStatuses.InProgress) &&
+        check(await db.Visits.AsNoTracking().AnyAsync(v => v.VisitId == row.VisitId && v.ChairId == newChair.Id && v.RoomId == newChair.RoomId && v.DentistId == target.UserId && v.Status == VisitStatuses.InProgress) &&
             await db.QueueEntries.AnyAsync(q => q.QueueEntryId == row.QueueEntryId && q.DentistId == target.UserId && q.Status == QueueStatus.InConsultation),
             "Transfer preserves Visit and queue status while updating both assignments");
         check(await db.QueueStatusHistories.CountAsync(h => h.QueueEntryId == row.QueueEntryId && h.FromStatus == h.ToStatus && h.ChangedByUserId == receptionist.UserId) == 1 &&
@@ -127,7 +127,7 @@ internal static class QueueTransferHttpSmoke
         var waitingSource = await Staff(RoleCodes.Dentist); var waitingTarget = await Staff(RoleCodes.Dentist, false);
         var waiting = await Row(waitingSource, false); authenticate(RoleCodes.Admin, admin.UserId);
         check(await Transfer(waiting, waitingSource, waitingTarget) == HttpStatusCode.OK, "Waiting transfer does not require or occupy destination chair200");
-        check(await db.Visits.AnyAsync(v => v.VisitId == waiting.VisitId && v.DentistId == waitingTarget.UserId && v.ChairId == null && v.Status == VisitStatuses.Created),
+        check(await db.Visits.AnyAsync(v => v.VisitId == waiting.VisitId && v.DentistId == waitingTarget.UserId && v.ChairId == null && v.RoomId == null && v.Status == VisitStatuses.Created),
             "Waiting transfer preserves unstarted Visit and assigns dentist");
 
         var failSource = await Staff(RoleCodes.Dentist); var failTarget = await Staff(RoleCodes.Dentist); var failed = await Row(failSource);

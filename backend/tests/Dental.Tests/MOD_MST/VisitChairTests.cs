@@ -13,8 +13,8 @@ public sealed class VisitChairTests
     private readonly IDentalChairRepository chairs = Substitute.For<IDentalChairRepository>();
     private readonly IVisitRepository visits = Substitute.For<IVisitRepository>();
     private readonly IUserRepository users = Substitute.For<IUserRepository>();
-    private readonly DentalChair chair = new() { Id = 3, Status = DentalChairStatus.Available, IsActive = true };
-    private readonly DentalChair targetChair = new() { Id = 4, Status = DentalChairStatus.Available, IsActive = true };
+    private readonly DentalChair chair = new() { Id = 3, RoomId = 10, Status = DentalChairStatus.Available, IsActive = true };
+    private readonly DentalChair targetChair = new() { Id = 4, RoomId = 11, Status = DentalChairStatus.Available, IsActive = true };
     private readonly Visit visit = new() { VisitId = 7, Status = VisitStatuses.Created };
     private readonly VietnamClock clock = new(TimeProvider.System);
     private VisitChairService Service() => new(workspaces, chairs, visits, users, clock);
@@ -30,7 +30,7 @@ public sealed class VisitChairTests
     [Fact] public async Task StartClaimsCurrentDentistChairAndAuditableVersion()
     {
         Assert.True((await Service().AcquireAsync(visit, 2, 99)).IsSuccess);
-        Assert.Equal(3, visit.ChairId); Assert.Equal(DentalChairStatus.Occupied, chair.Status);
+        Assert.Equal(3, visit.ChairId); Assert.Equal(10, visit.RoomId); Assert.Equal(DentalChairStatus.Occupied, chair.Status);
         Assert.Equal(2, chair.Version); Assert.Equal(99, chair.UpdatedByUserId); Assert.NotNull(chair.UpdatedAt);
     }
     [Fact] public async Task CallingChecksReadinessWithoutOccupyingOrAssigningVisitChair()
@@ -165,5 +165,21 @@ public sealed class VisitChairTests
 
         Assert.True((await Service().ReleaseAsync(visit, 99)).IsSuccess);
         Assert.Equal(DentalChairStatus.Available, chair.Status);
+    }
+    [Fact] public async Task ActiveVisitInSameRoomBlocksAcquireEvenIfChairIdDiffers()
+    {
+        visits.HasActiveVisitForRoomAsync(10, 7, Arg.Any<CancellationToken>()).Returns(true);
+        Assert.Equal(VisitChairService.Unavailable, (await Service().AcquireAsync(visit, 2, 99)).Error);
+        Assert.Null(visit.ChairId); Assert.Null(visit.RoomId);
+        Assert.Equal(DentalChairStatus.Available, chair.Status);
+    }
+    [Fact] public async Task ActiveVisitInTargetRoomBlocksTransfer()
+    {
+        visit.Status = VisitStatuses.InProgress; visit.ChairId = 3; visit.RoomId = 10; chair.Status = DentalChairStatus.Occupied;
+        visits.HasActiveVisitForRoomAsync(11, 7, Arg.Any<CancellationToken>()).Returns(true);
+        Assert.Equal(VisitChairService.Unavailable, (await Service().TransferAsync(visit, 6, 99)).Error);
+        Assert.Equal(3, visit.ChairId); Assert.Equal(10, visit.RoomId);
+        Assert.Equal(DentalChairStatus.Occupied, chair.Status);
+        Assert.Equal(DentalChairStatus.Available, targetChair.Status);
     }
 }

@@ -450,7 +450,7 @@ public sealed class QueueService
                 }, transactionCt);
                 await _unitOfWork.SaveChangesAsync(transactionCt);
                 await _auditLogger.LogRequiredAsync(AuditActions.QueueStatusChanged, "QueueEntry", entry.QueueEntryId, actorUserId,
-                    JsonSerializer.Serialize(new { action = "StartSelected", dentistId, visitId = entry.VisitId, chairId = entry.Visit.ChairId,
+                    JsonSerializer.Serialize(new { action = "StartSelected", dentistId, visitId = entry.VisitId, chairId = entry.Visit.ChairId, roomId = entry.Visit.RoomId,
                         fromStatus = (int)previousStatus, toStatus = (int)QueueStatus.InConsultation }), ipAddress, transactionCt);
                 var refreshed = await _queueRepository.GetByIdAsync(entry.QueueEntryId, transactionCt);
                 return Result<QueueEntryResponse>.Success(await ToResponseAsync(refreshed ?? entry, transactionCt));
@@ -723,6 +723,7 @@ public sealed class QueueService
 
                 var sourceDentistId = entry.DentistId.Value;
                 var sourceChairId = visit.ChairId;
+                var sourceRoomId = visit.RoomId;
                 if (activeVisit)
                 {
                     if (await _queueRepository.HasCallingForDentistAsync(
@@ -760,7 +761,7 @@ public sealed class QueueService
                         fromDentistId = sourceDentistId,
                         toDentistId = request.TargetDentistId,
                         fromChairId = sourceChairId,
-                        toChairId = visit.ChairId,
+                        toChairId = visit.ChairId, fromRoomId = sourceRoomId, toRoomId = visit.RoomId,
                         status = (int)entry.Status,
                         reason
                     }), ipAddress, transactionCt);
