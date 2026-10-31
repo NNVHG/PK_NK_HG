@@ -211,3 +211,24 @@ test('TV template renders dedicated location and TTS uses destination text', asy
   assert.ok(source.includes('${item.destination}'));
   assert.ok(!source.includes('phòng khám ${item.roomName}'));
 });
+
+test('TV template documents known conflict with demo_11 per AGENTS section 3.1', async () => {
+  const source = await readFile(new URL('../src/views/QueueDisplayView.vue', import.meta.url), 'utf8');
+  assert.match(source, /\[CẦN XÁC NHẬN\] Màn hình TV phòng chờ/);
+});
+
+test('TV styles support narrow mobile viewports down to 320px-390px', async () => {
+  const source = await readFile(new URL('../src/views/QueueDisplayView.vue', import.meta.url), 'utf8');
+  assert.match(source, /@media \(max-width: 600px\)/);
+  assert.match(source, /\.header\s*\{[^}]*flex-wrap:\s*wrap/s);
+  assert.match(source, /\.waiting-item\s*\{[^}]*flex-wrap:\s*wrap/s);
+});
+
+test('router exposes public display anonymously and guards internal queue from patients', async () => {
+  const routerSource = await readFile(new URL('../src/router/index.ts', import.meta.url), 'utf8');
+  // Public display anonymous
+  assert.match(routerSource, /path:\s*'\/queue\/display',[\s\S]*?meta:\s*\{\s*requiresAuth:\s*false\s*\}/);
+  assert.match(routerSource, /path:\s*'\/queue\/public-monitor',[\s\S]*?meta:\s*\{\s*requiresAuth:\s*false\s*\}/);
+  // Internal queue excludes PATIENT
+  assert.match(routerSource, /path:\s*'\/management\/queue\/today',[\s\S]*?roles:\s*\[\s*'ADMIN',\s*'RECEPTIONIST',\s*'DENTIST',\s*'ASSISTANT'\s*\]/);
+});
