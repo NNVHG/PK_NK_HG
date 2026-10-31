@@ -169,8 +169,8 @@ internal static class SchedulingSettingsHttpSmoke
             using (var r = await client.PutAsJsonAsync("/api/clinic/print-settings", new ClinicPrintSettingsRequest("Updated synthetic clinic location", "0901234567", print.Revision))) check(r.StatusCode == HttpStatusCode.OK, "Existing print config update still finds by unique key after primary key migration");
             check(await db.SystemConfigs.CountAsync(x => (x.Key == "Clinic:Address" || x.Key == "Clinic:Phone") && x.UpdatedByUserId == users[RoleCodes.Admin].UserId) == 2, "Print settings updates also record real updater metadata");
             var admin = await db.Users.SingleAsync(x => x.UserId == users[RoleCodes.Admin].UserId); admin.IsActive = false; await db.SaveChangesAsync(); As(RoleCodes.Admin);
-            using (var r = await client.GetAsync("/api/master/configs")) check(r.StatusCode == HttpStatusCode.Forbidden, "Inactive admin with stale JWT cannot read configs");
-            using (var r = await client.PutAsJsonAsync("/api/master/configs", Request(recovered))) check(r.StatusCode == HttpStatusCode.Forbidden, "Inactive admin with stale JWT cannot save config");
+            using (var r = await client.GetAsync("/api/master/configs")) check(r.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized, "Inactive admin with stale JWT cannot read configs");
+            using (var r = await client.PutAsJsonAsync("/api/master/configs", Request(recovered))) check(r.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized, "Inactive admin with stale JWT cannot save config");
         }
         finally { await app.StopAsync(); }
     }

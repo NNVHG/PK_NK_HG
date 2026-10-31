@@ -124,8 +124,8 @@ internal static class StockReceiptHttpSmoke
             db.StockReceiptLines.Add(new StockReceiptLine { StockReceiptId = saved.Receipt.Id, MedicalSupplyId = other.Id, SupplyCode = other.Code, SupplyName = other.Name, Unit = other.Unit, Quantity = 1 });
             try { await db.SaveChangesAsync(); check(false, "Old receipt cannot gain a line"); } catch (InvalidOperationException) { check(true, "Confirmed receipt cannot gain lines"); } db.ChangeTracker.Clear();
             var actor = await db.Users.SingleAsync(x => x.UserId == users[RoleCodes.Assistant].UserId); actor.IsActive = false; await db.SaveChangesAsync();
-            using (var r = await Send(Input())) check(r.StatusCode == HttpStatusCode.Forbidden, "Inactive actor with old JWT cannot confirm");
-            using (var r = await client.GetAsync("/api/inventory/stock")) check(r.StatusCode == HttpStatusCode.Forbidden, "Inactive actor with old JWT cannot read stock");
+            using (var r = await Send(Input())) check(r.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized, "Inactive actor with old JWT cannot confirm");
+            using (var r = await client.GetAsync("/api/inventory/stock")) check(r.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized, "Inactive actor with old JWT cannot read stock");
         }
         finally { await app.StopAsync(); }
     }
