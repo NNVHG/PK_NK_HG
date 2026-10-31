@@ -124,14 +124,20 @@ onUnmounted(resetSession);
 </script>
 
 <style scoped>
-.chair-status { max-width: 980px; margin: auto; padding: 1.5rem; }
+.chair-status { max-width: 980px; margin: auto; padding: 1.5rem; box-sizing: border-box; }
 .filters, .actions, nav { display: flex; flex-wrap: wrap; gap: .75rem; align-items: end; }
-label, .editor form { display: grid; gap: .5rem; }
-input, select, button { font: inherit; padding: .55rem; }
+label, .editor form { display: grid; gap: .5rem; max-width: 100%; }
+input, select, button { font: inherit; padding: .55rem; max-width: 100%; box-sizing: border-box; }
 button { cursor: pointer; } button:disabled { cursor: default; }
 .chairs { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 1rem; }
-.chairs li, .editor { border: 1px solid #cbd5e1; border-radius: .5rem; padding: 1rem; }
+.chairs li, .editor { border: 1px solid #cbd5e1; border-radius: .5rem; padding: 1rem; box-sizing: border-box; overflow-wrap: break-word; }
 .chairs h2 { font-size: 1.1rem; margin-top: 0; }
 .editor { margin-top: 1.5rem; } .confirmation { display: flex; align-items: start; }
-[role=alert] { color: #b91c1c; } [role=status] { color: #166534; }
+[role=alert] { color: #b91c1c; overflow-wrap: break-word; } [role=status] { color: #166534; overflow-wrap: break-word; }
+
+@media (max-width: 480px) {
+  .chair-status { padding: 0.75rem; }
+  .chairs { grid-template-columns: 1fr; }
+  .chairs li, .editor { padding: 0.75rem; }
+}
 </style>

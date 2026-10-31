@@ -1,7 +1,7 @@
 <template>
   <main class="page">
     <h1>Vị trí nha sĩ và phụ tá</h1>
-    <p>Nha sĩ chọn ghế/phòng hiện tại; phụ tá chọn nha sĩ làm cùng và tự theo phòng của nha sĩ. Vị trí được giữ đến khi đổi hoặc bỏ chọn.</p>
+    <p>Nha sĩ chọn ghế/phòng hiện tại và xác nhận mỗi ngày; phụ tá chọn nha sĩ làm cùng và tự theo phòng của nha sĩ. Vị trí được giữ đến khi đổi hoặc bỏ chọn.</p>
     <section v-if="auth.role === 'ADMIN'" class="card">
       <h2>Nhân sự cần điều phối</h2>
       <form @submit.prevent="loadTargets(1)"><label>Tìm tên nhân sự <input v-model="keyword" maxlength="100" :disabled="saving" /></label><button :disabled="saving || targetsLoading">Tìm</button></form>
@@ -16,13 +16,26 @@
     <section v-if="store.snapshot" class="card" aria-labelledby="workspace-title">
       <h2 id="workspace-title">{{ store.snapshot.fullName }} · {{ store.snapshot.roleCode }}</h2>
       <p v-if="store.snapshot.workingDentistId && store.snapshot.roleCode === 'ASSISTANT'">Nha sĩ làm cùng: {{ store.snapshot.dentistName }} · #{{ store.snapshot.workingDentistId }}</p>
-      <p>Vị trí hiện tại: <strong>{{ store.snapshot.roomName || 'Chưa có phòng' }} · {{ store.snapshot.chairNumber || 'Chưa có ghế' }}</strong></p>
+      
+      <div v-if="store.snapshot.roleCode === 'DENTIST'" class="location-status">
+        <p v-if="store.snapshot.isLocationUsable && store.snapshot.chairId">Vị trí đã xác nhận hôm nay: <strong>{{ store.snapshot.roomName || 'Chưa có phòng' }} · {{ store.snapshot.chairNumber || 'Chưa có ghế' }}</strong></p>
+        <p v-else class="unconfirmed-warning" role="alert">Chưa xác nhận phòng làm việc hôm nay. Vui lòng chọn ghế/phòng bên dưới và xác nhận vị trí cho ngày làm việc.</p>
+      </div>
+      <div v-else-if="store.snapshot.roleCode === 'ASSISTANT'" class="location-status">
+        <template v-if="store.snapshot.workingDentistId">
+          <p v-if="store.snapshot.isLocationUsable && store.snapshot.roomName">Vị trí theo nha sĩ hôm nay: <strong>{{ store.snapshot.roomName }} · {{ store.snapshot.chairNumber || 'Chưa có ghế' }}</strong></p>
+          <p v-else class="unconfirmed-warning" role="alert">Nha sĩ ({{ store.snapshot.dentistName }}) chưa xác nhận phòng làm việc hôm nay. Phòng sẽ tự động hiển thị sau khi nha sĩ xác nhận vị trí trong ngày.</p>
+        </template>
+        <p v-else>Chưa liên kết nha sĩ. Vui lòng chọn nha sĩ làm cùng bên dưới.</p>
+      </div>
+      <p v-else>Vị trí hiện tại: <strong>{{ store.snapshot.roomName || 'Chưa có phòng' }} · {{ store.snapshot.chairNumber || 'Chưa có ghế' }}</strong></p>
+
       <p v-if="store.snapshot.roleCode === 'ASSISTANT'">Phòng được lấy trực tiếp từ vị trí nha sĩ, cập nhật khi tải lại hoặc đồng bộ định kỳ. Phụ tá không chọn phòng riêng.</p>
       <p v-if="!store.snapshot.canChange" role="alert">Nha sĩ đang có ca khám hoặc lời mời chưa xử lý. Hoàn tất bước hiện tại trước khi đổi vị trí.</p>
       <form @submit.prevent="save">
-        <label v-if="store.snapshot.isActive && store.snapshot.roleCode === 'DENTIST'">Ghế/phòng làm việc
+        <label v-if="store.snapshot.isActive && store.snapshot.roleCode === 'DENTIST'">Ghế/phòng làm việc hôm nay
           <select v-model.number="chairChoice" :disabled="saving || loading || needsReview || !store.snapshot.canChange" @change="markDirty">
-            <option :value="0">Bỏ chọn vị trí</option><option v-for="chair in options?.chairs ?? []" :key="chair.id" :value="chair.id" :disabled="!chair.isActive || chair.status !== 1 || (chair.claimedByUserId !== null && chair.claimedByUserId !== store.snapshot.userId)">{{ chair.roomName }} · {{ chair.chairNumber }}{{ chair.status !== 1 ? ' · Không sẵn sàng' : '' }}{{ chair.claimedByUserId !== null && chair.claimedByUserId !== store.snapshot.userId ? ' · Đã có nha sĩ chọn' : '' }}</option>
+            <option :value="0">Bỏ chọn vị trí</option><option v-for="chair in options?.chairs ?? []" :key="chair.id" :value="chair.id" :disabled="!chair.isActive || chair.status !== 1 || (chair.claimedByUserId !== null && chair.claimedByUserId !== store.snapshot.userId)">{{ chair.roomName }} · {{ chair.chairNumber }}{{ chair.status !== 1 ? ' · Không sẵn sàng' : '' }}{{ chair.claimedByUserId !== null && chair.claimedByUserId !== store.snapshot.userId ? ' · Đã có nha sĩ chọn hôm nay' : '' }}</option>
           </select>
         </label>
         <label v-else-if="store.snapshot.isActive && store.snapshot.roleCode === 'ASSISTANT'">Nha sĩ làm cùng
@@ -32,7 +45,7 @@
         </label>
         <p v-else>Tài khoản đã khóa hoặc đã đổi vai trò. Admin chỉ có thể bỏ liên kết vị trí cũ trước khi gán người khác.</p>
         <p v-if="store.snapshot.roleCode === 'ASSISTANT' && dentistChoice">Phòng sẽ theo nha sĩ: <strong>{{ selectedDentist?.roomName || 'Chưa có phòng' }} · {{ selectedDentist?.chairNumber || 'Chưa có ghế' }}</strong></p>
-        <label><input v-model="confirmed" type="checkbox" :disabled="saving || loading || needsReview || !store.snapshot.canChange" /> Tôi đã đối chiếu đúng nhân sự và xác nhận vị trí/nhóm làm việc.</label>
+        <label><input v-model="confirmed" type="checkbox" :disabled="saving || loading || needsReview || !store.snapshot.canChange" /> Tôi đã đối chiếu đúng nhân sự và xác nhận vị trí/nhóm làm việc cho ngày hôm nay.</label>
         <button :disabled="saving || loading || needsReview || !confirmed || !store.snapshot.canChange">{{ saving ? 'Đang lưu…' : 'Xác nhận lưu' }}</button>
       </form>
     </section>
@@ -109,7 +122,23 @@ onMounted(async () => {
 onUnmounted(() => { life++; version++; targetVersion++; if (timer !== undefined) clearInterval(timer); store.reset(); options.value = null; targets.value = null; confirmed.value = false; chairChoice.value = 0; dentistChoice.value = 0; error.value = ''; targetError.value = ''; message.value = ''; });
 </script>
 <style scoped>
-.page { max-width: 940px; margin: auto; padding: 1.5rem; } .card { border: 1px solid #cbd5e1; border-radius: .6rem; margin: 1rem 0; padding: 1rem; }
-form { display: grid; gap: .8rem; } label { display: grid; gap: .35rem; } button, select, input { font: inherit; padding: .5rem; } button { cursor: pointer; } nav { display: flex; gap: .7rem; margin-top: .75rem; align-items: center; }
-ul { list-style: none; padding: 0; } li { margin: .4rem 0; } [role=alert] { color: #b91c1c; } [role=status] { color: #166534; }
+.page { max-width: 940px; margin: auto; padding: 1.5rem; box-sizing: border-box; }
+.card { border: 1px solid #cbd5e1; border-radius: .6rem; margin: 1rem 0; padding: 1rem; box-sizing: border-box; }
+.location-status { margin: 0.75rem 0; }
+.unconfirmed-warning { color: #b45309; background-color: #fffbeb; border: 1px solid #fde68a; padding: 0.6rem 0.8rem; border-radius: 0.4rem; font-weight: 500; }
+form { display: grid; gap: .8rem; } label { display: grid; gap: .35rem; max-width: 100%; }
+button, select, input { font: inherit; padding: .5rem; max-width: 100%; box-sizing: border-box; }
+button { cursor: pointer; }
+nav { display: flex; gap: .7rem; margin-top: .75rem; align-items: center; flex-wrap: wrap; }
+ul { list-style: none; padding: 0; margin: 0; }
+li { margin: .4rem 0; max-width: 100%; }
+li button { width: 100%; text-align: left; white-space: normal; overflow-wrap: break-word; word-break: break-word; }
+[role=alert] { color: #b91c1c; overflow-wrap: break-word; }
+[role=status] { color: #166534; overflow-wrap: break-word; }
+
+@media (max-width: 480px) {
+  .page { padding: 0.75rem; }
+  .card { padding: 0.75rem; margin: 0.75rem 0; }
+  button, select, input { padding: 0.45rem; }
+}
 </style>

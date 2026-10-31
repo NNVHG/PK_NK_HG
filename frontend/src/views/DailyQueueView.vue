@@ -355,23 +355,30 @@ onMounted(() => Promise.all([load(), loadDentists()]));
 onUnmounted(() => { life++; version++; dentistVersion++; clearCancellation(); clearImaging(); clearAbsence(); clearTransfer(); cleanupOpen.value = false; cleanupConfirmed.value = false; rows.value = []; dentists.value = []; callDentistId.value = 0; dentistError.value = ''; actionMsg.value = ''; error.value = ''; needsReview.value = false; updatedAt.value = ''; total.value = 0; });
 </script>
 <style scoped>
-.page { max-width: 900px; margin: auto; padding: 1.5rem; }
-.header-row { display: flex; justify-content: space-between; align-items: center; }
+.page { max-width: 900px; margin: auto; padding: 1.5rem; box-sizing: border-box; }
+.header-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
 .tv-link { color: #0284c7; text-decoration: none; font-weight: 600; padding: 0.4rem 0.8rem; border: 1px solid #0284c7; border-radius: 6px; }
 .tv-link:hover { background: #0284c7; color: #fff; }
 .toolbar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin: 1rem 0; }
-button, select { font: inherit; padding: .5rem; }
+button, select, textarea { font: inherit; padding: .5rem; max-width: 100%; box-sizing: border-box; }
 .btn-call-next { background: #0284c7; color: #fff; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; }
 .btn-call-next:hover:not(:disabled) { background: #0369a1; }
 .action-msg { color: #15803d; font-weight: 600; }
-.cancel-panel { border: 1px solid #b91c1c; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+.cancel-panel { border: 1px solid #b91c1c; border-radius: 8px; padding: 1rem; margin: 1rem 0; box-sizing: border-box; }
 .cancel-panel form { display: grid; gap: .75rem; } textarea { font: inherit; min-height: 5rem; }
-.imaging-panel { border: 1px solid #0284c7; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+.imaging-panel { border: 1px solid #0284c7; border-radius: 8px; padding: 1rem; margin: 1rem 0; box-sizing: border-box; }
 .imaging-panel form, .absence-panel form { display: grid; gap: .75rem; }
-.absence-panel { border: 1px solid #a16207; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
-.transfer-panel { border: 1px solid #0284c7; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+.absence-panel { border: 1px solid #a16207; border-radius: 8px; padding: 1rem; margin: 1rem 0; box-sizing: border-box; }
+.transfer-panel { border: 1px solid #0284c7; border-radius: 8px; padding: 1rem; margin: 1rem 0; box-sizing: border-box; }
 .transfer-panel form { display: grid; gap: .75rem; }
-.entries { list-style: none; padding: 0; } li { padding: 1rem; margin: .6rem 0; border: 1px solid #ddd; border-radius: 8px; }
-.priority { border-left: 5px solid #13795b; } [role=alert] { color: #b91c1c; }
+.entries { list-style: none; padding: 0; margin: 0; }
+li { padding: 1rem; margin: .6rem 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; overflow-wrap: break-word; }
+.priority { border-left: 5px solid #13795b; } [role=alert] { color: #b91c1c; overflow-wrap: break-word; }
 .care-note { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+@media (max-width: 480px) {
+  .page { padding: 0.75rem; }
+  .toolbar { gap: 0.4rem; }
+  .entries li { padding: 0.75rem; }
+}
 </style>
