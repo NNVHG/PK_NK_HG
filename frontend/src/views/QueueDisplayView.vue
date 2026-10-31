@@ -1,4 +1,5 @@
 <template>
+  <!-- [CẦN XÁC NHẬN] Màn hình TV phòng chờ: demo_11 F_CHK_02 ghi danh sách chờ không công khai; giữ nguyên hai endpoint ẩn danh đã che dữ liệu theo DL-090/DL-132 cho đến khi Gia chốt. -->
   <div class="tv-monitor">
     <header class="header">
       <div class="brand">
@@ -491,6 +492,72 @@ onUnmounted(() => {
 @media (max-width: 900px) {
   .content-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .tv-monitor {
+    padding: 0.75rem;
+  }
+  .header {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .brand {
+    gap: 0.75rem;
+  }
+  .brand h1 {
+    font-size: 1.35rem;
+    letter-spacing: 0;
+  }
+  .subtitle {
+    font-size: 0.8rem;
+  }
+  .header-right {
+    width: 100%;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .clock {
+    font-size: 1.35rem;
+  }
+  .sound-toggle {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+  }
+  .current-section, .waiting-section {
+    padding: 1rem;
+  }
+  .current-card {
+    padding: 1rem;
+  }
+  .number-tag {
+    font-size: 3rem;
+  }
+  .patient-name {
+    font-size: 1.5rem;
+    overflow-wrap: break-word;
+  }
+  .dentist-info {
+    font-size: 1rem;
+    overflow-wrap: break-word;
+  }
+  .location-info {
+    font-size: 1.15rem;
+  }
+  .waiting-item {
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding: 0.75rem;
+  }
+  .wait-number {
+    width: auto;
+    margin-right: 0.5rem;
+    font-size: 1.2rem;
+  }
+  .wait-name {
+    font-size: 1.05rem;
+    overflow-wrap: break-word;
   }
 }
 </style>
