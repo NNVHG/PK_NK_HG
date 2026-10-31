@@ -108,3 +108,33 @@ test('route allows only Admin Dentist Assistant and navigation is role guarded',
   const router = await readFile(new URL('../src/router/index.ts', import.meta.url), 'utf8'); const app = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8');
   assert.match(router, /StaffWorkspacesView[\s\S]*?roles: \['ADMIN', 'DENTIST', 'ASSISTANT'\]/); assert.match(app, /Vị trí nha sĩ/);
 });
+
+test('Dentist with unconfirmed room today starts with chairChoice 0 and can confirm today', async () => {
+  const unconfirmedDentist = { ...dentist, chairId: null, chairNumber: null, roomName: null, isLocationUsable: false };
+  const f = fixture({ snapshot: unconfirmedDentist });
+  await f.mount();
+  assert.equal(f.store.snapshot.isLocationUsable, false);
+  assert.equal(f.c.chairChoice.value, 0);
+  f.c.chairChoice.value = 1;
+  f.c.markDirty();
+  f.c.confirmed.value = true;
+  await f.c.save();
+  assert.deepEqual(f.writes, [[5, { chairId: 1, dentistId: null, expectedVersion: 1, confirmed: true }]]);
+});
+
+test('Assistant preserves linked dentist when dentist room is unconfirmed today', async () => {
+  const assistantUnconfirmedDentist = { ...assistant, chairId: null, chairNumber: null, roomName: null, isLocationUsable: false };
+  const f = fixture({ role: 'ASSISTANT', snapshot: assistantUnconfirmedDentist });
+  await f.mount();
+  assert.equal(f.store.snapshot.workingDentistId, 5);
+  assert.equal(f.store.snapshot.isLocationUsable, false);
+  assert.equal(f.c.dentistChoice.value, 5);
+});
+
+test('View template and styles support mobile viewport down to 320px with Vietnamese warning', async () => {
+  assert.match(source, /Chưa xác nhận phòng làm việc hôm nay/);
+  assert.match(source, /Vị trí đã xác nhận hôm nay/);
+  assert.match(source, /Nha sĩ \(\{\{ store\.snapshot\.dentistName \}\}\) chưa xác nhận phòng làm việc hôm nay/);
+  assert.match(source, /@media \(max-width: 480px\)/);
+  assert.match(source, /box-sizing: border-box/);
+});
