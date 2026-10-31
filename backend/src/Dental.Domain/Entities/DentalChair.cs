@@ -3,7 +3,7 @@ using Dental.Domain.Enums;
 
 namespace Dental.Domain.Entities;
 
-/// <summary>MOD_MST / DL-104: flat chair catalog; room is a name, not a separate hierarchy.</summary>
+/// <summary>MOD_MST / DL-104, DL-361: flat chair catalog preserved for historical traceability; linked to ClinicRoom via RoomId.</summary>
 public sealed class DentalChair : BaseEntity
 {
     public int Id { get; set; }
@@ -14,5 +14,6 @@ public sealed class DentalChair : BaseEntity
     public bool IsActive { get; set; } = true;
     public int CreatedByUserId { get; set; }
     public int? UpdatedByUserId { get; set; }
+    public int? RoomId { get; set; }
     public int Version { get; set; } = 1;
 }

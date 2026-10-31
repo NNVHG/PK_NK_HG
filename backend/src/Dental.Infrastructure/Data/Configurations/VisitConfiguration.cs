@@ -47,9 +47,13 @@ public sealed class VisitConfiguration : IEntityTypeConfiguration<Visit>
         builder.HasIndex(visit => visit.DentistId)
             .HasDatabaseName("IX_Visits_DentistId");
         builder.HasOne<DentalChair>().WithMany().HasForeignKey(visit => visit.ChairId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<ClinicRoom>().WithMany().HasForeignKey(visit => visit.RoomId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(visit => visit.ChairId).IsUnique()
             .HasFilter("\"Status\" = 'InProgress' AND \"ChairId\" IS NOT NULL")
             .HasDatabaseName("IX_Visits_ActiveChair");
+        builder.HasIndex(visit => visit.RoomId).IsUnique()
+            .HasFilter("\"Status\" = 'InProgress' AND \"RoomId\" IS NOT NULL")
+            .HasDatabaseName("IX_Visits_ActiveRoom");
         builder.HasIndex(visit => visit.CreatedByUserId)
             .HasDatabaseName("IX_Visits_CreatedByUserId");
     }

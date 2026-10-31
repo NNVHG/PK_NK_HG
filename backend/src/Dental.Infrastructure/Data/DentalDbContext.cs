@@ -12,6 +12,7 @@ public sealed class DentalDbContext : DbContext
     public DbSet<StaffWorkspace> StaffWorkspaces => Set<StaffWorkspace>();
     public DbSet<DentalImage> DentalImages => Set<DentalImage>();
     public DbSet<DentalImageClinicalAddendum> DentalImageClinicalAddenda => Set<DentalImageClinicalAddendum>();
+    public DbSet<ClinicRoom> ClinicRooms => Set<ClinicRoom>();
     public DbSet<DentalChair> DentalChairs => Set<DentalChair>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<User> Users => Set<User>();
@@ -101,6 +102,7 @@ public sealed class DentalDbContext : DbContext
         // Áp dụng từng configuration riêng theo entity
         modelBuilder.ApplyConfiguration(new BookingRequestConfiguration());
         modelBuilder.ApplyConfiguration(new StaffWorkspaceConfiguration());
+        modelBuilder.ApplyConfiguration(new ClinicRoomConfiguration());
         modelBuilder.ApplyConfiguration(new DentalChairConfiguration());
         modelBuilder.ApplyConfiguration(new RoleConfiguration());
         modelBuilder.ApplyConfiguration(new UserConfiguration());

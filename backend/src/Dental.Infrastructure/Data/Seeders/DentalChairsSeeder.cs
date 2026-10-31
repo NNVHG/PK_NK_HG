@@ -1,3 +1,4 @@
+using Dental.Application.Features.MOD_MST.Services;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
 using Dental.Domain.Enums;
@@ -5,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Dental.Infrastructure.Data.Seeders;
 
-/// <summary>MOD_MST / F_MST_05: seed danh mục phòng và ghế điều trị ban đầu (DL-104).</summary>
+/// <summary>MOD_MST / F_MST_05: seed danh mục phòng và ghế điều trị ban đầu (DL-104, DL-361, DL-367).</summary>
 public static class DentalChairsSeeder
 {
     public static async Task SeedAsync(DentalDbContext db, CancellationToken ct = default)
@@ -24,7 +25,7 @@ public static class DentalChairsSeeder
             ("G04", "Phòng Điều Trị 2", "Ghế chỉnh nha và điều trị tủy"),
         ];
 
-        db.DentalChairs.AddRange(chairs.Select(c => new DentalChair
+        var chairEntities = chairs.Select(c => new DentalChair
         {
             ChairNumber = c.ChairNumber,
             RoomName = c.RoomName,
@@ -34,8 +35,36 @@ public static class DentalChairsSeeder
             CreatedByUserId = adminId,
             Version = 1,
             CreatedAt = now,
-        }));
+        }).ToList();
 
+        db.DentalChairs.AddRange(chairEntities);
         await db.SaveChangesAsync(ct);
+
+        if (!await db.ClinicRooms.AnyAsync(ct))
+        {
+            var rooms = chairEntities.Select(c => new ClinicRoom
+            {
+                RoomCode = c.ChairNumber,
+                RoomName = RoomMigrationPreflight.CleanDisplayRoomName(c.RoomName),
+                NormalizedRoomName = RoomMigrationPreflight.NormalizeRoomName(c.RoomName),
+                Status = c.Status,
+                Description = c.Description,
+                IsActive = c.IsActive,
+                LegacyChairId = c.Id,
+                CreatedByUserId = adminId,
+                Version = 1,
+                CreatedAt = now,
+            }).ToList();
+
+            db.ClinicRooms.AddRange(rooms);
+            await db.SaveChangesAsync(ct);
+
+            foreach (var chair in chairEntities)
+            {
+                var room = rooms.Single(r => r.LegacyChairId == chair.Id);
+                chair.RoomId = room.Id;
+            }
+            await db.SaveChangesAsync(ct);
+        }
     }
 }
