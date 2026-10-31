@@ -5,7 +5,7 @@ using Dental.Domain.Entities;
 using Dental.Domain.Enums;
 namespace Dental.Application.Features.MOD_MST.Services;
 
-// MOD_MST / DL163,214,261,263,362,367. Caller owns the serializable transaction, save and required audit.
+// MOD_MST / DL163,214,261,263,361,362,367. Caller owns the serializable transaction, save and required audit.
 public sealed class VisitChairService(IStaffWorkspaceRepository workspaces, IDentalChairRepository chairs,
     IVisitRepository visits, IUserRepository users, VietnamClock clock) : IVisitChairCoordinator
 {
@@ -33,7 +33,8 @@ public sealed class VisitChairService(IStaffWorkspaceRepository workspaces, IDen
             ? await chairs.FindAsync(targetChairId, ct)
             : null;
         if (targetChair is not { IsActive: true } ||
-            await visits.HasActiveVisitForChairAsync(targetChair.Id, visit.VisitId, ct))
+            await visits.HasActiveVisitForChairAsync(targetChair.Id, visit.VisitId, ct) ||
+            (targetChair.RoomId.HasValue && await visits.HasActiveVisitForRoomAsync(targetChair.RoomId.Value, visit.VisitId, ct)))
             return Result.Failure(Unavailable);
 
         var sourceChair = await chairs.FindAsync(sourceChairId, ct);
@@ -67,7 +68,9 @@ public sealed class VisitChairService(IStaffWorkspaceRepository workspaces, IDen
         if (await visits.HasActiveVisitForDentistAsync(dentistId, ct, visit.VisitId)) return Result.Failure(Error.DentistHasActiveVisit);
         var workspace = await workspaces.FindAsync(dentistId, ct);
         var chair = workspace is { ChairId: int id } && workspace.WorkDate == clock.Today ? await chairs.FindAsync(id, ct) : null;
-        if (chair is not { IsActive: true } || await visits.HasActiveVisitForChairAsync(chair.Id, visit.VisitId, ct))
+        if (chair is not { IsActive: true } ||
+            await visits.HasActiveVisitForChairAsync(chair.Id, visit.VisitId, ct) ||
+            (chair.RoomId.HasValue && await visits.HasActiveVisitForRoomAsync(chair.RoomId.Value, visit.VisitId, ct)))
             return Result.Failure(Unavailable);
         if (visit.Status == VisitStatuses.InProgress && visit.ChairId.HasValue)
             return visit.ChairId == chair.Id && chair.Status == DentalChairStatus.Occupied ? Result.Success() : Result.Failure(Inconsistent);

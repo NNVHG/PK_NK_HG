@@ -12,6 +12,7 @@ public interface IVisitRepository
     Task<bool> HasOtherOpenVisitAsync(int patientId, IReadOnlyCollection<int> excludedVisitIds, CancellationToken ct = default);
     Task<bool> HasActiveVisitForDentistAsync(int dentistId, CancellationToken ct = default, int? excludedVisitId = null);
     Task<bool> HasActiveVisitForChairAsync(int chairId, int excludedVisitId, CancellationToken ct = default);
+    Task<bool> HasActiveVisitForRoomAsync(int roomId, int excludedVisitId, CancellationToken ct = default);
     Task AddAsync(Visit visit, CancellationToken ct = default);
     Task<PagedResult<Visit>> GetPatientVisitsAsync(
         int patientId,

@@ -64,7 +64,7 @@ internal static class PhysicalChairHttpSmoke
         var occupied = await Chair(doctor);
         check(occupied.Status == DentalChairStatus.Occupied && occupied.Version == originalChair.Version + 1 && occupied.UpdatedByUserId == doctor.UserId,
             "Start atomically sets Occupied/version/actor");
-        check(await db.Visits.AsNoTracking().AnyAsync(v => v.VisitId == row.VisitId && v.Status == VisitStatuses.InProgress && v.ChairId == occupied.Id), "Visit retains actual allocated ChairId");
+        check(await db.Visits.AsNoTracking().AnyAsync(v => v.VisitId == row.VisitId && v.Status == VisitStatuses.InProgress && v.ChairId == occupied.Id && v.RoomId == occupied.RoomId), "Visit retains actual allocated ChairId and RoomId");
         using (var r = await client.PutAsJsonAsync($"/api/workspaces/{doctor.UserId}", new { chairId = (int?)null, dentistId = (int?)null, expectedVersion = 1, confirmed = true }))
             check(r.StatusCode == HttpStatusCode.Conflict, "Active consultation blocks moving workspace409");
         check(await Status(row, 5, "Synthetic imaging indication") == HttpStatusCode.OK, "Dentist may route active chair visit to imaging200");
@@ -144,6 +144,13 @@ internal static class PhysicalChairHttpSmoke
         db.Visits.Add(duplicate); var rejected = false;
         try { await db.SaveChangesAsync(); } catch (DbUpdateException) { rejected = true; }
         db.ChangeTracker.Clear(); check(rejected, "PostgreSQL unique partial index independently rejects another active Visit on occupied chair");
+        if (raceChair.RoomId.HasValue)
+        {
+            var duplicateRoom = new Visit { PatientId = left.PatientId, DentistId = doctor.UserId, CreatedByUserId = actorId, Status = VisitStatuses.InProgress, RoomId = raceChair.RoomId.Value };
+            db.Visits.Add(duplicateRoom); var roomRejected = false;
+            try { await db.SaveChangesAsync(); } catch (DbUpdateException) { roomRejected = true; }
+            db.ChangeTracker.Clear(); check(roomRejected, "PostgreSQL unique partial index independently rejects another active Visit on occupied room");
+        }
 
         var movingDoctor = await Staff(RoleCodes.Dentist); var movingVisit = await Waiting(movingDoctor); var priorChair = await Chair(movingDoctor);
         var destination = new DentalChair { ChairNumber = "MOVE-" + Guid.NewGuid().ToString("N"), RoomName = "Synthetic destination room",
