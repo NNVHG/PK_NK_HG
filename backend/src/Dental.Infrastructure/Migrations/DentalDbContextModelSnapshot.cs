@@ -268,6 +268,84 @@ namespace Dental.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Dental.Domain.Entities.ClinicRoom", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("LegacyChairId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("NormalizedRoomName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("RoomCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("RoomName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("LegacyChairId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ClinicRooms_LegacyChairId")
+                        .HasFilter("\"LegacyChairId\" IS NOT NULL");
+
+                    b.HasIndex("NormalizedRoomName")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ClinicRooms_NormalizedRoomName");
+
+                    b.HasIndex("RoomCode")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ClinicRooms_RoomCode");
+
+                    b.HasIndex("RoomName")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ClinicRooms_RoomName");
+
+                    b.HasIndex("UpdatedByUserId");
+
+                    b.ToTable("ClinicRooms", (string)null);
+                });
+
             modelBuilder.Entity("Dental.Domain.Entities.DentalChair", b =>
                 {
                     b.Property<int>("Id")
@@ -294,6 +372,9 @@ namespace Dental.Infrastructure.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<int?>("RoomId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("RoomName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -319,6 +400,9 @@ namespace Dental.Infrastructure.Migrations
                         .HasDatabaseName("IX_DentalChairs_ChairNumber");
 
                     b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("RoomId")
+                        .HasDatabaseName("IX_DentalChairs_RoomId");
 
                     b.HasIndex("UpdatedByUserId");
 
@@ -2229,6 +2313,9 @@ namespace Dental.Infrastructure.Migrations
                     b.Property<int?>("DentistId")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("RoomId")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -2239,6 +2326,9 @@ namespace Dental.Infrastructure.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("integer");
 
+                    b.Property<DateOnly?>("WorkDate")
+                        .HasColumnType("date");
+
                     b.HasKey("UserId");
 
                     b.HasIndex("ChairId")
@@ -2247,6 +2337,11 @@ namespace Dental.Infrastructure.Migrations
 
                     b.HasIndex("DentistId")
                         .HasDatabaseName("IX_StaffWorkspaces_DentistId");
+
+                    b.HasIndex("RoomId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_StaffWorkspaces_RoomId")
+                        .HasFilter("\"RoomId\" IS NOT NULL");
 
                     b.HasIndex("UpdatedByUserId");
 
@@ -2664,6 +2759,9 @@ namespace Dental.Infrastructure.Migrations
                     b.Property<int>("PatientId")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("RoomId")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("StartedAt")
                         .HasColumnType("timestamptz");
 
@@ -2687,6 +2785,11 @@ namespace Dental.Infrastructure.Migrations
 
                     b.HasIndex("DentistId")
                         .HasDatabaseName("IX_Visits_DentistId");
+
+                    b.HasIndex("RoomId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Visits_ActiveRoom")
+                        .HasFilter("\"Status\" = 'InProgress' AND \"RoomId\" IS NOT NULL");
 
                     b.HasIndex("PatientId", "CreatedAt")
                         .HasDatabaseName("IX_Visits_PatientId_CreatedAt");
@@ -2907,6 +3010,25 @@ namespace Dental.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
+            modelBuilder.Entity("Dental.Domain.Entities.ClinicRoom", b =>
+                {
+                    b.HasOne("Dental.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.DentalChair", null)
+                        .WithMany()
+                        .HasForeignKey("LegacyChairId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Dental.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("Dental.Domain.Entities.DentalChair", b =>
                 {
                     b.HasOne("Dental.Domain.Entities.User", null)
@@ -2914,6 +3036,11 @@ namespace Dental.Infrastructure.Migrations
                         .HasForeignKey("CreatedByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.ClinicRoom", null)
+                        .WithMany()
+                        .HasForeignKey("RoomId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Dental.Domain.Entities.User", null)
                         .WithMany()
@@ -3487,6 +3614,11 @@ namespace Dental.Infrastructure.Migrations
                         .HasForeignKey("DentistId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("Dental.Domain.Entities.ClinicRoom", null)
+                        .WithMany()
+                        .HasForeignKey("RoomId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Dental.Domain.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("UpdatedByUserId")
@@ -3622,6 +3754,11 @@ namespace Dental.Infrastructure.Migrations
                         .HasForeignKey("PatientId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("Dental.Domain.Entities.ClinicRoom", null)
+                        .WithMany()
+                        .HasForeignKey("RoomId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("CreatedByUser");
 

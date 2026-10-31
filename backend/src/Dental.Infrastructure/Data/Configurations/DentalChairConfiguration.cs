@@ -15,6 +15,8 @@ public sealed class DentalChairConfiguration : IEntityTypeConfiguration<DentalCh
         b.Property(x => x.Description).HasMaxLength(500);
         b.Property(x => x.Status).HasConversion<int>().IsRequired();
         b.Property(x => x.Version).IsConcurrencyToken();
+        b.HasIndex(x => x.RoomId).HasDatabaseName("IX_DentalChairs_RoomId");
+        b.HasOne<ClinicRoom>().WithMany().HasForeignKey(x => x.RoomId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<User>().WithMany().HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<User>().WithMany().HasForeignKey(x => x.UpdatedByUserId).OnDelete(DeleteBehavior.Restrict);
     }
