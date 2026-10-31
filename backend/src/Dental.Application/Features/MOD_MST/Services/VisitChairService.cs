@@ -5,7 +5,7 @@ using Dental.Domain.Entities;
 using Dental.Domain.Enums;
 namespace Dental.Application.Features.MOD_MST.Services;
 
-// MOD_MST / DL163,214,261,263. Caller owns the serializable transaction, save and required audit.
+// MOD_MST / DL163,214,261,263,362,367. Caller owns the serializable transaction, save and required audit.
 public sealed class VisitChairService(IStaffWorkspaceRepository workspaces, IDentalChairRepository chairs,
     IVisitRepository visits, IUserRepository users, VietnamClock clock) : IVisitChairCoordinator
 {
@@ -29,7 +29,9 @@ public sealed class VisitChairService(IStaffWorkspaceRepository workspaces, IDen
             return Result.Failure(Error.DentistHasActiveVisit);
 
         var workspace = await workspaces.FindAsync(dentistId, ct);
-        var targetChair = workspace?.ChairId is int targetChairId ? await chairs.FindAsync(targetChairId, ct) : null;
+        var targetChair = workspace is { ChairId: int targetChairId } && workspace.WorkDate == clock.Today
+            ? await chairs.FindAsync(targetChairId, ct)
+            : null;
         if (targetChair is not { IsActive: true } ||
             await visits.HasActiveVisitForChairAsync(targetChair.Id, visit.VisitId, ct))
             return Result.Failure(Unavailable);
@@ -53,6 +55,7 @@ public sealed class VisitChairService(IStaffWorkspaceRepository workspaces, IDen
         targetChair.UpdatedAt = now;
         targetChair.UpdatedByUserId = actorId;
         visit.ChairId = targetChair.Id;
+        visit.RoomId = targetChair.RoomId;
         return Result.Success();
     }
 
@@ -63,7 +66,7 @@ public sealed class VisitChairService(IStaffWorkspaceRepository workspaces, IDen
         if (dentist is not { IsActive: true } || dentist.Role?.RoleCode != RoleCodes.Dentist) return Result.Failure(Unavailable);
         if (await visits.HasActiveVisitForDentistAsync(dentistId, ct, visit.VisitId)) return Result.Failure(Error.DentistHasActiveVisit);
         var workspace = await workspaces.FindAsync(dentistId, ct);
-        var chair = workspace?.ChairId is int id ? await chairs.FindAsync(id, ct) : null;
+        var chair = workspace is { ChairId: int id } && workspace.WorkDate == clock.Today ? await chairs.FindAsync(id, ct) : null;
         if (chair is not { IsActive: true } || await visits.HasActiveVisitForChairAsync(chair.Id, visit.VisitId, ct))
             return Result.Failure(Unavailable);
         if (visit.Status == VisitStatuses.InProgress && visit.ChairId.HasValue)
@@ -71,6 +74,7 @@ public sealed class VisitChairService(IStaffWorkspaceRepository workspaces, IDen
         if (chair.Status != DentalChairStatus.Available) return Result.Failure(Unavailable);
         if (!allocate) return Result.Success();
         visit.ChairId = chair.Id;
+        visit.RoomId = chair.RoomId;
         chair.Status = DentalChairStatus.Occupied; chair.Version++; chair.UpdatedAt = clock.UtcNow; chair.UpdatedByUserId = actorId;
         return Result.Success();
     }

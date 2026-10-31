@@ -1,3 +1,4 @@
+using Dental.Application.Common;
 using Dental.Application.Interfaces;
 using Dental.Domain.Entities;
 using Dental.Domain.Enums;
@@ -9,17 +10,24 @@ namespace Dental.Infrastructure.Repositories;
 public sealed class QueueRepository : IQueueRepository
 {
     private readonly DentalDbContext _db;
+    private readonly VietnamClock _clock;
 
-    public QueueRepository(DentalDbContext db) => _db = db;
+    public QueueRepository(DentalDbContext db, VietnamClock? clock = null)
+    {
+        _db = db;
+        _clock = clock ?? new VietnamClock(TimeProvider.System);
+    }
 
     public async Task<IReadOnlyList<Dental.Application.Features.Queue.DTOs.QueueDentistLocation>> GetDentistLocationsAsync(
         IReadOnlyCollection<int> dentistIds, CancellationToken ct = default)
     {
         if (dentistIds.Count == 0) return [];
+        var today = _clock.Today;
         return await (from workspace in _db.StaffWorkspaces.AsNoTracking()
                       join dentist in _db.Users on workspace.UserId equals dentist.UserId
                       join chair in _db.DentalChairs on workspace.ChairId equals (int?)chair.Id
-                      where dentistIds.Contains(workspace.UserId) && dentist.IsActive &&
+                      where dentistIds.Contains(workspace.UserId) && workspace.WorkDate == today &&
+                          dentist.IsActive &&
                           dentist.Role.RoleCode == Dental.Domain.Constants.RoleCodes.Dentist && chair.IsActive &&
                           (chair.Status == DentalChairStatus.Available || chair.Status == DentalChairStatus.Occupied)
                       select new Dental.Application.Features.Queue.DTOs.QueueDentistLocation(

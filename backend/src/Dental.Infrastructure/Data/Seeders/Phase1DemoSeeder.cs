@@ -173,7 +173,8 @@ public static class Phase1DemoSeeder
         if (workspace is not null) return workspace.ChairId;
         if (await db.StaffWorkspaces.AnyAsync(w => w.ChairId == chair.Id) ||
             await db.Visits.AnyAsync(v => v.ChairId == chair.Id && v.Status == VisitStatuses.InProgress)) return null;
-        db.StaffWorkspaces.Add(new StaffWorkspace { UserId = dentist.UserId, ChairId = chair.Id,
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "SE Asia Standard Time"));
+        db.StaffWorkspaces.Add(new StaffWorkspace { UserId = dentist.UserId, ChairId = chair.Id, RoomId = chair.RoomId, WorkDate = today,
             DentistId = dentist.UserId, UpdatedByUserId = adminId, Version = 1, CreatedAt = DateTime.UtcNow });
         await db.SaveChangesAsync();
         return chair.Id;

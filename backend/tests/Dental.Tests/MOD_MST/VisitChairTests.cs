@@ -16,14 +16,15 @@ public sealed class VisitChairTests
     private readonly DentalChair chair = new() { Id = 3, Status = DentalChairStatus.Available, IsActive = true };
     private readonly DentalChair targetChair = new() { Id = 4, Status = DentalChairStatus.Available, IsActive = true };
     private readonly Visit visit = new() { VisitId = 7, Status = VisitStatuses.Created };
-    private VisitChairService Service() => new(workspaces, chairs, visits, users, new(TimeProvider.System));
+    private readonly VietnamClock clock = new(TimeProvider.System);
+    private VisitChairService Service() => new(workspaces, chairs, visits, users, clock);
     public VisitChairTests()
     {
         users.FindByIdAsync(2, Arg.Any<CancellationToken>()).Returns(new User { UserId = 2, IsActive = true, Role = new() { RoleCode = RoleCodes.Dentist } });
-        workspaces.FindAsync(2, Arg.Any<CancellationToken>()).Returns(new StaffWorkspace { UserId = 2, ChairId = 3 });
+        workspaces.FindAsync(2, Arg.Any<CancellationToken>()).Returns(new StaffWorkspace { UserId = 2, ChairId = 3, WorkDate = clock.Today });
         chairs.FindAsync(3, Arg.Any<CancellationToken>()).Returns(chair);
         users.FindByIdAsync(6, Arg.Any<CancellationToken>()).Returns(new User { UserId = 6, IsActive = true, Role = new() { RoleCode = RoleCodes.Dentist } });
-        workspaces.FindAsync(6, Arg.Any<CancellationToken>()).Returns(new StaffWorkspace { UserId = 6, ChairId = 4 });
+        workspaces.FindAsync(6, Arg.Any<CancellationToken>()).Returns(new StaffWorkspace { UserId = 6, ChairId = 4, WorkDate = clock.Today });
         chairs.FindAsync(4, Arg.Any<CancellationToken>()).Returns(targetChair);
     }
     [Fact] public async Task StartClaimsCurrentDentistChairAndAuditableVersion()
@@ -151,4 +152,18 @@ public sealed class VisitChairTests
     public void ImagingCancellationRoleTableMatchesDl057(string role, bool allowed)
         => Assert.Equal(allowed, Dental.Application.Features.Queue.Services.QueueStateMachine
             .ValidateTransition(QueueStatus.InImaging, QueueStatus.Cancelled, role).IsSuccess);
+    [Fact] public async Task UnconfirmedYesterdayWorkspaceBlocksAcquireReadyAndTransferButAllowsOvernightRelease()
+    {
+        workspaces.FindAsync(2, Arg.Any<CancellationToken>()).Returns(new StaffWorkspace { UserId = 2, ChairId = 3, WorkDate = clock.Today.AddDays(-1) });
+        Assert.Equal(VisitChairService.Unavailable, (await Service().CheckReadyAsync(visit, 2)).Error);
+        Assert.Equal(VisitChairService.Unavailable, (await Service().AcquireAsync(visit, 2, 99)).Error);
+
+        visit.Status = VisitStatuses.InProgress; visit.ChairId = 3; chair.Status = DentalChairStatus.Occupied;
+        workspaces.FindAsync(6, Arg.Any<CancellationToken>()).Returns(new StaffWorkspace { UserId = 6, ChairId = 4, WorkDate = clock.Today.AddDays(-1) });
+        Assert.Equal(VisitChairService.Unavailable, (await Service().TransferAsync(visit, 6, 99)).Error);
+        Assert.Equal(3, visit.ChairId); Assert.Equal(DentalChairStatus.Occupied, chair.Status);
+
+        Assert.True((await Service().ReleaseAsync(visit, 99)).IsSuccess);
+        Assert.Equal(DentalChairStatus.Available, chair.Status);
+    }
 }

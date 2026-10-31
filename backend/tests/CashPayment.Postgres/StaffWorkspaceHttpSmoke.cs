@@ -172,6 +172,77 @@ internal static class StaffWorkspaceHttpSmoke
         authenticate(RoleCodes.Assistant,assistant.UserId);
         using(var r=await client.GetAsync(endpoint+"/me")) { var json=await r.Content.ReadFromJsonAsync<JsonElement>(); check(json.GetProperty("chairId").ValueKind==JsonValueKind.Null && !json.GetProperty("isLocationUsable").GetBoolean(),"Assistant never keeps stale copied room after dentist claim cleared"); }
         check(!await db.StaffWorkspaces.AnyAsync(w=>w.ChairId!=null && w.DentistId!=null),"Workspace never stores chair and dentist link together");
+
+        // E2: Workspace theo ngày (WorkDate in Asia/Ho_Chi_Minh).
+        var today = new VietnamClock(TimeProvider.System).Today;
+        var yesterday = today.AddDays(-1);
+        var dailyDoc1 = await Staff(RoleCodes.Dentist);
+        var dailyDoc2 = await Staff(RoleCodes.Dentist);
+        var dailyAssistant = await Staff(RoleCodes.Assistant);
+        var dailyChair = await Chair("Phòng Ngày Mới");
+
+        authenticate(RoleCodes.Dentist, dailyDoc1.UserId);
+        using (var r = await client.PutAsJsonAsync(endpoint + "/" + dailyDoc1.UserId, new ChangeWorkspaceRequest(dailyChair.Id, null, 0, true)))
+            check(r.StatusCode == HttpStatusCode.OK, "E2: Dentist confirms room today200");
+        authenticate(RoleCodes.Assistant, dailyAssistant.UserId);
+        using (var r = await client.PutAsJsonAsync(endpoint + "/" + dailyAssistant.UserId, new ChangeWorkspaceRequest(null, dailyDoc1.UserId, 0, true)))
+            check(r.StatusCode == HttpStatusCode.OK, "E2: Assistant links to dentist today200");
+
+        // Simulate rollover to next day by aging dailyDoc1's WorkDate to yesterday.
+        var agedRow = await db.StaffWorkspaces.SingleAsync(w => w.UserId == dailyDoc1.UserId);
+        agedRow.WorkDate = yesterday;
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+
+        authenticate(RoleCodes.Dentist, dailyDoc1.UserId);
+        using (var r = await client.GetAsync(endpoint + "/me"))
+        {
+            var json = await r.Content.ReadFromJsonAsync<JsonElement>();
+            check(r.StatusCode == HttpStatusCode.OK
+                && json.GetProperty("chairId").ValueKind == JsonValueKind.Null
+                && json.GetProperty("roomName").ValueKind == JsonValueKind.Null
+                && !json.GetProperty("isLocationUsable").GetBoolean()
+                && json.GetProperty("version").GetInt32() == 1,
+                "E2: Yesterday workspace is not active today until re-confirmed");
+        }
+        authenticate(RoleCodes.Assistant, dailyAssistant.UserId);
+        using (var r = await client.GetAsync(endpoint + "/me"))
+        {
+            var json = await r.Content.ReadFromJsonAsync<JsonElement>();
+            check(r.StatusCode == HttpStatusCode.OK
+                && json.GetProperty("workingDentistId").GetInt32() == dailyDoc1.UserId
+                && json.GetProperty("chairId").ValueKind == JsonValueKind.Null
+                && !json.GetProperty("isLocationUsable").GetBoolean(),
+                "E2: Assistant keeps dentist link across days but sees no active room before dentist confirms");
+        }
+
+        // Re-confirming the same chair on the new day updates WorkDate = today, increments Version, and writes audit.
+        authenticate(RoleCodes.Dentist, dailyDoc1.UserId);
+        using (var r = await client.PutAsJsonAsync(endpoint + "/" + dailyDoc1.UserId, new ChangeWorkspaceRequest(dailyChair.Id, null, 1, true)))
+        {
+            var json = await r.Content.ReadFromJsonAsync<JsonElement>();
+            check(r.StatusCode == HttpStatusCode.OK
+                && json.GetProperty("chairId").GetInt32() == dailyChair.Id
+                && json.GetProperty("roomName").GetString() == "Phòng Ngày Mới"
+                && json.GetProperty("isLocationUsable").GetBoolean()
+                && json.GetProperty("version").GetInt32() == 2,
+                "E2: Re-confirming same room on new day increments version and activates room");
+        }
+        check(await db.StaffWorkspaces.AsNoTracking().AnyAsync(w => w.UserId == dailyDoc1.UserId && w.WorkDate == today && w.Version == 2),
+            "E2: Re-confirmed workspace persists today's WorkDate");
+
+        // Age dailyDoc1's WorkDate to yesterday again; dailyDoc2 can now claim dailyChair today, releasing stale prior-day claim.
+        var agedAgain = await db.StaffWorkspaces.SingleAsync(w => w.UserId == dailyDoc1.UserId);
+        agedAgain.WorkDate = yesterday;
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+
+        authenticate(RoleCodes.Dentist, dailyDoc2.UserId);
+        using (var r = await client.PutAsJsonAsync(endpoint + "/" + dailyDoc2.UserId, new ChangeWorkspaceRequest(dailyChair.Id, null, 0, true)))
+            check(r.StatusCode == HttpStatusCode.OK, "E2: Another dentist can claim a room whose previous claim was from yesterday200");
+        check(await db.StaffWorkspaces.AsNoTracking().AnyAsync(w => w.UserId == dailyDoc1.UserId && w.ChairId == null && w.WorkDate == null)
+            && await db.StaffWorkspaces.AsNoTracking().AnyAsync(w => w.UserId == dailyDoc2.UserId && w.ChairId == dailyChair.Id && w.WorkDate == today),
+            "E2: Stale yesterday claim is released when claimed today by another dentist");
     }
     private sealed class Rendezvous : SaveChangesInterceptor
     {

@@ -66,7 +66,8 @@ internal static class VisitCorrectionHttpSmoke
         var chair = new DentalChair { ChairNumber = "CORR-CHAIR", RoomName = "Synthetic occupied room", IsActive = true,
             Status = DentalChairStatus.Occupied, CreatedByUserId = admin.UserId };
         db.DentalChairs.Add(chair); await db.SaveChangesAsync();
-        db.StaffWorkspaces.Add(new() { UserId = dentist.UserId, ChairId = chair.Id, UpdatedByUserId = admin.UserId });
+        var workDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "SE Asia Standard Time"));
+        db.StaffWorkspaces.Add(new() { UserId = dentist.UserId, ChairId = chair.Id, WorkDate = workDate, UpdatedByUserId = admin.UserId });
         var active = new Visit { PatientId = patientId, DentistId = dentist.UserId, CreatedByUserId = admin.UserId,
             Status = VisitStatuses.InProgress, StartedAt = DateTime.UtcNow, Diagnosis = "Synthetic active visit" };
         db.Visits.Add(active); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
