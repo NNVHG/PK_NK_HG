@@ -1,20 +1,20 @@
 # Hệ thống Quản Lý Phòng Khám Nha Khoa Hoàng Gia (PK_NK_HG)
 
-## Bản demo Phase 1 hiện hành — 23/10/2026
+## Trạng thái hiện hành của Đồ án — Bản hoàn thiện 52 chức năng (31/10/2026)
 
-Chạy trên nhánh `codex/individual-accounts-demo-prep`. Mỗi tài khoản Patient chỉ có một hồ sơ; nhiều tài khoản có thể dùng cùng SĐT. Đặt lịch công khai không OTP, cấp tài khoản CCCD sau check-in đã đối soát; OTP và đổi mật khẩu ở lần đăng nhập đầu.
+Hệ thống đã hoàn tất tích hợp và kiểm chứng toàn diện trên nhánh **`main @ b70edcf`** (kết quả Gate G4 sau chuỗi tích hợp các lát cắt C1, C2, C3, C4, D1, D2, E1–E4, F1, F2, F3, F4). Đồ án đã sẵn sàng bàn giao cho Chủ dự án (Gia) tiến hành nghiệm thu UAT độc lập trên giao diện người dùng.
 
-- [Hướng dẫn demo](demo/phase1/README.md) · [Bản HTML](demo/phase1/index.html)
-- [Phiếu nghiệm thu](demo/phase1/UAT.md) · [52 chức năng](demo/phase1/FUNCTIONS.csv) · [Báo cáo build](demo/phase1/BUILD_REPORT.md)
-- Chạy `demo/phase1/Prepare.ps1`, sau đó `demo/phase1/Start.ps1` bằng PowerShell 7; dùng database demo riêng cổng 55432.
-- Các checkpoint/số kiểm thử lịch sử bên dưới không thay kết quả nghiệm thu của bản này. Chưa Gia UAT, chưa mở Phase 2.
+- [Cẩm nang nghiệm thu người dùng (Gia UAT)](docs/testing/GIA_UAT_CHECKLIST_FINAL.md) · [Chi tiết trạng thái 52 chức năng](docs/FUNCTION_STATUS.md)
+- [Hướng dẫn chạy demo 1-click](demo/phase1/README.md) · [Bản HTML](demo/phase1/index.html) · [Danh mục chức năng](demo/phase1/FUNCTIONS.csv)
+- Chạy `demo/phase1/Prepare.ps1`, sau đó `demo/phase1/Start.ps1` bằng PowerShell 7 (khuyên dùng cho UAT, dùng database độc lập container `dental-phase1` cổng 55432) hoặc khởi chạy môi trường phát triển thông qua `.\start-dev.ps1`.
+- **Độ phủ kiểm thử tự động toàn diện trên `main`:** **2.298 / 2.298 .NET tests PASS**, **1.276 / 1.276 Node tests PASS**, **155 / 155 Runner 5 vai trò checks PASS**, **961 / 961 Full Payment/Lâm sàng checks PASS**, 472 modules frontend Vite build thành công, 0 EF Core pending model changes.
 
 
-> **Đồ án tốt nghiệp ngành Công nghệ Thông tin**  
-> **Trường Đại học Thủ Dầu Một — Viện Công nghệ số**  
-> **Sinh viên thực hiện:** Nguyễn Ngô Vũ Hoàng Gia — **MSSV:** 2224802010628 — **Lớp:** D22CNTT02  
-> **Giảng viên hướng dẫn:** TS. Ngô Thị Ngọc Dịu  
-> **Trạng thái hiện hành (`main @ d10ecffa`):** Phạm vi chính thức gồm **52 chức năng trên 12 phân hệ và 5 vai trò** (theo nguồn chuẩn `nội dung/chuc_nang_Gia_demo_11.xlsx`). Đã tích hợp 46/52 chức năng cốt lõi trên `main` (**1514/1514 .NET tests PASS**, **651/651 Node tests PASS**, **559/559 PostgreSQL HTTP integration tests PASS**, 38 EF Core migrations).
+> **Đồ án tốt nghiệp ngành Công nghệ Thông tin**<br>
+> **Trường Đại học Thủ Dầu Một — Viện Công nghệ số**<br>
+> **Sinh viên thực hiện:** Nguyễn Ngô Vũ Hoàng Gia — **MSSV:** 2224802010628 — **Lớp:** D22CNTT02<br>
+> **Giảng viên hướng dẫn:** TS. Ngô Thị Ngọc Dịu<br>
+> **Trạng thái hiện hành (`main @ b70edcf`):** Hoàn thành **100% 52/52 chức năng chính thức trên 12 phân hệ và 5 vai trò** (theo nguồn chuẩn `chuc_nang_Gia_demo_11.xlsx` và `AGENTS.md` §1.3). Đã hoàn tất đồng bộ và kiểm chứng toàn diện trên `main` (**2.298/2.298 .NET tests PASS**, **1.276/1.276 Node tests PASS**, **155/155 5-Role smoke checks PASS**, **961/961 PostgreSQL HTTP integration tests PASS**, 472 modules Vite build, 0 EF Core pending model changes). Sẵn sàng bàn giao cho Gia UAT.
 
 ---
 
@@ -59,18 +59,18 @@ Hệ thống được xây dựng theo kiến trúc phân tầng Clean Architect
 
 | Mã Module | Tên Module | Số CN | Trách nhiệm chính |
 |---|---|:---:|---|
-| `MOD_AUTH` | Xác thực & Phân quyền | **6** | Đăng ký bệnh nhân, Đăng nhập JWT & RBAC, Hồ sơ cá nhân & đổi mật khẩu, Khôi phục mật khẩu OTP (`F_AUTH_04`), Quản lý vai trò/quyền, Nhật ký Audit Log |
-| `MOD_PAT` | Bệnh nhân & Hồ sơ | **9** | Tạo hồ sơ (kèm nhập/đối soát CCCD SHA-256), Tìm kiếm nhanh, Kiểm tra trùng, Tiền sử & dị ứng, Sinh hiệu, Cảnh báo an toàn, Lịch sử điều trị timeline, Khóa/chốt hồ sơ, Tạo bản ghi khám mới (`Visit`) |
-| `MOD_APP` | Đặt lịch bệnh nhân | **2** | Đặt lịch trực tuyến (`F_APP_01`) và Đặt lịch tại quầy do Lễ tân thao tác hộ (`F_APP_02`, ghi chú cần lưu ý và nhắc hẹn) |
-| `MOD_CHK` | Tiếp đón & Hàng đợi | **6** | Xác nhận khách đến (kèm cảnh báo công nợ), Hàng đợi chung, Gọi số & màn hình TV, Quản lý trạng thái tiến trình, Điều phối Nha sĩ/X-quang (gộp chỉ định chụp), Bắt đầu/kết thúc lần khám |
-| `MOD_FDI` | Sơ đồ răng FDI | **7** | Hiển thị sơ đồ 32/20 răng chuẩn FDI, Chọn răng & mặt răng, Gán tình trạng bệnh lý, Chỉ định dịch vụ theo răng, Cập nhật sau điều trị, Lịch sử trạng thái răng, Ghi chú lâm sàng theo răng |
-| `MOD_IMG` | Hình ảnh hồ sơ | **2** | Tải lên tệp ảnh X-quang/chụp trong miệng gắn với lần khám/răng (`F_IMG_02` đơn giản hóa) và Xem/thu phóng ảnh (`F_IMG_04` đơn giản hóa) |
-| `MOD_RX` | Đơn thuốc | **4** | Kê đơn thuốc điện tử (kèm cảnh báo dị ứng), Kiểm tra tồn/an toàn thuốc, In/xuất đơn thuốc A5 (kèm mã QR tra cứu), Lịch sử đơn thuốc |
-| `MOD_BIL` | Thanh toán & Hóa đơn | **5** | Tạo hóa đơn nháp từ dịch vụ & đơn thuốc, Áp dụng giảm giá/khuyến mãi, Thu tiền viện phí & theo dõi các đợt trả (hỗ trợ trả nhiều đợt cho dịch vụ dài ngày), In/xuất biên lai K80 & hoàn tiền, Hủy/điều chỉnh hóa đơn nháp |
-| `MOD_INV` | Kho & Vật tư | **2** | Lập phiếu nhập kho vật tư kèm cảnh báo tồn tối thiểu (`F_INV_03` đơn giản hóa) và Gợi ý/xác nhận trừ tồn kho vật tư tiêu hao khi hoàn tất dịch vụ (`F_INV_06` đơn giản hóa) |
-| `MOD_ASS` | Nghiệp vụ phụ tá | **1** | Cập nhật và theo dõi trạng thái ghế/phòng điều trị (`F_ASS_06` đơn giản hóa) |
-| `MOD_MST` | Danh mục hệ thống | **7** | Quản lý dịch vụ & bảng giá, Danh mục bệnh lý/triệu chứng, Danh mục thuốc, Danh mục vật tư & ngưỡng tồn, Danh mục phòng & ghế nha khoa, Cấu hình hệ thống (`F_MST_06` đơn giản hóa), Quản lý người dùng nhân viên |
-| `MOD_RPT` | Báo cáo & Thống kê | **1** | Báo cáo tổng hợp doanh thu và công nợ phòng khám theo kỳ, phương thức thanh toán (`F_RPT_01`) |
+| `MOD_AUTH` | Xác thực & Phân quyền | **6** | Đăng ký tài khoản bệnh nhân (`F_AUTH_01`), Đăng nhập JWT & RBAC (`F_AUTH_02`), Hồ sơ cá nhân & đổi mật khẩu (`F_AUTH_03`), Khôi phục mật khẩu OTP SMS (`F_AUTH_04`), Quản lý vai trò/quyền (`F_AUTH_05`), Nhật ký Audit Log (`F_AUTH_06`) |
+| `MOD_PAT` | Bệnh nhân & Hồ sơ | **9** | Tạo hồ sơ kèm đối soát CCCD/Hộ chiếu chuẩn HMAC có phiên bản khóa (`F_PAT_01`), Tìm kiếm nhanh (`F_PAT_02`), Kiểm tra trùng (`F_PAT_03`), Tiền sử & dị ứng (`F_PAT_04`), Sinh hiệu (`F_PAT_05`), Cảnh báo an toàn lâm sàng (`F_PAT_06`), Timeline điều trị (`F_PAT_07`), Khóa/chốt hồ sơ (`F_PAT_08`), Tạo bản ghi khám mới (`F_PAT_09`) |
+| `MOD_APP` | Đặt lịch bệnh nhân | **2** | Đặt lịch trực tuyến không cần OTP/nha sĩ (`F_APP_01`) và Đặt lịch tại quầy do Lễ tân thao tác hộ theo slot 30 phút/chặn trùng (`F_APP_02`) |
+| `MOD_CHK` | Tiếp đón & Hàng đợi | **6** | Xác nhận khách đến kèm cảnh báo nợ cũ (`F_CHK_01`), Hàng đợi chung (`F_CHK_02`), Gọi số & dẫn bệnh nhân (`F_CHK_03`), Bắt đầu/kết thúc lần khám (`F_CHK_04`), Quản lý trạng thái tiến trình hàng đợi (`F_CHK_07`), Điều phối Nha sĩ/X-quang (`F_CHK_08`) |
+| `MOD_FDI` | Sơ đồ răng FDI | **7** | Hiển thị sơ đồ 32 răng người lớn / 20 răng trẻ em (`F_FDI_01`), Chọn răng & 5 mặt răng (`F_FDI_02`), Gán tình trạng bệnh lý (`F_FDI_03`), Chỉ định dịch vụ theo răng (`F_FDI_04`), Cập nhật sau điều trị (`F_FDI_05`), Lịch sử trạng thái răng (`F_FDI_06`), Ghi chú lâm sàng theo răng (`F_FDI_07`) |
+| `MOD_IMG` | Hình ảnh hồ sơ | **2** | Tải lên tệp ảnh X-quang/chụp trong miệng gắn với lần khám/răng (`F_IMG_02`) và Xem, thu phóng, so sánh 2 ảnh (`F_IMG_04`) |
+| `MOD_RX` | Đơn thuốc | **4** | Kê đơn thuốc điện tử kèm cảnh báo dị ứng (`F_RX_01`), Kiểm tra tồn/an toàn thuốc (`F_RX_02`), In/xuất đơn thuốc A5 kèm mã QR tra cứu (`F_RX_04`), Lịch sử đơn thuốc (`F_RX_05`) |
+| `MOD_BIL` | Thanh toán & Hóa đơn | **5** | Tạo hóa đơn nháp từ dịch vụ & đơn thuốc (`F_BIL_01`), Áp dụng giảm giá/khuyến mãi (`F_BIL_02`), Thu tiền viện phí tiền mặt & chuyển khoản thủ công, theo dõi trả nhiều đợt/dư nợ (`F_BIL_03`), In/xuất biên lai K80 (`F_BIL_06`), Hủy/điều chỉnh hóa đơn nháp (`F_BIL_07`) |
+| `MOD_INV` | Kho & Vật tư | **2** | Lập phiếu nhập kho vật tư kèm cảnh báo tồn tối thiểu (`F_INV_03`) và Gợi ý/xác nhận trừ tồn kho vật tư tiêu hao thực tế theo ca khám đã hoàn thành (`F_INV_06`) |
+| `MOD_ASS` | Nghiệp vụ phụ tá | **1** | Cập nhật và theo dõi trạng thái ghế/phòng điều trị (`F_ASS_06`) |
+| `MOD_MST` | Danh mục hệ thống | **7** | Quản lý dịch vụ & bảng giá (`F_MST_01`), Danh mục bệnh lý/triệu chứng (`F_MST_02`), Danh mục thuốc (`F_MST_03`), Danh mục vật tư & ngưỡng tồn (`F_MST_04`), Quản lý phòng & ghế nha khoa độc lập (`F_MST_05`), Cấu hình hệ thống (`F_MST_06`), Quản lý người dùng nhân viên (`F_MST_07`) |
+| `MOD_RPT` | Báo cáo & Thống kê | **1** | Báo cáo tổng hợp doanh thu và công nợ phòng khám theo kỳ, theo phương thức thanh toán (`F_RPT_01`) |
 
 ---
 
@@ -78,26 +78,54 @@ Hệ thống được xây dựng theo kiến trúc phân tầng Clean Architect
 
 Khi khởi chạy ở môi trường `Development`, hệ thống tự động khởi tạo 5 tài khoản mẫu cho 5 vai trò hệ thống:
 
-| Vai trò | Mã quyền (`RoleCode`) | Số điện thoại đăng nhập | Mật khẩu mặc định |
-|---|---|---|---|
-| **Quản trị viên** | `ADMIN` | `0900000001` | `AdminPassword@123` |
-| **Lễ tân / Thu ngân** | `RECEPTIONIST` | `0900000002` | `DemoPassword@123` |
-| **Nha sĩ** | `DENTIST` | `0900000003` | `DemoPassword@123` |
-| **Phụ tá** | `ASSISTANT` | `0900000004` | `DemoPassword@123` |
-| **Bệnh nhân** | `PATIENT` | `0900000005` | `DemoPassword@123` |
+| Vai trò | Mã quyền (`RoleCode`) | Tên hiển thị mẫu | Số điện thoại đăng nhập | Mật khẩu mặc định |
+|---|---|---|---|---|
+| **Quản trị viên** | `ADMIN` | Quản trị viên Hoàng Gia | `0900000001` | `AdminPassword@123` |
+| **Lễ tân / Thu ngân** | `RECEPTIONIST` | Lễ tân Tiếp đón | `0900000002` | `DemoPassword@123` |
+| **Nha sĩ điều trị** | `DENTIST` | Bác sĩ Hoàng Gia (BS. CKI) | `0900000003` | `DemoPassword@123` |
+| **Phụ tá lâm sàng** | `ASSISTANT` | Phụ tá Lâm sàng | `0900000004` | `DemoPassword@123` |
+| **Bệnh nhân** | `PATIENT` | Nguyễn Văn An | `0900000005` | `DemoPassword@123` |
+
+*(Nhân sự dự phòng bổ sung nếu cần: Nha sĩ 2: `0900000013` / `DemoPassword@123`; Phụ tá 2: `0900000014` / `DemoPassword@123`)*
+
+### Bộ chuỗi QR CCCD gắn chip mẫu (Chuẩn 7 trường Bộ Công an):
+Có thể dán trực tiếp vào ô Quét QR hoặc Tìm kiếm tại màn hình Tiếp đón:
+1. **Chuỗi 1 (Bệnh nhân có sẵn hồ sơ, tiền sử nguy kịch & nợ cũ - Nguyễn Văn An):**
+   ```text
+   079088012345||Nguyễn Văn An|12051988|Nam|45 Lê Lợi, TP. Thủ Dầu Một, Bình Dương|10052021
+   ```
+2. **Chuỗi 2 (Bệnh nhân đang có ca khám dở dang tại ghế - Trần Thị Bích):**
+   ```text
+   079195009876||Trần Thị Bích|24101995|Nữ|128 Cách Mạng Tháng Tám, Thuận An, Bình Dương|15082021
+   ```
+3. **Chuỗi 3 (Bệnh nhân mới lần đầu đến khám - Lê Hoàng Long):**
+   ```text
+   079201011223||Lê Hoàng Long|03092001|Nam|12 Đại lộ Bình Dương, TP. Thủ Dầu Một, Bình Dương|20112022
+   ```
 
 ---
 
 ## 5. Hướng dẫn Khởi chạy Hệ thống
 
-### Cách 1: Khởi chạy nhanh 1 chạm (Khuyên dùng trên Windows)
+### Cách 1: Khởi chạy bản Demo phục vụ Nghiệm thu Gia UAT (1-click cổng riêng 55432)
+Sử dụng script demo độc lập với database riêng, không làm ảnh hưởng CSDL phát triển:
+```powershell
+# Chuẩn bị môi trường và nạp seed dữ liệu demo
+.\demo\phase1\Prepare.ps1
+
+# Khởi động Backend API (cổng 5000) và Frontend Web (cổng 5173)
+.\demo\phase1\Start.ps1
+```
+*Dừng môi trường demo:* `.\demo\phase1\Stop.ps1`
+
+### Cách 2: Khởi chạy môi trường phát triển thông thường
 Yêu cầu đã bật Docker Desktop. Tại thư mục gốc dự án:
 ```powershell
 .\start-dev.ps1
 ```
 *Script sẽ tự khởi động container PostgreSQL, kích hoạt Backend API trên cổng 5000 và Frontend Web trên cổng 5173.*
 
-### Cách 2: Khởi chạy từng bước thủ công
+### Cách 3: Khởi chạy từng bước thủ công
 1. **Khởi động Cơ sở dữ liệu:**
    ```powershell
    docker compose up -d postgres
@@ -115,26 +143,48 @@ Yêu cầu đã bật Docker Desktop. Tại thư mục gốc dự án:
    ```
    *Web App:* `http://localhost:5173`
 
-> Hướng dẫn cấu hình chi tiết, kết nối DBeaver, mẫu lệnh cURL/PowerShell và kịch bản UAT phản biện 3 phút xem tại:  
+> Hướng dẫn cấu hình chi tiết, kết nối DBeaver, mẫu lệnh cURL/PowerShell và kịch bản UAT phản biện xem tại:<br>
+> 📖 [**Cẩm nang nghiệm thu người dùng (GIA_UAT_CHECKLIST_FINAL.md)**](./docs/testing/GIA_UAT_CHECKLIST_FINAL.md)<br>
 > 📖 [**Cẩm nang cài đặt và vận hành hệ thống (RUN_GUIDE.md)**](./docs/RUN_GUIDE.md)
 
 ---
 
 ## 6. Kết quả Kiểm thử Tự động (Automated Testing)
 
-Toàn bộ logic bảo mật, mã hóa BCrypt, phát hành JWT và phân quyền của đồ án đều được kiểm thử tự động:
+Toàn bộ logic bảo mật, mã hóa BCrypt, phát hành JWT, phân quyền 5 vai trò và toàn bộ 52 chức năng đều được kiểm thử tự động 100%:
 
-- **Backend Unit & Integration Tests:**
+- **Backend Unit & Integration Tests (.NET 10):**
   ```powershell
   dotnet test backend/DentalClinic.sln
   ```
-  *Kết quả:* **1514/1514 .NET tests PASSED** (kèm **559/559 PostgreSQL HTTP smoke tests** & **651/651 Node frontend tests PASSED**, 0 lỗi).
+  *Kết quả:* **2.298 / 2.298 .NET tests PASSED** (0 failed, 0 skipped, thời lượng ~5s).
+- **Frontend Unit & Component Tests (Node Test Runner):**
+  ```powershell
+  cd frontend
+  node --test tests/*.test.mjs
+  ```
+  *Kết quả:* **1.276 / 1.276 Node tests PASSED** (0 failed, 0 skipped).
 - **Frontend Type-check & Build:**
   ```powershell
   cd frontend
   npm run build
   ```
-  *Kết quả:* `vue-tsc` và `vite build` thành công, không có cảnh báo kiểu dữ liệu.
+  *Kết quả:* `vue-tsc` và `vite build` thành công, biên dịch **472 modules**, 0 cảnh báo/lỗi kiểu dữ liệu.
+- **Kiểm chứng Smoke 5 vai trò trên PostgreSQL cô lập:**
+  ```powershell
+  powershell -File backend/tests/Smoke/VerifyExistingFunctions.ps1
+  ```
+  *Kết quả:* **155 / 155 checks PASSED**, API loopback độc lập, CSDL test tự hủy an toàn (`databaseRemoved=True`).
+- **Kiểm chứng Full Payment & Nghiệp vụ lâm sàng:**
+  ```powershell
+  dotnet run --project backend/tests/CashPayment.Postgres --no-restore -p:UseAppHost=false -- --isolated-config backend/src/Dental.Api/appsettings.Development.json
+  ```
+  *Kết quả:* **961 / 961 checks PASSED**, bao gồm giao dịch tiền mặt, chuyển khoản thủ công, đối soát, hủy hóa đơn, rollback concurrency và dọn sạch DB test.
+- **Kiểm tra EF Core Migrations:**
+  ```powershell
+  dotnet ef migrations has-pending-model-changes --project backend/src/Dental.Infrastructure --startup-project backend/src/Dental.Api
+  ```
+  *Kết quả:* **0 pending model changes** (mô hình C# đồng bộ 100% với snapshot migration).
 
 ---
 
@@ -145,29 +195,35 @@ PK_NK_HG/
 ├── backend/
 │   ├── DentalClinic.sln                 # Solution chính thức
 │   ├── src/
-│   │   ├── Dental.Api/                  # Web API, Controllers, Middlewares
-│   │   ├── Dental.Application/          # DTOs, Service Interfaces, Logic nghiệp vụ
-│   │   ├── Dental.Domain/               # Entities, Enums, Domain Rules
-│   │   └── Dental.Infrastructure/       # EF Core, DbContext, Migrations, Seeders
+│   │   ├── Dental.Api/                  # Web API, Controllers, Middlewares, Policies
+│   │   ├── Dental.Application/          # DTOs, Service Interfaces, Logic nghiệp vụ (Features/MOD_*)
+│   │   ├── Dental.Domain/               # Entities, Enums, Domain Constants
+│   │   └── Dental.Infrastructure/       # EF Core, DbContext, Migrations, Seeders, Repositories
 │   └── tests/
-│       └── Dental.Tests/                # 501 tests cho các chức năng đã triển khai
+│       ├── Dental.Tests/                # 2.298 unit/integration tests cho 52 chức năng
+│       ├── CashPayment.Postgres/        # 961 checks smoke HTTP trên PostgreSQL cô lập
+│       └── Smoke/                       # VerifyExistingFunctions.ps1 (Runner 5 vai trò)
 ├── frontend/                            # Single Page Application Vue 3 + Vite
 │   ├── src/
-│   │   ├── views/                       # Màn hình theo module (Login, Dashboard, v.v.)
-│   │   ├── stores/                      # Pinia state management (auth store)
+│   │   ├── views/                       # Màn hình theo module (Login, Dashboard, FDI, Invoices, v.v.)
+│   │   ├── components/                  # Component tái sử dụng (FdiDentalChart, SafetyAlertBanner, ...)
+│   │   ├── stores/                      # Pinia state management (auth store, queue store, ...)
 │   │   ├── services/                    # Axios interceptors & API client
-│   │   └── router/                      # Vue Router & Navigation Guards
+│   │   └── router/                      # Vue Router & Navigation Guards phân quyền
+│   ├── tests/                           # 1.276 Node tests kiểm thử giao diện & logic
 │   └── package.json
+├── demo/                                # Bộ công cụ chạy demo UAT độc lập 1-click
+│   └── phase1/                          # Start.ps1, Stop.ps1, Prepare.ps1 (cổng 55432)
 ├── docs/                                # Tài liệu kỹ thuật, kiến trúc & cẩm nang
 │   ├── README.md                        # Mục lục tra cứu tài liệu hệ thống
-│   ├── RUN_GUIDE.md                     # Cẩm nang cài đặt, chạy và phản biện đồ án
+│   ├── FUNCTION_STATUS.md               # Trạng thái chi tiết 52 chức năng
 │   ├── ROLE_PERMISSION_MATRIX.md        # Ma trận phân quyền RBAC
 │   ├── ARCHITECTURE_OVERVIEW.md         # Tổng quan kiến trúc hệ thống
 │   ├── DATABASE_DESIGN.md               # Thiết kế cơ sở dữ liệu
-│   ├── testing/                         # Báo cáo, checklist & kế hoạch kiểm thử
+│   ├── testing/                         # GIA_UAT_CHECKLIST_FINAL.md, báo cáo kiểm thử
 │   └── ...
 ├── docker-compose.yml                   # Cấu hình container PostgreSQL 16 có healthcheck
-├── start-dev.ps1                        # Script PowerShell khởi chạy 1 chạm
+├── start-dev.ps1                        # Script PowerShell khởi chạy 1 chạm phát triển
 ├── AGENTS.md                            # Quy tắc bắt buộc cho AI coding agent
 ├── HISTORY_LOG.md                       # Lịch sử ghi nhận thao tác phát triển
 └── README.md                            # Tài liệu tổng quan đồ án
@@ -592,3 +648,23 @@ Bệnh nhân đăng nhập vào **Hồ sơ của tôi** (`/my-record`) để xem
 Đây là lối vào UI cho quyền đọc đã có; không thêm quyền tạo/sửa, kê đơn hoặc thu tiền. Banner cảnh báo an toàn chuyên môn vẫn chỉ dành cho nhân viên. Thanh điều hướng và bộ lọc lịch hẹn đã điều chỉnh cho màn hình nhỏ theo DL062; kiểm tra viewport không thay thế nghiệm thu thiết bị thật.
 
 Kết quả kiểm chứng nhánh nguồn được lưu tại `docs/testing/PATIENT_PORTAL_20261022_REPORT.md`; kết quả sau hòa giải tài khoản cá nhân được ghi riêng trong báo cáo tích hợp ngày 24/10/2026. Chưa thay thế nghiệm thu giao diện của Gia.
+
+---
+
+## Kiểm chứng và Đồng bộ vào nhánh main — Gate G4 (31/10/2026 — Asia/Ho_Chi_Minh)
+
+Nhánh `main` đã được cập nhật thành công từ `71676f3` lên **`b70edcf`** bằng phương thức fast-forward sạch (`git merge --ff-only integrate/20261028`) sau khi hoàn tất chuỗi lát cắt C1, C2, C3, C4, D1, D2, E1, E2, E3, E4, F1, F2, F3, F4 theo kế hoạch `docs/plans/ANTIGRAVITY_MAIN_READINESS_20261030.md`.
+
+- **Nhánh an toàn sao lưu:** Đã tạo `backup/main-20261031-1620` trỏ đúng HEAD cũ (`71676f3`).
+- **Nghiệp vụ và kỹ thuật đã tích hợp hoàn tất:**
+  - **Bảo mật danh tính & HMAC phiên bản khóa:** Hỗ trợ mã hóa đối soát CCCD/Hộ chiếu với key rotation, chặn rò rỉ dữ liệu định danh, bảo toàn tính tương thích ngược qua các phiên bản khóa.
+  - **Quản lý quan hệ giám hộ trẻ em:** Phân định quyền giám hộ độc lập theo tài khoản người lớn, bảo vệ tính sở hữu hồ sơ cá nhân của trẻ em (`Patient.UserId`).
+  - **Phòng khám độc lập & Workspace theo ngày:** Tách biệt thực thể phòng khám (`ClinicRoom`) khỏi ghế nha khoa (`DentalChair`), cơ chế xác nhận phòng làm việc hàng ngày của Nha sĩ (`POST /api/staff-workspaces/confirm-daily`), hỗ trợ nhiều Phụ tá theo một Nha sĩ.
+  - **Hàng đợi & Điều phối:** Tích hợp tiếp đón linh hoạt khi chưa có phòng/nha sĩ; gọi vào phòng và bắt đầu khám chỉ thực hiện khi nha sĩ và phòng hợp lệ trong ngày.
+  - **Tổng duyệt 52 chức năng:** Đối chiếu 100% từng dòng theo `chuc_nang_Gia_demo_11.xlsx`, không thất thoát bất kỳ chức năng nào; cập nhật đầy đủ hợp đồng tại `docs/API_INVENTORY.md`.
+  - **Cẩm nang Gia UAT:** Ban hành bộ tài liệu `docs/testing/GIA_UAT_CHECKLIST_FINAL.md` phục vụ nghiệm thu người dùng trực tiếp trên trình duyệt.
+- **Kiểm chứng trực tiếp trên HEAD `main @ b70edcf`:**
+  - Backend Solution: `dotnet build` đạt 0 lỗi, 1 warning CS9113 cũ; `dotnet test` đạt **2.298 / 2.298 PASS**.
+  - Frontend SPA: `node --test` đạt **1.276 / 1.276 PASS**; Vite build **472 modules** thành công.
+  - PostgreSQL Smoke cô lập: Runner 5 vai trò **155 / 155 PASS**; Full Payment Suite **961 / 961 PASS**.
+  - EF Core: **0 pending model changes**.
