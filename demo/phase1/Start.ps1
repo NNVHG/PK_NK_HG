@@ -26,6 +26,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Không khởi động được PostgreSQL demo
 $variables = @{
     ASPNETCORE_ENVIRONMENT = 'Development'; ASPNETCORE_URLS = 'http://127.0.0.1:5000';
     ConnectionStrings__Default = "Host=127.0.0.1;Port=55432;Database=dental_phase1_demo;Username=phase1;Password=$($settings.DatabasePassword)";
+    IdentitySecurity__HmacKey = "DentalClinicDemoIdentityHmacKey2026_Minimum32Bytes!";
     Jwt__Secret = $settings.JwtSecret; Jwt__Issuer = 'DentalClinic'; Jwt__Audience = 'DentalClinicClient';
     Seed__AdminPhone = '0900000001'; Seed__AdminPassword = 'AdminPassword@123';
     Seed__DemoUsers = 'true'; Seed__DemoPassword = 'DemoPassword@123'; Seed__Phase1 = 'true';

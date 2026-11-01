@@ -17,11 +17,11 @@ if (Get-Command docker -ErrorAction SilentlyContinue) {
 
 # 2. Khoi dong Backend API trong cua so rieng
 Write-Host "`n[2/3] Khoi dong Backend Web API (.NET 10)..." -ForegroundColor Yellow
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "Write-Host 'Dang chay Backend API tai http://localhost:5000...' -ForegroundColor Green; dotnet run --project backend/src/Dental.Api"
+Start-Process powershell -WorkingDirectory $PSScriptRoot -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", "Write-Host 'Dang chay Backend API tai http://localhost:5000...' -ForegroundColor Green; dotnet run --project backend/src/Dental.Api"
 
 # 3. Khoi dong Frontend SPA trong cua so rieng
 Write-Host "`n[3/3] Khoi dong Frontend SPA (Vue 3 + Vite)..." -ForegroundColor Yellow
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "Write-Host 'Dang chay Frontend SPA tai http://localhost:5173...' -ForegroundColor Green; cd frontend; npm run dev"
+Start-Process powershell -WorkingDirectory (Join-Path $PSScriptRoot "frontend") -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", "Write-Host 'Dang chay Frontend SPA tai http://localhost:5173...' -ForegroundColor Green; npm run dev"
 
 Write-Host "`n>>> HE THONG DANG KHOI CHAY THANH CONG! <<<" -ForegroundColor Green
 Write-Host "  - Frontend URL : http://localhost:5173" -ForegroundColor White
