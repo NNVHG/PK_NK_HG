@@ -1,6 +1,7 @@
 <template>
-  <div class="layout">
-    <header v-if="authStore.isAuthenticated && isPortalRoute" class="navbar" :class="isPatient ? 'navbar-patient' : 'navbar-staff'">
+  <div class="layout" :class="{ 'layout--portal': authStore.isAuthenticated && isPortalRoute }">
+    <header v-if="authStore.isAuthenticated && isPortalRoute" class="navbar" :class="isPatient ? 'navbar-patient' : 'navbar-staff'" :data-menu-open="menuOpen">
+      <div class="brand-row">
       <div class="brand">
         <router-link :to="isPatient ? '/patient/my-record' : '/management/dashboard'" class="brand-link">
           <img src="/logo-icon-nen-toi.svg" alt="Nha Khoa Hoàng Gia" class="brand-logo" width="28" height="28" />
@@ -9,7 +10,15 @@
         <span v-if="isPatient" class="area-tag patient-tag">Cổng Bệnh Nhân</span>
         <span v-else class="area-tag staff-tag">Khu Quản Lý</span>
       </div>
+      <button ref="menuButton" class="menu-toggle" type="button" aria-controls="portal-navigation"
+        :aria-expanded="menuOpen" :aria-label="menuOpen ? 'Đóng menu điều hướng' : 'Mở menu điều hướng'"
+        @click="menuOpen = !menuOpen">
+        <span aria-hidden="true">☰</span> Menu
+      </button>
+      </div>
+      <div id="portal-navigation" class="portal-navigation">
       <nav class="nav-links" aria-label="Điều hướng chính">
+        <span class="nav-caption">Điều hướng</span>
         <router-link :to="isPatient ? '/patient/dashboard' : '/management/dashboard'">Bảng điều khiển</router-link>
         <router-link v-if="['ADMIN','RECEPTIONIST'].includes(authStore.role)" to="/management/appointments/requests">Yêu cầu đặt lịch</router-link>
         <router-link v-if="authStore.role === 'PATIENT'" to="/book-appointment">Gửi yêu cầu đặt lịch</router-link>
@@ -45,16 +54,17 @@
         <span>{{ authStore.user?.fullName }} (<strong>{{ authStore.user?.roleName }}</strong>)</span>
         <button class="btn-logout" @click="handleLogout">Đăng xuất</button>
       </div>
+      </div>
     </header>
 
-    <main class="main-content">
+    <main ref="mainContent" class="main-content" :class="{ 'main-content--public': ['/', '/book-appointment'].includes(route.path) }" tabindex="-1">
       <router-view />
     </main>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useRouter, useRoute } from 'vue-router';
 
@@ -70,6 +80,39 @@ const isAdmin = computed(() => authStore.role === 'ADMIN');
 const isPatient = computed(() => authStore.role === 'PATIENT');
 const isPortalRoute = computed(() => route.path.startsWith('/patient/') || route.path.startsWith('/management/'));
 
+const menuOpen = ref(false);
+const menuButton = ref<HTMLButtonElement | null>(null);
+const mainContent = ref<HTMLElement | null>(null);
+
+function onKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && menuOpen.value) {
+    menuOpen.value = false;
+    void nextTick(() => menuButton.value?.focus());
+  }
+}
+
+function onResize() {
+  if (window.innerWidth > 640) menuOpen.value = false;
+}
+
+watch(() => route.fullPath, () => {
+  if (menuOpen.value) {
+    menuOpen.value = false;
+    void nextTick(() => mainContent.value?.focus());
+  }
+});
+watch(() => authStore.isAuthenticated, (authenticated) => {
+  if (!authenticated) menuOpen.value = false;
+});
+onMounted(() => {
+  document.addEventListener('keydown', onKeydown);
+  window.addEventListener('resize', onResize);
+});
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', onKeydown);
+  window.removeEventListener('resize', onResize);
+});
+
 async function handleLogout() {
   await authStore.logout();
   router.push('/login');
@@ -77,138 +120,51 @@ async function handleLogout() {
 </script>
 
 <style scoped>
-.layout {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
+.layout { min-height: 100vh; display: flex; flex-direction: column; }
+.layout--portal { flex-direction: row; background: #f4f7fb; }
 .navbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  align-items: center;
-  justify-content: space-between;
-  background-color: #2c3e50;
-  color: #fff;
-  padding: 0.75rem 1.5rem;
+  box-sizing: border-box; display: flex; flex-direction: column; flex-shrink: 0;
+  width: 260px; height: 100vh; position: sticky; top: 0; color: #fff;
+  background: #102e56; padding: 1.25rem .9rem; min-width: 0;
 }
-
-.navbar-patient {
-  border-bottom: 3px solid #0f766e;
-}
-
-.navbar-staff {
-  border-bottom: 3px solid #f59e0b;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex: 0 0 auto;
-}
-
-.area-tag {
-  display: inline-block;
-  font-size: 0.72rem;
-  font-weight: 700;
-  padding: 0.15rem 0.5rem;
-  border-radius: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-}
-
-.patient-tag {
-  background-color: #0f766e;
-  color: #fff;
-}
-
-.staff-tag {
-  background-color: #d97706;
-  color: #fff;
-}
-
-.brand-link {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: #fff;
-  text-decoration: none;
-}
-
-.brand-logo {
-  display: block;
-  flex-shrink: 0;
-}
-
-.brand h2 {
-  font-size: 1.15rem;
-  font-weight: 600;
-  margin: 0;
-}
-
-.nav-links {
-  display: flex;
-  flex: 1 1 36rem;
-  min-width: 0;
-  flex-wrap: wrap;
-  gap: .5rem 1rem;
-}
-
-.nav-links a {
-  white-space: nowrap;
-  padding: .25rem 0;
-  color: #bdc3c7;
-  text-decoration: none;
-  font-weight: 500;
-  transition: color 0.2s;
-}
-
-.nav-links a.router-link-active,
-.nav-links a:hover {
-  color: #fff;
-}
-
-.user-menu {
-  display: flex;
-  flex-wrap: wrap;
-  min-width: 0;
-  align-items: center;
-  gap: 1rem;
-}
-
+.navbar-patient { border-bottom: 3px solid #55b8aa; }
+.navbar-staff { border-bottom: 3px solid #e5b95e; }
+.brand-row { display: flex; justify-content: space-between; align-items: center; gap: .75rem; }
+.brand { display: flex; align-items: flex-start; flex-direction: column; gap: .65rem; min-width: 0; }
+.brand-link { display: flex; align-items: center; gap: .65rem; color: #fff; text-decoration: none; }
+.brand-logo { display: block; flex-shrink: 0; width: 34px; height: 34px; }
+.brand h2 { font-size: 1rem; line-height: 1.3; margin: 0; }
+.area-tag { display: inline-block; font-size: .65rem; font-weight: 700; padding: .2rem .5rem; border-radius: 4px; text-transform: uppercase; letter-spacing: .04em; }
+.patient-tag { background-color: #0f766e; color: #fff; }
+.staff-tag { background-color: #755413; color: #fff; }
+.menu-toggle { display: none; border: 1px solid #aec3db; background: transparent; color: #fff; border-radius: .5rem; padding: .55rem .7rem; cursor: pointer; font: inherit; }
+.portal-navigation { min-height: 0; display: flex; flex: 1; flex-direction: column; margin-top: 1.5rem; }
+.nav-links { min-height: 0; overflow-y: auto; display: flex; flex: 1; flex-direction: column; gap: .2rem; }
+.nav-caption { padding: .4rem .65rem; color: #b8cbe1; font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.nav-links a { color: #e0eafa; padding: .6rem .65rem; border-radius: .5rem; text-decoration: none; font-size: .875rem; line-height: 1.35; overflow-wrap: anywhere; }
+.nav-links a.router-link-exact-active, .nav-links a:hover { color: #fff; background: #1857b6; }
+.nav-links a:focus-visible, .menu-toggle:focus-visible, .btn-logout:focus-visible, .brand-link:focus-visible { outline: 3px solid #e5b95e; outline-offset: 2px; }
+.user-menu { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; border-top: 1px solid #48617e; padding: 1rem .4rem 0; margin-top: .75rem; font-size: .8rem; }
 .user-menu span { overflow-wrap: anywhere; }
-
-.btn-logout {
-  flex-shrink: 0;
-  background-color: #e74c3c;
-  color: white;
-  border: none;
-  padding: 0.4rem 0.8rem;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: 500;
-}
-
-.btn-logout:hover {
-  background-color: #c0392b;
-}
-
-.main-content {
-  flex: 1;
-  min-width: 0;
-  box-sizing: border-box;
-  padding: 1.5rem;
-  max-width: 1200px;
-  margin: 0 auto;
-  width: 100%;
-}
-
+.btn-logout { flex-shrink: 0; border: 1px solid #aac1dc; border-radius: .45rem; color: #fff; background: transparent; padding: .45rem .7rem; cursor: pointer; font: inherit; }
+.btn-logout:hover { background: #1857b6; }
+.main-content { flex: 1; min-width: 0; box-sizing: border-box; padding: 1.5rem; max-width: 1400px; margin: 0 auto; width: 100%; }
+.main-content--public { padding: 0; max-width: none; }
 @media (max-width: 640px) {
-  .navbar { align-items: flex-start; padding: .75rem 1rem; }
-  .nav-links { flex-basis: 100%; }
+  .layout--portal { flex-direction: column; }
+  .navbar { position: relative; width: 100%; height: auto; padding: .75rem 1rem; }
+  .brand { gap: .3rem; }
+  .brand-logo { width: 28px; height: 28px; }
+  .menu-toggle { display: inline-flex; align-items: center; gap: .4rem; }
+  .portal-navigation { display: none; max-height: calc(100vh - 100px); overflow-y: auto; margin-top: 1rem; }
+  .navbar[data-menu-open="true"] .portal-navigation { display: flex; }
+  .nav-links { overflow-y: visible; flex: none; }
   .main-content { padding: 1rem; }
+  .main-content--public { padding: 0; }
+}
+@media print {
+  .layout--portal { display: block; background: #fff; }
+  .navbar { display: none; }
+  .main-content { max-width: none; padding: 0; }
 }
 </style>

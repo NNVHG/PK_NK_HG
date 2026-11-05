@@ -11,14 +11,16 @@ test('root navigation remains native, named and free of new permission logic', (
   assert.match(descriptor.template.content, /v-if="authStore.role === 'PATIENT'" to="\/patient\/appointments"/);
   assert.match(descriptor.template.content, /v-if="isAdmin" to="\/management\/admin\/staff"/);
 });
-test('header and navigation allow wrapping without breaking words in links', () => {
-  assert.match(css, /\.navbar\s*\{[^}]*flex-wrap:\s*wrap/s);
-  assert.match(css, /\.nav-links\s*\{[^}]*flex-wrap:\s*wrap/s);
-  assert.match(css, /\.nav-links a\s*\{[^}]*white-space:\s*nowrap/s);
+test('desktop navigation scrolls vertically and allows long labels to wrap', () => {
+  assert.match(css, /\.nav-links\s*\{[^}]*overflow-y:\s*auto/s);
+  assert.match(css, /\.nav-links a\s*\{[^}]*overflow-wrap:\s*anywhere/s);
 });
-test('mobile navigation has its own line and main width includes padding', () => {
+test('mobile navigation can be toggled and main width includes padding', () => {
+  assert.match(descriptor.template.content, /aria-controls="portal-navigation"/);
+  assert.match(descriptor.template.content, /:aria-expanded="menuOpen"/);
   assert.match(css, /@media\s*\(max-width:\s*640px\)/);
-  assert.match(css, /\.nav-links\s*\{\s*flex-basis:\s*100%/);
+  assert.match(css, /\.portal-navigation\s*\{[^}]*display:\s*none/s);
+  assert.match(css, /\.navbar\[data-menu-open="true"\]\s+\.portal-navigation\s*\{[^}]*display:\s*flex/s);
   assert.match(css, /\.main-content\s*\{[^}]*box-sizing:\s*border-box/s);
 });
 test('long names can wrap while logout button retains its width', () => {
