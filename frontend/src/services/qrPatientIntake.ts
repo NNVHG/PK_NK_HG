@@ -20,15 +20,40 @@ export function validQrBirthDate(value:string):boolean {
  return value>=earliest&&value<=today;
 }
 export async function decodeCitizenQr(raw: string): Promise<ScannedIdentity> {
- if (raw.length>1024 || /[\u0000-\u001f\u007f]/.test(raw)) throw invalid();
- const fields=raw.trim().split('|').map(v=>v.trim().normalize('NFC'));
- if (fields.length!==7) throw invalid();
- const [id,oldId,name,birth,gender,address,issued]=fields as [string,string,string,string,string,string,string];
- if (!/^[0-9]{12}$/.test(id) || oldId && !/^[0-9]{9}$/.test(oldId) || !name || name.length>100 || !address || address.length>500 || !['Nam','Nữ'].includes(gender)) throw invalid();
- const dateOfBirth=isoDate(birth), today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Ho_Chi_Minh'});
- if (!validQrBirthDate(dateOfBirth)) throw invalid();
- if (issued && (isoDate(issued)<dateOfBirth || isoDate(issued)>today)) throw invalid();
- return { citizenId:id,citizenIdMasked:id.slice(0,3)+'******'+id.slice(-3),fullName:name,dateOfBirth,gender:gender==='Nam'?'Male':'Female',address };
+  if (raw.length > 1024 || /[\u0000-\u001f\u007f]/.test(raw)) throw invalid();
+  const fields = raw.trim().split('|').map(value => value.trim().normalize('NFC'));
+  if (fields.length !== 6 && fields.length !== 7) throw invalid();
+
+  // The two supported six-field layouts omit either the old ID or issue date.
+  // Birth date and gender positions identify the layout before normalization.
+  if (fields.length === 6) {
+    const omitsOldId = /^[0-9]{8}$/.test(fields[2]!) && ['Nam', 'Nữ'].includes(fields[3]!);
+    const omitsIssueDate = /^[0-9]{8}$/.test(fields[3]!) && ['Nam', 'Nữ'].includes(fields[4]!);
+    if (omitsOldId === omitsIssueDate) throw invalid();
+    if (omitsOldId) fields.splice(1, 0, '');
+    else fields.push('');
+  }
+
+  const [id, oldId, name, birth, gender, address, issued] = fields as [string, string, string, string, string, string, string];
+  if (!/^[0-9]{12}$/.test(id) || (oldId && !/^[0-9]{9}$/.test(oldId))) throw invalid();
+  if (!name || name.length > 100 || !['Nam', 'Nữ'].includes(gender) || address.length > 500) throw invalid();
+
+  const dateOfBirth = isoDate(birth);
+  if (!validQrBirthDate(dateOfBirth)) throw invalid();
+  if (issued) {
+    const issueDate = isoDate(issued);
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' });
+    if (issueDate < dateOfBirth || issueDate > today) throw invalid();
+  }
+
+  return {
+    citizenId: id,
+    citizenIdMasked: id.slice(0, 3) + '******' + id.slice(-3),
+    fullName: name,
+    dateOfBirth,
+    gender: gender === 'Nam' ? 'Male' : 'Female',
+    address,
+  };
 }
 export const qrPatientIntakeService={
  async lookup(citizenId: string): Promise<{existing:QrExistingPatient|null}> { return (await apiClient.post('/patients/check-cccd',{citizenId})).data; },

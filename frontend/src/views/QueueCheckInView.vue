@@ -235,6 +235,7 @@ const qrScanInput = ref<HTMLInputElement | null>(null);
 let qrTimer: ReturnType<typeof setTimeout> | undefined;
 let qrStream: MediaStream | null = null;
 let qrCameraGen = 0;
+let qrScanGeneration = 0;
 
 async function loadDesk(page = 1) {
   if (!canCheckIn.value || disposed || page < 1) return;
@@ -272,6 +273,7 @@ async function selectFromDesk(row: AppointmentResponse) {
   finally { if (sequence === selectionSequence) selecting.value = false; }
 }
 function clearSelection() {
+  closeQr();
   appointmentSequence++; debtRequestSequence++; selectionSequence++;
   selecting.value = false; selectedPatient.value = null; citizenId.value = ''; documentType.value = 'citizenId'; nationalityCode.value = ''; checkInPhone.value = ''; notes.value = '';
   appointments.value = []; appointmentId.value = null; loadingAppointments.value = false; appointmentLookupFailed.value = false;
@@ -335,18 +337,29 @@ watch(keyword, () => {
   clearTimeout(searchTimer); searchSequence++; clearSelection(); patients.value = []; searched.value = false; searchError.value = ''; searching.value = false;
   if (keyword.value.trim() && canCheckIn.value) searchTimer = setTimeout(() => { void searchPatients(1); }, 350);
 });
-watch(() => auth.user?.userId, () => { clearTimeout(searchTimer); searchSequence++; deskSequence++; waitingSequence++; clearSelection(); keyword.value = ''; deskRows.value = []; waitingRows.value = []; patients.value = []; });
+watch(() => [auth.user?.userId, auth.role], () => {
+  clearTimeout(searchTimer);
+  searchSequence++;
+  deskSequence++;
+  waitingSequence++;
+  clearSelection();
+  keyword.value = '';
+  deskRows.value = [];
+  waitingRows.value = [];
+  patients.value = [];
+}, { flush: 'sync' });
 onMounted(refreshToday);
 
-async function selectPatient(patient: PatientSummary) {
+async function selectPatient(patient: PatientSummary, scannedCitizenId = '') {
   if (!canCheckIn.value || checkingIn.value || disposed) return;
+  closeQr();
   notes.value = '';
   selectedPatient.value = patient;
-  citizenId.value = '';
+  citizenId.value = scannedCitizenId;
   documentType.value = 'citizenId';
   nationalityCode.value = '';
   fieldErrors.value = {};
-  checkInPhone.value = '';
+  checkInPhone.value = scannedCitizenId ? patient.phone : '';
   await Promise.all([loadAppointments(patient), loadOutstandingDebt(patient)]);
 }
 
@@ -394,6 +407,7 @@ async function loadAppointments(patient: PatientSummary) {
 }
 
 function onDocumentTypeChanged() {
+  closeQr();
   citizenId.value = '';
   nationalityCode.value = '';
   fieldErrors.value = {};
@@ -434,16 +448,19 @@ interface NativeDetector { detect(source: HTMLVideoElement): Promise<Array<{ raw
 interface NativeDetectorConstructor { new(options: { formats: string[] }): NativeDetector; getSupportedFormats(): Promise<string[]> }
 
 function openQr() {
+  if (disposed || !canCheckIn.value || checkingIn.value) return;
+  closeQr();
   qrOpened.value = true;
   qrRaw.value = '';
   qrError.value = '';
   qrMessage.value = '';
   nextTick(() => {
-    qrScanInput.value?.focus();
+    if (qrOpened.value && !disposed) qrScanInput.value?.focus();
   });
 }
 
 function closeQr() {
+  qrScanGeneration++;
   stopQrCamera();
   qrOpened.value = false;
   qrRaw.value = '';
@@ -463,14 +480,23 @@ function stopQrCamera() {
 }
 
 async function processQrString(raw: string) {
+  if (disposed || !canCheckIn.value || !qrOpened.value || checkingIn.value) return;
   const value = raw.trim();
   if (!value) return;
+  const generation = ++qrScanGeneration;
+  const userId = auth.user?.userId;
+  const role = auth.role;
+  const patientId = selectedPatient.value?.patientId;
+  const isCurrent = () => generation === qrScanGeneration && qrOpened.value && !disposed
+    && canCheckIn.value && auth.user?.userId === userId && auth.role === role
+    && selectedPatient.value?.patientId === patientId;
   qrError.value = '';
   qrMessage.value = '';
   try {
     let id12 = '';
     if (value.includes('|')) {
       const decoded = await decodeCitizenQr(value);
+      if (!isCurrent()) return;
       id12 = decoded.citizenId;
     } else if (/^[0-9]{12}$/.test(value)) {
       id12 = value;
@@ -479,26 +505,25 @@ async function processQrString(raw: string) {
       return;
     }
 
-    documentType.value = 'citizenId';
-    nationalityCode.value = '';
-    citizenId.value = id12;
-
     if (!selectedPatient.value) {
       const lookup = await qrPatientIntakeService.lookup(id12);
+      if (!isCurrent()) return;
       const patient = lookup.existing?.isActive ? await patientsService.getById(lookup.existing.patientId) : null;
+      if (!isCurrent()) return;
       if (patient) {
-        await selectPatient(patient);
-        citizenId.value = id12;
-        if (patient.phone) checkInPhone.value = patient.phone;
-        closeQr();
+        // Commit the scan before loading dependent data. Those loaders guard selection changes.
+        await selectPatient(patient, id12);
       } else {
         qrError.value = 'Không tìm thấy hồ sơ cho CCCD này. Mở trang Bệnh nhân để tạo hồ sơ mới.';
       }
     } else {
+      documentType.value = 'citizenId';
+      nationalityCode.value = '';
+      citizenId.value = id12;
       closeQr();
     }
   } catch {
-    qrError.value = 'Không thể đọc mã CCCD. Vui lòng quét lại hoặc nhập tay 12 số.';
+    if (isCurrent()) qrError.value = 'Không thể đọc mã CCCD. Vui lòng quét lại hoặc nhập tay 12 số.';
   }
 }
 
@@ -519,6 +544,7 @@ async function startQrCamera() {
   const ticketId = qrCameraGen;
   try {
     if (!(await Detector.getSupportedFormats()).includes('qr_code')) throw Error();
+    if (ticketId !== qrCameraGen || disposed || !qrOpened.value) return;
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
     if (ticketId !== qrCameraGen || disposed || !qrOpened.value) {
       stream.getTracks().forEach(t => t.stop());
@@ -529,6 +555,7 @@ async function startQrCamera() {
     if (!qrVideo.value) { stopQrCamera(); return; }
     qrVideo.value.srcObject = stream;
     await qrVideo.value.play();
+    if (ticketId !== qrCameraGen || disposed || !qrOpened.value) return;
     const detector = new Detector({ formats: ['qr_code'] });
     async function frame() {
       if (ticketId !== qrCameraGen || disposed || !qrOpened.value || !qrVideo.value) return;

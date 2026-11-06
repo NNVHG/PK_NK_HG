@@ -10,21 +10,22 @@ const compiled = ts.transpileModule(compileScript(descriptor, { id: 'check-in-te
 const appointment = { appointmentId: 11, patientId: 7, patientName: 'Synthetic patient', patientCode: 'BN000007', slotTime: '09:00:00', status: 'Scheduled', notes: null };
 const patient = { patientId: 7, fullName: 'Synthetic patient', patientCode: 'BN000007', phone: '0900000091' };
 const page = { items: [appointment], page: 1, pageSize: 20, totalCount: 41, totalPages: 3, hasNextPage: true, hasPreviousPage: false };
-function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
-function fixture({ role = 'RECEPTIONIST', queryPages = [page], deskPages = [page], waitingPages = [{ ...page, items: [] }], rejectQr = false } = {}) {
+function deferred() { let resolve, reject; const promise = new Promise((done, fail) => { resolve = done; reject = fail; }); return { promise, resolve, reject }; }
+function fixture({ role = 'RECEPTIONIST', queryPages = [page], deskPages = [page], waitingPages = [{ ...page, items: [] }], rejectQr = false, decode, lookup, getPatient, debt } = {}) {
   let mount, unmount; const watchers = [], calls = { search: [], desk: [], waiting: [], patient: [], appointments: [], debt: [], checkIn: [], lookup: [] };
   const auth = { role, user: { userId: 5 } };
   const imports = {
-    vue: { defineComponent: component => component, computed: get => ({ get value() { return get(); } }), ref: value => ({ value }), onMounted: cb => { mount = cb; }, onBeforeUnmount: cb => { unmount = cb; }, watch: (getter, cb) => watchers.push({ getter, cb }) },
+    vue: { defineComponent: component => component, computed: get => ({ get value() { return get(); } }), ref: value => ({ value }), nextTick: cb => Promise.resolve().then(cb), onMounted: cb => { mount = cb; }, onBeforeUnmount: cb => { unmount = cb; }, watch: (getter, cb) => watchers.push({ getter, cb }) },
     axios: { isAxiosError: error => Boolean(error?.response) },
     '@/stores/auth': { useAuthStore: () => auth },
     '@/services/qrPatientIntake': {
       decodeCitizenQr: async raw => {
+        if (decode) return decode(raw);
         if (rejectQr) throw new Error('Mã QR không hợp lệ.');
         const parts = raw.split('|');
         return { citizenId: parts[0], citizenIdMasked: parts[0].slice(0, 3) + '***', fullName: parts[2] || '', dateOfBirth: '1990-01-01', gender: 'Male', address: '' };
       },
-      qrPatientIntakeService: { lookup: async citizenId => { calls.lookup.push(['lookup', citizenId]); return { existing: { patientId: 7, isActive: true } }; } }
+      qrPatientIntakeService: { lookup: async citizenId => { calls.lookup.push(['lookup', citizenId]); return lookup ? lookup(citizenId) : { existing: { patientId: 7, isActive: true } }; } }
     },
     '@/services/checkInForm': { validateCheckIn: (id, phone, notes, documentType, nationalityCode) => { const e = {}; if (documentType === 'passport') { if (!/^[A-Za-z0-9]{6,12}$/.test(id.trim())) e.citizenId = 'Số hộ chiếu không hợp lệ.'; if (!/^[A-Za-z]{2,3}$/.test(nationalityCode.trim())) e.nationalityCode = 'Mã quốc gia cấp không hợp lệ.'; } else if (!/^\d{12}$/.test(id.trim())) e.citizenId = 'CCCD phải gồm 12 chữ số.'; if (!/^0\d{9}$/.test(phone.trim())) e.phone = 'Số điện thoại phải gồm 10 chữ số.'; if (notes.length > 500) e.notes = 'Ghi chú không được vượt quá 500 ký tự.'; return e; }, checkInProblem: problem => ({ fields: {}, message: problem?.message ?? 'Không thể tiếp đón.' }) },
     '@/services/appointments': { appointmentsService: {
@@ -33,11 +34,11 @@ function fixture({ role = 'RECEPTIONIST', queryPages = [page], deskPages = [page
     } },
     '@/services/patients': { patientsService: {
       search: async (...args) => { calls.search.push(args); const value = queryPages.shift() ?? page; if (value instanceof Error) throw value; return value; },
-      getById: async id => { calls.patient.push(id); return patient; },
+      getById: async id => { calls.patient.push(id); return getPatient ? getPatient(id) : patient; },
     } },
     '@/services/queue': { queueService: {
       getToday: async (...args) => { calls.waiting.push(args); const value = waitingPages.shift() ?? { ...page, items: [] }; if (value instanceof Error) throw value; return value; },
-      getOutstandingDebt: async (...args) => { calls.debt.push(args); return { totalOutstandingDebt: 0, invoiceCodes: [] }; },
+      getOutstandingDebt: async (...args) => { calls.debt.push(args); return debt ? debt(...args) : { totalOutstandingDebt: 0, invoiceCodes: [] }; },
       checkIn: async payload => { calls.checkIn.push(payload); return { queueNumber: 9, patientName: patient.fullName, queueDate: '2026-10-24', statusText: 'Đang chờ' }; },
     } },
   };
@@ -126,4 +127,94 @@ test('F_CHK_01 component hides check-in controls from disallowed roles and expos
 test('F_CHK_01 refuses patient lookups after unmount', async () => {
   const f = fixture(); f.unmount(); f.c.keyword.value = 'Synthetic'; await f.c.searchPatients();
   assert.deepEqual(f.calls.search, []); assert.deepEqual(f.c.patients.value, []);
+});
+
+test('QR success selects one patient and clears raw input after lookup', async () => {
+  const f = fixture(); f.c.openQr(); f.c.qrRaw.value = '000000000901';
+  await f.c.onQrSubmit();
+  assert.equal(f.c.selectedPatient.value.patientId, 7);
+  assert.equal(f.c.citizenId.value, '000000000901');
+  assert.equal(f.c.checkInPhone.value, patient.phone);
+  assert.equal(f.c.qrOpened.value, false);
+  assert.equal(f.c.qrRaw.value, '');
+});
+
+test('closing QR during decode prevents lookup and form writes', async () => {
+  const pending = deferred(), f = fixture({ decode: () => pending.promise });
+  f.c.openQr(); const operation = f.c.processQrString('synthetic|qr');
+  f.c.closeQr(); pending.resolve({ citizenId: '000000000901' }); await operation;
+  assert.deepEqual(f.calls.lookup, []);
+  assert.equal(f.c.selectedPatient.value, null); assert.equal(f.c.citizenId.value, '');
+});
+
+test('closing QR during lookup prevents patient fetch and form writes', async () => {
+  const pending = deferred(), f = fixture({ lookup: () => pending.promise });
+  f.c.openQr(); const operation = f.c.processQrString('000000000901');
+  f.c.closeQr(); pending.resolve({ existing: { patientId: 7, isActive: true } }); await operation;
+  assert.deepEqual(f.calls.patient, []);
+  assert.equal(f.c.selectedPatient.value, null); assert.equal(f.c.citizenId.value, '');
+});
+
+test('late patient fetch after cancel does not repopulate identity or debt', async () => {
+  const pending = deferred(), reached = deferred();
+  const f = fixture({ getPatient: () => { reached.resolve(); return pending.promise; } });
+  f.c.openQr(); const operation = f.c.processQrString('000000000901'); await reached.promise;
+  f.c.closeQr(); pending.resolve(patient); await operation;
+  assert.equal(f.c.selectedPatient.value, null); assert.equal(f.c.citizenId.value, '');
+  assert.equal(f.c.checkInPhone.value, ''); assert.deepEqual(f.calls.debt, []);
+});
+
+test('identity changes and unmount clear QR state and ignore pending requests', async () => {
+  for (const change of ['user', 'role', 'unmount']) {
+    const pending = deferred(), f = fixture({ lookup: () => pending.promise });
+    f.c.openQr(); f.c.qrRaw.value = 'synthetic raw';
+    const operation = f.c.processQrString('000000000901');
+    if (change === 'unmount') f.unmount();
+    else {
+      if (change === 'user') f.auth.user.userId++;
+      else f.auth.role = 'PATIENT';
+      f.watchers[1].cb();
+    }
+    pending.resolve({ existing: { patientId: 7, isActive: true } }); await operation;
+    assert.equal(f.c.qrOpened.value, false); assert.equal(f.c.qrRaw.value, '');
+    assert.equal(f.c.selectedPatient.value, null); assert.equal(f.c.citizenId.value, '');
+    assert.deepEqual(f.calls.patient, []);
+  }
+});
+
+test('manual patient selection invalidates a pending QR lookup', async () => {
+  const pending = deferred(), f = fixture({ lookup: () => pending.promise });
+  f.c.openQr(); const operation = f.c.processQrString('000000000901');
+  await f.c.selectPatient({ ...patient, patientId: 8, fullName: 'Current synthetic patient' });
+  pending.resolve({ existing: { patientId: 7, isActive: true } }); await operation;
+  assert.equal(f.c.selectedPatient.value.patientId, 8); assert.equal(f.c.citizenId.value, '');
+  assert.deepEqual(f.calls.patient, []);
+});
+
+test('the latest scan wins when an earlier lookup finishes last', async () => {
+  const pending = deferred();
+  const f = fixture({ lookup: id => id === '000000000901' ? pending.promise : { existing: { patientId: 8, isActive: true } }, getPatient: id => ({ ...patient, patientId: id }) });
+  f.c.openQr(); const earlier = f.c.processQrString('000000000901');
+  await f.c.processQrString('000000000902');
+  pending.resolve({ existing: { patientId: 7, isActive: true } }); await earlier;
+  assert.equal(f.c.selectedPatient.value.patientId, 8); assert.equal(f.c.citizenId.value, '000000000902');
+  assert.deepEqual(f.calls.patient, [8]);
+});
+
+test('late rejected QR lookup cannot overwrite a reopened dialog', async () => {
+  const pending = deferred(), f = fixture({ lookup: () => pending.promise });
+  f.c.openQr(); const operation = f.c.processQrString('000000000901');
+  f.c.closeQr(); f.c.openQr();
+  pending.reject(new Error('Synthetic failure')); await operation;
+  assert.equal(f.c.qrOpened.value, true); assert.equal(f.c.qrError.value, '');
+});
+
+test('identity change during QR dependent debt load prevents repopulation', async () => {
+  const pending = deferred(), reached = deferred();
+  const f = fixture({ debt: () => { reached.resolve(); return pending.promise; } });
+  f.c.openQr(); const operation = f.c.processQrString('000000000901'); await reached.promise;
+  f.auth.user.userId++; f.watchers[1].cb();
+  pending.resolve({ totalOutstandingDebt: 1000, invoiceCodes: ['SYNTHETIC-OLD'] }); await operation;
+  assert.equal(f.c.selectedPatient.value, null); assert.equal(f.c.citizenId.value, '');
+  assert.equal(f.c.checkInPhone.value, ''); assert.equal(f.c.outstandingDebt.value, null);
 });

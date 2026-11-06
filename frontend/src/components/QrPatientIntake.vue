@@ -1,43 +1,73 @@
 <template>
- <section v-if="allowed" class="qr-intake" aria-label="Tiếp nhận bằng QR CCCD">
-  <button type="button" :disabled="busy" @click="toggle">{{ opened ? 'Đóng tiếp nhận QR' : 'Tiếp nhận bằng QR CCCD' }}</button>
-  <div v-if="opened">
-   <p>Đặt con trỏ vào ô quét rồi dùng đầu đọc USB và nhấn Enter. Nhập tay SĐT, đối chiếu với bệnh nhân trước khi tạo hồ sơ.</p>
-   <form @submit.prevent="scan()">
-    <label>Quét mã CCCD<input ref="scanInput" v-model="raw" type="password" maxlength="1024" autocomplete="off" :disabled="busy || cameraOn" /></label>
-    <button :disabled="busy || cameraOn || !raw">Đọc và đối soát</button>
-    <button type="button" :disabled="busy || cameraOn" @click="startCamera">Quét bằng camera</button>
-   </form>
-   <div v-if="cameraOn">
-    <video ref="video" muted playsinline aria-label="Camera quét QR CCCD" />
-    <button type="button" @click="stopCamera">Dừng camera</button>
-   </div>
-   <p v-if="error" role="alert">{{ error }}</p><p v-if="message" role="status">{{ message }}</p>
-   <p v-if="busy" role="status">Đang xử lý…</p>
-   <div v-if="existing">
-    <p>{{ existing.fullName }} · {{ existing.patientCode }} đã có hồ sơ ({{ existing.masked }}).</p>
-    <p v-if="!existing.isActive">Hồ sơ đang ngừng hoạt động; mở hồ sơ để đối chiếu, không tạo trùng.</p>
-    <RouterLink :to="{name:'management-patient-detail',params:{id:existing.patientId}}" @click="close">Mở hồ sơ &amp; tiếp đón</RouterLink>
-    <button type="button" @click="close">Hủy</button>
-   </div>
-   <form v-if="identity && !existing" @submit.prevent="save">
-    <p>CCCD: {{ identity.citizenIdMasked }}</p>
-    <label>Họ và tên<input v-model="form.fullName" required maxlength="100" :disabled="busy || needsReview" @input="invalidate" /></label>
-    <label>Ngày sinh<input v-model="form.dateOfBirth" type="date" required :disabled="busy || needsReview" @input="invalidate" /></label>
-    <label>Giới tính<select v-model="form.gender" :disabled="busy || needsReview" @change="invalidate"><option value="Male">Nam</option><option value="Female">Nữ</option></select></label>
-    <label>SĐT (nhập tay)<input ref="phoneInput" v-model="form.phone" type="tel" required pattern="0[0-9]{9}" maxlength="10" autocomplete="off" :disabled="busy || needsReview" @input="invalidate" /></label>
-    <label>Địa chỉ<textarea v-model="form.address" maxlength="500" :disabled="busy || needsReview" @input="invalidate" /></label>
-    <div v-if="duplicates.length">
-     <p>SĐT đã được dùng bởi các hồ sơ sau. Đối chiếu CCCD để tránh tạo trùng hồ sơ.</p>
-     <ul><li v-for="item in duplicates" :key="item.patientCode">{{ item.patientCode }} · {{ item.fullName }} · {{ item.dateOfBirth }}</li></ul>
-     <label><input v-model="duplicateIdentityConfirmed" type="checkbox" :disabled="busy || needsReview" /> Đã đối chiếu CCCD: đây là người khác dùng chung SĐT, cần tạo hồ sơ độc lập</label>
+  <section v-if="allowed" class="qr-intake" aria-label="Tiếp nhận bằng QR CCCD">
+    <div class="intake-heading">
+      <div>
+        <h2>Tiếp nhận bằng QR CCCD</h2>
+        <p>Quét và đối chiếu giấy tờ để tìm hoặc tạo hồ sơ bệnh nhân.</p>
+      </div>
+      <button type="button" class="secondary-button" :aria-expanded="opened" :disabled="busy" @click="toggle">
+        {{ opened ? 'Đóng tiếp nhận QR' : 'Tiếp nhận bằng QR CCCD' }}
+      </button>
     </div>
-    <label><input v-model="confirmed" type="checkbox" :disabled="busy || needsReview" /> Tôi đã đối chiếu thông tin với bệnh nhân</label>
-    <button :disabled="busy || needsReview || !confirmed || (duplicates.length>0 && !duplicateIdentityConfirmed)">Tạo hồ sơ</button>
-    <p v-if="needsReview">Chưa xác minh kết quả. Quét lại để đối soát; không gửi tạo mới lần nữa.</p>
-   </form>
-  </div>
- </section>
+
+    <div v-if="opened" class="intake-body">
+      <form class="scan-panel" @submit.prevent="scan()">
+        <label class="field">
+          <span>Quét mã CCCD</span>
+          <input ref="scanInput" v-model="raw" type="password" maxlength="1024" autocomplete="off" :disabled="busy || cameraOn" />
+          <span class="field-hint">Đặt con trỏ vào ô, quét bằng đầu đọc USB và nhấn Enter.</span>
+        </label>
+        <div class="actions">
+          <button class="primary-button" :disabled="busy || cameraOn || !raw">Đọc và đối soát</button>
+          <button type="button" class="secondary-button" :disabled="busy || cameraOn" @click="startCamera">Quét bằng camera</button>
+        </div>
+        <p class="manual-help">Để nhập thông tin thủ công, đóng tiếp nhận QR và chọn “Thêm bệnh nhân” trên trang hồ sơ.</p>
+      </form>
+
+      <div v-if="cameraOn" class="camera-panel">
+        <video ref="video" muted playsinline aria-label="Camera quét QR CCCD" />
+        <button type="button" class="secondary-button" @click="stopCamera">Dừng camera</button>
+      </div>
+      <p v-if="error" class="alert alert-error" role="alert">{{ error }}</p>
+      <p v-if="message" class="alert alert-success" role="status">{{ message }}</p>
+      <p v-if="busy" class="processing" role="status">Đang xử lý…</p>
+
+      <div v-if="existing" class="existing-patient">
+        <h3>Hồ sơ đã có</h3>
+        <p><strong>{{ existing.fullName }}</strong> · {{ existing.patientCode }}</p>
+        <p class="masked-id">CCCD {{ existing.masked }}</p>
+        <p v-if="!existing.isActive" class="alert alert-warning">Hồ sơ đang ngừng hoạt động; mở hồ sơ để đối chiếu, không tạo trùng.</p>
+        <div class="actions">
+          <RouterLink class="primary-button" :to="{name:'management-patient-detail',params:{id:existing.patientId}}" @click="close">Mở hồ sơ &amp; tiếp đón</RouterLink>
+          <button type="button" class="secondary-button" @click="close">Hủy</button>
+        </div>
+      </div>
+
+      <form v-if="identity && !existing" class="identity-form" @submit.prevent="save">
+        <div class="identity-heading">
+          <h3>Đối chiếu thông tin</h3>
+          <p class="masked-id">CCCD {{ identity.citizenIdMasked }}</p>
+        </div>
+        <div class="field-grid">
+          <label class="field field-wide"><span>Họ và tên</span><input v-model="form.fullName" required maxlength="100" :disabled="busy || needsReview" @input="invalidate" /></label>
+          <label class="field"><span>Ngày sinh</span><input v-model="form.dateOfBirth" type="date" required :disabled="busy || needsReview" @input="invalidate" /></label>
+          <label class="field"><span>Giới tính</span><select v-model="form.gender" :disabled="busy || needsReview" @change="invalidate"><option value="Male">Nam</option><option value="Female">Nữ</option></select></label>
+          <label class="field field-wide"><span>SĐT (nhập tay)</span><input ref="phoneInput" v-model="form.phone" type="tel" inputmode="numeric" required pattern="0[0-9]{9}" maxlength="10" autocomplete="off" :disabled="busy || needsReview" @input="invalidate" /></label>
+          <label class="field field-wide"><span>Địa chỉ <span class="optional">(không bắt buộc)</span></span><textarea v-model="form.address" maxlength="500" rows="2" :disabled="busy || needsReview" @input="invalidate" /></label>
+        </div>
+        <div v-if="duplicates.length" class="alert alert-warning">
+          <p>SĐT đã được dùng bởi các hồ sơ sau. Đối chiếu CCCD để tránh tạo trùng hồ sơ.</p>
+          <ul><li v-for="item in duplicates" :key="item.patientCode">{{ item.patientCode }} · {{ item.fullName }} · {{ item.dateOfBirth }}</li></ul>
+          <label class="confirmation"><input v-model="duplicateIdentityConfirmed" type="checkbox" :disabled="busy || needsReview" /><span>Đã đối chiếu CCCD: đây là người khác dùng chung SĐT, cần tạo hồ sơ độc lập</span></label>
+        </div>
+        <div class="form-footer">
+          <label class="confirmation"><input v-model="confirmed" type="checkbox" :disabled="busy || needsReview" /><span>Tôi đã đối chiếu thông tin với bệnh nhân</span></label>
+          <button class="primary-button" :disabled="busy || needsReview || !confirmed || (duplicates.length>0 && !duplicateIdentityConfirmed)">Tạo hồ sơ</button>
+        </div>
+        <p v-if="needsReview" class="alert alert-warning">Chưa xác minh kết quả. Quét lại để đối soát; không gửi tạo mới lần nữa.</p>
+      </form>
+    </div>
+  </section>
 </template>
 <script setup lang="ts">
 import { computed,nextTick,onUnmounted,reactive,ref,watch } from 'vue';
@@ -113,6 +143,96 @@ async function startCamera() {
 watch(actor,close);
 onUnmounted(()=>{disposed=true;close();});
 </script>
+
 <style scoped>
-.qr-intake{margin:1rem 0;padding:1rem;border:1px solid #cbd5e1;border-radius:.5rem;}label{display:block;margin:.75rem 0;}input,select,textarea{display:block;max-width:100%;padding:.5rem;}input[type=checkbox]{display:inline;}button{margin:.4rem;padding:.5rem;}video{display:block;width:min(100%,30rem);}[role=alert]{color:#b91c1c;}p{line-height:1.6;}
+.qr-intake {
+  margin: 1rem 0;
+  border: 1px solid #c8deeb;
+  border-radius: 16px;
+  background: #fff;
+  color: #18354c;
+  overflow-wrap: anywhere;
+}
+
+.intake-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem;
+}
+
+h2, h3 { margin: 0; color: #102e56; }
+h2 { font-size: 1.1rem; }
+h3 { font-size: 1rem; }
+p { line-height: 1.6; }
+.intake-heading p { margin: .4rem 0 0; color: #536a7e; font-size: .875rem; }
+.intake-body { border-top: 1px solid #e4edf5; padding: 1.25rem; }
+.scan-panel { padding: 1rem; border: 1px solid #d8ecfa; border-radius: 10px; background: #f4faff; }
+.field { display: flex; flex-direction: column; gap: .5rem; min-width: 0; font-size: .9rem; font-weight: 650; }
+.field input, .field select, .field textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: .65rem .75rem;
+  border: 1px solid #b8cedf;
+  border-radius: 8px;
+  background: #fff;
+  color: #18354c;
+  font: inherit;
+  font-size: 1rem;
+}
+.field textarea { resize: vertical; }
+.field-hint, .optional { color: #536a7e; font-size: .8rem; font-weight: 400; line-height: 1.5; }
+.field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.field-wide { grid-column: 1 / -1; }
+.actions { display: flex; flex-wrap: wrap; gap: .65rem; margin-top: 1rem; }
+.primary-button, .secondary-button {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: .65rem 1rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font: inherit;
+  font-size: .875rem;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+.primary-button { background: #1857b6; color: #fff; }
+.secondary-button { background: #fff; border-color: #b8cedf; color: #1857b6; }
+button:disabled, input:disabled, select:disabled, textarea:disabled { opacity: .6; cursor: not-allowed; }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid #1857b6; outline-offset: 3px; }
+.manual-help { margin: 1rem 0 0; color: #536a7e; font-size: .875rem; }
+.camera-panel { display: grid; justify-items: start; gap: .75rem; margin-top: 1rem; }
+video { display: block; width: min(100%, 30rem); border-radius: 10px; background: #102e56; }
+.alert { padding: .8rem 1rem; border: 1px solid transparent; border-radius: 9px; font-size: .875rem; line-height: 1.6; }
+.alert-error { color: #991b1b; background: #fef2f2; border-color: #fecaca; }
+.alert-success { color: #166534; background: #f0fdf4; border-color: #bbf7d0; }
+.alert-warning { color: #854d0e; background: #fffbeb; border-color: #fde68a; }
+.alert p { margin-top: 0; }
+.alert ul { padding-left: 1.2rem; }
+.processing { color: #1857b6; }
+.existing-patient, .identity-form { border-top: 1px solid #e4edf5; margin-top: 1.5rem; padding-top: 1.5rem; }
+.identity-heading { margin-bottom: 1rem; }
+.masked-id { color: #536a7e; font-size: .875rem; }
+.confirmation { display: flex; align-items: flex-start; gap: .6rem; line-height: 1.6; font-size: .875rem; }
+.confirmation input { flex: none; width: 18px; height: 18px; margin: .15rem 0 0; accent-color: #1857b6; }
+.form-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; padding-top: 1rem; margin-top: 1.25rem; border-top: 1px solid #e4edf5; }
+@media (hover: hover) {
+  .primary-button:hover:not(:disabled) { background: #144c9e; }
+  .secondary-button:hover:not(:disabled) { background: #eaf5fc; }
+}
+@media (max-width: 540px) {
+  .intake-heading { align-items: stretch; flex-direction: column; }
+  .intake-heading, .intake-body { padding: 1rem; }
+  .scan-panel { padding: .875rem; }
+  .field-grid { grid-template-columns: minmax(0, 1fr); }
+  .actions > *, .form-footer > button { width: 100%; }
+}
 </style>

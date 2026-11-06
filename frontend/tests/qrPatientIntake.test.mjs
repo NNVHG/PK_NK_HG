@@ -12,7 +12,7 @@ const raw='987654311101||Synthetic QR Patient|29021992|Nam|Synthetic address|010
 const decoded=()=>({citizenId:'987654311101',citizenIdMasked:'987******101',fullName:'Synthetic',dateOfBirth:'1992-02-29',gender:'Male',address:'Synthetic address'});
 test('strict seven-field parser keeps only CCCD needed for secured lookup',async()=>{const d=await decodeCitizenQr(raw);assert.equal(d.citizenId,'987654311101');assert.equal(d.citizenIdMasked,'987******101');assert.equal(d.dateOfBirth,'1992-02-29');assert.doesNotMatch(JSON.stringify(d),/01012020|987654311101\|/);});
 test('female and optional old ID/issue date accepted',async()=>{assert.equal((await decodeCitizenQr(raw.replace('|Nam|','|Nữ|').replace('||','|123456789|').replace('|01012020','|'))).gender,'Female');});
-for(const [label,value] of [['wrong field count',raw+'|x'],['raw ID only','987654311101'],['non-ASCII digits',raw.replace('987654311101','９８７６５４３１１１０１')],['bad old ID',raw.replace('||','|abc|')],['missing name',raw.replace('Synthetic QR Patient','')],['invalid leap day',raw.replace('29021992','29021991')],['future birth',raw.replace('29021992','01012999')],['invalid gender',raw.replace('|Nam|','|Other|')],['missing address',raw.replace('Synthetic address','')],['issue before birth',raw.replace('01012020','01011900')],['future issue',raw.replace('01012020','01012999')],['control character',raw+'\n'],['oversized','x'.repeat(1025)]])test('rejects '+label+' without leaking scanned input',async()=>{await assert.rejects(decodeCitizenQr(value),e=>e.message.includes('Mã QR không đúng')&&!e.message.includes('987654311101'));});
+for(const [label,value] of [['wrong field count',raw+'|x'],['raw ID only','987654311101'],['non-ASCII digits',raw.replace('987654311101','９８７６５４３１１１０１')],['bad old ID',raw.replace('||','|abc|')],['missing name',raw.replace('Synthetic QR Patient','')],['invalid leap day',raw.replace('29021992','29021991')],['future birth',raw.replace('29021992','01012999')],['invalid gender',raw.replace('|Nam|','|Other|')],['issue before birth',raw.replace('01012020','01011900')],['future issue',raw.replace('01012020','01012999')],['control character',raw+'\n'],['oversized','x'.repeat(1025)]])test('rejects '+label+' without leaking scanned input',async()=>{await assert.rejects(decodeCitizenQr(value),e=>e.message.includes('Mã QR không đúng')&&!e.message.includes('987654311101'));});
 test('lookup and create send CCCD only in authenticated request body, never QR text',async()=>{apiCalls.length=0;await qrPatientIntakeService.lookup('987654311101');await qrPatientIntakeService.create(decoded(),{fullName:'Synthetic',phone:'0990011101'});assert.deepEqual(apiCalls[0],['/patients/check-cccd',{citizenId:'987654311101'}]);assert.deepEqual(Object.keys(apiCalls[1][1]).sort(),['citizenId','confirmed','patient']);assert.equal(apiCalls[1][1].citizenId,'987654311101');assert.doesNotMatch(JSON.stringify(apiCalls),/01012020|987654311101\|/);assert.ok(apiCalls.every(([url])=>!url.includes('987654311101')));});
 const source=await readFile(new URL('../src/components/QrPatientIntake.vue',import.meta.url),'utf8');
 const compiled=transpile(compileScript(parse(source).descriptor,{id:'qr-intake'}).content);
@@ -51,4 +51,68 @@ test('edited birth date, gender and phone are checked again before writing',asyn
 test('camera permission refusal clears active state and allows USB fallback',async()=>{const saved=Object.getOwnPropertyDescriptor(globalThis,'navigator');globalThis.BarcodeDetector=class{static async getSupportedFormats(){return['qr_code'];}};Object.defineProperty(globalThis,'navigator',{configurable:true,value:{mediaDevices:{getUserMedia:async()=>{throw Error('Synthetic permission refusal');}}}});
  try{const f=fixture();await f.c.toggle();await f.c.startCamera();assert.equal(f.c.cameraOn.value,false);assert.match(f.c.error.value,/USB/);assert.equal(f.calls.length,0);f.cleanup();}
  finally{delete globalThis.BarcodeDetector;if(saved)Object.defineProperty(globalThis,'navigator',saved);else delete globalThis.navigator;}
+});
+
+test('six-field QR without old ID preserves field positions', async () => {
+  const value = raw.replace('||', '|');
+  const result = await decodeCitizenQr(value);
+  assert.equal(result.fullName, 'Synthetic QR Patient');
+  assert.equal(result.dateOfBirth, '1992-02-29');
+  assert.equal(result.address, 'Synthetic address');
+});
+
+test('six-field QR without issue date preserves old ID validation', async () => {
+  const value = raw.replace('||', '|123456789|').replace('|01012020', '');
+  assert.equal((await decodeCitizenQr(value)).fullName, 'Synthetic QR Patient');
+  assert.equal((await decodeCitizenQr(raw.replace('|01012020', ''))).gender, 'Male');
+  await assert.rejects(decodeCitizenQr(value.replace('123456789', 'bad-old-id')));
+});
+
+test('missing address is optional in each supported layout', async () => {
+  const values = [raw, raw.replace('||', '|'), raw.replace('|01012020', '')];
+  for (const value of values) {
+    const result = await decodeCitizenQr(value.replace('Synthetic address', ''));
+    assert.equal(result.address, '');
+    assert.equal(result.dateOfBirth, '1992-02-29');
+  }
+});
+
+test('six-field layouts validate supplied issue date and mandatory identity fields', async () => {
+  const value = raw.replace('||', '|');
+  for (const invalidValue of [
+    value.replace('01012020', '01011900'),
+    value.replace('01012020', '31022020'),
+    value.replace('01012020', '01012999'),
+    value.replace('Synthetic QR Patient', ''),
+    value.replace('29021992', '29021991'),
+    value.replace('|Nam|', '|Unknown|'),
+    value.replace('987654311101', 'invalid'),
+    value.replace('Synthetic address', 'x'.repeat(501)),
+  ]) {
+    await assert.rejects(decodeCitizenQr(invalidValue));
+  }
+});
+
+test('malformed six-field layouts cannot shift identity fields into place', async () => {
+  for (const fields of [
+    ['987654311101', '', 'Synthetic', 'Nam', 'Nữ', ''],
+    ['987654311101', '', '29021992', 'Nam', 'Nữ', ''],
+    ['987654311101', 'Synthetic', '', 'Nam', '', ''],
+    ['987654311101', 'Synthetic', '29021992', '', '', ''],
+    ['987654311101', 'Synthetic', '29021992', 'Nam', ''],
+  ]) {
+    await assert.rejects(decodeCitizenQr(fields.join('|')));
+  }
+});
+
+test('confirmed patient creation accepts an empty optional address', async () => {
+  const f = fixture();
+  await scan(f);
+  f.c.form.phone = '0990011101';
+  f.c.form.address = '';
+  f.c.confirmed.value = true;
+  await f.c.save();
+  const creation = f.calls.find(call => call[0] === 'create');
+  assert.equal(creation[2].address, '');
+  assert.deepEqual(f.events, ['created']);
 });
