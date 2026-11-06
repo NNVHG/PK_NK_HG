@@ -222,6 +222,7 @@ const deskLoading = ref(false), deskError = ref('');
 const waitingRows = ref<QueueEntryResponse[]>([]), waitingPage = ref(1), waitingTotal = ref(0), waitingNext = ref(false);
 const waitingLoading = ref(false), waitingError = ref(''), selecting = ref(false);
 let searchSequence = 0, deskSequence = 0, waitingSequence = 0, selectionSequence = 0, appointmentSequence = 0;
+let selectionOwnerSequence = 0;
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 let disposed = false;
 
@@ -262,19 +263,21 @@ async function loadWaiting(page = 1) {
 async function refreshToday() { await Promise.all([loadDesk(), loadWaiting()]); }
 async function selectFromDesk(row: AppointmentResponse) {
   if (!canCheckIn.value || checkingIn.value || selecting.value) return;
+  const owner = ++selectionOwnerSequence;
   const sequence = ++selectionSequence;
+  searchSequence++;
   selecting.value = true; searchError.value = '';
   try {
     const patient = await patientsService.getById(row.patientId);
-    if (sequence !== selectionSequence || disposed) return;
+    if (owner !== selectionOwnerSequence || sequence !== selectionSequence || disposed) return;
     await selectPatient(patient);
-    if (sequence === selectionSequence && appointments.value.some(a => a.appointmentId === row.appointmentId)) appointmentId.value = row.appointmentId;
-  } catch { if (sequence === selectionSequence) searchError.value = 'Không tải được hồ sơ. Vui lòng thử lại.'; }
-  finally { if (sequence === selectionSequence) selecting.value = false; }
+    if (owner === selectionOwnerSequence && sequence === selectionSequence && appointments.value.some(a => a.appointmentId === row.appointmentId)) appointmentId.value = row.appointmentId;
+  } catch { if (owner === selectionOwnerSequence && sequence === selectionSequence) searchError.value = 'Không tải được hồ sơ. Vui lòng thử lại.'; }
+  finally { if (owner === selectionOwnerSequence && sequence === selectionSequence) selecting.value = false; }
 }
 function clearSelection() {
   closeQr();
-  appointmentSequence++; debtRequestSequence++; selectionSequence++;
+  appointmentSequence++; debtRequestSequence++; selectionSequence++; selectionOwnerSequence++;
   selecting.value = false; selectedPatient.value = null; citizenId.value = ''; documentType.value = 'citizenId'; nationalityCode.value = ''; checkInPhone.value = ''; notes.value = '';
   appointments.value = []; appointmentId.value = null; loadingAppointments.value = false; appointmentLookupFailed.value = false;
   outstandingDebt.value = null; debtLoading.value = false; debtLookupFailed.value = false; fieldErrors.value = {}; checkInError.value = ''; ticket.value = null;
@@ -282,8 +285,9 @@ function clearSelection() {
 async function searchPatients(page = 1) {
   clearTimeout(searchTimer);
   if (!canCheckIn.value || checkingIn.value || disposed || page < 1) return;
-  const sequence = ++searchSequence, value = keyword.value.trim();
-  clearSelection(); patients.value = []; searched.value = false; searchError.value = ''; searchTotal.value = 0; searchNext.value = false; searchPage.value = page;
+  clearSelection();
+  const sequence = ++searchSequence, owner = ++selectionOwnerSequence, value = keyword.value.trim();
+  patients.value = []; searched.value = false; searchError.value = ''; searchTotal.value = 0; searchNext.value = false; searchPage.value = page;
   if (!value) { searching.value = false; return; }
   searching.value = true;
   try {
@@ -292,16 +296,16 @@ async function searchPatients(page = 1) {
       try {
         scannedCitizenId = (await decodeCitizenQr(value)).citizenId;
       } catch {
-        if (sequence === searchSequence && !disposed) {
+        if (owner === selectionOwnerSequence && sequence === searchSequence && !disposed) {
           searchError.value = 'Mã QR CCCD không hợp lệ. Vui lòng quét lại hoặc nhập CCCD 12 chữ số.';
         }
         return;
       }
-      if (sequence !== searchSequence || disposed) return;
+      if (owner !== selectionOwnerSequence || sequence !== searchSequence || disposed) return;
       const lookup = await qrPatientIntakeService.lookup(scannedCitizenId);
-      if (sequence !== searchSequence || disposed) return;
+      if (owner !== selectionOwnerSequence || sequence !== searchSequence || disposed) return;
       const patient = lookup.existing?.isActive ? await patientsService.getById(lookup.existing.patientId) : null;
-      if (sequence !== searchSequence || disposed) return;
+      if (owner !== selectionOwnerSequence || sequence !== searchSequence || disposed) return;
       if (patient) {
         patients.value = [patient];
         searchTotal.value = 1;
@@ -318,18 +322,18 @@ async function searchPatients(page = 1) {
     }
     if (/^[0-9]{12}$/.test(value)) {
       const lookup = await qrPatientIntakeService.lookup(value);
-      if (sequence !== searchSequence || disposed) return;
+      if (owner !== selectionOwnerSequence || sequence !== searchSequence || disposed) return;
       const patient = lookup.existing?.isActive ? await patientsService.getById(lookup.existing.patientId) : null;
-      if (sequence !== searchSequence || disposed) return;
+      if (owner !== selectionOwnerSequence || sequence !== searchSequence || disposed) return;
       patients.value = patient ? [patient] : []; searchTotal.value = patients.value.length; searchPage.value = 1;
     } else {
       const result = await patientsService.search({ keyword: value, page, pageSize: 20 });
-      if (sequence !== searchSequence || disposed) return;
+      if (owner !== selectionOwnerSequence || sequence !== searchSequence || disposed) return;
       patients.value = result.items; searchTotal.value = result.totalCount; searchNext.value = result.hasNextPage;
     }
     searched.value = true;
-  } catch { if (sequence === searchSequence) searchError.value = 'Không thể tìm hồ sơ bệnh nhân. Vui lòng thử lại; tìm CCCD cần HTTPS hoặc localhost.'; }
-  finally { if (sequence === searchSequence) searching.value = false; }
+  } catch { if (owner === selectionOwnerSequence && sequence === searchSequence) searchError.value = 'Không thể tìm hồ sơ bệnh nhân. Vui lòng thử lại; tìm CCCD cần HTTPS hoặc localhost.'; }
+  finally { if (owner === selectionOwnerSequence && sequence === searchSequence) searching.value = false; }
 }
 watch(keyword, () => {
   clearTimeout(searchTimer); searchSequence++; clearSelection(); patients.value = []; searched.value = false; searchError.value = ''; searching.value = false;
@@ -350,6 +354,8 @@ onMounted(refreshToday);
 
 async function selectPatient(patient: PatientSummary, scannedCitizenId = '') {
   if (!canCheckIn.value || checkingIn.value || disposed) return;
+  selectionOwnerSequence++;
+  searchSequence++;
   closeQr();
   notes.value = '';
   selectedPatient.value = patient;
