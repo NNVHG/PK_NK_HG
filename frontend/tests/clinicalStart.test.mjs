@@ -15,6 +15,8 @@ function fixture({ role = 'DENTIST', failure = false, dentists = [{ dentistId: 5
   const state = { row: { ...row }, visit: { ...visit } };
   const imports = {
     '@/components/DiagnosisAutocomplete.vue': { default: {} },
+    '@/components/SafetyAlertBanner.vue': { default: {} },
+
     vue: { defineComponent: c => c, ref: value => ({ value }), computed: get => ({ get value() { return get(); } }), onMounted: cb => { mount = cb; }, onUnmounted: cb => { cleanup = cb; } },
     axios: { default: { isAxiosError: e => !!e.response } },
     '@/stores/auth': { useAuthStore: () => ({ role, user: { userId: 5 } }) },
@@ -94,4 +96,11 @@ test('clinical screen shows actual destination and links to ready workspace befo
   assert.ok(source.includes("selected.chairNumber || 'Chưa có ghế'"));
   assert.ok(source.includes('to="/management/staff/workspace"'));
   assert.ok(source.includes('Bắt đầu khám sẽ chiếm ghế'));
+});
+
+test('clinical screen mounts SafetyAlertBanner for selected patient and visit', async () => {
+  const source = await readFile(new URL('../src/views/ClinicalDiagnosisView.vue', import.meta.url), 'utf8');
+  assert.ok(source.includes("import SafetyAlertBanner from '@/components/SafetyAlertBanner.vue'"));
+  assert.ok(source.includes('<SafetyAlertBanner'));
+  assert.ok(source.includes(':patient-id="selected.patientId"'));
 });

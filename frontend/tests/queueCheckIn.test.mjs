@@ -218,3 +218,18 @@ test('identity change during QR dependent debt load prevents repopulation', asyn
   assert.equal(f.c.selectedPatient.value, null); assert.equal(f.c.citizenId.value, '');
   assert.equal(f.c.checkInPhone.value, ''); assert.equal(f.c.outstandingDebt.value, null);
 });
+
+test('quick search QR scan does not repopulate identity after identity change or unmount during debt load', async () => {
+  const pending = deferred(), reached = deferred();
+  const f = fixture({ debt: () => { reached.resolve(); return pending.promise; } });
+  f.c.keyword.value = '000000000901||Nguyen Van A|01011990|Nam|Ha Noi|01012021';
+  const op = f.c.searchPatients();
+  await reached.promise;
+  f.auth.user.userId++;
+  f.watchers[1].cb();
+  pending.resolve({ totalOutstandingDebt: 500, invoiceCodes: ['INV-STALE'] });
+  await op;
+  assert.equal(f.c.selectedPatient.value, null);
+  assert.equal(f.c.citizenId.value, '');
+  assert.equal(f.c.checkInPhone.value, '');
+});

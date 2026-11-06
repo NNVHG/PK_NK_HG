@@ -43,6 +43,8 @@
           <button type="button" :disabled="busy" @click="reloadVisit">
             {{ dirty ? 'Bỏ thay đổi và tải lại' : 'Tải lại hồ sơ' }}
           </button>
+          <SafetyAlertBanner v-if="selected.patientId" :patient-id="selected.patientId" :refresh-key="visit?.visitId ?? selected.queueEntryId" />
+
           <template v-if="visit">
             <RouterLink v-if="!dirty && !busy" :to="`/management/clinical/visits/${visit.visitId}/fdi`">Mở sơ đồ và ghi tình trạng răng</RouterLink>
             <RouterLink v-if="!dirty && !busy" :to="`/management/clinical/visits/${visit.visitId}/prescription`">Kê / xem đơn thuốc</RouterLink>
@@ -90,6 +92,8 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import axios from 'axios';
 import DiagnosisAutocomplete from '@/components/DiagnosisAutocomplete.vue';
+import SafetyAlertBanner from '@/components/SafetyAlertBanner.vue';
+
 import { useAuthStore } from '@/stores/auth';
 import { queueService, type QueueEntryResponse } from '@/services/queue';
 import { visitsService } from '@/services/visits';

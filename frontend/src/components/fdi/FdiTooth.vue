@@ -25,54 +25,56 @@
       {{ toothNumber }}
     </button>
 
-    <svg
-      :width="size"
-      :height="size"
-      viewBox="0 0 48 48"
-      class="tooth-svg"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <polygon
-        v-for="pos in surfacePositions"
-        :key="pos"
-        :points="polygonPoints[pos]"
-        :class="[
-          'tooth-surface',
-          pos,
-          {
-            'is-selected': isSurfaceSelected(surfacesByPos[pos]),
-            'has-condition': toothConditionColor(conditionCodeFor(surfacesByPos[pos])) !== undefined,
-            [`condition-${toothConditionColor(conditionCodeFor(surfacesByPos[pos]))}`]: toothConditionColor(conditionCodeFor(surfacesByPos[pos])) !== undefined,
-            'is-readonly': readonly
-          }
-        ]"
-        :role="readonly ? undefined : 'button'"
-        :tabindex="readonly ? -1 : 0"
-        :aria-label="getSurfaceAriaLabel(surfacesByPos[pos])"
-        :aria-pressed="readonly ? undefined : isSurfaceSelected(surfacesByPos[pos])"
-        @click="onSurfaceClick(surfacesByPos[pos])"
-        @keydown.enter.prevent="onSurfaceClick(surfacesByPos[pos])"
-        @keydown.space.prevent="onSurfaceClick(surfacesByPos[pos])"
+    <div class="tooth-surface-target-wrap">
+      <svg
+        :width="size"
+        :height="size"
+        viewBox="0 0 48 48"
+        class="tooth-svg"
+        xmlns="http://www.w3.org/2000/svg"
       >
-        <title>{{ getSurfaceTooltip(surfacesByPos[pos]) }}</title>
-      </polygon>
+        <polygon
+          v-for="pos in surfacePositions"
+          :key="pos"
+          :points="polygonPoints[pos]"
+          :class="[
+            'tooth-surface',
+            pos,
+            {
+              'is-selected': isSurfaceSelected(surfacesByPos[pos]),
+              'has-condition': toothConditionColor(conditionCodeFor(surfacesByPos[pos])) !== undefined,
+              [`condition-${toothConditionColor(conditionCodeFor(surfacesByPos[pos]))}`]: toothConditionColor(conditionCodeFor(surfacesByPos[pos])) !== undefined,
+              'is-readonly': readonly
+            }
+          ]"
+          :role="readonly ? undefined : 'button'"
+          :tabindex="readonly ? -1 : 0"
+          :aria-label="getSurfaceAriaLabel(surfacesByPos[pos])"
+          :aria-pressed="readonly ? undefined : isSurfaceSelected(surfacesByPos[pos])"
+          @click="onSurfaceClick(surfacesByPos[pos])"
+          @keydown.enter.prevent="onSurfaceClick(surfacesByPos[pos])"
+          @keydown.space.prevent="onSurfaceClick(surfacesByPos[pos])"
+        >
+          <title>{{ getSurfaceTooltip(surfacesByPos[pos]) }}</title>
+        </polygon>
 
-      <g v-if="missingTooth" class="missing-tooth-mark" aria-hidden="true">
-        <line x1="7" y1="7" x2="41" y2="41" />
-        <line x1="41" y1="7" x2="7" y2="41" />
-      </g>
+        <g v-if="missingTooth" class="missing-tooth-mark" aria-hidden="true">
+          <line x1="7" y1="7" x2="41" y2="41" />
+          <line x1="41" y1="7" x2="7" y2="41" />
+        </g>
 
-      <text
-        v-for="pos in surfacePositions"
-        :key="'text-' + pos"
-        :x="textCoords[pos].x"
-        :y="textCoords[pos].y"
-        class="surface-code"
-        :class="{ 'is-selected': isSurfaceSelected(surfacesByPos[pos]) }"
-      >
-        {{ getSurfaceCode(surfacesByPos[pos]) }}
-      </text>
-    </svg>
+        <text
+          v-for="pos in surfacePositions"
+          :key="'text-' + pos"
+          :x="textCoords[pos].x"
+          :y="textCoords[pos].y"
+          class="surface-code"
+          :class="{ 'is-selected': isSurfaceSelected(surfacesByPos[pos]) }"
+        >
+          {{ getSurfaceCode(surfacesByPos[pos]) }}
+        </text>
+      </svg>
+    </div>
 
     <button
       v-if="showNumber && effectiveNumberPosition === 'bottom'"
@@ -125,7 +127,7 @@ const props = withDefaults(defineProps<Props>(), {
   missingTooth: false,
   isWholeToothSelected: false,
   readonly: false,
-  size: 44,
+  size: 46,
   showNumber: true,
   numberPosition: 'auto'
 });
@@ -212,24 +214,33 @@ function onToothNumberClick() {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   user-select: none;
-  padding: 2px;
-  border-radius: 6px;
+  padding: 3px;
+  border-radius: 8px;
   transition: background-color 0.15s ease;
+  min-width: 44px;
+}
+
+.tooth-surface-target-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
 }
 
 .tooth-number-btn {
   font-family: inherit;
   font-size: 11px;
   font-weight: 700;
-  color: #334155;
-  background: #f1f5f9;
+  color: #18354c;
+  background: #f4faff;
   border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  min-width: 28px;
-  height: 20px;
-  line-height: 18px;
+  border-radius: 6px;
+  min-width: 32px;
+  min-height: 24px;
+  line-height: 22px;
   padding: 0 4px;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -239,20 +250,20 @@ function onToothNumberClick() {
 }
 
 .tooth-number-btn:hover:not(:disabled) {
-  background: #e2e8f0;
-  border-color: #94a3b8;
-  color: #0f172a;
+  background: #d8ecfa;
+  border-color: #397bcc;
+  color: #102e56;
 }
 
 .tooth-number-btn.is-active {
-  background: #e0f2fe;
-  border-color: #38bdf8;
-  color: #0369a1;
+  background: #d8ecfa;
+  border-color: #1857b6;
+  color: #102e56;
 }
 
 .tooth-number-btn.is-fully-selected {
-  background: #0284c7;
-  border-color: #0369a1;
+  background: #1857b6;
+  border-color: #102e56;
   color: #ffffff;
 }
 
@@ -262,7 +273,7 @@ function onToothNumberClick() {
 }
 
 .tooth-number-btn:focus-visible {
-  outline: 2px solid #2563eb;
+  outline: 2px solid #1857b6;
   outline-offset: 1px;
 }
 
@@ -279,28 +290,28 @@ function onToothNumberClick() {
   transition: fill 0.15s ease, stroke 0.15s ease;
 }
 
-.tooth-surface.condition-healthy { --condition-fill: #ffffff; fill: var(--condition-fill); stroke: #e0e0e0; }
-.tooth-surface.condition-caries { --condition-fill: #f44336; fill: var(--condition-fill); }
-.tooth-surface.condition-restored { --condition-fill: #2196f3; fill: var(--condition-fill); }
-.tooth-surface.condition-missing { --condition-fill: #9e9e9e; fill: var(--condition-fill); }
-.tooth-surface.condition-treatment { --condition-fill: #ff9800; fill: var(--condition-fill); }
-.tooth-surface.condition-prosthetic { --condition-fill: #9c27b0; fill: var(--condition-fill); }
+.tooth-surface.condition-healthy { --condition-fill: #ffffff; fill: var(--condition-fill); stroke: #cbd5e1; }
+.tooth-surface.condition-caries { --condition-fill: #ef4444; fill: var(--condition-fill); }
+.tooth-surface.condition-restored { --condition-fill: #1857b6; fill: var(--condition-fill); }
+.tooth-surface.condition-missing { --condition-fill: #64748b; fill: var(--condition-fill); }
+.tooth-surface.condition-treatment { --condition-fill: #e5b95e; fill: var(--condition-fill); }
+.tooth-surface.condition-prosthetic { --condition-fill: #8b5cf6; fill: var(--condition-fill); }
 
 .tooth-surface:hover:not(.is-readonly) {
-  fill: #bae6fd;
-  stroke: #0284c7;
+  fill: #d8ecfa;
+  stroke: #1857b6;
 }
 
 .tooth-surface.is-selected:not(.has-condition) {
-  fill: #0284c7;
-  stroke: #0369a1;
+  fill: #1857b6;
+  stroke: #102e56;
 }
 
 .tooth-surface.is-selected:hover:not(.is-readonly):not(.has-condition) {
-  fill: #0369a1;
+  fill: #102e56;
 }
 
-.tooth-surface.has-condition.is-selected { stroke: #0369a1; stroke-width: 2.5; }
+.tooth-surface.has-condition.is-selected { stroke: #102e56; stroke-width: 2.5; }
 .tooth-surface.has-condition.is-selected:hover:not(.is-readonly) { fill: var(--condition-fill); }
 .missing-tooth-mark { stroke: #424242; stroke-width: 3; stroke-linecap: round; pointer-events: none; }
 
@@ -309,11 +320,12 @@ function onToothNumberClick() {
 }
 
 .tooth-surface:focus-visible {
-  outline: 2px solid #2563eb;
+  outline: 2px solid #1857b6;
   outline-offset: -1px;
 }
 
 .surface-code {
+  font-family: inherit;
   font-size: 8px;
   font-weight: 700;
   fill: #64748b;
@@ -326,5 +338,9 @@ function onToothNumberClick() {
 
 .surface-code.is-selected {
   fill: #ffffff;
+}
+
+.fdi-tooth.is-fully-selected {
+  background-color: rgba(24, 87, 182, 0.08);
 }
 </style>

@@ -30,7 +30,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { patientsService, type PatientSafetyAlerts } from '@/services/patients';
 
 const props = defineProps<{ patientId: number; refreshKey?: number }>();
@@ -38,18 +38,37 @@ const data = ref<PatientSafetyAlerts | null>(null);
 const loading = ref(false);
 const error = ref('');
 
+let activeSequence = 0;
+let disposed = false;
+
 onMounted(() => void loadAlerts());
+watch(() => props.patientId, () => {
+  data.value = null;
+  error.value = '';
+  void loadAlerts();
+});
 watch(() => props.refreshKey, () => void loadAlerts());
+onBeforeUnmount(() => {
+  disposed = true;
+  activeSequence++;
+});
 
 async function loadAlerts() {
+  const targetPatientId = props.patientId;
+  const sequence = ++activeSequence;
   loading.value = true;
   error.value = '';
   try {
-    data.value = await patientsService.getSafetyAlerts(props.patientId);
+    const result = await patientsService.getSafetyAlerts(targetPatientId);
+    if (disposed || sequence !== activeSequence || props.patientId !== targetPatientId) return;
+    data.value = result;
   } catch {
+    if (disposed || sequence !== activeSequence || props.patientId !== targetPatientId) return;
     error.value = 'Không tải được cảnh báo an toàn. Vui lòng thử tải lại.';
   } finally {
-    loading.value = false;
+    if (!disposed && sequence === activeSequence && props.patientId === targetPatientId) {
+      loading.value = false;
+    }
   }
 }
 

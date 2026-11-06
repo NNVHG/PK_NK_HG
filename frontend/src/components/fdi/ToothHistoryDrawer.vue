@@ -63,9 +63,72 @@ onUnmounted(close);
 defineExpose({ open, close });
 </script>
 <style scoped>
-.history-drawer { box-sizing: border-box; position: fixed; inset: 0 0 0 auto; margin: 0; width: min(600px, 95vw); height: 100dvh; max-height: 100dvh; border: 0; padding: 1.25rem; overflow-y: auto; }
-.history-drawer::backdrop { background: #0006; }
+.history-drawer {
+  box-sizing: border-box;
+  position: fixed;
+  inset: 0 0 0 auto;
+  margin: 0;
+  width: min(600px, 95vw);
+  height: 100dvh;
+  max-height: 100dvh;
+  border: 0;
+  border-left: 1px solid #d8ecfa;
+  padding: 1.5rem;
+  overflow-y: auto;
+  background: #ffffff;
+  color: #18354c;
+  box-shadow: -4px 0 24px rgba(16, 46, 86, 0.15);
+}
+.history-drawer::backdrop { background: rgba(16, 46, 86, 0.4); backdrop-filter: blur(2px); }
 header, footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-button { padding: .6rem; } .timeline { padding-left: 1.5rem; } li { padding: 1rem 0; border-bottom: 1px solid #ddd; }
-.note { white-space: pre-wrap; overflow-wrap: anywhere; } .error { color: #b91c1c; }
+header h2 { margin: 0; font-size: 1.25rem; color: #102e56; }
+button {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 0.6rem 1rem;
+  min-height: 44px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #f4faff;
+  color: #18354c;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+button:hover:not(:disabled) {
+  background: #d8ecfa;
+  border-color: #1857b6;
+  color: #102e56;
+}
+button:disabled { opacity: 0.55; cursor: not-allowed; }
+.timeline {
+  list-style: none;
+  padding: 0;
+  margin: 1.25rem 0;
+  display: grid;
+  gap: 1rem;
+}
+li {
+  padding: 1rem 1.25rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  display: grid;
+  gap: 0.4rem;
+}
+li strong { color: #102e56; font-size: 0.95rem; }
+.note {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  color: #92400e;
+  margin: 0.25rem 0;
+}
+.error { color: #b91c1c; font-weight: 500; }
 </style>

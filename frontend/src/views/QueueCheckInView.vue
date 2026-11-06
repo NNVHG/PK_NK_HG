@@ -308,9 +308,7 @@ async function searchPatients(page = 1) {
         searchPage.value = 1;
         searched.value = true;
         const id = value.split('|')[0].trim();
-        await selectPatient(patient);
-        citizenId.value = id;
-        if (patient.phone) checkInPhone.value = patient.phone;
+        await selectPatient(patient, id);
         return;
       } else {
         searchError.value = 'Chưa có hồ sơ cho CCCD này. Mở hồ sơ bệnh nhân để tạo mới.';

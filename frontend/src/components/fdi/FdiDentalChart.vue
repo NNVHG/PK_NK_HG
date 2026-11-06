@@ -552,13 +552,14 @@ const selectionSummaryText = computed(() => {
   margin: 0;
   font-size: 16px;
   font-weight: 700;
-  color: #0f172a;
+  color: #102e56;
 }
 
 .dentition-selector {
   display: inline-flex;
-  background: #f1f5f9;
+  background: #f4faff;
   padding: 3px;
+  border: 1px solid #d8ecfa;
   border-radius: 8px;
   gap: 2px;
 }
@@ -567,23 +568,28 @@ const selectionSummaryText = computed(() => {
   font-family: inherit;
   font-size: 12px;
   font-weight: 600;
-  color: #475569;
+  color: #18354c;
   background: transparent;
   border: none;
-  padding: 5px 10px;
+  min-height: 36px;
+  padding: 6px 12px;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .dentition-btn:hover:not(:disabled) {
-  color: #0f172a;
+  color: #102e56;
+  background: #d8ecfa;
 }
 
 .dentition-btn.active {
-  background: #ffffff;
-  color: #0284c7;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  background: #1857b6;
+  color: #ffffff;
+  box-shadow: 0 1px 2px rgba(16, 46, 86, 0.15);
 }
 
 .dentition-btn:disabled {
@@ -600,26 +606,30 @@ const selectionSummaryText = computed(() => {
 .zoom-controls {
   display: inline-flex;
   align-items: center;
-  background: #f8fafc;
+  background: #f4faff;
   border: 1px solid #cbd5e1;
-  border-radius: 6px;
+  border-radius: 8px;
   overflow: hidden;
 }
 
 .zoom-btn {
   font-family: inherit;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
-  color: #334155;
+  color: #18354c;
   background: transparent;
   border: none;
-  padding: 4px 10px;
+  min-height: 36px;
+  padding: 6px 12px;
   cursor: pointer;
   transition: background 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .zoom-btn:hover:not(:disabled) {
-  background: #e2e8f0;
+  background: #d8ecfa;
 }
 
 .zoom-btn:disabled {
@@ -636,25 +646,29 @@ const selectionSummaryText = computed(() => {
 .zoom-text {
   font-size: 11px;
   font-weight: 600;
-  color: #64748b;
-  min-width: 42px;
+  color: #18354c;
+  min-width: 44px;
   text-align: center;
   border-left: 1px solid #e2e8f0;
   border-right: 1px solid #e2e8f0;
-  padding: 4px 2px;
+  padding: 6px 2px;
 }
 
 .clear-btn {
   font-family: inherit;
   font-size: 12px;
   font-weight: 600;
-  color: #dc2626;
+  color: #b91c1c;
   background: #fef2f2;
   border: 1px solid #fecaca;
-  border-radius: 6px;
-  padding: 5px 10px;
+  border-radius: 8px;
+  min-height: 36px;
+  padding: 6px 12px;
   cursor: pointer;
   transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .clear-btn:hover {
@@ -822,32 +836,33 @@ const selectionSummaryText = computed(() => {
 }
 
 .swatch.blue {
-  background: #0284c7;
-  border-color: #0369a1;
+  background: #1857b6;
+  border-color: #102e56;
 }
 
-.swatch.status-healthy { background: #ffffff; border-color: #e0e0e0; }
-.swatch.status-caries { background: #f44336; border-color: #d32f2f; }
-.swatch.status-restored { background: #2196f3; border-color: #1976d2; }
-.swatch.status-missing { background: #9e9e9e; border-color: #616161; }
-.swatch.status-treatment { background: #ff9800; border-color: #ef6c00; }
-.swatch.status-prosthetic { background: #9c27b0; border-color: #6a1b9a; }
+.swatch.status-healthy { background: #ffffff; border-color: #cbd5e1; }
+.swatch.status-caries { background: #ef4444; border-color: #dc2626; }
+.swatch.status-restored { background: #1857b6; border-color: #102e56; }
+.swatch.status-missing { background: #64748b; border-color: #475569; }
+.swatch.status-treatment { background: #e5b95e; border-color: #b45309; }
+.swatch.status-prosthetic { background: #8b5cf6; border-color: #6d28d9; }
 
 .selection-summary {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
-  border-radius: 6px;
+  background: #f4faff;
+  border: 1px solid #d8ecfa;
+  border-radius: 8px;
   padding: 8px 12px;
   font-size: 12px;
-  color: #0369a1;
+  color: #102e56;
 }
 
 .summary-label {
   font-weight: 700;
   white-space: nowrap;
+  color: #1857b6;
 }
 
 .summary-content {
