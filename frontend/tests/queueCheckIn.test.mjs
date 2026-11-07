@@ -11,7 +11,7 @@ const appointment = { appointmentId: 11, patientId: 7, patientName: 'Synthetic p
 const patient = { patientId: 7, fullName: 'Synthetic patient', patientCode: 'BN000007', phone: '0900000091' };
 const page = { items: [appointment], page: 1, pageSize: 20, totalCount: 41, totalPages: 3, hasNextPage: true, hasPreviousPage: false };
 function deferred() { let resolve, reject; const promise = new Promise((done, fail) => { resolve = done; reject = fail; }); return { promise, resolve, reject }; }
-function fixture({ role = 'RECEPTIONIST', queryPages = [page], deskPages = [page], waitingPages = [{ ...page, items: [] }], rejectQr = false, decode, lookup, getPatient, debt } = {}) {
+function fixture({ role = 'RECEPTIONIST', queryPages = [page], deskPages = [page], waitingPages = [{ ...page, items: [] }], rejectQr = false, decode, lookup, getPatient, debt, appointments } = {}) {
   let mount, unmount; const watchers = [], calls = { search: [], desk: [], waiting: [], patient: [], appointments: [], debt: [], checkIn: [], lookup: [] };
   const auth = { role, user: { userId: 5 } };
   const imports = {
@@ -30,7 +30,7 @@ function fixture({ role = 'RECEPTIONIST', queryPages = [page], deskPages = [page
     '@/services/checkInForm': { validateCheckIn: (id, phone, notes, documentType, nationalityCode) => { const e = {}; if (documentType === 'passport') { if (!/^[A-Za-z0-9]{6,12}$/.test(id.trim())) e.citizenId = 'Số hộ chiếu không hợp lệ.'; if (!/^[A-Za-z]{2,3}$/.test(nationalityCode.trim())) e.nationalityCode = 'Mã quốc gia cấp không hợp lệ.'; } else if (!/^\d{12}$/.test(id.trim())) e.citizenId = 'CCCD phải gồm 12 chữ số.'; if (!/^0\d{9}$/.test(phone.trim())) e.phone = 'Số điện thoại phải gồm 10 chữ số.'; if (notes.length > 500) e.notes = 'Ghi chú không được vượt quá 500 ký tự.'; return e; }, checkInProblem: problem => ({ fields: {}, message: problem?.message ?? 'Không thể tiếp đón.' }) },
     '@/services/appointments': { appointmentsService: {
       getForDesk: async (...args) => { calls.desk.push(args); const value = deskPages.shift() ?? page; if (value instanceof Error) throw value; return value; },
-      getScheduledForPatientOnDate: async (...args) => { calls.appointments.push(args); return { ...page, items: [appointment] }; },
+      getScheduledForPatientOnDate: async (...args) => { calls.appointments.push(args); return appointments ? appointments(...args) : { ...page, items: [appointment] }; },
     } },
     '@/services/patients': { patientsService: {
       search: async (...args) => { calls.search.push(args); const value = queryPages.shift() ?? page; if (value instanceof Error) throw value; return value; },
@@ -270,4 +270,77 @@ test('late quick search QR response does not overwrite patient selected from app
   assert.equal(f.c.selectedPatient.value?.fullName, 'Patient B');
   assert.equal(f.c.citizenId.value, '');
   assert.notEqual(f.c.checkInPhone.value, patientA.phone);
+});
+
+test('selectFromDesk normal success resets selecting to false and preserves non-blocked selection controls', async () => {
+  const patientB = { patientId: 8, fullName: 'Patient B', patientCode: 'BN000008', phone: '0900000081' };
+  const deskAppointment = { appointmentId: 22, patientId: 8, patientName: 'Patient B', patientCode: 'BN000008', slotTime: '10:00:00', status: 'Scheduled', notes: null };
+  const f = fixture({
+    deskPages: [{ items: [deskAppointment], page: 1, pageSize: 20, totalCount: 1, totalPages: 1, hasNextPage: false, hasPreviousPage: false }],
+    getPatient: () => patientB,
+    appointments: () => ({ items: [deskAppointment], page: 1, pageSize: 20, totalCount: 1, totalPages: 1, hasNextPage: false, hasPreviousPage: false })
+  });
+
+  await f.mount();
+  assert.equal(f.c.selecting.value, false);
+
+  await f.c.selectFromDesk(deskAppointment);
+
+  assert.equal(f.c.selecting.value, false);
+  assert.equal(f.c.selectedPatient.value?.patientId, 8);
+  assert.equal(f.c.appointmentId.value, 22);
+});
+
+test('selectFromDesk with multiple appointments preserves exactly clicked appointmentId', async () => {
+  const patientB = { patientId: 8, fullName: 'Patient B', patientCode: 'BN000008', phone: '0900000081' };
+  const appt99 = { appointmentId: 99, patientId: 8, patientName: 'Patient B', patientCode: 'BN000008', slotTime: '08:00:00', status: 'Scheduled', notes: null };
+  const appt11 = { appointmentId: 11, patientId: 8, patientName: 'Patient B', patientCode: 'BN000008', slotTime: '14:00:00', status: 'Scheduled', notes: null };
+  const f = fixture({
+    deskPages: [{ items: [appt99, appt11], page: 1, pageSize: 20, totalCount: 2, totalPages: 1, hasNextPage: false, hasPreviousPage: false }],
+    getPatient: () => patientB,
+    appointments: () => ({ items: [appt99, appt11], page: 1, pageSize: 20, totalCount: 2, totalPages: 1, hasNextPage: false, hasPreviousPage: false })
+  });
+
+  await f.mount();
+  assert.equal(f.c.selecting.value, false);
+
+  // User explicitly clicks appointment 11
+  await f.c.selectFromDesk(appt11);
+
+  assert.equal(f.c.selecting.value, false);
+  assert.equal(f.c.selectedPatient.value?.patientId, 8);
+  assert.equal(f.c.appointmentId.value, 11);
+});
+
+test('quick search QR success clears searching and does not leave search indicator active', async () => {
+  const patientA = { patientId: 7, fullName: 'Patient A', patientCode: 'BN000007', phone: '0900000071' };
+  const f = fixture({
+    lookup: () => ({ existing: { patientId: 7, isActive: true } }),
+    getPatient: () => patientA
+  });
+
+  f.c.keyword.value = '000000000701||Patient A|01011990|Nam|Ha Noi|01012021';
+  await f.c.searchPatients();
+
+  assert.equal(f.c.searching.value, false);
+  assert.equal(f.c.searchError.value, '');
+  assert.equal(f.c.selectedPatient.value?.patientId, 7);
+  assert.equal(f.c.citizenId.value, '000000000701');
+});
+
+test('selectFromDesk network failure resets selecting to false and sets searchError', async () => {
+  const deskAppointment = { appointmentId: 22, patientId: 8, patientName: 'Patient B', patientCode: 'BN000008', slotTime: '10:00:00', status: 'Scheduled', notes: null };
+  const f = fixture({
+    deskPages: [{ items: [deskAppointment], page: 1, pageSize: 20, totalCount: 1, totalPages: 1, hasNextPage: false, hasPreviousPage: false }],
+    getPatient: () => { throw new Error('Network error'); }
+  });
+
+  await f.mount();
+  assert.equal(f.c.selecting.value, false);
+
+  await f.c.selectFromDesk(deskAppointment);
+
+  assert.equal(f.c.selecting.value, false);
+  assert.equal(f.c.selectedPatient.value, null);
+  assert.equal(f.c.searchError.value, 'Không tải được hồ sơ. Vui lòng thử lại.');
 });

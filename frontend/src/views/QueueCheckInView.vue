@@ -270,10 +270,10 @@ async function selectFromDesk(row: AppointmentResponse) {
   try {
     const patient = await patientsService.getById(row.patientId);
     if (owner !== selectionOwnerSequence || sequence !== selectionSequence || disposed) return;
-    await selectPatient(patient);
+    await selectPatient(patient, '', owner);
     if (owner === selectionOwnerSequence && sequence === selectionSequence && appointments.value.some(a => a.appointmentId === row.appointmentId)) appointmentId.value = row.appointmentId;
   } catch { if (owner === selectionOwnerSequence && sequence === selectionSequence) searchError.value = 'Không tải được hồ sơ. Vui lòng thử lại.'; }
-  finally { if (owner === selectionOwnerSequence && sequence === selectionSequence) selecting.value = false; }
+  finally { if (owner === selectionOwnerSequence) selecting.value = false; }
 }
 function clearSelection() {
   closeQr();
@@ -312,7 +312,7 @@ async function searchPatients(page = 1) {
         searchPage.value = 1;
         searched.value = true;
         const id = value.split('|')[0].trim();
-        await selectPatient(patient, id);
+        await selectPatient(patient, id, owner);
         return;
       } else {
         searchError.value = 'Chưa có hồ sơ cho CCCD này. Mở hồ sơ bệnh nhân để tạo mới.';
@@ -352,10 +352,14 @@ watch(() => [auth.user?.userId, auth.role], () => {
 }, { flush: 'sync' });
 onMounted(refreshToday);
 
-async function selectPatient(patient: PatientSummary, scannedCitizenId = '') {
+async function selectPatient(patient: PatientSummary, scannedCitizenId = '', parentOwner?: number) {
   if (!canCheckIn.value || checkingIn.value || disposed) return;
-  selectionOwnerSequence++;
-  searchSequence++;
+  if (parentOwner === undefined) {
+    selectionOwnerSequence++;
+    searchSequence++;
+  } else if (parentOwner !== selectionOwnerSequence) {
+    return;
+  }
   closeQr();
   notes.value = '';
   selectedPatient.value = patient;
