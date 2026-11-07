@@ -246,7 +246,8 @@ test('late quick search QR response does not overwrite patient selected from app
       if (id === 7) return pendingA.promise;
       if (id === 8) return patientB;
       return patient;
-    }
+    },
+    appointments: () => ({ items: [deskAppointmentB], page: 1, pageSize: 20, totalCount: 1, totalPages: 1, hasNextPage: false, hasPreviousPage: false })
   });
 
   await f.mount();
@@ -270,6 +271,10 @@ test('late quick search QR response does not overwrite patient selected from app
   assert.equal(f.c.selectedPatient.value?.fullName, 'Patient B');
   assert.equal(f.c.citizenId.value, '');
   assert.notEqual(f.c.checkInPhone.value, patientA.phone);
+  assert.equal(f.c.selecting.value, false);
+  assert.equal(f.c.searching.value, false);
+  assert.equal(f.c.canCheckIn.value, true);
+  assert.equal(f.c.appointmentId.value, 22);
 });
 
 test('selectFromDesk normal success resets selecting to false and preserves non-blocked selection controls', async () => {
@@ -343,4 +348,55 @@ test('selectFromDesk network failure resets selecting to false and sets searchEr
   assert.equal(f.c.selecting.value, false);
   assert.equal(f.c.selectedPatient.value, null);
   assert.equal(f.c.searchError.value, 'Không tải được hồ sơ. Vui lòng thử lại.');
+});
+
+test('subsequent patient searches and selections work cleanly after quick search A is superseded by desk appointment B', async () => {
+  const pendingA = deferred();
+  const patientA = { patientId: 7, fullName: 'Patient A', patientCode: 'BN000007', phone: '0900000071' };
+  const patientB = { patientId: 8, fullName: 'Patient B', patientCode: 'BN000008', phone: '0900000081' };
+  const patientC = { patientId: 9, fullName: 'Patient C', patientCode: 'BN000009', phone: '0900000091' };
+  const deskApptB = { appointmentId: 22, patientId: 8, patientName: 'Patient B', patientCode: 'BN000008', slotTime: '10:00:00', status: 'Scheduled', notes: null };
+  const f = fixture({
+    deskPages: [{ items: [deskApptB], page: 1, pageSize: 20, totalCount: 1, totalPages: 1, hasNextPage: false, hasPreviousPage: false }],
+    queryPages: [{ items: [patientC], page: 1, pageSize: 20, totalCount: 1, totalPages: 1, hasNextPage: false, hasPreviousPage: false }],
+    lookup: () => ({ existing: { patientId: 7, isActive: true } }),
+    getPatient: id => {
+      if (id === 7) return pendingA.promise;
+      if (id === 8) return patientB;
+      if (id === 9) return patientC;
+      return patient;
+    },
+    appointments: id => ({ items: [{ appointmentId: id === 8 ? 22 : 33, patientId: id, patientName: 'Patient', patientCode: 'BN', slotTime: '10:00:00', status: 'Scheduled', notes: null }], page: 1, pageSize: 20, totalCount: 1, totalPages: 1, hasNextPage: false, hasPreviousPage: false })
+  });
+
+  await f.mount();
+
+  // 1. Initiate search A
+  f.c.keyword.value = '000000000701||Patient A|01011990|Nam|Ha Noi|01012021';
+  const searchPromiseA = f.c.searchPatients();
+
+  // 2. Desk pick B supersedes search A
+  await f.c.selectFromDesk(deskApptB);
+  assert.equal(f.c.selectedPatient.value?.patientId, 8);
+  assert.equal(f.c.selecting.value, false);
+  assert.equal(f.c.searching.value, false);
+
+  // 3. Late resolve A
+  pendingA.resolve(patientA);
+  await searchPromiseA;
+  assert.equal(f.c.selectedPatient.value?.patientId, 8);
+  assert.equal(f.c.searching.value, false);
+
+  // 4. Subsequent search C works without being blocked
+  f.c.keyword.value = 'Patient C';
+  await f.c.searchPatients();
+  assert.equal(f.c.searching.value, false);
+  assert.equal(f.c.patients.value.length, 1);
+  assert.equal(f.c.patients.value[0].patientId, 9);
+
+  // 5. Select C
+  await f.c.selectPatient(f.c.patients.value[0]);
+  assert.equal(f.c.selectedPatient.value?.patientId, 9);
+  assert.equal(f.c.selecting.value, false);
+  assert.equal(f.c.searching.value, false);
 });

@@ -266,6 +266,7 @@ async function selectFromDesk(row: AppointmentResponse) {
   const owner = ++selectionOwnerSequence;
   const sequence = ++selectionSequence;
   searchSequence++;
+  searching.value = false;
   selecting.value = true; searchError.value = '';
   try {
     const patient = await patientsService.getById(row.patientId);
