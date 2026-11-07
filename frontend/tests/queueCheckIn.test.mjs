@@ -236,6 +236,7 @@ test('quick search QR scan does not repopulate identity after identity change or
 
 test('late quick search QR response does not overwrite patient selected from appointment desk', async () => {
   const pendingA = deferred();
+  const reachedA = deferred();
   const patientA = { patientId: 7, fullName: 'Patient A', patientCode: 'BN000007', phone: '0900000071' };
   const patientB = { patientId: 8, fullName: 'Patient B', patientCode: 'BN000008', phone: '0900000081' };
   const deskAppointmentB = { appointmentId: 22, patientId: 8, patientName: 'Patient B', patientCode: 'BN000008', slotTime: '10:00:00', status: 'Scheduled', notes: null };
@@ -243,7 +244,10 @@ test('late quick search QR response does not overwrite patient selected from app
     deskPages: [{ items: [deskAppointmentB], page: 1, pageSize: 20, totalCount: 1, totalPages: 1, hasNextPage: false, hasPreviousPage: false }],
     lookup: () => ({ existing: { patientId: 7, isActive: true } }),
     getPatient: id => {
-      if (id === 7) return pendingA.promise;
+      if (id === 7) {
+        reachedA.resolve();
+        return pendingA.promise;
+      }
       if (id === 8) return patientB;
       return patient;
     },
@@ -257,7 +261,11 @@ test('late quick search QR response does not overwrite patient selected from app
   f.c.keyword.value = '000000000701||Patient A|01011990|Nam|Ha Noi|01012021';
   const searchPromise = f.c.searchPatients();
 
+  // Barrier: wait until getById(7) has strictly been reached and is in flight
+  await reachedA.promise;
+  assert.equal(f.c.searching.value, true);
   assert.equal(f.c.selecting.value, false);
+
   const selectDeskPromise = f.c.selectFromDesk(f.c.deskRows.value[0]);
   await selectDeskPromise;
 
