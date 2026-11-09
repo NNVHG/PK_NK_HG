@@ -42,6 +42,13 @@ TIMELINE_DO_AN.md
 PROJECT_STATUS.md
 .archify/
 .vscode/
+/.agents/
+/.security-audit/
+/.audit/
+/runs/
+
+# Bản xuất bộ nhận diện lưu riêng; tài nguyên web nằm trong frontend/public.
+/frontend/src/assets/nha-khoa-hoang-gia-brand-kit/
 
 
 # ===== Database Backups / Volumes =====
