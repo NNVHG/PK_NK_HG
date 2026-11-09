@@ -3,7 +3,6 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Dental.Application.Interfaces;
 using Dental.Domain.Constants;
-using Dental.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -23,16 +22,20 @@ public sealed class LegacyPatientAccountConversion(
 
     public async Task<int> RunAsync(CancellationToken cancellationToken = default)
     {
-        await using var transaction = await db.Database.BeginTransactionAsync(
+        // Startup runs this against the schema immediately before the unique Patient.UserId index.
+        // Keep its mappings independent of columns added to the current model by later migrations.
+        var options = new DbContextOptionsBuilder<ConversionDbContext>()
+            .UseNpgsql(db.Database.GetDbConnection()).Options;
+        await using var conversionDb = new ConversionDbContext(options);
+        await using var transaction = await conversionDb.Database.BeginTransactionAsync(
             IsolationLevel.Serializable, cancellationToken);
 
-        // Read detached: the new 1:1 model must not fix up old multiple links before conversion.
-        var sourceUsers = await db.Users.AsNoTracking()
+        var sourceUsers = await conversionDb.Users
             .Include(user => user.Role)
             .Where(user =>
                 (user.RequiresIndividualIdentityConversion &&
-                    (user.IsActive || db.Patients.Any(patient => patient.UserId == user.UserId))) ||
-                db.Patients.Count(patient => patient.UserId == user.UserId) > 1)
+                    (user.IsActive || conversionDb.Patients.Any(patient => patient.UserId == user.UserId))) ||
+                conversionDb.Patients.Count(patient => patient.UserId == user.UserId) > 1)
             .OrderBy(user => user.UserId)
             .ToListAsync(cancellationToken);
 
@@ -43,7 +46,7 @@ public sealed class LegacyPatientAccountConversion(
         }
 
         var sourceUserIds = sourceUsers.Select(user => user.UserId).ToArray();
-        var patients = await db.Patients.AsNoTracking()
+        var patients = await conversionDb.Patients
             .Where(patient => patient.UserId.HasValue && sourceUserIds.Contains(patient.UserId.Value))
             .OrderBy(patient => patient.PatientId)
             .ToListAsync(cancellationToken);
@@ -58,7 +61,7 @@ public sealed class LegacyPatientAccountConversion(
             .GroupBy(patient => patient.CitizenIdHash!.ToUpperInvariant(), StringComparer.Ordinal)
             .Count(group => group.Count() > 1);
 
-        var allPatientHashes = await db.Patients
+        var allPatientHashes = await conversionDb.Patients
             .Where(patient => patient.CitizenIdHash != null)
             .Select(patient => patient.CitizenIdHash!)
             .ToListAsync(cancellationToken);
@@ -77,19 +80,18 @@ public sealed class LegacyPatientAccountConversion(
 
         var patientRoleId = sourceUsers.Select(user => user.RoleId).Distinct().Single();
         var createdAt = DateTime.UtcNow;
-        var newUsersByPatient = new Dictionary<int, User>(patients.Count);
+        var newUsersByPatient = new Dictionary<int, ConversionUser>(patients.Count);
 
         foreach (var patient in patients)
         {
             var phone = patient.Phone.Trim();
-            var user = new User
+            var user = new ConversionUser
             {
                 Phone = phone,
                 LoginByCitizenId = true,
                 RequiresIndividualIdentityConversion = false,
                 PasswordHash = passwordHasher.Hash(phone),
                 RequiresPhoneActivation = true,
-                PhoneVerifiedAtUtc = null,
                 FullName = patient.FullName,
                 Email = patient.Email,
                 DateOfBirth = patient.DateOfBirth,
@@ -99,31 +101,28 @@ public sealed class LegacyPatientAccountConversion(
                 CreatedAt = createdAt
             };
 
-            if (!string.Equals(patient.CitizenIdHash, patient.CitizenIdHash!.ToUpperInvariant(), StringComparison.Ordinal))
-            {
-                patient.CitizenIdHash = patient.CitizenIdHash.ToUpperInvariant();
-                patient.CitizenIdVersion++;
-                patient.UpdatedAt = createdAt;
-            }
-
-            patient.Phone = phone;
             newUsersByPatient.Add(patient.PatientId, user);
-            db.Users.Add(user);
+            conversionDb.Users.Add(user);
         }
 
         // Save once inside the transaction to obtain generated UserIds for the Patient links and audit trail.
-        await db.SaveChangesAsync(cancellationToken);
+        await conversionDb.SaveChangesAsync(cancellationToken);
 
         foreach (var patient in patients)
         {
             var oldUserId = patient.UserId!.Value;
             var newUser = newUsersByPatient[patient.PatientId];
+            var normalizedHash = patient.CitizenIdHash!.ToUpperInvariant();
+            if (patient.CitizenIdHash != normalizedHash)
+            {
+                patient.CitizenIdHash = normalizedHash;
+                patient.CitizenIdVersion++;
+            }
+            patient.Phone = newUser.Phone;
             patient.UserId = newUser.UserId;
             patient.UpdatedAt = createdAt;
-            db.Patients.Update(patient);
-            db.AuditLogs.Add(new AuditLog
+            conversionDb.AuditLogs.Add(new ConversionAuditLog
             {
-                UserId = null,
                 Action = "MOD_AUTH_LEGACY_PATIENT_CONVERSION",
                 EntityType = "Patient",
                 EntityId = patient.PatientId,
@@ -139,15 +138,12 @@ public sealed class LegacyPatientAccountConversion(
 
         foreach (var sourceUser in sourceUsers)
         {
-            // Attach the scalar account only; detached Role instances may share the same key.
-            db.Entry(sourceUser).State = EntityState.Unchanged;
             sourceUser.IsActive = false;
             sourceUser.RequiresIndividualIdentityConversion = true;
             sourceUser.TokenVersion++;
             sourceUser.UpdatedAt = createdAt;
-            db.AuditLogs.Add(new AuditLog
+            conversionDb.AuditLogs.Add(new ConversionAuditLog
             {
-                UserId = null,
                 Action = "MOD_AUTH_LEGACY_LOGIN_DISABLED",
                 EntityType = "User",
                 EntityId = sourceUser.UserId,
@@ -156,12 +152,87 @@ public sealed class LegacyPatientAccountConversion(
             });
         }
 
-        await db.SaveChangesAsync(cancellationToken);
+        await conversionDb.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         logger.LogInformation(
             "Bulk legacy Patient account conversion completed. ConvertedProfiles={ConvertedProfiles}, DisabledLegacyAccounts={DisabledLegacyAccounts}.",
             patients.Count, sourceUsers.Count);
         return patients.Count;
+    }
+
+    private sealed class ConversionDbContext(DbContextOptions<ConversionDbContext> options) : DbContext(options)
+    {
+        public DbSet<ConversionUser> Users => Set<ConversionUser>();
+        public DbSet<ConversionPatient> Patients => Set<ConversionPatient>();
+        public DbSet<ConversionAuditLog> AuditLogs => Set<ConversionAuditLog>();
+
+        protected override void OnModelCreating(ModelBuilder builder)
+        {
+            var users = builder.Entity<ConversionUser>().ToTable("Users");
+            users.HasKey(user => user.UserId);
+            users.HasOne(user => user.Role).WithMany().HasForeignKey(user => user.RoleId);
+            users.Property(user => user.TokenVersion).IsConcurrencyToken();
+            users.Property(user => user.RequiresPhoneActivation).IsConcurrencyToken();
+            builder.Entity<ConversionRole>().ToTable("Roles").HasKey(role => role.RoleId);
+
+            // Patient.UserId can still repeat here. Map it as a scalar so tracking keeps every link.
+            var patients = builder.Entity<ConversionPatient>().ToTable("Patients");
+            patients.HasKey(patient => patient.PatientId);
+            patients.Property(patient => patient.CitizenIdVersion).IsConcurrencyToken();
+
+            builder.Entity<ConversionAuditLog>().ToTable("AuditLogs").HasKey(log => log.LogId);
+        }
+    }
+
+    private sealed class ConversionUser
+    {
+        public int UserId { get; set; }
+        public string Phone { get; set; } = string.Empty;
+        public bool LoginByCitizenId { get; set; }
+        public bool RequiresIndividualIdentityConversion { get; set; }
+        public string PasswordHash { get; set; } = string.Empty;
+        public int TokenVersion { get; set; }
+        public bool RequiresPhoneActivation { get; set; }
+        public string FullName { get; set; } = string.Empty;
+        public string? Email { get; set; }
+        public DateOnly? DateOfBirth { get; set; }
+        public string? Gender { get; set; }
+        public int RoleId { get; set; }
+        public bool IsActive { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
+        public ConversionRole Role { get; set; } = null!;
+    }
+
+    private sealed class ConversionRole
+    {
+        public int RoleId { get; set; }
+        public string RoleCode { get; set; } = string.Empty;
+    }
+
+    private sealed class ConversionPatient
+    {
+        public int PatientId { get; set; }
+        public int? UserId { get; set; }
+        public string FullName { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
+        public string? Email { get; set; }
+        public DateOnly DateOfBirth { get; set; }
+        public string? Gender { get; set; }
+        public string? CitizenIdHash { get; set; }
+        public int CitizenIdVersion { get; set; }
+        public bool IsActive { get; set; }
+        public DateTime? UpdatedAt { get; set; }
+    }
+
+    private sealed class ConversionAuditLog
+    {
+        public long LogId { get; set; }
+        public string Action { get; set; } = string.Empty;
+        public string EntityType { get; set; } = string.Empty;
+        public int EntityId { get; set; }
+        public string? Detail { get; set; }
+        public DateTime CreatedAt { get; set; }
     }
 }

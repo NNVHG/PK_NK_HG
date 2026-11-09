@@ -6,16 +6,18 @@ Hệ thống phục vụ một phòng khám nha khoa. Luồng trình diễn đi 
 
 ## Chạy ứng dụng cục bộ
 
-Cần PowerShell 7, .NET SDK 10, Node.js 22 trở lên và Docker chạy Linux containers. Chạy các lệnh từ thư mục gốc của kho mã.
+Cần Windows, PowerShell 7.2 trở lên, .NET SDK 10, Node.js 22 trở lên và Docker chạy Linux containers. Chạy các lệnh từ thư mục gốc của kho mã.
 
 Tạo PostgreSQL 16 riêng cho dữ liệu phát triển. Lần đầu chọn mật khẩu gồm chữ và số.
 
     $env:POSTGRES_PASSWORD = Read-Host 'Mật khẩu PostgreSQL cục bộ' -MaskInput
     docker run --name pk-nk-hg-dev --env POSTGRES_PASSWORD --env POSTGRES_DB=dental_clinic --publish 127.0.0.1:55432:5432 --detach postgres:16-alpine
 
-Chạy `docker start pk-nk-hg-dev` để mở lại container đã dừng. Chờ PostgreSQL sẵn sàng trước khi mở API và dùng mật khẩu đã đặt lúc tạo container.
+Chạy `docker start pk-nk-hg-dev` để mở lại container đã dừng. Kiểm tra PostgreSQL trước khi mở API. Khi lệnh báo `accepting connections`, tiếp tục với mật khẩu đã đặt lúc tạo container.
 
-Trong cửa sổ PowerShell chạy API, đặt lại biến `POSTGRES_PASSWORD` nếu mở phiên mới. Dùng khóa JWT và khóa HMAC riêng, mỗi khóa ít nhất 32 byte. Giữ cùng khóa HMAC khi dùng lại cơ sở dữ liệu.
+    docker exec pk-nk-hg-dev pg_isready -h 127.0.0.1 -U postgres -d dental_clinic
+
+Trong cửa sổ PowerShell chạy API, đặt lại biến `POSTGRES_PASSWORD` nếu mở phiên mới. Dùng khóa JWT và khóa HMAC riêng, mỗi khóa ít nhất 32 byte. Giữ cùng khóa HMAC khi dùng lại cơ sở dữ liệu. Số điện thoại Admin gồm 10 chữ số và bắt đầu bằng 0.
 
     $env:ConnectionStrings__Default = "Host=127.0.0.1;Port=55432;Database=dental_clinic;Username=postgres;Password=$env:POSTGRES_PASSWORD"
     $env:Jwt__Secret = Read-Host 'Khóa JWT cục bộ' -MaskInput
@@ -26,10 +28,10 @@ Trong cửa sổ PowerShell chạy API, đặt lại biến `POSTGRES_PASSWORD` 
 
 Trong cửa sổ PowerShell khác, chạy frontend.
 
-    npm --prefix frontend ci
-    npm --prefix frontend run dev
+    npm.cmd --prefix frontend ci
+    npm.cmd --prefix frontend run dev
 
-Mở [ứng dụng](http://localhost:5173) hoặc [Swagger](http://localhost:5000/swagger).
+Lần chạy đầu, API tự áp dụng migration và tạo tài khoản Admin từ cấu hình trên. Mở [ứng dụng](http://localhost:5173) để đăng nhập, hoặc mở [Swagger](http://localhost:5000/swagger) để kiểm tra API.
 
 ## Mã nguồn
 
@@ -41,8 +43,8 @@ Mở [ứng dụng](http://localhost:5173) hoặc [Swagger](http://localhost:500
 Chạy từ thư mục gốc của kho mã:
 
     dotnet test backend/DentalClinic.sln
-    npm --prefix frontend ci
+    npm.cmd --prefix frontend ci
     node --test frontend/tests/*.test.mjs
-    npm --prefix frontend run build
+    npm.cmd --prefix frontend run build
 
 Dùng dữ liệu tổng hợp và cơ sở dữ liệu cô lập cho các bài kiểm thử tích hợp.

@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -57,8 +58,8 @@ try
         try
         {
             OwnedSmokeApi.ValidateDatabase(connection.ConnectionString, databaseName);
-            // Runner tạo DB/schema bằng migration; API thật seed. Không chèn account/visit/payment để bỏ qua luồng.
-            await setup.Database.MigrateAsync();
+            // Create only the database. The real API must migrate and seed it on first startup.
+            await setup.GetService<IRelationalDatabaseCreator>().CreateAsync();
             await FiveRoleHttpSmoke.RunAsync(options, databaseName, Check, cleanupProbe: args[2] == "--five-role-cleanup-probe");
             Console.WriteLine($"PostgreSQL owned five-role checks: {checks}/{checks} PASS");
         }
@@ -87,6 +88,7 @@ try
     if (args.Length == 3 && args[2] == "--identity-migration-only")
     {
         await IdentityMigrationSmoke.RunAsync(setup, options, Check);
+        await LegacyPatientAccountStartupSmoke.RunAsync(connection.ConnectionString, Check);
         Console.WriteLine($"PostgreSQL identity migration checks: {checks}/{checks} PASS");
         return;
     }
