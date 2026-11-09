@@ -4,26 +4,37 @@
 
 Hệ thống phục vụ một phòng khám nha khoa. Luồng trình diễn đi từ đặt lịch, tiếp đón và hàng đợi đến khám, sơ đồ răng FDI, kê đơn và thanh toán. Kho vật tư và báo cáo doanh thu hỗ trợ vận hành phòng khám.
 
-## Chạy demo
+## Chạy ứng dụng cục bộ
 
-Cần Windows, PowerShell 7, .NET SDK 10, Node.js 22 trở lên và Docker Desktop chạy Linux containers. Mở PowerShell tại thư mục gốc của kho mã rồi chạy:
+Cần PowerShell 7, .NET SDK 10, Node.js 22 trở lên và Docker chạy Linux containers. Chạy các lệnh từ thư mục gốc của kho mã.
 
-    pwsh -NoProfile -File demo/phase1/Prepare.ps1
-    pwsh -NoProfile -File demo/phase1/Start.ps1
+Tạo PostgreSQL 16 riêng cho dữ liệu phát triển. Lần đầu chọn mật khẩu gồm chữ và số.
 
-Mở [ứng dụng demo](http://127.0.0.1:5173) hoặc [Swagger](http://127.0.0.1:5000/swagger). Demo dùng PostgreSQL 16 riêng ở cổng 55432 và tạo dữ liệu tổng hợp. Dừng phiên demo bằng lệnh sau:
+    $env:POSTGRES_PASSWORD = Read-Host 'Mật khẩu PostgreSQL cục bộ' -MaskInput
+    docker run --name pk-nk-hg-dev --env POSTGRES_PASSWORD --env POSTGRES_DB=dental_clinic --publish 127.0.0.1:55432:5432 --detach postgres:16-alpine
 
-    pwsh -NoProfile -File demo/phase1/Stop.ps1
+Chạy `docker start pk-nk-hg-dev` để mở lại container đã dừng. Chờ PostgreSQL sẵn sàng trước khi mở API và dùng mật khẩu đã đặt lúc tạo container.
 
-- [Hướng dẫn và kịch bản demo](demo/phase1/README.md)
-- [Bản HTML để đọc ngoại tuyến](demo/phase1/index.html)
-- [Danh mục 52 chức năng](demo/phase1/FUNCTIONS.csv) và [phiếu nghiệm thu](demo/phase1/UAT.md)
+Trong cửa sổ PowerShell chạy API, đặt lại biến `POSTGRES_PASSWORD` nếu mở phiên mới. Dùng khóa JWT và khóa HMAC riêng, mỗi khóa ít nhất 32 byte. Giữ cùng khóa HMAC khi dùng lại cơ sở dữ liệu.
+
+    $env:ConnectionStrings__Default = "Host=127.0.0.1;Port=55432;Database=dental_clinic;Username=postgres;Password=$env:POSTGRES_PASSWORD"
+    $env:Jwt__Secret = Read-Host 'Khóa JWT cục bộ' -MaskInput
+    $env:IdentitySecurity__HmacKey = Read-Host 'Khóa HMAC cục bộ' -MaskInput
+    $env:Seed__AdminPhone = Read-Host 'Số điện thoại Admin thử nghiệm'
+    $env:Seed__AdminPassword = Read-Host 'Mật khẩu Admin thử nghiệm' -MaskInput
+    dotnet run --project backend/src/Dental.Api
+
+Trong cửa sổ PowerShell khác, chạy frontend.
+
+    npm --prefix frontend ci
+    npm --prefix frontend run dev
+
+Mở [ứng dụng](http://localhost:5173) hoặc [Swagger](http://localhost:5000/swagger).
 
 ## Mã nguồn
 
 - [Frontend](frontend/) dùng Vue 3, TypeScript, Vite, Pinia và Vue Router.
 - [Backend](backend/) dùng ASP.NET Core 10, EF Core và PostgreSQL. API thực thi quyền của Admin, Lễ tân/Thu ngân, Nha sĩ, Phụ tá và Bệnh nhân.
-- [Mẫu giao diện](design/figma-prototype/index.html) dùng để đối chiếu thiết kế. Mở tệp bằng trình duyệt sau khi clone.
 
 ## Kiểm thử
 

@@ -51,6 +51,12 @@ PROJECT_STATUS.md
 /frontend/src/assets/nha-khoa-hoang-gia-brand-kit/
 
 
+# Bộ demo và tài liệu thiết kế lưu tại máy.
+/.stitch/
+/demo/
+/design/figma-prototype/
+
+
 # ===== Database Backups / Volumes =====
 backups/
 postgres-data/
