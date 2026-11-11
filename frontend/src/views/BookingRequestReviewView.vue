@@ -1,77 +1,130 @@
 <template>
   <section class="review" aria-labelledby="review-title">
-    <header class="review-header">
-      <div>
+    <div class="header-banner">
+      <div class="header-icon">📑</div>
+      <div class="header-titles">
         <h1 id="review-title">Yêu cầu đặt lịch chờ xác nhận</h1>
-        <p>Hồ sơ đã có lần khám hoàn tất được xếp trước để duyệt.</p>
+        <p class="subtitle">Duyệt hồ sơ đặt khám trực tuyến. Bệnh nhân từng khám tại phòng khám được ưu tiên xếp trước.</p>
       </div>
-      <button type="button" class="button" :disabled="approvalBusy || busy" @click="load(page)">
-        Tải lại
+      <button type="button" class="btn btn-outline" :disabled="approvalBusy || busy" @click="load(page)">
+        🔄 Tải lại
       </button>
-    </header>
+    </div>
 
-    <p v-if="error" class="notice error" role="alert">{{ error }}</p>
-    <p class="feedback" role="status" aria-live="polite">{{ message }}</p>
-    <p v-if="busy && !rows.length" class="notice" role="status">Đang tải yêu cầu…</p>
-    <p v-if="!busy && !needsReview && !rows.length" class="notice">Không có yêu cầu chờ xác nhận.</p>
+    <div v-if="error" class="alert-box alert-error" role="alert">⚠️ {{ error }}</div>
+    <div v-if="message" class="alert-box alert-success" role="status" aria-live="polite">✅ {{ message }}</div>
+    <div v-if="busy && !rows.length" class="loading-state" role="status">
+      <div class="spinner"></div>
+      <p>Đang tải danh sách yêu cầu đặt lịch…</p>
+    </div>
+    <div v-if="!busy && !needsReview && !rows.length" class="empty-state">
+      <p>Hiện không có yêu cầu đặt lịch nào đang chờ xác nhận.</p>
+    </div>
 
-    <ol v-if="rows.length" class="requests" aria-label="Danh sách yêu cầu chờ xác nhận">
-      <li v-for="row in rows" :key="row.id" class="request">
+    <ol v-if="rows.length" class="requests-grid" aria-label="Danh sách yêu cầu chờ xác nhận">
+      <li v-for="row in rows" :key="row.id" class="request-card">
         <div class="request-heading">
-          <h2>{{ row.fullName }}</h2>
-          <span v-if="row.isReturning" class="returning">Đã từng khám</span>
-        </div>
-
-        <dl class="details">
-          <div>
-            <dt>Lịch hẹn</dt>
-            <dd><time :datetime="row.appointmentDate">{{ row.appointmentDate }}</time> · {{ row.slotTime.slice(0, 5) }}</dd>
+          <div class="patient-main">
+            <h2>{{ row.fullName }}</h2>
+            <span v-if="row.isReturning" class="badge-returning">✨ Đã từng khám</span>
           </div>
-          <div><dt>Số điện thoại</dt><dd>{{ row.phone }}</dd></div>
-          <div><dt>Ngày sinh</dt><dd><time :datetime="row.dateOfBirth">{{ row.dateOfBirth }}</time></dd></div>
-          <div><dt>Nha sĩ</dt><dd>{{ row.dentistName || 'Chờ phân công' }}</dd></div>
-        </dl>
-        <p v-if="row.notes" class="notes"><strong>Ghi chú</strong> {{ row.notes }}</p>
+          <span class="request-id">#YC-{{ row.id }}</span>
+        </div>
 
-        <div class="actions">
-          <button type="button" class="button primary"
+        <dl class="details-grid">
+          <div class="detail-item">
+            <dt>Lịch hẹn</dt>
+            <dd>
+              <time :datetime="row.appointmentDate">📅 {{ row.appointmentDate }}</time>
+              <span class="time-slot">⏰ <strong>{{ row.slotTime.slice(0, 5) }}</strong></span>
+            </dd>
+          </div>
+          <div class="detail-item">
+            <dt>Số điện thoại</dt>
+            <dd>📞 {{ row.phone }}</dd>
+          </div>
+          <div class="detail-item">
+            <dt>Ngày sinh</dt>
+            <dd>🎂 <time :datetime="row.dateOfBirth">{{ row.dateOfBirth }}</time></dd>
+          </div>
+          <div class="detail-item">
+            <dt>Nha sĩ yêu cầu</dt>
+            <dd>👨‍⚕️ {{ row.dentistName || 'Chờ phòng khám phân công' }}</dd>
+          </div>
+        </dl>
+
+        <div v-if="row.notes" class="request-notes">
+          <span class="notes-label">Ghi chú của khách:</span> {{ row.notes }}
+        </div>
+
+        <div class="actions-bar">
+          <button
+            type="button"
+            class="btn btn-primary"
             :aria-expanded="approvingId === row.id"
-            :disabled="approvalBusy || busy || needsReview" @click="chooseApproval(row)">
-            Đối soát / xác nhận lịch
+            :disabled="approvalBusy || busy || needsReview"
+            @click="chooseApproval(row)"
+          >
+            📋 Đối soát & Duyệt lịch
           </button>
-          <button type="button" class="button reject"
+          <button
+            type="button"
+            class="btn btn-danger-outline"
             :aria-expanded="selected?.id === row.id"
-            :disabled="approvalBusy || busy || needsReview" @click="choose(row)">
-            Từ chối yêu cầu
+            :disabled="approvalBusy || busy || needsReview"
+            @click="choose(row)"
+          >
+            ✕ Từ chối
           </button>
         </div>
 
-        <BookingRequestApproval v-if="approvingId === row.id" :key="row.id" class="approval-panel"
-          :request-id="row.id" @approved="approved" @working="approvalBusy = $event" />
+        <BookingRequestApproval
+          v-if="approvingId === row.id"
+          :key="row.id"
+          class="approval-panel"
+          :request-id="row.id"
+          @approved="approved"
+          @working="approvalBusy = $event"
+        />
 
-        <form v-if="selected?.id === row.id" class="rejection" @submit.prevent="reject">
+        <form v-if="selected?.id === row.id" class="rejection-form" @submit.prevent="reject">
           <h3>Từ chối yêu cầu của {{ row.fullName }}</h3>
-          <p>Yêu cầu bị từ chối sẽ nhả chỗ đã giữ.</p>
-          <label class="reason">Lý do
-            <textarea v-model="reason" rows="3" maxlength="500"
-              :disabled="approvalBusy || busy || needsReview" required />
-          </label>
-          <label class="confirmation">
+          <p class="rejection-sub">Yêu cầu khi bị từ chối sẽ ngay lập tức giải phóng khung giờ đã giữ.</p>
+          <div class="form-group">
+            <label for="reject-reason">Lý do từ chối <span class="required">*</span></label>
+            <textarea
+              id="reject-reason"
+              v-model="reason"
+              rows="3"
+              maxlength="500"
+              placeholder="Nhập lý do cụ thể gửi đến bệnh nhân..."
+              :disabled="approvalBusy || busy || needsReview"
+              required
+            ></textarea>
+          </div>
+          <label class="confirm-checkbox">
             <input v-model="confirmed" type="checkbox" :disabled="approvalBusy || busy || needsReview" />
-            Tôi đã đối chiếu đúng yêu cầu và lý do
+            <span>Tôi đã đối chiếu đúng yêu cầu đặt lịch và xác nhận từ chối.</span>
           </label>
-          <button class="button danger" type="submit"
-            :disabled="approvalBusy || busy || needsReview || !confirmed">
-            Xác nhận từ chối
-          </button>
+          <div class="rejection-actions">
+            <button
+              class="btn btn-danger"
+              type="submit"
+              :disabled="approvalBusy || busy || needsReview || !confirmed"
+            >
+              Xác nhận từ chối yêu cầu
+            </button>
+          </div>
         </form>
       </li>
     </ol>
 
-    <nav v-if="rows.length || page > 1" class="pagination" aria-label="Phân trang yêu cầu">
-      <button type="button" class="button" :disabled="approvalBusy || busy || page === 1" @click="load(page - 1)">Trang trước</button>
-      <span>Trang {{ page }}</span>
-      <button type="button" class="button" :disabled="approvalBusy || busy || !hasNext" @click="load(page + 1)">Trang sau</button>
+    <nav v-if="rows.length || page > 1" class="pagination-bar" aria-label="Phân trang yêu cầu">
+      <span class="page-info">Trang <strong>{{ page }}</strong></span>
+      <div class="pagination-controls">
+        <button type="button" class="btn btn-outline" :disabled="approvalBusy || busy || page === 1" @click="load(page - 1)">← Trang trước</button>
+        <button type="button" class="btn btn-outline" :disabled="approvalBusy || busy || !hasNext" @click="load(page + 1)">Trang sau →</button>
+      </div>
     </nav>
   </section>
 </template>
@@ -97,68 +150,66 @@ async function reject(){if(disposed||approvalBusy.value||busy.value||needsReview
 watch(identity,()=>{generation++;busy.value=false;clear();error.value='';message.value='';if(!disposed)void load();});onMounted(()=>void load());onUnmounted(()=>{disposed=true;generation++;clear();message.value='';});
 </script>
 <style scoped>
-.review {
-  max-width: 68rem;
-  margin-inline: auto;
-  color: #18354c;
-  overflow-wrap: anywhere;
-}
-.review-header, .request-heading, .actions, .pagination {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: .75rem;
-}
-.review-header { justify-content: space-between; margin-bottom: 1.5rem; }
-.review-header h1 { margin: 0; font-size: clamp(1.5rem, 3vw, 2rem); color: #102e56; }
-.review-header p { margin: .45rem 0 0; color: #496274; }
-.requests { display: grid; gap: 1rem; list-style: none; margin: 0; padding: 0; }
-.request, .notice, .feedback:not(:empty) {
-  min-width: 0;
-  padding: clamp(1rem, 3vw, 1.5rem);
-  border: 1px solid #cddfeb;
-  border-radius: .85rem;
-  background: #fff;
-}
-.request-heading h2 { margin: 0; font-size: 1.18rem; color: #102e56; }
-.returning { padding: .25rem .65rem; border-radius: 1rem; background: #d8ecfa; color: #174474; font-size: .8rem; }
-.details { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: 1rem; margin: 1.1rem 0; }
-.details dt { color: #496274; font-size: .85rem; }
-.details dd { margin: .3rem 0 0; font-weight: 600; }
-.notes { margin-block: 1rem; white-space: pre-wrap; }
-.notes strong { display: block; font-size: .85rem; }
-.actions { padding-top: 1rem; border-top: 1px solid #dfeaf2; }
-.button, .approval-panel :deep(button) {
-  box-sizing: border-box;
-  min-height: 44px;
-  max-width: 100%;
-  padding: .55rem .9rem;
-  border: 1px solid #adc8db;
-  border-radius: .55rem;
-  background: #fff;
-  color: #1857b6;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-.button.primary { background: #1857b6; border-color: #1857b6; color: #fff; }
-.button.reject { color: #8f2638; border-color: #e1bdc4; }
-.button.danger { background: #8f2638; color: #fff; border-color: #8f2638; }
-.button:disabled, .approval-panel :deep(button:disabled) { opacity: .55; cursor: default; }
-.review :deep(:focus-visible) { outline: 3px solid #1857b6; outline-offset: 2px; }
-.approval-panel, .rejection { margin: 1rem 0 0; padding: 1rem; border-radius: .65rem; background: #f4faff; }
-.approval-panel :deep(h2), .rejection h3 { margin: 0 0 .75rem; font-size: 1.1rem; }
-.approval-panel :deep(select), .rejection textarea { box-sizing: border-box; max-width: 100%; font: inherit; }
-.rejection { border: 1px solid #e1bdc4; background: #fffafa; }
-.reason { display: grid; gap: .4rem; font-weight: 600; }
-.reason textarea { width: 100%; padding: .65rem; border: 1px solid #9ab1c1; border-radius: .4rem; resize: vertical; }
-.confirmation { display: flex; align-items: baseline; gap: .5rem; margin-block: .9rem; }
-.pagination { justify-content: flex-end; margin-top: 1rem; }
-.notice.error { color: #84283b; border-color: #e1bdc4; background: #fff5f6; }
-.feedback:empty { margin: 0; }
-.feedback:not(:empty) { border-color: #a0c9b6; color: #185237; background: #f0f9f5; }
-@media (max-width: 32rem) {
-  .actions { align-items: stretch; flex-direction: column; }
-  .pagination { justify-content: flex-start; }
+.review { max-width: 1040px; margin: 0 auto; padding: 1.5rem; color: #1e293b; box-sizing: border-box; }
+.header-banner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem; }
+.header-icon { font-size: 2.25rem; background: #e0f2fe; width: 3.5rem; height: 3.5rem; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
+.header-titles { flex: 1; min-width: 260px; }
+.header-titles h1 { margin: 0; font-size: 1.6rem; color: #0f172a; font-weight: 700; }
+.subtitle { margin: 0.25rem 0 0; color: #64748b; font-size: 0.95rem; }
+
+.requests-grid { display: flex; flex-direction: column; gap: 1rem; list-style: none; padding: 0; margin: 0 0 1.5rem; }
+.request-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+.request-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; border-bottom: 1px solid #f1f5f9; padding-bottom: 0.65rem; }
+.patient-main { display: flex; align-items: center; gap: 0.5rem; }
+.patient-main h2 { margin: 0; font-size: 1.2rem; color: #0f172a; }
+.badge-returning { background: #dcfce7; color: #15803d; font-size: 0.75rem; font-weight: 600; padding: 0.2rem 0.5rem; border-radius: 9999px; }
+.request-id { font-size: 0.85rem; color: #64748b; font-weight: 600; }
+
+.details-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.85rem; margin: 0.75rem 0; }
+.detail-item dt { font-size: 0.8rem; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.detail-item dd { margin: 0.2rem 0 0; font-size: 0.95rem; color: #0f172a; font-weight: 500; display: flex; gap: 0.4rem; align-items: center; }
+.time-slot { color: #0284c7; }
+
+.request-notes { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.65rem 0.85rem; font-size: 0.85rem; color: #334155; margin: 0.75rem 0; }
+.notes-label { font-weight: 600; color: #475569; }
+
+.actions-bar { display: flex; gap: 0.75rem; margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid #f1f5f9; }
+
+.btn { height: 44px; padding: 0 1.25rem; border-radius: 8px; font-weight: 600; font-size: 0.95rem; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; border: none; }
+.btn-primary { background: #0284c7; color: #fff; }
+.btn-primary:hover:not(:disabled) { background: #0369a1; }
+.btn-outline { background: #fff; color: #334155; border: 1px solid #cbd5e1; }
+.btn-danger { background: #dc2626; color: #fff; }
+.btn-danger-outline { height: 44px; padding: 0 1rem; background: #fff; border: 1px solid #fca5a5; color: #dc2626; border-radius: 8px; font-weight: 600; cursor: pointer; }
+.btn-danger-outline:hover:not(:disabled) { background: #fef2f2; }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.approval-panel { margin-top: 1rem; padding: 1rem; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 10px; }
+.rejection-form { margin-top: 1rem; padding: 1rem; background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; display: flex; flex-direction: column; gap: 0.75rem; }
+.rejection-form h3 { margin: 0; font-size: 1.05rem; color: #991b1b; }
+.rejection-sub { margin: 0; font-size: 0.85rem; color: #7f1d1d; }
+.form-group { display: flex; flex-direction: column; gap: 0.35rem; }
+.form-group label { font-size: 0.85rem; font-weight: 600; color: #334155; }
+.required { color: #dc2626; }
+textarea { width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.65rem; font-family: inherit; font-size: 0.95rem; box-sizing: border-box; }
+.confirm-checkbox { display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.85rem; color: #334155; }
+.rejection-actions { display: flex; justify-content: flex-end; }
+
+.alert-box { padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.9rem; margin-bottom: 1rem; }
+.alert-error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+.alert-success { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+.loading-state, .empty-state { text-align: center; padding: 3rem 1rem; color: #64748b; background: #f8fafc; border-radius: 12px; }
+.spinner { width: 30px; height: 30px; border: 3px solid #e2e8f0; border-top-color: #0284c7; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 0.75rem; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.pagination-bar { display: flex; justify-content: space-between; align-items: center; padding-top: 1rem; border-top: 1px solid #e2e8f0; }
+.page-info { font-size: 0.875rem; color: #64748b; }
+.pagination-controls { display: flex; gap: 0.5rem; }
+
+@media (max-width: 640px) {
+  .review { padding: 1rem; }
+  .header-banner { flex-direction: column; align-items: flex-start; }
+  .actions-bar { flex-direction: column; }
+  .btn { width: 100%; }
 }
 </style>

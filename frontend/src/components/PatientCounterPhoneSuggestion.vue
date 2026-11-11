@@ -34,4 +34,76 @@ async function load() {
 function useSuggestion() { if (!busy.value && !props.disabled && current(revision) && suggestion.value) emit('select', suggestion.value.newPhone); }
 onMounted(load);
 </script>
-<style scoped>section { padding: .8rem; border-left: 3px solid #64748b; margin: 1rem 0; } button { padding: .6rem; margin: .3rem; font: inherit; } [role=alert] { color: #9f1239; }</style>
+<style scoped>
+section {
+  padding: 1rem 1.25rem;
+  border-left: 4px solid #0284c7;
+  border-radius: 8px;
+  background: #f0f9ff;
+  margin: 1rem 0;
+  border-top: 1px solid #e0f2fe;
+  border-right: 1px solid #e0f2fe;
+  border-bottom: 1px solid #e0f2fe;
+}
+
+h3 {
+  color: #0f2d59;
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+p {
+  color: #334155;
+  margin: 0.5rem 0;
+}
+
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: #0f2d59;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  margin: 0.35rem 0.35rem 0.35rem 0;
+}
+
+button:hover:not(:disabled) {
+  background: #1e3a8a;
+}
+
+button:focus-visible {
+  outline: 3px solid rgba(2, 132, 199, 0.35);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+[role="alert"] {
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-weight: 500;
+  margin: 0.75rem 0;
+}
+
+@media (max-width: 640px) {
+  button {
+    width: 100%;
+    margin-right: 0;
+  }
+}
+</style>

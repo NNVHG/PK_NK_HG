@@ -38,4 +38,86 @@ async function load() {
 watch(identity, () => { void load(); }, { immediate: true });
 onUnmounted(() => { disposed = true; generation++; rows.value = []; loading.value = false; });
 </script>
-<style scoped>.stock-notice{border:1px solid #94a3b8;padding:1rem;margin:1rem 0}.stock-notice strong{display:block;color:#92400e}.stock-notice li{margin:.5rem 0}[role=alert]{color:#b91c1c}button{font:inherit;padding:.5rem}</style>
+<style scoped>
+.stock-notice {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 1.25rem;
+  margin: 1.25rem 0;
+  box-shadow: 0 2px 8px rgba(15, 45, 89, 0.04);
+}
+
+.stock-notice h3 {
+  color: #0f2d59;
+  font-weight: 600;
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.stock-notice strong {
+  display: block;
+  color: #92400e;
+}
+
+.stock-notice ul {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0;
+}
+
+.stock-notice li {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  background: #f8fafc;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+[role="alert"] {
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-weight: 500;
+  margin: 0.75rem 0;
+}
+
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: #0f2d59;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  margin: 0.4rem 0;
+}
+
+button:hover:not(:disabled) {
+  background: #1e3a8a;
+}
+
+button:focus-visible {
+  outline: 3px solid rgba(2, 132, 199, 0.35);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  button {
+    width: 100%;
+  }
+}
+</style>

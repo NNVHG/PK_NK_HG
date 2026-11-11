@@ -70,10 +70,13 @@
               <div class="timeline-top"><strong>Lần khám #{{ visit.visitId }}</strong><span :class="['status-pill', `status-${visit.status.toLowerCase()}`]">{{ formatVisitStatus(visit.status) }}</span></div>
               <p>{{ visit.startedAt ? formatDateTime(visit.startedAt) : 'Chưa bắt đầu' }}<template v-if="visit.endedAt"> — {{ formatDateTime(visit.endedAt) }}</template></p>
               <p>Nha sĩ: {{ visit.dentistName || 'Chưa phân công' }}</p>
-              <RouterLink :to="`${portalPrefix}/clinical/visits/${visit.visitId}/fdi`">Xem tình trạng răng của lần khám</RouterLink>
-              <RouterLink :to="`${portalPrefix}/clinical/visits/${visit.visitId}/prescription`">{{ authStore.role === 'PATIENT' ? 'Xem đơn thuốc' : 'Xem / kê đơn thuốc' }}</RouterLink>
-              <RouterLink v-if="['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(authStore.role)" :to="`${portalPrefix}/clinical/visits/${visit.visitId}/invoice-draft`">{{ authStore.role === 'PATIENT' ? 'Xem hóa đơn' : 'Xem hóa đơn nháp' }}</RouterLink>
-              <div class="visit-flags"><span>{{ visit.hasMedicalHistory ? 'Có tiền sử' : 'Chưa ghi tiền sử' }}</span><span>{{ visit.hasVitalSigns ? 'Có sinh hiệu' : 'Chưa ghi sinh hiệu' }}</span></div>
+              <p v-if="isPatientView && visit.diagnosis" class="visit-diagnosis"><strong>Chẩn đoán:</strong> {{ visit.diagnosis }}</p>
+              <div class="visit-links">
+                <RouterLink :to="`${portalPrefix}/clinical/visits/${visit.visitId}/fdi`">{{ isPatientView ? 'Tình trạng răng' : 'Xem tình trạng răng của lần khám' }}</RouterLink>
+                <RouterLink :to="`${portalPrefix}/clinical/visits/${visit.visitId}/prescription`">{{ authStore.role === 'PATIENT' ? 'Xem đơn thuốc' : 'Xem / kê đơn thuốc' }}</RouterLink>
+                <RouterLink v-if="['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(authStore.role)" :to="`${portalPrefix}/clinical/visits/${visit.visitId}/invoice-draft`">{{ authStore.role === 'PATIENT' ? 'Xem hóa đơn' : 'Xem hóa đơn nháp' }}</RouterLink>
+              </div>
+              <div v-if="!isPatientView" class="visit-flags"><span>{{ visit.hasMedicalHistory ? 'Có tiền sử' : 'Chưa ghi tiền sử' }}</span><span>{{ visit.hasVitalSigns ? 'Có sinh hiệu' : 'Chưa ghi sinh hiệu' }}</span></div>
               <div class="post-treatment-section">
                 <button class="button button-quiet" v-if="postTreatmentExpandedMap[visit.visitId]" :disabled="savingAddendumMap[visit.visitId] || postTreatmentLoadingMap[visit.visitId]" @click="loadPostTreatmentNotes(visit.visitId)">Tải lại ghi chú</button>
                 <button class="button button-quiet post-treatment-toggle" type="button" @click="togglePostTreatmentNotes(visit.visitId)">
@@ -155,7 +158,7 @@
           <p class="record-meta">Ghi nhận {{ formatDateTime(latestHistory.createdAt) }} · Lần khám #{{ latestHistory.visitId }}</p>
           <p v-if="latestHistory.note" class="history-note">{{ latestHistory.note }}</p>
           <ul v-if="latestHistory.items.length" class="history-list">
-            <li v-for="item in latestHistory.items" :key="item.itemId">
+            <li v-for="item in latestHistory.items" :key="item.itemId" :class="{ 'history-critical': item.isCritical }">
               <div><span class="history-kind">{{ item.type === 'Allergy' ? 'Dị ứng' : item.type === 'Condition' ? 'Bệnh nền' : item.type }}</span><strong>{{ item.name }}</strong><span v-if="item.isCritical" class="critical-tag">Cần lưu ý</span></div>
               <p v-if="item.detail">{{ item.detail }}</p>
             </li>
@@ -281,7 +284,10 @@ const patient = ref<PatientDetails | null>(null);
 const loadingPatient = ref(true);
 const pageError = ref('');
 const notFound = ref(false);
-const activeTab = ref<TabId>('info');
+const tabIds: TabId[] = ['info', 'timeline', 'history', 'vitals', 'prescriptions', 'images'];
+const queryTab = Array.isArray(route.query.tab) ? route.query.tab[0] : route.query.tab;
+const activeTab = ref<TabId>(tabIds.find(id => id === queryTab) ?? 'info');
+const isPatientView = computed(() => authStore.role === 'PATIENT');
 const tabs: Array<{ id: TabId; label: string }> = [
   { id: 'info', label: 'Thông tin' }, { id: 'timeline', label: 'Lịch sử khám' },
   { id: 'prescriptions', label: 'Đơn thuốc' }, { id: 'images', label: 'Ảnh hồ sơ' }, { id: 'history', label: 'Tiền sử & dị ứng' }, { id: 'vitals', label: 'Sinh hiệu' }
@@ -873,6 +879,16 @@ dd { margin: 0.2rem 0 0; color: #263e50; font-weight: 650; white-space: pre-wrap
 .history-kind { color: #507287; font-size: 0.82rem; }
 .critical-tag { border-radius: 99px; padding: 0.2rem 0.5rem; background: #fff0dd; color: #925300; font-size: 0.72rem; font-weight: 700; }
 .history-list li p { margin: 0.5rem 0 0; white-space: pre-wrap; }
+.history-list li.history-critical { border-color: #f3c6c1; background: #fff6f5; }
+.visit-diagnosis { color: #2c4253; }
+.visit-links { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.65rem; }
+.visit-links a { border: 1px solid #cbdbe4; border-radius: 8px; padding: 0.4rem 0.75rem; background: #f6fafc; color: #216d94; font-size: 0.85rem; font-weight: 700; text-decoration: none; }
+.visit-links a:hover { background: #e8f3f9; }
+.vital-history { display: grid; gap: 0.75rem; }
+.vital-history .vital-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0.6rem 0 0; }
+.vital-history .vital-grid > div { padding: 0.6rem; border-radius: 9px; background: #eef7fb; text-align: center; }
+.vital-history .vital-grid dd { font-weight: 800; }
+.history-list li > div { overflow-wrap: anywhere; }
 .vital-grid { margin: 0 0 1rem; }
 .modal-backdrop { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; overflow-y: auto; padding: 1rem; background: #152b3a88; }
 .modal-card { width: min(100%, 600px); padding: 1.2rem; border-radius: 16px; background: #fff; box-shadow: 0 25px 75px #0c243755; }
@@ -896,5 +912,6 @@ dd { margin: 0.2rem 0 0; color: #263e50; font-weight: 650; white-space: pre-wrap
 .addendum-form textarea { width: 100%; border: 1px solid #cbdbe4; border-radius: 7px; padding: 0.5rem; font: inherit; font-size: 0.88rem; box-sizing: border-box; }
 .addendum-actions { display: flex; justify-content: space-between; align-items: center; }
 @media (max-width: 760px) { .editable-record-row { grid-template-columns: 1fr 1fr; } .editable-record-row label:nth-child(3) { grid-column: 1 / -1; } }
+@media (max-width: 640px) { .vital-history .vital-grid { grid-template-columns: 1fr; } }
 @media (max-width: 640px) { .profile-header { align-items: flex-start; flex-direction: column; } .profile-grid, .vital-grid, .edit-form, .vital-form { grid-template-columns: 1fr; } .edit-form label:nth-of-type(6), .edit-form .notice, .modal-actions, .vital-form .form-context, .vital-form .field-label, .vital-form .notice { grid-column: auto; } .editable-record-row { grid-template-columns: 1fr; } .editable-record-row label:nth-child(3) { grid-column: auto; } .tabs { overflow-x: auto; flex-wrap: nowrap; } .tabs button { white-space: nowrap; } }
 </style>

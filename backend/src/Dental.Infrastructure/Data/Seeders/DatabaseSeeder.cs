@@ -118,6 +118,7 @@ public static class DatabaseSeeder
                     RoleId                  = roleMap[roleCode],
                     IsActive                = true,
                     RequiresPhoneActivation = false,
+                    LoginByCitizenId        = roleCode == RoleCodes.Patient,
                     PhoneVerifiedAtUtc      = DateTime.UtcNow,
                     CreatedAt               = DateTime.UtcNow,
                 });

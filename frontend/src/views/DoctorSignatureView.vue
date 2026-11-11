@@ -69,5 +69,153 @@ watch(identity, () => { generation++; busy.value = false; clear(); error.value =
 onMounted(() => load()); onUnmounted(() => { disposed = true; generation++; clear(); error.value = ''; message.value = ''; });
 </script>
 <style scoped>
-.signature-page { max-width:48rem;margin:1rem auto;padding:1rem; } label { display:block;margin:1rem 0; } input,button { padding:.5rem; } .signature { max-width:100%;max-height:180px;border:1px solid #cbd5e1;background:#fff; } [role=alert] { color:#b91c1c; }
+.signature-page {
+  max-width: 768px;
+  margin: 1.5rem auto;
+  padding: 1.5rem;
+  background: #f8fafc;
+  color: #1e293b;
+  font-family: inherit;
+}
+
+h1 {
+  color: #0f2d59;
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+}
+
+h2 {
+  color: #0f2d59;
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+p {
+  color: #334155;
+  line-height: 1.6;
+  margin: 0.5rem 0;
+}
+
+section {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin: 1.25rem 0;
+  box-shadow: 0 2px 8px rgba(15, 45, 89, 0.04);
+}
+
+label {
+  display: block;
+  font-weight: 500;
+  color: #334155;
+  margin: 0.75rem 0 0.4rem;
+}
+
+input[type="file"] {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 0.5rem;
+  font-size: 0.95rem;
+  color: #1e293b;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
+}
+
+input[type="checkbox"] {
+  width: 1.125rem;
+  height: 1.125rem;
+  accent-color: #0284c7;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
+
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.625rem 1.25rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: #0f2d59;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  margin: 0.5rem 0.5rem 0.5rem 0;
+}
+
+button:hover:not(:disabled) {
+  background: #1e3a8a;
+}
+
+button:focus-visible {
+  outline: 3px solid rgba(2, 132, 199, 0.35);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.signature {
+  display: block;
+  max-width: 100%;
+  max-height: 180px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  background-image: linear-gradient(45deg, #f1f5f9 25%, transparent 25%),
+                    linear-gradient(-45deg, #f1f5f9 25%, transparent 25%),
+                    linear-gradient(45deg, transparent 75%, #f1f5f9 75%),
+                    linear-gradient(-45deg, transparent 75%, #f1f5f9 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+  margin: 0.75rem 0;
+  padding: 0.5rem;
+  object-fit: contain;
+}
+
+[role="alert"] {
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-weight: 500;
+  margin: 0.75rem 0;
+}
+
+[role="status"] {
+  color: #0369a1;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-weight: 500;
+  margin: 0.75rem 0;
+}
+
+@media (max-width: 640px) {
+  .signature-page {
+    padding: 1rem 0.75rem;
+  }
+  section {
+    padding: 1rem;
+  }
+  button {
+    width: 100%;
+    margin-right: 0;
+  }
+}
 </style>

@@ -1,43 +1,144 @@
 <template>
   <main class="page">
-    <h1>Đặt lịch tại quầy</h1>
-    <p v-if="slotDurationMinutes">Độ dài khung hẹn mới: {{ slotDurationMinutes }} phút.</p>
-    <p v-if="scheduleError" role="alert">{{ scheduleError }} <button type="button" :disabled="busy || scheduleLoading" @click="loadSchedule">Tải lại giờ</button></p>
-    <p v-if="scheduleLoading" role="status">Đang tải khung giờ…</p>
-    <p>Chọn hồ sơ bệnh nhân để đặt lịch. Khách chỉ vào hàng đợi khi được check-in.</p>
-    <form @submit.prevent="search">
-      <label for="lookup">Tìm theo tên, SĐT hoặc mã hồ sơ</label>
-      <input id="lookup" v-model.trim="keyword" maxlength="200" :disabled="busy" autocomplete="off" />
-      <button :disabled="busy || searching || !keyword.trim()">{{ searching ? 'Đang tìm…' : 'Tìm hồ sơ' }}</button>
-    </form>
-    <p v-if="searched && !patients.length">Không tìm thấy hồ sơ. Thử từ khóa khác hoặc tạo hồ sơ tại màn hình bệnh nhân.</p>
-    <p v-if="patients.length">Hiển thị tối đa 20 kết quả; thu hẹp từ khóa nếu chưa thấy hồ sơ.</p>
-    <ul><li v-for="patient in patients" :key="patient.patientId">
-      <button type="button" :disabled="busy || searching" :aria-pressed="selected?.patientId === patient.patientId" @click="choose(patient)">
-        {{ patient.fullName }} · {{ patient.dateOfBirth }} · {{ patient.patientCode }}
-      </button>
-    </li></ul>
-    <form v-if="selected" @submit.prevent="book">
-      <h2>{{ selected.fullName }} · {{ selected.patientCode }}</h2>
-      <label for="dentist">Nha sĩ (tùy chọn)</label>
-      <select id="dentist" v-model.number="dentistId" :disabled="busy || loadingDentists" @change="bookingDetailsChanged">
-        <option :value="0">Chưa phân nha sĩ</option>
-        <option v-for="dentist in dentists" :key="dentist.dentistId" :value="dentist.dentistId">{{ dentist.dentistName }} · #{{ dentist.dentistId }}</option>
-      </select>
-      <p v-if="loadingDentists" role="status">Đang tải nha sĩ hoạt động…</p>
-      <p v-if="dentistError" role="alert">{{ dentistError }}</p>
-      <button type="button" :disabled="busy || loadingDentists" @click="loadDentists">Tải lại nha sĩ</button>
-      <label for="day">Ngày khám</label><input id="day" v-model="day" type="date" :min="today" :disabled="busy" required @change="bookingDetailsChanged" />
-      <label for="slot">Khung giờ</label><select id="slot" v-model="slot" :disabled="busy" required @change="bookingDetailsChanged">
-        <option value="" disabled>Chọn giờ</option><option v-for="time in slots" :key="time">{{ time }}</option>
-      </select>
-      <label for="reason">Lý do khám / ghi chú cần lưu ý (tùy chọn, tối đa 500 ký tự)</label><textarea id="reason" v-model.trim="notes" maxlength="500" :disabled="busy" aria-describedby="booking-note-hint" />
-      <p id="booking-note-hint">Ghi tình trạng bệnh nặng hoặc điều cần lưu ý để nhân viên đối chiếu. Lịch hẹn vẫn theo khung giờ đã chọn.</p>
-      <label><input v-model="confirmed" type="checkbox" :disabled="busy" /> Đã đối chiếu hồ sơ, nha sĩ, ngày, giờ với khách</label>
-      <button :disabled="busy || searching || loadingDentists || !confirmed">{{ busy ? 'Đang đặt lịch…' : 'Xác nhận đặt lịch' }}</button>
-    </form>
-    <p v-if="error" role="alert">{{ error }}</p>
-    <p v-if="success" role="status">Đã đặt lịch #{{ success.appointmentId }} cho {{ success.patientName }} · {{ success.appointmentDate }} · {{ success.slotTime.slice(0, 5) }} · {{ success.dentistName || 'Chưa phân nha sĩ' }}.</p>
+    <div class="header-banner">
+      <div class="header-icon">🛎️</div>
+      <div class="header-titles">
+        <h1>Đặt lịch khám tại quầy</h1>
+        <p class="subtitle">Lễ tân hỗ trợ tìm kiếm hồ sơ và đặt lịch hẹn trực tiếp cho bệnh nhân.</p>
+      </div>
+    </div>
+
+    <div v-if="slotDurationMinutes" class="info-banner">
+      ⏱️ Độ dài mỗi khung hẹn chuẩn: <strong>{{ slotDurationMinutes }} phút</strong>.
+    </div>
+
+    <div v-if="scheduleError" class="alert-box alert-error" role="alert">
+      ⚠️ {{ scheduleError }}
+      <button type="button" class="btn btn-outline-sm" :disabled="busy || scheduleLoading" @click="loadSchedule">Tải lại khung giờ</button>
+    </div>
+    <div v-if="scheduleLoading" class="loading-state-sm" role="status">Đang đồng bộ khung giờ khám…</div>
+
+    <!-- Step 1: Search Patient -->
+    <div class="card search-card">
+      <div class="card-header">
+        <h2>1. Tìm kiếm hồ sơ bệnh nhân</h2>
+      </div>
+      <form class="search-form" @submit.prevent="search">
+        <div class="form-group flex-1">
+          <label for="lookup">Nhập tên, số điện thoại hoặc mã hồ sơ</label>
+          <div class="input-with-icon">
+            <span class="input-icon">🔍</span>
+            <input
+              id="lookup"
+              v-model.trim="keyword"
+              placeholder="VD: Nguyễn Văn A, 0912..., BN0001"
+              maxlength="200"
+              :disabled="busy"
+              autocomplete="off"
+            />
+          </div>
+        </div>
+        <button class="btn btn-primary" :disabled="busy || searching || !keyword.trim()">
+          {{ searching ? 'Đang tìm…' : 'Tìm kiếm' }}
+        </button>
+      </form>
+
+      <div v-if="searched && !patients.length" class="empty-state">
+        <p>Không tìm thấy hồ sơ nào phù hợp. Vui lòng thử từ khóa khác hoặc tạo hồ sơ bệnh nhân mới.</p>
+      </div>
+
+      <div v-if="patients.length" class="patient-results">
+        <p class="results-hint">Hiển thị tối đa 20 kết quả; chọn đúng bệnh nhân để chuyển sang bước chọn giờ:</p>
+        <ul class="patient-list">
+          <li v-for="patient in patients" :key="patient.patientId">
+            <button
+              type="button"
+              class="patient-item-btn"
+              :class="{ selected: selected?.patientId === patient.patientId }"
+              :disabled="busy || searching"
+              :aria-pressed="selected?.patientId === patient.patientId"
+              @click="choose(patient)"
+            >
+              <div class="patient-main">
+                <span class="patient-name">{{ patient.fullName }}</span>
+                <span class="patient-code">#{{ patient.patientCode }}</span>
+              </div>
+              <div class="patient-sub">
+                <span>🎂 Ngày sinh: {{ patient.dateOfBirth }}</span>
+              </div>
+            </button>
+          </li>
+        </ul>
+      </div>
+    </div>
+    <!-- Step 2: Booking Form -->
+    <div v-if="selected" class="card booking-card">
+      <div class="card-header">
+        <h2>2. Lập lịch hẹn cho {{ selected.fullName }} <span class="badge-code">#{{ selected.patientCode }}</span></h2>
+      </div>
+
+      <form class="booking-form" @submit.prevent="book">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="dentist">Nha sĩ phụ trách (tùy chọn)</label>
+            <div class="select-with-btn">
+              <select id="dentist" v-model.number="dentistId" :disabled="busy || loadingDentists" @change="bookingDetailsChanged">
+                <option :value="0">Chưa phân nha sĩ (phòng khám phân sau)</option>
+                <option v-for="dentist in dentists" :key="dentist.dentistId" :value="dentist.dentistId">
+                  {{ dentist.dentistName }} · #{{ dentist.dentistId }}
+                </option>
+              </select>
+              <button type="button" class="btn btn-outline-sm" :disabled="busy || loadingDentists" @click="loadDentists" title="Tải lại nha sĩ">🔄</button>
+            </div>
+            <p v-if="loadingDentists" class="loading-state-sm" role="status">Đang tải nha sĩ…</p>
+            <p v-if="dentistError" class="alert-box alert-error" role="alert">{{ dentistError }}</p>
+          </div>
+
+          <div class="form-group">
+            <label for="day">Ngày khám dự kiến <span class="required">*</span></label>
+            <input id="day" v-model="day" type="date" :min="today" :disabled="busy" required @change="bookingDetailsChanged" />
+          </div>
+
+          <div class="form-group">
+            <label for="slot">Khung giờ hẹn <span class="required">*</span></label>
+            <select id="slot" v-model="slot" :disabled="busy" required @change="bookingDetailsChanged">
+              <option value="" disabled>-- Chọn khung giờ --</option>
+              <option v-for="time in slots" :key="time" :value="time">{{ time }}</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="reason">Lý do khám / Ghi chú cần lưu ý</label>
+          <textarea
+            id="reason"
+            v-model.trim="notes"
+            maxlength="500"
+            rows="3"
+            placeholder="Ghi chú triệu chứng đau, tình trạng đặc biệt cần bác sĩ lưu ý..."
+            :disabled="busy"
+            aria-describedby="booking-note-hint"
+          ></textarea>
+          <p id="booking-note-hint" class="hint-text">
+            ℹ️ Ghi chú thông tin tình trạng để nhân viên tiếp đón đối chiếu; lịch hẹn vẫn áp dụng khung giờ đã chọn.
+          </p>
+        </div>
+
+        <label class="confirm-checkbox">
+          <input v-model="confirmed" type="checkbox" :disabled="busy" />
+          <span>Tôi đã kiểm tra kỹ thông tin hồ sơ bệnh nhân, ngày khám và khung giờ trước khi xác nhận.</span>
+        </label>
+
+        <button class="btn btn-primary btn-submit" :disabled="busy || searching || loadingDentists || !confirmed">
+          {{ busy ? 'Đang tạo lịch hẹn…' : '✅ Xác nhận đặt lịch tại quầy' }}
+        </button>
+      </form>
+    </div>
+
+    <div v-if="error" class="alert-box alert-error" role="alert">⚠️ {{ error }}</div>
+    <div v-if="success" class="alert-box alert-success" role="status">
+      ✅ Đã đặt lịch thành công <strong>#{{ success.appointmentId }}</strong> cho bệnh nhân <strong>{{ success.patientName }}</strong> vào ngày {{ success.appointmentDate }} lúc {{ success.slotTime.slice(0, 5) }} (Nha sĩ: {{ success.dentistName || 'Chưa phân công' }}).
+    </div>
     <CounterPatientPhoneRequest v-if="success" :key="success.appointmentId" :appointment-id="success.appointmentId" />
   </main>
 </template>
@@ -112,9 +213,64 @@ async function book() {
 onUnmounted(() => { version++; dentistVersion++; patients.value = []; selected.value = null; dentists.value = []; dentistId.value = 0; notes.value = ''; success.value = null; dentistError.value = ''; });
 </script>
 <style scoped>
-.page { max-width: 680px; margin: auto; padding: 1.5rem; }
-form { display: grid; gap: .6rem; margin: 1rem 0; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; }
-input, select, textarea, button { font: inherit; padding: .6rem; }
-ul { list-style: none; padding: 0; } li { margin: .4rem 0; }
-button[aria-pressed=true] { border: 2px solid #13795b; } [role=alert] { color: #b91c1c; } [role=status] { color: #13795b; }
+.page { max-width: 860px; margin: 0 auto; padding: 1.5rem; color: #1e293b; box-sizing: border-box; }
+.header-banner { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.25rem; }
+.header-icon { font-size: 2.25rem; background: #e0f2fe; width: 3.5rem; height: 3.5rem; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
+.header-titles h1 { margin: 0; font-size: 1.6rem; color: #0f172a; font-weight: 700; }
+.subtitle { margin: 0.25rem 0 0; color: #64748b; font-size: 0.95rem; }
+
+.info-banner { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.9rem; margin-bottom: 1.25rem; }
+
+.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.25rem; margin-bottom: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+.card-header h2 { margin: 0 0 1rem; font-size: 1.2rem; color: #0f172a; display: flex; align-items: center; gap: 0.5rem; }
+.badge-code { font-size: 0.8rem; background: #e0f2fe; color: #0369a1; padding: 0.2rem 0.5rem; border-radius: 4px; }
+
+.search-form { display: flex; gap: 0.75rem; align-items: flex-end; }
+.flex-1 { flex: 1; }
+.form-group { display: flex; flex-direction: column; gap: 0.35rem; }
+.form-group label { font-size: 0.85rem; font-weight: 600; color: #475569; }
+.required { color: #dc2626; }
+.input-with-icon { position: relative; display: flex; align-items: center; }
+.input-icon { position: absolute; left: 0.75rem; font-size: 0.9rem; color: #94a3b8; pointer-events: none; }
+.input-with-icon input { width: 100%; height: 44px; padding: 0.5rem 0.75rem 0.5rem 2.25rem; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; box-sizing: border-box; }
+
+.patient-results { margin-top: 1.25rem; border-top: 1px solid #f1f5f9; padding-top: 1rem; }
+.results-hint { font-size: 0.85rem; color: #64748b; margin: 0 0 0.75rem; }
+.patient-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.75rem; }
+.patient-item-btn { width: 100%; padding: 0.75rem 1rem; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; cursor: pointer; text-align: left; transition: all 0.15s; }
+.patient-item-btn:hover:not(:disabled) { background: #f0f9ff; border-color: #bae6fd; }
+.patient-item-btn.selected { background: #e0f2fe; border-color: #0284c7; outline: 2px solid #0284c7; }
+.patient-main { display: flex; justify-content: space-between; align-items: baseline; }
+.patient-name { font-weight: 700; color: #0f172a; font-size: 0.95rem; }
+.patient-code { font-size: 0.8rem; color: #64748b; font-weight: 600; }
+.patient-sub { font-size: 0.8rem; color: #64748b; margin-top: 0.25rem; }
+
+.booking-form { display: flex; flex-direction: column; gap: 1.25rem; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+.select-with-btn { display: flex; gap: 0.5rem; align-items: center; }
+.select-with-btn select { flex: 1; }
+select, input[type="date"] { height: 44px; padding: 0.5rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; background: #fff; box-sizing: border-box; }
+textarea { border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.65rem; font-family: inherit; font-size: 0.95rem; box-sizing: border-box; }
+.hint-text { font-size: 0.8rem; color: #64748b; margin: 0.25rem 0 0; }
+
+.confirm-checkbox { display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.85rem; color: #334155; }
+.btn-submit { width: 100%; height: 48px; font-size: 1.05rem; }
+
+.btn { height: 44px; padding: 0 1.25rem; border-radius: 8px; font-weight: 600; font-size: 0.95rem; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; border: none; }
+.btn-primary { background: #0284c7; color: #fff; }
+.btn-primary:hover:not(:disabled) { background: #0369a1; }
+.btn-outline-sm { height: 36px; padding: 0 0.75rem; border-radius: 6px; background: #fff; color: #334155; border: 1px solid #cbd5e1; font-size: 0.85rem; cursor: pointer; }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.alert-box { padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.9rem; margin-bottom: 1rem; }
+.alert-error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+.alert-success { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+.loading-state-sm { font-size: 0.85rem; color: #64748b; padding: 0.5rem 0; }
+.empty-state { text-align: center; padding: 2rem; color: #64748b; background: #f8fafc; border-radius: 8px; margin-top: 1rem; }
+
+@media (max-width: 640px) {
+  .page { padding: 1rem; }
+  .search-form { flex-direction: column; align-items: stretch; }
+  .btn { width: 100%; }
+}
 </style>

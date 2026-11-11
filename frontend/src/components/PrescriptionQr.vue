@@ -36,5 +36,46 @@ watch(identity, () => { generation++; busy.value = false; clear(); });
 onUnmounted(() => { disposed = true; generation++; clear(); });
 </script>
 <style scoped>
-section { margin:1rem 0; } figure { margin:.8rem 0; } img { display:block; max-width:100%;height:auto; image-rendering:pixelated; } [role=alert] { color:#b91c1c; }
+section {
+  margin: 1.25rem 0;
+  padding: 1.25rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(15, 45, 89, 0.04);
+}
+
+figure {
+  margin: 1rem 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+img {
+  display: block;
+  max-width: 200px;
+  height: auto;
+  image-rendering: pixelated;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.5rem;
+  background: #ffffff;
+}
+
+figcaption {
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+[role="alert"] {
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-weight: 500;
+  margin: 0.75rem 0;
+}
 </style>

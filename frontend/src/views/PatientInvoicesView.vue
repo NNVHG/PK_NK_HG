@@ -1,82 +1,318 @@
 <template>
-  <main class="page">
-    <h1>Hóa đơn của tôi</h1>
-    <button :disabled="profilesBusy" @click="loadProfiles">Tải lại hồ sơ</button>
-    <p v-if="profileError" role="alert">{{ profileError }}</p>
-    <label v-if="profiles.length > 1">Chọn hồ sơ để xem hóa đơn
-      <select v-model.number="patientId" :disabled="profilesBusy || invoicesBusy" @change="selectProfile">
-        <option v-for="profile in profiles" :key="profile.patientId" :value="profile.patientId">
-          {{ profile.fullName }} · {{ profile.patientCode }}
-        </option>
-      </select>
-    </label>
-    <p v-if="validProfile && selectedProfile">Hồ sơ đã chọn: {{ selectedProfile.fullName }} · {{ birth(selectedProfile.dateOfBirth) }} · {{ selectedProfile.patientCode }}{{ selectedProfile.isActive ? '' : ' · Đã ngừng hoạt động' }}</p>
-    <p v-if="!profilesBusy && !profileError && !profiles.length">Tài khoản chưa có hồ sơ bệnh nhân.</p>
-    <form @submit.prevent="searchInvoices">
-      <label>Trạng thái
-        <select v-model="status" :disabled="invoicesBusy || !validProfile">
-          <option value="">Tất cả</option><option v-for="(name, index) in statuses" :key="index" :value="String(index)">{{ name }}</option>
+  <main class="page-container">
+    <div class="page-header">
+      <div>
+        <p class="eyebrow">Tài chính & Thanh toán</p>
+        <h1>Hóa đơn của tôi</h1>
+        <p class="subtitle">Theo dõi chi phí dịch vụ, công nợ điều trị và lịch sử các đợt thanh toán</p>
+      </div>
+      <div class="header-actions">
+        <button type="button" class="button button-secondary" :disabled="profilesBusy" @click="loadProfiles">
+          <span :class="{ 'spin-icon': profilesBusy }">🔄</span>
+          <span>Tải lại hồ sơ</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Thông báo lỗi chung -->
+    <div v-if="profileError" class="alert alert-error" role="alert">
+      <span class="alert-icon">⚠️</span>
+      <span>{{ profileError }}</span>
+    </div>
+
+    <div v-if="!profilesBusy && !profileError && !profiles.length" class="alert alert-info">
+      <span class="alert-icon">ℹ️</span>
+      <div>
+        <strong>Chưa có hồ sơ liên kết</strong>
+        <p>Tài khoản chưa có hồ sơ bệnh nhân đang hoạt động. Vui lòng liên hệ Lễ tân để kích hoạt.</p>
+      </div>
+    </div>
+
+    <!-- Chọn hồ sơ khám (nếu có người giám hộ / nhiều hồ sơ) -->
+    <div v-if="profiles.length > 1" class="panel profile-picker-panel">
+      <div class="picker-row">
+        <label for="select-profile" class="picker-label">
+          <span>👶 Xem hóa đơn theo hồ sơ:</span>
+        </label>
+        <select
+          id="select-profile"
+          v-model.number="patientId"
+          :disabled="profilesBusy || invoicesBusy"
+          class="form-select profile-select"
+          @change="selectProfile"
+        >
+          <option v-for="profile in profiles" :key="profile.patientId" :value="profile.patientId">
+            {{ profile.fullName }} · {{ profile.patientCode }}
+          </option>
         </select>
-      </label>
-      <label>Từ ngày lập (giờ Việt Nam)
-        <input v-model="fromDate" type="date" min="0001-01-02" max="9999-12-31" :disabled="invoicesBusy || !validProfile" />
-      </label>
-      <label>Đến ngày lập (bao gồm cả ngày)
-        <input v-model="toDate" type="date" min="0001-01-01" max="9999-12-30" :disabled="invoicesBusy || !validProfile" />
-      </label>
-      <button :disabled="invoicesBusy || !validProfile">Lọc hóa đơn</button>
-      <button type="button" :disabled="invoicesBusy || !validProfile" @click="resetInvoiceFilters">Xóa bộ lọc</button>
-    </form>
-    <button :disabled="invoicesBusy || !validProfile" @click="loadInvoices(1)">Tải hóa đơn của tôi</button>
-    <p v-if="invoicesLoaded">Đã áp dụng: {{ applied.status == null ? 'Tất cả trạng thái' : statuses[applied.status] }} ·
-      Từ {{ applied.fromDate ? birth(applied.fromDate) : 'không giới hạn' }} đến {{ applied.toDate ? birth(applied.toDate) : 'không giới hạn' }} (giờ Việt Nam)</p>
-    <p v-if="invoicesBusy" role="status">Đang tải hóa đơn…</p>
-    <p v-if="invoiceError" role="alert">{{ invoiceError }}</p>
-    <p v-if="invoicesLoaded && !invoices.length">Không có hóa đơn trong trang và bộ lọc này.</p>
-    <ul><li v-for="row in invoices" :key="row.invoiceId">
-      <strong>{{ row.invoiceCode }}</strong> · {{ row.patientName }} · {{ row.patientCode }}
-      <p>{{ date(row.createdAt) }} · {{ statuses[row.status] ?? 'Không xác định' }}</p>
-      <p>Tổng tiền {{ money(row.totalAmount) }} · Đã trả {{ money(row.paidAmount) }} · Còn nợ {{ money(row.remainingAmount) }}</p>
-      <button :disabled="invoicesBusy" @click="selectInvoice(row.invoiceId)">Xem chi tiết và thanh toán</button>
-    </li></ul>
-    <nav v-if="invoicesLoaded" aria-label="Phân trang hóa đơn">
-      <span>{{ invoiceTotal }} hóa đơn · Trang {{ invoicePage }}</span>
-      <button :disabled="invoicesBusy || invoicePage <= 1" @click="loadInvoices(invoicePage - 1)">Trước</button>
-      <button :disabled="invoicesBusy || invoicePage >= invoicePages" @click="loadInvoices(invoicePage + 1)">Sau</button>
-    </nav>
-    <section v-if="selected" aria-label="Chi tiết hóa đơn">
-      <h2>{{ selected.invoiceCode }} · Chi tiết hóa đơn</h2>
-      <p>Tên dịch vụ và giá được ghi tại thời điểm lập hóa đơn.</p>
-      <button :disabled="itemsBusy" @click="loadItems(1)">Tải lại chi tiết</button>
-      <p v-if="itemsBusy" role="status">Đang tải chi tiết…</p>
-      <p v-if="itemError" role="alert">{{ itemError }}</p>
-      <p v-if="itemsLoaded && !items.length">Hóa đơn này chưa có dòng dịch vụ.</p>
-      <ul><li v-for="item in items" :key="item.itemId">
-        <strong>{{ item.name }}</strong> · {{ item.code }}
-        <p>Số lượng {{ item.quantity }} · Đơn giá {{ money(item.unitPrice) }} · Thành tiền {{ money(item.totalAmount) }}</p>
-      </li></ul>
-      <nav v-if="itemsLoaded" aria-label="Phân trang chi tiết hóa đơn">
-        <span>{{ itemTotal }} dòng · Trang {{ itemPage }}</span>
-        <button :disabled="itemsBusy || itemPage <= 1" @click="loadItems(itemPage - 1)">Trước</button>
-        <button :disabled="itemsBusy || itemPage >= itemPages" @click="loadItems(itemPage + 1)">Sau</button>
-      </nav>
-    </section>
-    <section v-if="selected" aria-label="Các lần thanh toán">
-      <h2>{{ selected.invoiceCode }} · Các lần thanh toán</h2>
-      <button :disabled="paymentsBusy" @click="loadPayments(1)">Tải lại thanh toán</button>
-      <p v-if="paymentsBusy" role="status">Đang tải thanh toán…</p>
-      <p v-if="paymentError" role="alert">{{ paymentError }}</p>
-      <p v-if="paymentsLoaded && !payments.length">Chưa có khoản thanh toán được ghi nhận.</p>
-      <ul><li v-for="payment in payments" :key="payment.paymentId">
-        #{{ payment.paymentId }} · {{ date(payment.paidAt) }} · {{ payment.paymentMethod === 'Cash' ? 'Tiền mặt' : 'Chuyển khoản' }}
-        <p>Ghi vào hóa đơn: {{ money(payment.amount) }} <strong v-if="payment.isSimulation">· MÔ PHỎNG</strong></p>
-      </li></ul>
-      <nav v-if="paymentsLoaded" aria-label="Phân trang thanh toán">
-        <span>{{ paymentTotal }} khoản · Trang {{ paymentPage }}</span>
-        <button :disabled="paymentsBusy || paymentPage <= 1" @click="loadPayments(paymentPage - 1)">Trước</button>
-        <button :disabled="paymentsBusy || paymentPage >= paymentPages" @click="loadPayments(paymentPage + 1)">Sau</button>
-      </nav>
-    </section>
+      </div>
+
+      <div v-if="validProfile && selectedProfile" class="selected-profile-tag">
+        <span>Hồ sơ hiện tại: <strong>{{ selectedProfile.fullName }}</strong> (Mã: {{ selectedProfile.patientCode }}) · Ngày sinh: {{ birth(selectedProfile.dateOfBirth) }}</span>
+        <span v-if="!selectedProfile.isActive" class="inactive-badge">Đã ngừng hoạt động</span>
+      </div>
+    </div>
+
+    <!-- Bộ lọc tìm kiếm hóa đơn -->
+    <div class="panel filter-panel">
+      <form class="filter-form" @submit.prevent="searchInvoices">
+        <div class="filter-grid">
+          <div class="form-group">
+            <label for="filter-status" class="form-label">Trạng thái thanh toán</label>
+            <select id="filter-status" v-model="status" :disabled="invoicesBusy || !validProfile" class="form-select">
+              <option value="">Tất cả trạng thái</option>
+              <option v-for="(name, index) in statuses" :key="index" :value="String(index)">{{ name }}</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="filter-from-date" class="form-label">Từ ngày lập</label>
+            <input
+              id="filter-from-date"
+              v-model="fromDate"
+              type="date"
+              min="0001-01-02"
+              max="9999-12-31"
+              :disabled="invoicesBusy || !validProfile"
+              class="form-input"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="filter-to-date" class="form-label">Đến ngày lập</label>
+            <input
+              id="filter-to-date"
+              v-model="toDate"
+              type="date"
+              min="0001-01-01"
+              max="9999-12-30"
+              :disabled="invoicesBusy || !validProfile"
+              class="form-input"
+            />
+          </div>
+        </div>
+
+        <div class="filter-actions">
+          <button type="button" class="button button-outline" :disabled="invoicesBusy || !validProfile" @click="resetInvoiceFilters">
+            Xóa bộ lọc
+          </button>
+          <button type="submit" class="button button-primary" :disabled="invoicesBusy || !validProfile">
+            <span>🔍 Lọc hóa đơn</span>
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Trạng thái lọc đã áp dụng -->
+    <div v-if="invoicesLoaded" class="applied-filter-bar">
+      <span>Đang hiển thị: <strong>{{ applied.status == null ? 'Tất cả trạng thái' : statuses[applied.status] }}</strong></span>
+      <span> · Từ: <strong>{{ applied.fromDate ? birth(applied.fromDate) : 'Ban đầu' }}</strong> đến: <strong>{{ applied.toDate ? birth(applied.toDate) : 'Hiện tại' }}</strong></span>
+    </div>
+
+    <!-- Thông báo lỗi khi tải hóa đơn -->
+    <div v-if="invoiceError" class="alert alert-error" role="alert">
+      <span class="alert-icon">⚠️</span>
+      <span>{{ invoiceError }}</span>
+    </div>
+
+    <!-- Loading hóa đơn -->
+    <div v-if="invoicesBusy" class="panel status-panel" role="status">
+      <div class="loading-spinner"></div>
+      <p>Đang tải danh sách hóa đơn điều trị…</p>
+    </div>
+
+    <!-- Empty state -->
+    <div v-else-if="invoicesLoaded && !invoices.length" class="panel empty-panel">
+      <span class="empty-icon">🧾</span>
+      <h3>Không có hóa đơn phù hợp</h3>
+      <p>Hồ sơ này chưa phát sinh chi phí điều trị trong khoảng thời gian đã chọn.</p>
+    </div>
+    <!-- Danh sách Hóa đơn -->
+    <div v-else-if="invoices.length" class="invoices-list">
+      <div
+        v-for="row in invoices"
+        :key="row.invoiceId"
+        class="invoice-card"
+        :class="{ 'invoice-card--active': selected?.invoiceId === row.invoiceId }"
+      >
+        <div class="invoice-card-header">
+          <div class="invoice-code-wrap">
+            <span class="invoice-icon">🧾</span>
+            <div>
+              <h3 class="invoice-code">{{ row.invoiceCode }}</h3>
+              <p class="invoice-date">Lập ngày: {{ date(row.createdAt) }}</p>
+            </div>
+          </div>
+          <span class="status-badge" :class="'status-' + row.status">
+            {{ statuses[row.status] ?? 'Không xác định' }}
+          </span>
+        </div>
+
+        <div class="invoice-card-body">
+          <div class="finance-grid">
+            <div class="finance-item">
+              <span class="finance-label">Tổng chi phí</span>
+              <span class="finance-val total">{{ money(row.totalAmount) }}</span>
+            </div>
+            <div class="finance-item">
+              <span class="finance-label">Đã thanh toán</span>
+              <span class="finance-val paid">{{ money(row.paidAmount) }}</span>
+            </div>
+            <div class="finance-item">
+              <span class="finance-label">Còn nợ</span>
+              <span class="finance-val debt" :class="{ 'debt--zero': row.remainingAmount <= 0 }">
+                {{ money(row.remainingAmount) }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="invoice-card-actions">
+          <button
+            type="button"
+            class="button"
+            :class="selected?.invoiceId === row.invoiceId ? 'button-secondary' : 'button-outline-primary'"
+            :disabled="invoicesBusy"
+            @click="selectInvoice(row.invoiceId)"
+          >
+            <span>{{ selected?.invoiceId === row.invoiceId ? 'Đang xem chi tiết' : 'Xem dịch vụ & đợt trả tiền' }}</span>
+            <span aria-hidden="true">→</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phân trang hóa đơn -->
+    <div v-if="invoicesLoaded && invoicePages > 1" class="panel pagination-panel" aria-label="Phân trang hóa đơn">
+      <span class="pagination-info">
+        Tổng <strong>{{ invoiceTotal }}</strong> hóa đơn · Trang <strong>{{ invoicePage }}</strong>/{{ invoicePages }}
+      </span>
+      <div class="pagination-buttons">
+        <button
+          type="button"
+          class="button button-sm button-secondary"
+          :disabled="invoicesBusy || invoicePage <= 1"
+          @click="loadInvoices(invoicePage - 1)"
+        >
+          ← Trang trước
+        </button>
+        <button
+          type="button"
+          class="button button-sm button-secondary"
+          :disabled="invoicesBusy || invoicePage >= invoicePages"
+          @click="loadInvoices(invoicePage + 1)"
+        >
+          Trang sau →
+        </button>
+      </div>
+    </div>
+    <!-- Khối chi tiết hóa đơn được chọn -->
+    <div v-if="selected" class="detail-container">
+      <!-- Section: Dòng dịch vụ thực hiện -->
+      <section class="panel detail-panel" aria-label="Chi tiết dịch vụ">
+        <div class="detail-header">
+          <div class="detail-title-wrap">
+            <span class="detail-icon">🦷</span>
+            <div>
+              <h2 class="detail-title">Dịch vụ điều trị · {{ selected.invoiceCode }}</h2>
+              <p class="detail-subtitle">Đơn giá và chiết khấu chốt tại thời điểm điều trị</p>
+            </div>
+          </div>
+          <button type="button" class="button button-sm button-secondary" :disabled="itemsBusy" @click="loadItems(1)">
+            <span :class="{ 'spin-icon': itemsBusy }">🔄</span>
+            <span>Tải lại dịch vụ</span>
+          </button>
+        </div>
+
+        <div v-if="itemsBusy" class="status-panel-sm" role="status">
+          <div class="loading-spinner"></div>
+          <p>Đang tải chi tiết dịch vụ…</p>
+        </div>
+        <div v-else-if="itemError" class="alert alert-error" role="alert">
+          <span>⚠️ {{ itemError }}</span>
+        </div>
+        <div v-else-if="itemsLoaded && !items.length" class="empty-detail">
+          <p>Hóa đơn này chưa có dòng dịch vụ nào.</p>
+        </div>
+        <div v-else class="items-table-wrap">
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th>Dịch vụ / Thủ thuật</th>
+                <th class="text-center">Số lượng</th>
+                <th class="text-right">Đơn giá</th>
+                <th class="text-right">Thành tiền</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in items" :key="item.itemId">
+                <td>
+                  <strong>{{ item.name }}</strong>
+                  <span class="code-badge">{{ item.code }}</span>
+                </td>
+                <td class="text-center">{{ item.quantity }}</td>
+                <td class="text-right">{{ money(item.unitPrice) }}</td>
+                <td class="text-right"><strong>{{ money(item.totalAmount) }}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div v-if="itemsLoaded && itemPages > 1" class="detail-pagination">
+          <button type="button" class="btn-text" :disabled="itemsBusy || itemPage <= 1" @click="loadItems(itemPage - 1)">← Trước</button>
+          <span>Trang {{ itemPage }}/{{ itemPages }}</span>
+          <button type="button" class="btn-text" :disabled="itemsBusy || itemPage >= itemPages" @click="loadItems(itemPage + 1)">Sau →</button>
+        </div>
+      </section>
+
+      <!-- Section: Lịch sử các lần thanh toán (F_BIL_03) -->
+      <section class="panel detail-panel" aria-label="Lịch sử các đợt trả tiền">
+        <div class="detail-header">
+          <div class="detail-title-wrap">
+            <span class="detail-icon">💳</span>
+            <div>
+              <h2 class="detail-title">Lịch sử thanh toán & Trả góp · {{ selected.invoiceCode }}</h2>
+              <p class="detail-subtitle">Ghi nhận các đợt thanh toán tiền mặt và chuyển khoản</p>
+            </div>
+          </div>
+          <button type="button" class="button button-sm button-secondary" :disabled="paymentsBusy" @click="loadPayments(1)">
+            <span :class="{ 'spin-icon': paymentsBusy }">🔄</span>
+            <span>Tải lại thanh toán</span>
+          </button>
+        </div>
+
+        <div v-if="paymentsBusy" class="status-panel-sm" role="status">
+          <div class="loading-spinner"></div>
+          <p>Đang tải lịch sử thanh toán…</p>
+        </div>
+        <div v-else-if="paymentError" class="alert alert-error" role="alert">
+          <span>⚠️ {{ paymentError }}</span>
+        </div>
+        <div v-else-if="paymentsLoaded && !payments.length" class="empty-detail">
+          <p>Chưa có khoản thanh toán nào được ghi nhận cho hóa đơn này.</p>
+        </div>
+        <div v-else class="payments-list">
+          <div v-for="payment in payments" :key="payment.paymentId" class="payment-item">
+            <div class="payment-info">
+              <span class="payment-id">Đợt #{{ payment.paymentId }}</span>
+              <span class="payment-date">{{ date(payment.paidAt) }}</span>
+              <span class="method-tag">{{ payment.paymentMethod === 'Cash' ? '💵 Tiền mặt' : '🏦 Chuyển khoản' }}</span>
+              <span v-if="payment.isSimulation" class="sim-badge">MÔ PHỎNG</span>
+            </div>
+            <div class="payment-amount">
+              <span class="amount-label">Số tiền ghi nhận:</span>
+              <strong class="amount-val">{{ money(payment.amount) }}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="paymentsLoaded && paymentPages > 1" class="detail-pagination">
+          <button type="button" class="btn-text" :disabled="paymentsBusy || paymentPage <= 1" @click="loadPayments(paymentPage - 1)">← Trước</button>
+          <span>Trang {{ paymentPage }}/{{ paymentPages }}</span>
+          <button type="button" class="btn-text" :disabled="paymentsBusy || paymentPage >= paymentPages" @click="loadPayments(paymentPage + 1)">Sau →</button>
+        </div>
+      </section>
+    </div>
   </main>
 </template>
 <script setup lang="ts">
@@ -107,7 +343,7 @@ function clearItems() { itemVersion++; items.value = []; itemsBusy.value = false
 function clearPayments() { clearItems(); paymentVersion++; selected.value = null; payments.value = []; paymentsBusy.value = false; paymentsLoaded.value = false; paymentTotal.value = 0; paymentPages.value = 0; paymentPage.value = 1; paymentError.value = ''; }
 function clearInvoices() { invoiceVersion++; invoices.value = []; invoicesBusy.value = false; invoicesLoaded.value = false; invoiceTotal.value = 0; invoicePages.value = 0; invoicePage.value = 1; invoiceError.value = ''; clearPayments(); }
 function clearFilters() { status.value = ''; fromDate.value = ''; toDate.value = ''; applied.value = {}; }
-function selectProfile() { clearFilters(); clearInvoices(); }
+function selectProfile() { clearFilters(); clearInvoices(); if (validProfile.value) void loadInvoices(1); }
 function validDate(value: string) {
   if (!value) return true;
   if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value) || value < '0001-01-01') return false;
@@ -142,6 +378,7 @@ async function loadProfiles() { clearFilters();
       else if (rows.length > 0) {
         profiles.value = rows.map(p => ({ patientId: p.patientId, patientCode: p.patientCode, fullName: p.fullName, dateOfBirth: p.dateOfBirth, isActive: p.isActive }));
         patientId.value = rows[0].patientId;
+        void loadInvoices(1);
       }
     }
   } catch { if (ticket === profileVersion) profileError.value = 'Không tải được hồ sơ. Vui lòng tải lại.'; }
@@ -193,7 +430,618 @@ onMounted(loadProfiles);
 onUnmounted(() => { profileVersion++; profiles.value = []; patientId.value = 0; clearFilters(); clearInvoices(); });
 </script>
 <style scoped>
-.page { max-width: 900px; margin: auto; padding: 1rem; }
-label { display: block; margin: 1rem 0; } button, select { padding: .5rem; margin: .3rem; }
-ul { list-style: none; padding: 0; } li { border: 1px solid #ddd; padding: 1rem; margin: .7rem 0; }
+.page-container {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+  color: #1e293b;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.eyebrow {
+  margin: 0 0 0.25rem;
+  color: #0284c7;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+h1 {
+  font-size: 1.65rem;
+  font-weight: 850;
+  color: #0f2d59;
+  margin: 0;
+  line-height: 1.25;
+}
+
+.subtitle {
+  margin: 0.35rem 0 0;
+  color: #64748b;
+  font-size: 0.885rem;
+  line-height: 1.45;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.panel {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(15, 45, 89, 0.03);
+}
+
+/* Profile picker */
+.profile-picker-panel {
+  padding: 1rem 1.25rem;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.picker-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.picker-label {
+  font-size: 0.85rem;
+  font-weight: 750;
+  color: #0f2d59;
+}
+
+.profile-select {
+  max-width: 320px;
+}
+
+.selected-profile-tag {
+  font-size: 0.8rem;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.inactive-badge {
+  background: #fee2e2;
+  color: #991b1b;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.725rem;
+}
+
+/* Filter panel */
+.filter-panel {
+  padding: 1.25rem;
+}
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.form-label {
+  font-size: 0.825rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.form-input,
+.form-select {
+  width: 100%;
+  box-sizing: border-box;
+  height: 38px;
+  padding: 0 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.85rem;
+  color: #1e293b;
+  background: #ffffff;
+}
+
+.form-input:focus,
+.form-select:focus {
+  outline: none;
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+}
+
+.filter-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.applied-filter-bar {
+  font-size: 0.825rem;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 0.6rem 0.85rem;
+  border-radius: 6px;
+}
+
+/* Invoices list */
+.invoices-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.invoice-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  transition: all 0.15s ease;
+}
+
+.invoice-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 12px rgba(15, 45, 89, 0.05);
+}
+
+.invoice-card--active {
+  border-color: #0284c7;
+  background: #f0f9ff;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2);
+}
+
+.invoice-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.invoice-code-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.invoice-icon {
+  font-size: 1.35rem;
+}
+
+.invoice-code {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 850;
+  color: #0f2d59;
+}
+
+.invoice-date {
+  margin: 0.15rem 0 0;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.status-badge {
+  font-size: 0.775rem;
+  font-weight: 750;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+}
+
+.status-0 { background: #f1f5f9; color: #475569; }
+.status-1 { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+.status-2 { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
+.status-3 { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+.status-4 { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+
+.finance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  background: #f8fafc;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.finance-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.finance-label {
+  font-size: 0.75rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+}
+
+.finance-val {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #1e293b;
+}
+
+.finance-val.total { color: #0f2d59; }
+.finance-val.paid { color: #166534; }
+.finance-val.debt { color: #dc2626; }
+.finance-val.debt--zero { color: #64748b; }
+
+.invoice-card-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+/* Detail container */
+.detail-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.detail-panel {
+  padding: 1.5rem;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.25rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.detail-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.detail-icon {
+  font-size: 1.35rem;
+}
+
+.detail-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #0f2d59;
+}
+
+.detail-subtitle {
+  margin: 0.15rem 0 0;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+/* Tables */
+.items-table-wrap {
+  overflow-x: auto;
+}
+
+.items-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.865rem;
+}
+
+.items-table th {
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 750;
+  padding: 0.75rem 0.85rem;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+}
+
+.items-table td {
+  padding: 0.85rem;
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
+}
+
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+
+.code-badge {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.725rem;
+  font-weight: 700;
+  background: #e2e8f0;
+  color: #334155;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  margin-left: 0.4rem;
+}
+
+/* Payments list */
+.payments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.payment-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.85rem 1rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.payment-info {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+}
+
+.payment-id {
+  font-weight: 750;
+  color: #0f2d59;
+}
+
+.payment-date {
+  color: #64748b;
+}
+
+.method-tag {
+  font-weight: 700;
+  color: #334155;
+}
+
+.sim-badge {
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.725rem;
+  font-weight: 750;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+}
+
+.payment-amount {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.amount-label {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.amount-val {
+  font-size: 1rem;
+  color: #166534;
+}
+
+.detail-pagination {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  font-size: 0.825rem;
+  color: #64748b;
+}
+
+/* Pagination panel */
+.pagination-panel {
+  padding: 0.85rem 1.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.pagination-info {
+  font-size: 0.835rem;
+  color: #64748b;
+}
+
+.pagination-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* Buttons */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  height: 40px;
+  padding: 0 1.15rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.button-sm {
+  height: 34px;
+  padding: 0 0.85rem;
+  font-size: 0.825rem;
+}
+
+.button-primary {
+  background: #0284c7;
+  color: #ffffff;
+}
+
+.button-primary:hover:not(:disabled) {
+  background: #0369a1;
+}
+
+.button-secondary {
+  background: #ffffff;
+  color: #334155;
+  border-color: #cbd5e1;
+}
+
+.button-secondary:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.button-outline {
+  background: #ffffff;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+
+.button-outline:hover:not(:disabled) {
+  background: #f8fafc;
+}
+
+.button-outline-primary {
+  background: #f0f9ff;
+  color: #0284c7;
+  border-color: #bae6fd;
+}
+
+.button-outline-primary:hover:not(:disabled) {
+  background: #e0f2fe;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-text {
+  background: transparent;
+  border: none;
+  color: #0284c7;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.btn-text:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Alerts & status */
+.alert {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  font-size: 0.865rem;
+}
+
+.alert-icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.alert-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.alert-info {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  color: #0369a1;
+}
+
+.status-panel,
+.empty-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 3rem 1rem;
+  color: #64748b;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 2.2rem;
+}
+
+.empty-panel h3 {
+  margin: 0;
+  color: #0f2d59;
+  font-size: 1.1rem;
+}
+
+.empty-panel p,
+.empty-detail p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.status-panel-sm {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 1.5rem 0;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #0284c7;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 </style>

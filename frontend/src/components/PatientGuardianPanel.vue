@@ -2,7 +2,7 @@
   <div class="guardian-management">
     <div class="section-header">
       <div>
-        <p class="eyebrow">QUYỀN GIÁM HỘ (DL-353, DL-358, DL-359)</p>
+        <p class="eyebrow">QUAN HỆ ĐẠI DIỆN HỢP PHÁP</p>
         <h3>Đại diện hợp pháp & Giám hộ</h3>
       </div>
       <button
@@ -141,7 +141,7 @@
     <!-- Modal Tách Tài Khoản Độc Lập -->
     <div v-if="showPromoteModal" class="modal-backdrop">
       <div class="modal-content">
-        <h3>Chuyển đổi thành tài khoản độc lập (DL-359)</h3>
+        <h3>Chuyển đổi thành tài khoản độc lập</h3>
         <p>Bệnh nhân đã đủ điều kiện có CCCD riêng. Khi tạo tài khoản độc lập, quyền giám hộ hiện hành sẽ được chấm dứt tự động cùng giao dịch.</p>
         <form @submit.prevent="submitPromote">
           <label>

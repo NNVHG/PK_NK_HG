@@ -81,7 +81,119 @@ function sentTime(value: string) { return new Intl.DateTimeFormat('vi-VN', { tim
 onUnmounted(reset);
 </script>
 <style scoped>
-section { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
-button, input { font: inherit; padding: .5rem; margin: .3rem; } ul { padding: 0; list-style: none; }
-li { border-top: 1px solid #eee; padding: .7rem 0; } .message { white-space: pre-wrap; overflow-wrap: anywhere; } [role=alert] { color: #b91c1c; }
+section {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin: 1.25rem 0;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 45, 89, 0.04);
+}
+
+h3 {
+  color: #0f2d59;
+  font-weight: 600;
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+}
+
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: #0f2d59;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  margin: 0.35rem;
+}
+
+button:hover:not(:disabled) {
+  background: #1e3a8a;
+}
+
+button:focus-visible {
+  outline: 3px solid rgba(2, 132, 199, 0.35);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+input:not([type="checkbox"]) {
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.95rem;
+  color: #1e293b;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  margin: 0.35rem;
+  box-sizing: border-box;
+}
+
+input:focus-visible {
+  outline: 3px solid rgba(2, 132, 199, 0.35);
+  outline-offset: 2px;
+  border-color: #0284c7;
+}
+
+input[type="checkbox"] {
+  width: 1.125rem;
+  height: 1.125rem;
+  accent-color: #0284c7;
+  vertical-align: middle;
+  margin-right: 0.4rem;
+}
+
+ul {
+  padding: 0;
+  list-style: none;
+  margin: 1rem 0;
+}
+
+li {
+  border-top: 1px solid #e2e8f0;
+  padding: 0.75rem 0;
+}
+
+li:first-child {
+  border-top: none;
+}
+
+.message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: #f8fafc;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  margin-top: 0.35rem;
+}
+
+[role="alert"] {
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-weight: 500;
+  margin: 0.75rem 0;
+}
+
+@media (max-width: 640px) {
+  button, input:not([type="checkbox"]) {
+    width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+  }
+}
 </style>

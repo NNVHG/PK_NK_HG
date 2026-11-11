@@ -1,18 +1,48 @@
 <template>
   <section class="staff-page">
-    <nav aria-label="Quản lý tài khoản và quyền">
-      <RouterLink to="/management/admin/staff" aria-current="page">Tài khoản nhân viên</RouterLink>
-      <span aria-hidden="true"> · </span>
-      <RouterLink to="/management/admin/role-permissions">Ma trận quyền (chỉ đọc)</RouterLink>
+    <nav class="sub-nav" aria-label="Quản lý tài khoản và quyền">
+      <RouterLink to="/management/admin/staff" class="nav-link nav-link--active" aria-current="page">
+        <span class="nav-icon">👥</span> Tài khoản nhân viên
+      </RouterLink>
+      <span class="nav-sep" aria-hidden="true">/</span>
+      <RouterLink to="/management/admin/role-permissions" class="nav-link">
+        <span class="nav-icon">🛡️</span> Ma trận quyền RBAC
+      </RouterLink>
     </nav>
     <header class="page-heading">
       <div>
-        <p class="eyebrow">MOD_MST · F_MST_07</p>
+        <p class="eyebrow">QUẢN TRỊ TỔ CHỨC & NHÂN SỰ</p>
         <h1>Tài khoản nhân viên</h1>
-        <p class="subtitle">Tạo tài khoản, cập nhật vai trò và quản lý trạng thái truy cập.</p>
+        <p class="subtitle">Quản lý tài khoản cán bộ phòng khám, thiết lập vai trò y tế và bảo mật truy cập hệ thống.</p>
       </div>
-      <button class="button button-primary" type="button" @click="openCreateForm">+ Thêm nhân viên</button>
+      <button class="button button-primary" type="button" @click="openCreateForm">
+        <span class="btn-icon">＋</span> Thêm nhân viên
+      </button>
     </header>
+
+    <!-- Stat cards tổng quan -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Tổng số tài khoản</div>
+        <div class="stat-value">{{ totalCount }}</div>
+        <div class="stat-hint">Cán bộ & nhân viên</div>
+      </div>
+      <div class="stat-card stat-card--success">
+        <div class="stat-label">Đang hoạt động</div>
+        <div class="stat-value">{{ activeStaffCount }}</div>
+        <div class="stat-hint">Sẵn sàng ca làm việc</div>
+      </div>
+      <div class="stat-card stat-card--warning">
+        <div class="stat-label">Chờ xác minh OTP</div>
+        <div class="stat-value">{{ pendingActivationCount }}</div>
+        <div class="stat-hint">Nhân viên mới tạo</div>
+      </div>
+      <div class="stat-card stat-card--info">
+        <div class="stat-label">Bác sĩ / Nha sĩ</div>
+        <div class="stat-value">{{ dentistCount }}</div>
+        <div class="stat-hint">Đảm nhiệm lâm sàng</div>
+      </div>
+    </div>
 
     <p v-if="pageError" class="alert alert-error" role="alert">{{ pageError }}</p>
     <p v-if="successMessage" class="alert alert-success" role="status">{{ successMessage }}</p>
@@ -20,29 +50,34 @@
     <section class="panel filters" aria-label="Bộ lọc nhân viên">
       <label class="search-field">
         <span>Tìm theo họ tên hoặc SĐT</span>
-        <input
-          v-model="searchText"
-          type="search"
-          placeholder="Nhập tên hoặc số điện thoại"
-          @keydown.enter="applyFilters"
-        />
+        <div class="input-icon-wrapper">
+          <span class="field-icon">🔍</span>
+          <input
+            v-model="searchText"
+            type="search"
+            placeholder="Nhập tên nhân viên hoặc số điện thoại..."
+            @keydown.enter="applyFilters"
+          />
+        </div>
       </label>
       <label>
-        <span>Vai trò</span>
+        <span>Vai trò chuyên môn</span>
         <select v-model="roleFilter" @change="applyFilters">
           <option value="">Tất cả vai trò</option>
           <option v-for="role in roleOptions" :key="role.code" :value="role.code">{{ role.label }}</option>
         </select>
       </label>
       <label>
-        <span>Trạng thái</span>
+        <span>Trạng thái tài khoản</span>
         <select v-model="statusFilter" @change="applyFilters">
           <option value="">Tất cả trạng thái</option>
           <option value="true">Đang hoạt động</option>
           <option value="false">Đã khóa</option>
         </select>
       </label>
-      <button class="button button-secondary filter-button" type="button" @click="applyFilters">Tìm kiếm</button>
+      <button class="button button-secondary filter-button" type="button" @click="applyFilters">
+        Lọc danh sách
+      </button>
     </section>
 
     <section class="panel list-panel">
@@ -280,6 +315,10 @@ const formTitleId = computed(() => editingStaffId.value === null ? 'create-staff
 const firstItem = computed(() => totalCount.value === 0 ? 0 : (page.value - 1) * pageSize.value + 1);
 const lastItem = computed(() => Math.min(page.value * pageSize.value, totalCount.value));
 
+const activeStaffCount = computed(() => staffItems.value.filter(s => s.isActive).length);
+const pendingActivationCount = computed(() => staffItems.value.filter(s => s.requiresPhoneActivation).length);
+const dentistCount = computed(() => staffItems.value.filter(s => s.roleCode === 'DENTIST').length);
+
 onMounted(() => loadStaff());
 
 function emptyForm(): StaffForm {
@@ -457,56 +496,145 @@ async function confirmStatusChange() {
 
 <style scoped>
 .staff-page {
-  max-width: 1180px;
+  max-width: 1300px;
   margin: 0 auto;
-  color: #223247;
+  padding: 1.5rem 1rem 3rem;
+  color: #1e293b;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.sub-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.875rem;
+}
+
+.nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #64748b;
+  text-decoration: none;
+  font-weight: 600;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.nav-link:hover {
+  color: #0284c7;
+  background: #f0f9ff;
+}
+
+.nav-link--active {
+  color: #0284c7;
+  background: #e0f2fe;
+}
+
+.nav-sep {
+  color: #cbd5e1;
 }
 
 .page-heading {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 1.25rem;
-  margin-bottom: 1.5rem;
 }
 
 .eyebrow {
-  margin: 0 0 0.35rem;
-  color: #3980ad;
-  font-size: 0.73rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-}
-
-h1,
-h2 {
-  margin: 0;
+  margin: 0 0 0.25rem;
+  color: #0284c7;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 h1 {
-  font-size: clamp(1.65rem, 3vw, 2.1rem);
+  font-size: 1.65rem;
+  font-weight: 850;
+  color: #0f2d59;
+  margin: 0;
+  line-height: 1.25;
 }
 
 .subtitle {
-  margin: 0.45rem 0 0;
-  color: #6b7b8d;
-  line-height: 1.5;
+  margin: 0.35rem 0 0;
+  color: #64748b;
+  font-size: 0.885rem;
+  line-height: 1.45;
 }
 
+/* Stats Cards */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.stat-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.15rem 1.25rem;
+  box-shadow: 0 2px 6px rgba(15, 45, 89, 0.03);
+  display: flex;
+  flex-direction: column;
+  border-left: 4px solid #94a3b8;
+}
+
+.stat-card--success {
+  border-left-color: #10b981;
+}
+
+.stat-card--warning {
+  border-left-color: #f59e0b;
+}
+
+.stat-card--info {
+  border-left-color: #0284c7;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.stat-value {
+  font-size: 1.85rem;
+  font-weight: 850;
+  color: #0f2d59;
+  line-height: 1.2;
+  margin: 0.3rem 0;
+}
+
+.stat-hint {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+/* Panel & Filter */
 .panel {
-  border: 1px solid #e3eaf0;
-  border-radius: 13px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
   background: #fff;
-  box-shadow: 0 8px 24px rgba(30, 56, 79, 0.05);
+  box-shadow: 0 2px 6px rgba(15, 45, 89, 0.03);
 }
 
 .filters {
   display: grid;
-  grid-template-columns: minmax(220px, 1.6fr) minmax(160px, 1fr) minmax(160px, 1fr) auto;
+  grid-template-columns: minmax(240px, 1.8fr) minmax(180px, 1fr) minmax(180px, 1fr) auto;
   align-items: end;
-  gap: 0.85rem;
-  padding: 1rem;
-  margin-bottom: 1rem;
+  gap: 1rem;
+  padding: 1.15rem 1.25rem;
 }
 
 .filters label,
@@ -514,9 +642,27 @@ h1 {
 .field {
   display: grid;
   gap: 0.4rem;
-  color: #405467;
-  font-size: 0.82rem;
+  color: #334155;
+  font-size: 0.825rem;
   font-weight: 600;
+}
+
+.input-icon-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.field-icon {
+  position: absolute;
+  left: 0.75rem;
+  font-size: 0.85rem;
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.input-icon-wrapper input {
+  padding-left: 2.25rem !important;
 }
 
 .filters input,
@@ -526,20 +672,30 @@ h1 {
 .field select {
   box-sizing: border-box;
   width: 100%;
-  min-height: 2.55rem;
-  padding: 0.55rem 0.7rem;
-  border: 1px solid #d3dde6;
+  height: 40px;
+  padding: 0 0.85rem;
+  border: 1px solid #cbd5e1;
   border-radius: 8px;
-  background: #fff;
-  color: #26394c;
+  background: #f8fafc;
+  color: #1e293b;
   font: inherit;
-  font-size: 0.88rem;
+  font-size: 0.875rem;
+  outline: none;
+  transition: all 0.15s ease;
 }
 
-input:focus,
-select:focus {
-  border-color: #4b93bf;
-  outline: 3px solid rgba(75, 147, 191, 0.14);
+.filters input:focus,
+.filters select:focus,
+.page-controls select:focus,
+.field input:focus,
+.field select:focus {
+  border-color: #0284c7;
+  background: #ffffff;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
+}
+
+.filter-button {
+  height: 40px;
 }
 
 .list-panel {
@@ -554,42 +710,41 @@ table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
-  white-space: nowrap;
+  min-width: 950px;
 }
 
 th,
 td {
-  padding: 0.9rem 1rem;
-  border-bottom: 1px solid #edf1f4;
+  padding: 0.9rem 1.15rem;
+  border-bottom: 1px solid #f1f5f9;
   vertical-align: middle;
 }
 
 th {
-  background: #f8fafb;
-  color: #68798a;
-  font-size: 0.74rem;
-  font-weight: 700;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.775rem;
+  font-weight: 750;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 td {
-  color: #46596b;
-  font-size: 0.88rem;
-}
-
-td strong,
-td small {
-  display: block;
+  color: #334155;
+  font-size: 0.885rem;
 }
 
 td strong {
-  color: #26394c;
+  display: block;
+  color: #0f2d59;
+  font-weight: 700;
 }
 
 td small {
-  margin-top: 0.25rem;
-  color: #8593a0;
+  display: block;
+  margin-top: 0.2rem;
+  color: #64748b;
   font-size: 0.75rem;
 }
 
@@ -600,7 +755,22 @@ td small {
 .row-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.8rem;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.row-actions a {
+  color: #0284c7;
+  text-decoration: none;
+  font-size: 0.825rem;
+  font-weight: 700;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  background: #f0f9ff;
+}
+
+.row-actions a:hover {
+  background: #e0f2fe;
 }
 
 .role-badge,
@@ -608,49 +778,72 @@ td small {
   display: inline-flex;
   align-items: center;
   min-height: 1.65rem;
-  padding: 0.2rem 0.6rem;
-  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+  border-radius: 6px;
   font-size: 0.76rem;
-  font-weight: 700;
+  font-weight: 750;
 }
 
 .role-badge {
-  background: #eef4f8;
-  color: #49677e;
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
 }
 
 .status-active {
-  background: #e7f7ef;
-  color: #176341;
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
 }
 
 .status-locked {
-  background: #fff0ef;
-  color: #a52b25;
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
 }
 
 .text-button {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: #347ba7;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #0284c7;
   font: inherit;
   font-size: 0.82rem;
   font-weight: 700;
   cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.text-button:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #cbd5e1;
 }
 
 .text-button:disabled {
-  color: #a2adb6;
+  color: #94a3b8;
   cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .text-danger {
-  color: #b8433d;
+  color: #dc2626;
+  border-color: #fee2e2;
+  background: #fff5f5;
+}
+
+.text-danger:hover:not(:disabled) {
+  background: #fee2e2;
 }
 
 .text-success {
-  color: #24784f;
+  color: #059669;
+  border-color: #d1fae5;
+  background: #f0fdf4;
+}
+
+.text-success:hover:not(:disabled) {
+  background: #d1fae5;
 }
 
 .pagination,

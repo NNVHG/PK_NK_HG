@@ -121,5 +121,111 @@ onMounted(()=>{props.invoice.items.forEach(i=>{quantities[i.id]=0;});});
 </script>
 
 <style scoped>
-.refund-proposal{border:1px solid #9aa;padding:1rem;margin:1.25rem 0;border-radius:.4rem}.refund-proposal label{display:block;margin:.7rem 0}.refund-proposal input[type=number],.refund-proposal select,.refund-proposal textarea{display:block;padding:.5rem;max-width:100%;box-sizing:border-box}.refund-proposal textarea{width:min(100%,38rem);min-height:4rem}.refund-proposal button{padding:.55rem;margin:.35rem}.proposal-card{border-top:1px solid #bbb;padding:.8rem 0}.refund-proposal :focus-visible{outline:3px solid #125c97;outline-offset:3px}
+.refund-proposal {
+  border: 1px solid #e2e8f0;
+  padding: 1.25rem;
+  margin: 1.25rem 0;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 45, 89, 0.04);
+}
+
+.refund-proposal h3,
+.refund-proposal h4 {
+  color: #0f2d59;
+  font-weight: 600;
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+}
+
+.refund-proposal label {
+  display: block;
+  font-weight: 500;
+  color: #334155;
+  margin: 0.75rem 0 0.35rem;
+  font-size: 0.925rem;
+}
+
+.refund-proposal input:not([type="checkbox"]):not([type="radio"]),
+.refund-proposal select,
+.refund-proposal textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.95rem;
+  color: #1e293b;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.refund-proposal textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.refund-proposal input:focus-visible,
+.refund-proposal select:focus-visible,
+.refund-proposal textarea:focus-visible {
+  outline: 3px solid rgba(2, 132, 199, 0.35);
+  outline-offset: 2px;
+  border-color: #0284c7;
+}
+
+.refund-proposal input[type="checkbox"] {
+  width: 1.125rem;
+  height: 1.125rem;
+  accent-color: #0284c7;
+  vertical-align: middle;
+  margin-right: 0.4rem;
+}
+
+.refund-proposal button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: #0f2d59;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  margin: 0.4rem 0.4rem 0.4rem 0;
+}
+
+.refund-proposal button:hover:not(:disabled) {
+  background: #1e3a8a;
+}
+
+.refund-proposal button:focus-visible {
+  outline: 3px solid rgba(2, 132, 199, 0.35);
+  outline-offset: 2px;
+}
+
+.refund-proposal button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.proposal-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+  background: #f8fafc;
+}
+
+@media (max-width: 640px) {
+  .refund-proposal button {
+    width: 100%;
+    margin-right: 0;
+  }
+}
 </style>

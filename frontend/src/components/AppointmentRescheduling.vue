@@ -1,23 +1,111 @@
 <template>
-  <button :disabled="reading || busy" @click="open">{{ reading ? 'Đang tải…' : 'Đổi lịch' }}</button>
-  <dialog ref="dialog" :aria-labelledby="'reschedule-title-' + appointmentId" @cancel.prevent="close">
-    <form @submit.prevent="save">
-      <h2 :id="'reschedule-title-' + appointmentId">Đổi lịch #{{ appointmentId }} · {{ patientName }}</h2>
-      <p v-if="current">Lịch hiện tại: {{ current.appointmentDate }} · {{ current.slotTime.slice(0, 5) }} · khung {{ current.slotDurationMinutes ?? 30 }} phút · {{ current.dentistName || 'Chưa phân nha sĩ' }}. Đã đổi {{ current.rescheduleCount }} lần.</p>
-      <p v-if="slotDurationMinutes">Độ dài khung hẹn mới: {{ slotDurationMinutes }} phút.</p>
-      <p v-if="error" role="alert">{{ error }}</p>
-      <p v-if="scheduleError" role="alert">{{ scheduleError }} <button type="button" :disabled="busy || scheduleLoading" @click="loadSchedule">Tải lại giờ</button></p>
-      <p v-if="selfService && eligibility">{{ eligibility.message || `Bạn còn ${eligibility.remainingChanges} lần đổi lịch. Chỉ được đổi trước giờ hẹn ít nhất 2 giờ.` }}</p>
-      <template v-if="current?.status === 'Scheduled' && (!selfService || eligibility?.canReschedule)">
-        <label :for="'new-day-' + appointmentId">Ngày mới</label><input :id="'new-day-' + appointmentId" v-model="day" type="date" :min="today" :disabled="busy" required />
-        <label :for="'new-time-' + appointmentId">Giờ mới</label><select :id="'new-time-' + appointmentId" v-model="time" :disabled="busy" required><option v-for="slot in slots" :key="slot">{{ slot }}</option></select>
-        <label :for="'reschedule-reason-' + appointmentId">Lý do đổi lịch (bắt buộc, tối đa 500 ký tự)</label><textarea :id="'reschedule-reason-' + appointmentId" v-model.trim="reason" maxlength="500" :disabled="busy" required />
-        <label><input v-model="confirmed" type="checkbox" :disabled="busy" /> {{ selfService ? 'Tôi xác nhận ngày, giờ mới cho hồ sơ này' : 'Đã đối chiếu ngày, giờ và yêu cầu với khách' }}</label>
-        <button :disabled="busy || !confirmed">{{ busy ? 'Đang đổi lịch…' : 'Xác nhận đổi lịch' }}</button>
-      </template>
-      <p v-else-if="current && !selfService">Lịch không còn ở trạng thái chờ khám. Tải lại danh sách để đối chiếu.</p>
-      <button type="button" :disabled="busy" @click="close">Quay lại, giữ lịch</button>
-    </form>
+  <button type="button" class="action-btn action-btn--edit" :disabled="reading || busy" @click="open">
+    <span>{{ reading ? 'Đang tải…' : 'Đổi lịch hẹn' }}</span>
+  </button>
+
+  <dialog ref="dialog" class="custom-dialog" :aria-labelledby="'reschedule-title-' + appointmentId" @cancel.prevent="close">
+    <div class="dialog-content">
+      <div class="dialog-header">
+        <div class="dialog-title-wrap">
+          <span class="dialog-icon">📅</span>
+          <div>
+            <h2 :id="'reschedule-title-' + appointmentId" class="dialog-title">
+              Đổi lịch khám #{{ appointmentId }}
+            </h2>
+            <p class="dialog-subtitle">Bệnh nhân: <strong>{{ patientName }}</strong></p>
+          </div>
+        </div>
+        <button type="button" class="dialog-close-btn" :disabled="busy" aria-label="Đóng hộp thoại" @click="close">✕</button>
+      </div>
+
+      <form class="dialog-form" @submit.prevent="save">
+        <div v-if="current" class="info-box">
+          <div class="info-row">
+            <span class="info-label">Lịch hiện tại:</span>
+            <span class="info-val">{{ formatDate(current.appointmentDate) }} lúc {{ current.slotTime.slice(0, 5) }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Nha sĩ:</span>
+            <span class="info-val">{{ current.dentistName || 'Chưa phân nha sĩ' }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Số lần đã đổi:</span>
+            <span class="info-val">{{ current.rescheduleCount }} lần</span>
+          </div>
+        </div>
+
+        <div v-if="error" class="dialog-alert dialog-alert--error" role="alert">
+          <span>⚠️ {{ error }}</span>
+        </div>
+
+        <div v-if="scheduleError" class="dialog-alert dialog-alert--error" role="alert">
+          <span>{{ scheduleError }}</span>
+          <button type="button" class="btn-text" :disabled="busy || scheduleLoading" @click="loadSchedule">Tải lại giờ</button>
+        </div>
+
+        <div v-if="selfService && eligibility" class="eligibility-notice">
+          <span>ℹ️ {{ eligibility.message || `Bạn còn ${eligibility.remainingChanges} lần đổi lịch. Chỉ được đổi trước giờ hẹn ít nhất 2 giờ.` }}</span>
+        </div>
+
+        <template v-if="current?.status === 'Scheduled' && (!selfService || eligibility?.canReschedule)">
+          <div class="form-row">
+            <div class="form-group">
+              <label :for="'new-day-' + appointmentId" class="form-label">Ngày khám mới <b class="req">*</b></label>
+              <input :id="'new-day-' + appointmentId" v-model="day" type="date" :min="today" :disabled="busy" required class="form-input" />
+            </div>
+
+            <div class="form-group">
+              <label :for="'new-time-' + appointmentId" class="form-label">
+                Giờ mới <b class="req">*</b>
+                <small v-if="slotDurationMinutes" class="text-muted">({{ slotDurationMinutes }}p)</small>
+              </label>
+              <select :id="'new-time-' + appointmentId" v-model="time" :disabled="busy || scheduleLoading" required class="form-select">
+                <option value="" disabled>Chọn khung giờ</option>
+                <option v-for="slot in slots" :key="slot" :value="slot">{{ slot }}</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label :for="'reschedule-reason-' + appointmentId" class="form-label">
+              Lý do đổi lịch <b class="req">*</b>
+              <small class="text-muted">(tối đa 500 ký tự)</small>
+            </label>
+            <textarea
+              :id="'reschedule-reason-' + appointmentId"
+              v-model.trim="reason"
+              maxlength="500"
+              :disabled="busy"
+              required
+              rows="3"
+              placeholder="Vui lòng nhập lý do bạn cần thay đổi lịch hẹn…"
+              class="form-textarea"
+            />
+          </div>
+
+          <label class="checkbox-label">
+            <input v-model="confirmed" type="checkbox" :disabled="busy" />
+            <span>{{ selfService ? 'Tôi xác nhận ngày, giờ mới cho hồ sơ này' : 'Đã đối chiếu ngày, giờ và yêu cầu với khách' }}</span>
+          </label>
+
+          <div class="dialog-actions">
+            <button type="button" class="btn-dialog btn-dialog--secondary" :disabled="busy" @click="close">
+              Quay lại, giữ lịch
+            </button>
+            <button type="submit" class="btn-dialog btn-dialog--primary" :disabled="busy || !confirmed">
+              {{ busy ? 'Đang đổi lịch…' : 'Xác nhận đổi lịch' }}
+            </button>
+          </div>
+        </template>
+
+        <template v-else>
+          <p v-if="current && !selfService" class="text-muted">Lịch không còn ở trạng thái chờ khám. Tải lại danh sách để đối chiếu.</p>
+          <div class="dialog-actions">
+            <button type="button" class="btn-dialog btn-dialog--secondary" :disabled="busy" @click="close">Đóng</button>
+          </div>
+        </template>
+      </form>
+    </div>
   </dialog>
 </template>
 <script setup lang="ts">
@@ -75,10 +163,285 @@ async function save() {
     catch { if (ticket === version) { current.value = null; eligibility.value = null; } }
   } finally { if (ticket === version) busy.value = false; }
 }
+function formatDate(value: string): string {
+  return new Intl.DateTimeFormat('vi-VN').format(new Date(`${value}T00:00:00`));
+}
+
 onUnmounted(reset);
 </script>
+
 <style scoped>
-dialog { max-width: 560px; width: calc(100% - 3rem); border: 1px solid #ddd; border-radius: 10px; }
-dialog::backdrop { background: #0006; } form { display: grid; gap: .7rem; padding: .5rem; }
-button, input, select, textarea { font: inherit; padding: .6rem; } [role=alert] { color: #b91c1c; }
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  height: 36px;
+  padding: 0 0.85rem;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.825rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+}
+
+.action-btn--edit {
+  background: #f0f9ff;
+  color: #0369a1;
+  border-color: #bae6fd;
+}
+
+.action-btn--edit:hover:not(:disabled) {
+  background: #e0f2fe;
+  border-color: #0284c7;
+}
+
+.action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.custom-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  max-width: 540px;
+  width: calc(100% - 2rem);
+  padding: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(15, 45, 89, 0.2);
+  background: #ffffff;
+}
+
+.custom-dialog::backdrop {
+  background: rgba(15, 45, 89, 0.45);
+  backdrop-filter: blur(2px);
+}
+
+.dialog-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.dialog-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.dialog-icon {
+  font-size: 1.35rem;
+}
+
+.dialog-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #0f2d59;
+}
+
+.dialog-subtitle {
+  margin: 0.15rem 0 0;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.dialog-close-btn {
+  border: none;
+  background: transparent;
+  font-size: 1.25rem;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+}
+
+.dialog-close-btn:hover {
+  color: #0f2d59;
+  background: #f1f5f9;
+}
+
+.dialog-form {
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.info-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.825rem;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.info-label {
+  color: #64748b;
+}
+
+.info-val {
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.dialog-alert {
+  padding: 0.65rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.825rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dialog-alert--error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.eligibility-notice {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  padding: 0.65rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.825rem;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.form-label {
+  font-size: 0.825rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.req {
+  color: #dc2626;
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  height: 38px;
+  padding: 0 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.875rem;
+  color: #1e293b;
+  background: #ffffff;
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+}
+
+.form-textarea {
+  height: auto;
+  padding: 0.5rem 0.75rem;
+  resize: vertical;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.825rem;
+  color: #334155;
+  cursor: pointer;
+  padding: 0.35rem 0;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  margin-top: 0.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.btn-dialog {
+  height: 38px;
+  padding: 0 1rem;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.btn-dialog--primary {
+  background: #0284c7;
+  color: #ffffff;
+}
+
+.btn-dialog--primary:hover:not(:disabled) {
+  background: #0369a1;
+}
+
+.btn-dialog--secondary {
+  background: #ffffff;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+
+.btn-dialog--secondary:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+.btn-dialog:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-text {
+  background: transparent;
+  border: none;
+  color: #0284c7;
+  font-size: 0.775rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
 </style>

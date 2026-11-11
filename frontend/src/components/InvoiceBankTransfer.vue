@@ -139,10 +139,132 @@ watch(() => props.invoiceId, load, { immediate: true });
 onUnmounted(endSession);
 </script>
 <style scoped>
-.bank-transfer { border-top: 1px solid #ccc; padding-top: 1rem; }
-img { max-width: 300px; width: 100%; } label { display: block; margin: .6rem 0; } button { margin: .4rem; }
-dialog { width: min(90vw, 600px); max-height: 85vh; overflow: auto; border: 1px solid #ccc; }
-dialog::backdrop { background: rgb(0 0 0 / .4); }
-.offline-demo { background: #fff8db; color: #5c4600; border: 1px solid #b58b00; border-radius: .5rem; padding: .75rem; }
-.qr-expired { opacity: .3; filter: grayscale(1); pointer-events: none; }
+.bank-transfer {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+h3 {
+  color: #0f2d59;
+  font-weight: 600;
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+}
+
+img {
+  max-width: 260px;
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  padding: 0.5rem;
+  background: #ffffff;
+  display: block;
+  margin: 0.75rem 0;
+}
+
+label {
+  display: block;
+  font-weight: 500;
+  color: #334155;
+  margin: 0.75rem 0 0.35rem;
+  font-size: 0.925rem;
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+select {
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.95rem;
+  color: #1e293b;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid rgba(2, 132, 199, 0.35);
+  outline-offset: 2px;
+  border-color: #0284c7;
+}
+
+input[type="checkbox"] {
+  width: 1.125rem;
+  height: 1.125rem;
+  accent-color: #0284c7;
+  vertical-align: middle;
+  margin-right: 0.4rem;
+}
+
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: #0f2d59;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  margin: 0.4rem 0.4rem 0.4rem 0;
+}
+
+button:hover:not(:disabled) {
+  background: #1e3a8a;
+}
+
+button:focus-visible {
+  outline: 3px solid rgba(2, 132, 199, 0.35);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+dialog {
+  width: min(90vw, 600px);
+  max-height: 85vh;
+  overflow: auto;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(15, 45, 89, 0.15);
+  padding: 1.5rem;
+}
+
+dialog::backdrop {
+  background: rgba(15, 45, 89, 0.5);
+  backdrop-filter: blur(2px);
+}
+
+.offline-demo {
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  border-left: 4px solid #d97706;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+}
+
+.qr-expired {
+  opacity: 0.3;
+  filter: grayscale(1);
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  button {
+    width: 100%;
+    margin-right: 0;
+  }
+}
 </style>

@@ -1,48 +1,286 @@
 <template>
   <section v-if="auth.role === 'ADMIN'" class="revenue-report">
-    <h1>Báo cáo doanh thu</h1>
-    <p>Phòng Khám Nha Khoa · Tiền Việt Nam (VNĐ) · Ngày theo giờ Việt Nam (UTC+7)</p>
-    <form class="filters no-print" @submit.prevent="load">
-      <label>Từ ngày<input v-model="form.fromDate" type="date" required :disabled="loading || exporting" /></label>
-      <label>Đến ngày<input v-model="form.toDate" type="date" required :disabled="loading || exporting" /></label>
-      <label>Nhóm thời gian<select v-model="form.groupBy" :disabled="loading || exporting"><option value="Auto">Tự động</option><option value="Day">Ngày</option><option value="Week">Tuần ISO</option><option value="Month">Tháng</option></select></label>
-      <label>Top dịch vụ<select v-model="form.top" :disabled="loading || exporting"><option>5</option><option>10</option><option>20</option><option value="All">Tất cả</option></select></label>
-      <label>Sắp xếp<select v-model="form.sortBy" :disabled="loading || exporting"><option value="Revenue">Theo doanh thu</option><option value="UsageCount">Theo số lượng thực hiện</option></select></label>
-      <label>Mã thu ngân (tùy chọn)<input v-model="cashier" type="number" min="1" max="2147483647" step="1" :disabled="loading || exporting" /></label>
-      <button :disabled="loading || exporting">{{ loading ? 'Đang tải…' : 'Xem / Làm mới' }}</button>
-      <div class="quick"><button v-for="q in quickFilters" :key="q.value" type="button" :disabled="loading || exporting" @click="quick(q.value)">{{ q.label }}</button></div>
-    </form>
-    <p v-if="error" role="alert" class="error no-print">{{ error }}</p>
-    <p v-if="report && !current" class="no-print" role="status">Bộ lọc đã đổi. Bấm Xem / Làm mới để cập nhật kết quả.</p>
-    <template v-if="report">
-      <div class="no-print actions"><button :disabled="!current || loading || exporting" @click="exportCsv">{{ exporting ? 'Đang xuất…' : 'Xuất CSV' }}</button><button :disabled="!current || loading || exporting" @click="printReport">In A4 ngang</button></div>
-      <p><strong>Kỳ:</strong> {{ report.filter.fromDate }} → {{ report.filter.toDate }} · Thu ngân: {{ report.filter.cashierId ?? 'Tất cả' }} · Cập nhật: {{ dateTime(report.generatedAt) }}</p>
-      <div class="cards">
-        <article><h2>Thu trước hoàn trong kỳ</h2><strong>{{ money(report.summary.grossRevenue) }}</strong></article>
-        <article><h2>Đã hoàn trong kỳ</h2><strong>{{ money(report.summary.totalRefunded) }}</strong></article>
-        <article><h2>Doanh thu thuần trong kỳ</h2><strong>{{ money(report.summary.netRevenue) }}</strong></article>
+    <header class="page-heading no-print">
+      <div>
+        <p class="eyebrow">TÀI CHÍNH & KẾ TOÁN PHÒNG KHÁM</p>
+        <h1>Báo cáo doanh thu & Dòng tiền</h1>
+        <p class="subtitle">Hệ thống ghi nhận theo giờ Việt Nam (UTC+7) · Đơn vị tiền tệ: VNĐ · Dữ liệu đối soát thực thu theo ca khám & hóa đơn.</p>
       </div>
-      <aside class="debt"><h2>Tổng nợ hiện tại toàn phòng khám</h2><strong>{{ money(report.summary.totalOutstanding) }}</strong><p>Tại thời điểm cập nhật trên; độc lập với kỳ lọc và thu ngân. Không phải số dư nợ lịch sử cuối kỳ.</p></aside>
-      <dl class="details">
-        <dt>Giá trị sau giảm của hóa đơn xác nhận lập trong kỳ (toàn phòng khám)</dt><dd>{{ money(report.summary.totalInvoiced) }}</dd>
-        <dt>Chiết khấu các hóa đơn đó (toàn phòng khám)</dt><dd>{{ money(report.summary.totalDiscount) }}</dd>
-        <dt>Khoản thu trong kỳ của hóa đơn hiện còn PartiallyPaid (đã gồm trong tổng thu)</dt><dd>{{ money(report.summary.temporaryCollections) }}</dd>
-        <dt>Hóa đơn lập trong kỳ hiện đã hủy trước thu tiền</dt><dd>{{ report.summary.cancelledInvoiceCount }}</dd>
-      </dl>
-      <h2>Diễn biến doanh thu thuần · {{ groupLabel(report.filter.groupBy) }}</h2>
-      <div class="timeline" aria-label="Doanh thu theo thời gian"><div v-for="p in report.revenueTimeline" :key="p.label" class="period"><span>{{ p.label }}</span><div class="bar-track"><div class="bar" :class="{ negative: p.revenue < 0 }" :style="{ width: barWidth(p.revenue) + '%' }"></div></div><strong>{{ money(p.revenue) }}</strong><span>{{ p.transactionCount }} giao dịch</span></div></div>
-      <h2>Phương thức thanh toán</h2>
-      <div class="table-wrap"><table><thead><tr><th>Phương thức</th><th>Thu trước hoàn</th><th>Đã hoàn</th><th>Thuần</th><th>% tiền thu trước hoàn</th></tr></thead><tbody><tr v-for="m in report.byPaymentMethod" :key="m.method"><td>{{ methodLabel(m.method) }}</td><td>{{ money(m.grossRevenue) }}</td><td>{{ money(m.totalRefunded) }}</td><td>{{ money(m.amount) }}</td><td>{{ m.percentage }}%</td></tr><tr v-if="!report.byPaymentMethod.length"><td colspan="5">Không có giao dịch trong kỳ.</td></tr></tbody></table></div>
-      <h2>Theo thu ngân</h2>
-      <div class="table-wrap"><table><thead><tr><th>Mã</th><th>Thu ngân</th><th>Số giao dịch</th><th>Doanh thu thuần</th></tr></thead><tbody><tr v-for="c in report.byCashier" :key="c.cashierId"><td>{{ c.cashierId }}</td><td>{{ c.name }}</td><td>{{ c.transactionCount }}</td><td>{{ money(c.amount) }}</td></tr><tr v-if="!report.byCashier.length"><td colspan="4">Không có giao dịch trong kỳ.</td></tr></tbody></table></div>
-      <h2>Top dịch vụ theo khoản thu phân bổ</h2>
-      <p class="explanation">Chỉ từ hóa đơn hiện đã Paid và ca khám Completed, không có hoàn tiền. Tiền thu phân bổ về đúng kỳ thực thu sau chiết khấu; tiền thuốc tách khỏi bảng này. Khi tất toán, cơ cấu kỳ cũ được cập nhật. Số lượng thực hiện tính một lần mỗi dòng dịch vụ trong kỳ có khoản thu được phân bổ; không cộng số lượng nhiều lần theo số phiếu thu.</p>
-      <div class="table-wrap"><table><thead><tr><th>Mã</th><th>Dịch vụ</th><th>Số lượng thực hiện</th><th>Thực thu phân bổ</th></tr></thead><tbody><tr v-for="s in report.topServices" :key="s.serviceCode + '/' + s.serviceName"><td>{{ s.serviceCode }}</td><td>{{ s.serviceName }}</td><td>{{ s.usageCount }}</td><td>{{ money(s.revenue) }}</td></tr><tr v-if="!report.topServices.length"><td colspan="4">Không có dịch vụ đủ điều kiện phân bổ trong kỳ.</td></tr></tbody></table></div>
-      <details class="daily"><summary>Chi tiết từng ngày</summary><table><thead><tr><th>Ngày UTC+7</th><th>Thu trước hoàn</th><th>Đã hoàn</th><th>Thuần</th><th>Số giao dịch</th></tr></thead><tbody><tr v-for="d in report.dailyRevenue" :key="d.date"><td>{{ d.date }}</td><td>{{ money(d.grossRevenue) }}</td><td>{{ money(d.totalRefunded) }}</td><td>{{ money(d.revenue) }}</td><td>{{ d.transactionCount }}</td></tr></tbody></table></details>
-      <footer class="signatures"><p>Người lập biểu<br /><small>(Ký, ghi rõ họ tên)</small></p><p>Giám đốc phòng khám / Người đại diện<br /><small>(Ký, ghi rõ họ tên)</small></p></footer>
+      <div v-if="report" class="heading-actions">
+        <button class="button button-secondary" :disabled="!current || loading || exporting" @click="exportCsv">
+          <span class="btn-icon">📥</span> {{ exporting ? 'Đang xuất…' : 'Xuất CSV' }}
+        </button>
+        <button class="button button-primary" :disabled="!current || loading || exporting" @click="printReport">
+          <span class="btn-icon">🖨️</span> In A4 ngang
+        </button>
+      </div>
+    </header>
+
+    <form class="panel filters-panel no-print" @submit.prevent="load">
+      <div class="filters-grid">
+        <label class="filter-field">
+          <span>Từ ngày</span>
+          <input v-model="form.fromDate" type="date" required :disabled="loading || exporting" />
+        </label>
+        <label class="filter-field">
+          <span>Đến ngày</span>
+          <input v-model="form.toDate" type="date" required :disabled="loading || exporting" />
+        </label>
+        <label class="filter-field">
+          <span>Nhóm thời gian</span>
+          <select v-model="form.groupBy" :disabled="loading || exporting">
+            <option value="Auto">Tự động</option>
+            <option value="Day">Theo ngày</option>
+            <option value="Week">Theo tuần ISO</option>
+            <option value="Month">Theo tháng</option>
+          </select>
+        </label>
+        <label class="filter-field">
+          <span>Top dịch vụ</span>
+          <select v-model="form.top" :disabled="loading || exporting">
+            <option>5</option>
+            <option>10</option>
+            <option>20</option>
+            <option value="All">Tất cả</option>
+          </select>
+        </label>
+        <label class="filter-field">
+          <span>Sắp xếp</span>
+          <select v-model="form.sortBy" :disabled="loading || exporting">
+            <option value="Revenue">Theo doanh thu</option>
+            <option value="UsageCount">Theo số lượng làm</option>
+          </select>
+        </label>
+        <label class="filter-field">
+          <span>Mã thu ngân (tùy chọn)</span>
+          <input v-model="cashier" type="number" min="1" max="2147483647" step="1" placeholder="Tất cả thu ngân" :disabled="loading || exporting" />
+        </label>
+        <div class="filter-submit">
+          <button class="button button-primary" :disabled="loading || exporting">
+            <span class="btn-icon">{{ loading ? '⏳' : '🔍' }}</span>
+            {{ loading ? 'Đang tải…' : 'Xem báo cáo' }}
+          </button>
+        </div>
+      </div>
+      <div class="quick-pills">
+        <span class="quick-label">Khoảng nhanh:</span>
+        <button
+          v-for="q in quickFilters"
+          :key="q.value"
+          type="button"
+          class="pill-btn"
+          :disabled="loading || exporting"
+          @click="quick(q.value)"
+        >
+          {{ q.label }}
+        </button>
+      </div>
+    </form>
+
+    <p v-if="error" role="alert" class="alert alert-error no-print">{{ error }}</p>
+    <p v-if="report && !current" class="alert alert-warning no-print" role="status">
+      Bộ lọc đã thay đổi. Bấm "Xem báo cáo" để cập nhật số liệu mới nhất.
+    </p>
+
+    <template v-if="report">
+      <div class="report-meta">
+        <span class="meta-item"><strong>Kỳ báo cáo:</strong> {{ report.filter.fromDate }} ➔ {{ report.filter.toDate }}</span>
+        <span class="meta-item"><strong>Thu ngân:</strong> {{ report.filter.cashierId ? '#' + report.filter.cashierId : 'Toàn phòng khám' }}</span>
+        <span class="meta-item"><strong>Cập nhật lúc:</strong> {{ dateTime(report.generatedAt) }}</span>
+      </div>
+
+      <div class="kpi-cards">
+        <div class="kpi-card kpi-card--gross">
+          <div class="kpi-label">Thu trước hoàn trong kỳ</div>
+          <div class="kpi-value">{{ money(report.summary.grossRevenue) }}</div>
+          <div class="kpi-hint">Tổng tiền mặt & chuyển khoản đã nhận</div>
+        </div>
+        <div class="kpi-card kpi-card--refund">
+          <div class="kpi-label">Đã hoàn trả trong kỳ</div>
+          <div class="kpi-value">{{ money(report.summary.totalRefunded) }}</div>
+          <div class="kpi-hint">Các khoản trả lại bệnh nhân</div>
+        </div>
+        <div class="kpi-card kpi-card--net">
+          <div class="kpi-label">Doanh thu thuần trong kỳ</div>
+          <div class="kpi-value text-emerald">{{ money(report.summary.netRevenue) }}</div>
+          <div class="kpi-hint">Doanh số thực thu sau đối trừ hoàn trả</div>
+        </div>
+      </div>
+
+      <aside class="panel debt-panel">
+        <div class="debt-header">
+          <div>
+            <div class="debt-title">TỔNG DƯ NỢ HIỆN TẠI TOÀN PHÒNG KHÁM</div>
+            <div class="debt-amount">{{ money(report.summary.totalOutstanding) }}</div>
+          </div>
+          <span class="debt-badge">Dư nợ lâm sàng</span>
+        </div>
+        <p class="debt-desc">
+          Số liệu độc lập với kỳ lọc và thu ngân; tính tại thời điểm hiện hành trên tất cả hồ sơ điều trị đang có số dư nợ chưa quyết toán.
+        </p>
+      </aside>
+      <section class="panel details-panel">
+        <h3 class="panel-subtitle">Chỉ số tài chính phụ trợ trong kỳ</h3>
+        <div class="details-grid">
+          <div class="detail-item">
+            <span class="detail-title">Hóa đơn xác nhận lập (sau giảm)</span>
+            <span class="detail-val">{{ money(report.summary.totalInvoiced) }}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-title">Tổng chiết khấu / giảm giá</span>
+            <span class="detail-val">{{ money(report.summary.totalDiscount) }}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-title">Khoản thu của hóa đơn trả góp (PartiallyPaid)</span>
+            <span class="detail-val">{{ money(report.summary.temporaryCollections) }}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-title">Hóa đơn hủy trước khi thu tiền</span>
+            <span class="detail-val">{{ report.summary.cancelledInvoiceCount }} hóa đơn</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel section-panel">
+        <h2 class="section-title">Diễn biến doanh thu thuần ({{ groupLabel(report.filter.groupBy) }})</h2>
+        <div class="timeline" aria-label="Doanh thu theo thời gian">
+          <div v-for="p in report.revenueTimeline" :key="p.label" class="period-row">
+            <div class="period-label">{{ p.label }}</div>
+            <div class="bar-track">
+              <div
+                class="bar-fill"
+                :class="{ 'bar-fill--negative': p.revenue < 0 }"
+                :style="{ width: barWidth(p.revenue) + '%' }"
+              ></div>
+            </div>
+            <div class="period-val">{{ money(p.revenue) }}</div>
+            <div class="period-count">{{ p.transactionCount }} GD</div>
+          </div>
+        </div>
+      </section>
+
+      <div class="tables-row">
+        <section class="panel table-panel">
+          <h2 class="section-title">Cơ cấu phương thức thanh toán</h2>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Phương thức</th>
+                  <th>Thu trước hoàn</th>
+                  <th>Đã hoàn</th>
+                  <th>Thuần</th>
+                  <th>Tỷ trọng</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="m in report.byPaymentMethod" :key="m.method">
+                  <td><strong>{{ methodLabel(m.method) }}</strong></td>
+                  <td>{{ money(m.grossRevenue) }}</td>
+                  <td>{{ money(m.totalRefunded) }}</td>
+                  <td><strong>{{ money(m.amount) }}</strong></td>
+                  <td><span class="badge-ratio">{{ m.percentage }}%</span></td>
+                </tr>
+                <tr v-if="!report.byPaymentMethod.length">
+                  <td colspan="5" class="empty-cell">Không có giao dịch trong kỳ.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel table-panel">
+          <h2 class="section-title">Hiệu suất theo thu ngân</h2>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Mã</th>
+                  <th>Thu ngân viên</th>
+                  <th>Số giao dịch</th>
+                  <th>Doanh thu thuần</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="c in report.byCashier" :key="c.cashierId">
+                  <td><code>#{{ c.cashierId }}</code></td>
+                  <td><strong>{{ c.name }}</strong></td>
+                  <td>{{ c.transactionCount }}</td>
+                  <td><strong>{{ money(c.amount) }}</strong></td>
+                </tr>
+                <tr v-if="!report.byCashier.length">
+                  <td colspan="4" class="empty-cell">Không có giao dịch trong kỳ.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+      <section class="panel table-panel">
+        <h2 class="section-title">Top dịch vụ theo khoản thu phân bổ</h2>
+        <p class="explanation">
+          Chỉ tính từ hóa đơn đã hoàn tất thanh toán và ca khám đã kết thúc, không có hoàn tiền. Tiền thu phân bổ về đúng kỳ thực thu sau chiết khấu; tiền thuốc kê đơn tách riêng.
+        </p>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Mã DV</th>
+                <th>Tên dịch vụ kỹ thuật</th>
+                <th>Số lượt thực hiện</th>
+                <th>Thực thu phân bổ</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="s in report.topServices" :key="s.serviceCode + '/' + s.serviceName">
+                <td><code>{{ s.serviceCode }}</code></td>
+                <td><strong>{{ s.serviceName }}</strong></td>
+                <td>{{ s.usageCount }} ca</td>
+                <td><strong class="text-emerald">{{ money(s.revenue) }}</strong></td>
+              </tr>
+              <tr v-if="!report.topServices.length">
+                <td colspan="4" class="empty-cell">Không có dịch vụ đủ điều kiện phân bổ trong kỳ.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <details class="panel daily-accordion">
+        <summary class="daily-summary">
+          <span>📅 Xem chi tiết dữ liệu từng ngày trong kỳ</span>
+        </summary>
+        <div class="table-wrap daily-table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Ngày (UTC+7)</th>
+                <th>Thu trước hoàn</th>
+                <th>Đã hoàn</th>
+                <th>Thuần</th>
+                <th>Số giao dịch</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="d in report.dailyRevenue" :key="d.date">
+                <td><code>{{ d.date }}</code></td>
+                <td>{{ money(d.grossRevenue) }}</td>
+                <td>{{ money(d.totalRefunded) }}</td>
+                <td><strong>{{ money(d.revenue) }}</strong></td>
+                <td>{{ d.transactionCount }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+
+      <footer class="signatures">
+        <p><strong>Người lập biểu</strong><br /><small>(Ký, ghi rõ họ tên)</small></p>
+        <p><strong>Giám đốc chuyên môn / Người đại diện</strong><br /><small>(Ký, ghi rõ họ tên)</small></p>
+      </footer>
     </template>
   </section>
-  <p v-else role="alert">Chỉ Admin được xem báo cáo doanh thu.</p>
+  <p v-else role="alert" class="alert alert-error">Chỉ tài khoản Quản trị viên (Admin) mới có quyền truy cập Báo cáo doanh thu.</p>
 </template>
 
 <script setup lang="ts">
@@ -126,16 +364,520 @@ onUnmounted(() => { disposed = true; generation++; report.value = null; loadedKe
 </script>
 
 <style scoped>
-h1 { margin-bottom: .4rem; } h2 { font-size: 1.05rem; margin: 1.5rem 0 .7rem; }
-.filters { display: flex; gap: .8rem; flex-wrap: wrap; padding: 1rem; margin: 1.2rem 0; background: #f1f5f9; border-radius: 8px; align-items: end; }
-label { display: grid; gap: .3rem; font-size: .9rem; } input, select, button { padding: .55rem; border: 1px solid #94a3b8; border-radius: 4px; } button { cursor: pointer; } button:disabled { opacity: .55; cursor: default; }
-.quick { flex-basis: 100%; display: flex; gap: .4rem; flex-wrap: wrap; } .actions { display: flex; gap: .6rem; justify-content: flex-end; }
-.cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; } .cards article { padding: 1rem; border: 1px solid #cbd5e1; border-radius: 8px; } .cards h2, .debt h2 { margin-top: 0; } .cards strong, .debt strong { font-size: 1.4rem; }
-.debt { background: #eff6ff; border-left: 4px solid #2563eb; padding: 1rem; margin-top: 1rem; } .debt p, .explanation { font-size: .9rem; line-height: 1.6; } .details { display: grid; grid-template-columns: 1fr auto; gap: .6rem; padding: 1rem 0; } dd { text-align: right; margin: 0; }
-.period { display: grid; grid-template-columns: 7.5rem 1fr 10rem 7rem; gap: .5rem; padding: .4rem 0; align-items: center; font-size: .85rem; } .bar-track { background: #e2e8f0; height: 1rem; } .bar { background: #0f766e; height: 100%; } .negative { background: #be123c; }
-.table-wrap { overflow-x: auto; } table { width: 100%; border-collapse: collapse; font-size: .9rem; } th, td { border-bottom: 1px solid #cbd5e1; padding: .7rem; text-align: right; } th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; } th { background: #f1f5f9; } .daily { margin-top: 1.5rem; } .error { color: #b91c1c; } .signatures { display: none; }
-@media (max-width: 700px) { .cards { grid-template-columns: 1fr; } .period { grid-template-columns: 7rem 1fr; } .details { grid-template-columns: 1fr; } dd { text-align: left; } }
-@media print { .no-print { display: none !important; } .cards, .debt { break-inside: avoid; } thead { display: table-header-group; } tr, .period { break-inside: avoid; } .signatures { display: flex; justify-content: space-around; margin: 2rem 0 4rem; text-align: center; } .daily { display: none; } .table-wrap { overflow: visible; } th, td { padding: .35rem; } .bar { print-color-adjust: exact; } }
+.revenue-report {
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+  color: #1e293b;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.page-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+}
+
+.eyebrow {
+  margin: 0 0 0.25rem;
+  color: #0284c7;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+h1 {
+  font-size: 1.65rem;
+  font-weight: 850;
+  color: #0f2d59;
+  margin: 0;
+  line-height: 1.25;
+}
+
+.subtitle {
+  margin: 0.35rem 0 0;
+  color: #64748b;
+  font-size: 0.885rem;
+  line-height: 1.45;
+}
+
+.heading-actions {
+  display: flex;
+  gap: 0.65rem;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  height: 40px;
+  padding: 0 1.15rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+}
+
+.button-primary {
+  background: #0284c7;
+  color: #ffffff;
+}
+
+.button-primary:hover:not(:disabled) {
+  background: #0369a1;
+}
+
+.button-secondary {
+  background: #ffffff;
+  color: #334155;
+  border-color: #cbd5e1;
+}
+
+.button-secondary:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.panel {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(15, 45, 89, 0.03);
+  padding: 1.25rem;
+}
+
+.filters-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.filters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.85rem;
+  align-items: end;
+}
+
+.filter-field {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.825rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.filter-field input,
+.filter-field select {
+  height: 40px;
+  padding: 0 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #1e293b;
+  font: inherit;
+  font-size: 0.875rem;
+  outline: none;
+}
+
+.filter-field input:focus,
+.filter-field select:focus {
+  border-color: #0284c7;
+  background: #ffffff;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
+}
+
+.filter-submit {
+  display: flex;
+}
+
+.filter-submit .button {
+  width: 100%;
+}
+
+.quick-pills {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.quick-label {
+  font-size: 0.8rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.pill-btn {
+  height: 32px;
+  padding: 0 0.85rem;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pill-btn:hover:not(:disabled) {
+  background: #e0f2fe;
+  border-color: #bae6fd;
+  color: #0284c7;
+}
+
+.report-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  color: #0369a1;
+}
+
+/* KPI summary */
+.kpi-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.kpi-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 2px 6px rgba(15, 45, 89, 0.03);
+  border-left: 4px solid #94a3b8;
+}
+
+.kpi-card--gross { border-left-color: #0284c7; }
+.kpi-card--refund { border-left-color: #ef4444; }
+.kpi-card--net { border-left-color: #10b981; }
+
+.kpi-label {
+  font-size: 0.825rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.kpi-value {
+  font-size: 1.95rem;
+  font-weight: 850;
+  color: #0f2d59;
+  line-height: 1.2;
+  margin: 0.35rem 0;
+}
+
+.text-emerald {
+  color: #059669;
+}
+
+.kpi-hint {
+  font-size: 0.775rem;
+  color: #94a3b8;
+}
+
+/* Debt panel */
+.debt-panel {
+  background: #fffbeb;
+  border: 1px solid #fef3c7;
+  border-left: 4px solid #f59e0b;
+}
+
+.debt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.debt-title {
+  font-size: 0.825rem;
+  font-weight: 800;
+  color: #b45309;
+  letter-spacing: 0.04em;
+}
+
+.debt-amount {
+  font-size: 1.85rem;
+  font-weight: 850;
+  color: #92400e;
+  line-height: 1.2;
+  margin: 0.25rem 0;
+}
+
+.debt-badge {
+  background: #fde68a;
+  color: #78350f;
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+}
+
+.debt-desc {
+  font-size: 0.85rem;
+  color: #78350f;
+  margin: 0.5rem 0 0;
+  line-height: 1.5;
+}
+/* Details grid */
+.details-panel {
+  padding: 1.15rem 1.25rem;
+}
+
+.panel-subtitle {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #0f2d59;
+  margin: 0 0 0.85rem;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  background: #f8fafc;
+  padding: 0.75rem 0.95rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.detail-title {
+  font-size: 0.785rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.detail-val {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #0f2d59;
+}
+
+/* Section panel & timeline */
+.section-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.section-title {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #0f2d59;
+  margin: 0;
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.period-row {
+  display: grid;
+  grid-template-columns: 8rem 1fr 11rem 6rem;
+  gap: 0.85rem;
+  align-items: center;
+  font-size: 0.885rem;
+}
+
+.period-label {
+  font-weight: 700;
+  color: #334155;
+}
+
+.bar-track {
+  background: #e2e8f0;
+  height: 1.15rem;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  background: #0284c7;
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+
+.bar-fill--negative {
+  background: #ef4444;
+}
+
+.period-val {
+  font-weight: 800;
+  color: #0f2d59;
+  text-align: right;
+}
+
+.period-count {
+  color: #64748b;
+  font-size: 0.8rem;
+  text-align: right;
+}
+
+/* Tables row */
+.tables-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+.table-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.75rem 0.85rem;
+  border-bottom: 1px solid #f1f5f9;
+  text-align: right;
+}
+
+.data-table th:first-child,
+.data-table td:first-child,
+.data-table th:nth-child(2),
+.data-table td:nth-child(2) {
+  text-align: left;
+}
+
+.data-table thead th {
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.775rem;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.badge-ratio {
+  background: #e0f2fe;
+  color: #0369a1;
+  font-weight: 800;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.explanation {
+  font-size: 0.825rem;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.empty-cell {
+  text-align: center !important;
+  color: #94a3b8;
+  padding: 2rem !important;
+}
+
+/* Accordion */
+.daily-accordion {
+  padding: 0;
+  overflow: hidden;
+}
+
+.daily-summary {
+  padding: 1rem 1.25rem;
+  font-weight: 750;
+  color: #0f2d59;
+  cursor: pointer;
+  background: #f8fafc;
+  user-select: none;
+}
+
+.daily-table-wrap {
+  padding: 0.5rem 1.25rem 1.25rem;
+}
+
+.signatures {
+  display: none;
+}
+
+.alert {
+  padding: 0.85rem 1.15rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.alert-error {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fee2e2;
+}
+
+.alert-warning {
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fef3c7;
+}
+
+@media (max-width: 900px) {
+  .tables-row { grid-template-columns: 1fr; }
+  .kpi-cards { grid-template-columns: 1fr; }
+  .period-row { grid-template-columns: 7rem 1fr 9rem; }
+  .period-count { display: none; }
+}
+
+@media print {
+  .no-print { display: none !important; }
+  .panel { border: 1px solid #cbd5e1; box-shadow: none; break-inside: avoid; }
+  .kpi-cards, .debt-panel { break-inside: avoid; }
+  thead { display: table-header-group; }
+  tr, .period-row { break-inside: avoid; }
+  .signatures { display: flex; justify-content: space-around; margin: 3rem 0; text-align: center; }
+  .daily-accordion { display: none; }
+  .table-wrap { overflow: visible; }
+  .data-table th, .data-table td { padding: 0.4rem; }
+  .bar-fill { print-color-adjust: exact; }
+}
 </style>
 <style>
 @media print { body:has(.revenue-report) .navbar { display: none !important; } body:has(.revenue-report) .main-content { max-width: none; margin: 0; padding: 0; } }

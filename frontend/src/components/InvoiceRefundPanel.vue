@@ -110,8 +110,200 @@ if(typeof window!=='undefined')window.addEventListener('afterprint',closeVoucher
 onUnmounted(()=>{disposed=true;generation++;clear();window.removeEventListener('afterprint',closeVoucher);});
 </script>
 <style>
-.refund-panel{border-top:1px solid #bbb;margin-top:1.5rem;padding-top:1rem}.refund-panel label{display:block;margin:.8rem 0}.refund-panel input[type=number],.refund-panel select,.refund-panel textarea{display:block;padding:.5rem;max-width:100%;box-sizing:border-box}.refund-panel textarea{width:100%;min-height:5rem}.refund-panel button{padding:.6rem;margin:.4rem}.refund-panel :focus-visible{outline:3px solid #125c97;outline-offset:3px}
-.mod-bil-refund-root{position:fixed;inset:0;z-index:2000;background:#eee;overflow:auto;padding:1rem;box-sizing:border-box;width:100vw;height:100vh;max-width:none;max-height:none;margin:0;border:0}.refund-voucher{background:white;color:black;width:72mm;max-width:100%;margin:auto;padding:4mm;font:13px Arial}.refund-voucher h2,.refund-voucher h3{text-align:center}.refund-voucher p{overflow-wrap:anywhere}.refund-print-controls{max-width:36rem;margin:0 auto 1rem}.refund-signatures{margin-top:2rem;text-align:center}
-@page mod-bil-refund{size:80mm auto;margin:4mm}
-@media print{.mod-bil-refund-root{display:none!important}body.mod-bil-refund-printing>*:not(.mod-bil-refund-root){display:none!important}body.mod-bil-refund-printing>.mod-bil-refund-root{display:block!important;position:static;padding:0;background:white;overflow:visible}body.mod-bil-refund-printing .refund-print-controls{display:none!important}body.mod-bil-refund-printing .refund-voucher{page:mod-bil-refund;width:100%;padding:0;margin:0}body.mod-bil-refund-printing{margin:0;padding:0}}
+.refund-panel {
+  border-top: 1px solid #e2e8f0;
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+}
+
+.refund-panel h2,
+.refund-panel h3 {
+  color: #0f2d59;
+  font-weight: 600;
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+}
+
+.refund-panel label {
+  display: block;
+  font-weight: 500;
+  color: #334155;
+  margin: 0.75rem 0 0.35rem;
+  font-size: 0.925rem;
+}
+
+.refund-panel input:not([type="checkbox"]):not([type="radio"]),
+.refund-panel select,
+.refund-panel textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.95rem;
+  color: #1e293b;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.refund-panel textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.refund-panel input:focus-visible,
+.refund-panel select:focus-visible,
+.refund-panel textarea:focus-visible {
+  outline: 3px solid rgba(2, 132, 199, 0.35);
+  outline-offset: 2px;
+  border-color: #0284c7;
+}
+
+.refund-panel input[type="checkbox"] {
+  width: 1.125rem;
+  height: 1.125rem;
+  accent-color: #0284c7;
+  vertical-align: middle;
+  margin-right: 0.4rem;
+}
+
+.refund-panel button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: #0f2d59;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  margin: 0.4rem 0.4rem 0.4rem 0;
+}
+
+.refund-panel button:hover:not(:disabled) {
+  background: #1e3a8a;
+}
+
+.refund-panel button:focus-visible {
+  outline: 3px solid rgba(2, 132, 199, 0.35);
+  outline-offset: 2px;
+}
+
+.refund-panel button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.refund-panel fieldset {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+  background: #ffffff;
+}
+
+.refund-panel legend {
+  font-weight: 600;
+  color: #0f2d59;
+  padding: 0 0.5rem;
+}
+
+.refund-panel ul {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+}
+
+.refund-panel li {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  background: #ffffff;
+}
+
+.mod-bil-refund-root {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: #eee;
+  overflow: auto;
+  padding: 1rem;
+  box-sizing: border-box;
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
+}
+
+.refund-voucher {
+  background: white;
+  color: black;
+  width: 72mm;
+  max-width: 100%;
+  margin: auto;
+  padding: 4mm;
+  font: 13px Arial;
+}
+
+.refund-voucher h2,
+.refund-voucher h3 {
+  text-align: center;
+}
+
+.refund-voucher p {
+  overflow-wrap: anywhere;
+}
+
+.refund-print-controls {
+  max-width: 36rem;
+  margin: 0 auto 1rem;
+}
+
+.refund-signatures {
+  margin-top: 2rem;
+  text-align: center;
+}
+
+@page mod-bil-refund {
+  size: 80mm auto;
+  margin: 4mm;
+}
+
+@media print {
+  .mod-bil-refund-root {
+    display: none !important;
+  }
+  body.mod-bil-refund-printing > *:not(.mod-bil-refund-root) {
+    display: none !important;
+  }
+  body.mod-bil-refund-printing > .mod-bil-refund-root {
+    display: block !important;
+    position: static;
+    padding: 0;
+    background: white;
+    overflow: visible;
+  }
+  body.mod-bil-refund-printing .refund-print-controls {
+    display: none !important;
+  }
+  body.mod-bil-refund-printing .refund-voucher {
+    page: mod-bil-refund;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+  }
+  body.mod-bil-refund-printing {
+    margin: 0;
+    padding: 0;
+  }
+}
 </style>

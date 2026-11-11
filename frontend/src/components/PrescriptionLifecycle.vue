@@ -77,5 +77,119 @@ watch(identity, () => { generation++; busy.value = false; needsReview.value = fa
 onUnmounted(() => { disposed = true; generation++; clear(); });
 </script>
 <style scoped>
-.lifecycle { margin:1rem 0;padding:1rem;border:1px solid #cbd5e1; } h2 { font-size:1.1rem; } label,button { margin:.5rem 0; } p,li { line-height:1.6; } [role=alert] { color:#b91c1c; } summary { cursor:pointer; } li { margin:.6rem 0; }
+.lifecycle {
+  margin: 1.25rem 0;
+  padding: 1.25rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(15, 45, 89, 0.04);
+}
+
+h2 {
+  color: #0f2d59;
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+}
+
+label {
+  display: block;
+  font-weight: 500;
+  color: #334155;
+  margin: 0.75rem 0 0.35rem;
+  font-size: 0.925rem;
+}
+
+textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 80px;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.95rem;
+  color: #1e293b;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+textarea:focus-visible {
+  outline: 3px solid rgba(2, 132, 199, 0.35);
+  outline-offset: 2px;
+  border-color: #0284c7;
+}
+
+input[type="checkbox"] {
+  width: 1.125rem;
+  height: 1.125rem;
+  accent-color: #0284c7;
+  vertical-align: middle;
+  margin-right: 0.4rem;
+}
+
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: #0f2d59;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  margin: 0.4rem 0.4rem 0.4rem 0;
+}
+
+button:hover:not(:disabled) {
+  background: #1e3a8a;
+}
+
+button:focus-visible {
+  outline: 3px solid rgba(2, 132, 199, 0.35);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+p, li {
+  line-height: 1.6;
+}
+
+li {
+  margin: 0.6rem 0;
+}
+
+summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #0f2d59;
+  padding: 0.4rem 0;
+}
+
+[role="alert"] {
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-weight: 500;
+  margin: 0.75rem 0;
+}
+
+@media (max-width: 640px) {
+  button {
+    width: 100%;
+    margin-right: 0;
+  }
+}
 </style>

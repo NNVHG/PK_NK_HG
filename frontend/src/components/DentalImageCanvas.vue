@@ -60,11 +60,93 @@ function imageFailed(event?: Event) {
 onMounted(load); watch(() => props.image.id, () => { reset(); void load(); });
 </script>
 <style scoped>
-.image-pane { min-width: 0; overflow-wrap: anywhere; }
-.toolbar, .pan-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: .5rem; }
-button { font: inherit; padding: .5rem; }
-.viewport { height: clamp(16rem, 48vh, 36rem); overflow: hidden; display: flex; align-items: center; justify-content: center; background: #0f172a; color: #f8fafc; }
-.viewport img { max-width: 100%; max-height: 100%; object-fit: contain; user-select: none; }
-dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .4rem 1rem; }
-dd { margin: 0; }.notes { white-space: pre-wrap; }
+.image-pane {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.25rem;
+  box-shadow: 0 2px 8px rgba(15, 45, 89, 0.04);
+}
+
+.toolbar, .pan-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.5rem 0.875rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f2d59;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+button:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+button:focus-visible {
+  outline: 3px solid rgba(2, 132, 199, 0.35);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.viewport {
+  height: clamp(16rem, 48vh, 36rem);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0f172a;
+  color: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #334155;
+}
+
+.viewport img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  user-select: none;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.5rem 1rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+dt {
+  font-weight: 600;
+  color: #475569;
+}
+
+dd {
+  margin: 0;
+  color: #1e293b;
+}
+
+.notes {
+  white-space: pre-wrap;
+}
 </style>

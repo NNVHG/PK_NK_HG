@@ -52,7 +52,7 @@ const router = createRouter({
     { path: '/patient/appointments', name: 'patient-portal-appointments', component: () => import('@/views/AppointmentsView.vue'), meta: { requiresAuth: true, roles: ['PATIENT'] } },
     { path: '/patient/appointments/mine', name: 'patient-portal-appointments-history', component: () => import('@/views/PatientAppointmentHistoryView.vue'), meta: { requiresAuth: true, roles: ['PATIENT'] } },
     { path: '/patient/invoices/mine', name: 'patient-portal-invoices', component: () => import('@/views/PatientInvoicesView.vue'), meta: { requiresAuth: true, roles: ['PATIENT'] } },
-    { path: '/patient/dashboard', name: 'patient-portal-dashboard', component: () => import('@/views/DashboardView.vue'), meta: { requiresAuth: true, roles: ['PATIENT'] } },
+    { path: '/patient/dashboard', name: 'patient-portal-dashboard', component: () => import('@/views/PatientDashboardView.vue'), meta: { requiresAuth: true, roles: ['PATIENT'] } },
     { path: '/patient/profile', name: 'patient-portal-profile', component: () => import('@/views/ProfileView.vue'), meta: { requiresAuth: true, roles: ['PATIENT'] } },
     { path: '/patient/clinical/visits/:visitId/images', name: 'patient-portal-visit-images', component: () => import('@/views/ToothImageLookupView.vue'), meta: { requiresAuth: true, roles: ['PATIENT'] } },
     { path: '/patient/clinical/visits/:visitId/prescription', name: 'patient-portal-visit-prescription', component: () => import('@/views/PrescriptionView.vue'), meta: { requiresAuth: true, roles: ['PATIENT'] } },
@@ -307,7 +307,7 @@ router.beforeEach((to, _from, next) => {
   // 2. Tuyến chỉ dành cho khách (guest-only) khi đã đăng nhập
   if (to.meta.guestOnly && authStore.isAuthenticated) {
     if (isPatient) {
-      return next({ path: '/patient/my-record' });
+      return next({ path: '/patient/dashboard' });
     }
     return next({ path: '/management/dashboard' });
   }
@@ -316,7 +316,7 @@ router.beforeEach((to, _from, next) => {
   if (authStore.isAuthenticated) {
     // Bệnh nhân không được truy cập khu vực quản lý /management/*
     if (isPatient && to.path.startsWith('/management/')) {
-      return next({ path: '/patient/my-record' });
+      return next({ path: '/patient/dashboard' });
     }
 
     // Nhân viên không truy cập khu vực cá nhân bệnh nhân /patient/*
@@ -328,7 +328,7 @@ router.beforeEach((to, _from, next) => {
     if (to.meta.roles && Array.isArray(to.meta.roles)) {
       if (!to.meta.roles.includes(userRole)) {
         if (isPatient) {
-          return next({ path: '/patient/my-record' });
+          return next({ path: '/patient/dashboard' });
         }
         return next({ path: '/management/dashboard' });
       }

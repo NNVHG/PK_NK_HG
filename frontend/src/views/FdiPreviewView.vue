@@ -4,7 +4,7 @@
       <div class="header-info">
         <h1>Xem trước Sơ đồ răng FDI (Dev Mode)</h1>
         <p class="subtitle">
-          Chức năng F_FDI_01 &amp; F_FDI_02 · Tuân thủ ISO 3950 FDI, AGENTS.md §2.4, DL-007, DL-018
+          Sơ đồ răng giải phẫu chuẩn quốc tế FDI (ISO 3950)
         </p>
       </div>
 

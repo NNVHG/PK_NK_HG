@@ -2,7 +2,7 @@
   <section class="patients-page">
     <header class="page-heading">
       <div>
-        <p class="eyebrow">MOD_PAT · F_PAT_01 · F_PAT_02 · F_PAT_10</p>
+        <p class="eyebrow">QUẢN LÝ HỒ SƠ BỆNH NHÂN</p>
         <h1>Hồ sơ bệnh nhân</h1>
         <p class="subtitle">Tìm kiếm nhanh và quản lý thông tin hồ sơ bệnh nhân.</p>
       </div>

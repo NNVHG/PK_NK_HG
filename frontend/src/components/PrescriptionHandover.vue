@@ -98,6 +98,94 @@ watch(() => props.blocked, blocked => { if (!blocked && !status.value) void load
 onUnmounted(() => { disposed = true; generation++; clear(); });
 </script>
 <style scoped>
-.handover { margin:1rem 0;padding:1rem;border:1px solid #64748b;border-radius:.5rem; }
-.handover label { display:block;margin:.75rem 0; }.handover input:not([type=checkbox]) { display:block;max-width:100%;box-sizing:border-box;min-height:2.5rem; }.handover button { min-height:2.5rem; }
+.handover {
+  margin: 1.25rem 0;
+  padding: 1.25rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(15, 45, 89, 0.04);
+}
+
+.handover h2,
+.handover h3 {
+  color: #0f2d59;
+  font-weight: 600;
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+}
+
+.handover label {
+  display: block;
+  font-weight: 500;
+  color: #334155;
+  margin: 0.75rem 0 0.35rem;
+  font-size: 0.925rem;
+}
+
+.handover input:not([type="checkbox"]) {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.95rem;
+  color: #1e293b;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.handover input:focus-visible {
+  outline: 3px solid rgba(2, 132, 199, 0.35);
+  outline-offset: 2px;
+  border-color: #0284c7;
+}
+
+.handover input[type="checkbox"] {
+  width: 1.125rem;
+  height: 1.125rem;
+  accent-color: #0284c7;
+  vertical-align: middle;
+  margin-right: 0.4rem;
+}
+
+.handover button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: #0f2d59;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  margin: 0.4rem 0.4rem 0.4rem 0;
+}
+
+.handover button:hover:not(:disabled) {
+  background: #1e3a8a;
+}
+
+.handover button:focus-visible {
+  outline: 3px solid rgba(2, 132, 199, 0.35);
+  outline-offset: 2px;
+}
+
+.handover button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .handover button {
+    width: 100%;
+    margin-right: 0;
+  }
+}
 </style>

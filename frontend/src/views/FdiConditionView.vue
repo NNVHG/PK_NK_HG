@@ -48,7 +48,7 @@
 
           <form @submit.prevent="save" class="clinical-form">
             <div class="form-field">
-              <label for="fdi-condition-code">Tình trạng (danh mục F_MST_02)</label>
+              <label for="fdi-condition-code">Tình trạng bệnh lý răng miệng</label>
               <select id="fdi-condition-code" v-model="code" :disabled="busy" required @change="clearSuggestion">
                 <option v-for="(label, value) in FDI_CONDITIONS" :key="value" :value="value">{{ label }}</option>
               </select>

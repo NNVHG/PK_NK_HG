@@ -38,6 +38,9 @@
       <p>{{ row.patientCode }} · {{ row.statusText }} · {{ row.queueDate }}</p>
       <p v-if="row.notes" class="care-note">Ghi chú cần lưu ý: {{ row.notes }}</p>
       <p>{{ row.isPriority ? 'Ưu tiên lịch hẹn đúng giờ' : 'Chờ thông thường' }} · {{ row.dentistName || 'Chưa phân nha sĩ' }} · {{ locationLabel(row) }}</p>
+      <button v-if="row.status === 6 || row.status === 2" type="button" class="btn-recall-tv" @click="emitTvCall(row)">
+        📢 Đọc lại trên TV
+      </button>
       <RouterLink v-if="row.status === 6 && ['ADMIN', 'DENTIST'].includes(authStore.role)" to="/management/clinical/diagnosis">Mở hồ sơ để bắt đầu khám</RouterLink>
       <button v-if="canCancelWaiting && row.status === 1 && row.canCancelConsultation !== true" :disabled="loading || writing || imagingRow !== null || absenceRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openCancellation(row)">Hủy lượt chưa khám</button>
       <button v-if="canCancelClinical(row)" :disabled="loading || writing || imagingRow !== null || absenceRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openCancellation(row, true)">Hủy ca đã bắt đầu khám</button>
@@ -179,6 +182,27 @@ async function load(targetPage = 1) {
   } catch { if (ticket === version) error.value = 'Không thể tải hàng đợi. Vui lòng tải lại.'; }
   finally { if (ticket === version) loading.value = false; }
 }
+function emitTvCall(entry: QueueEntryResponse) {
+  const payload = {
+    queueEntryId: entry.queueEntryId,
+    queueNumberDisplay: numberLabel(entry.queueNumber),
+    maskedPatientName: entry.patientName,
+    roomName: entry.roomName || null,
+    chairNumber: entry.chairNumber || null,
+    dentistName: entry.dentistName || null,
+    timestamp: Date.now()
+  };
+  try {
+    const ch = new BroadcastChannel('dental_tv_call_channel');
+    ch.postMessage(payload);
+    ch.close();
+  } catch {}
+  try {
+    localStorage.setItem('dental_tv_call_event', JSON.stringify(payload));
+  } catch {}
+  actionMsg.value = `Đã phát tín hiệu gọi số ${numberLabel(entry.queueNumber)} - ${entry.patientName} lên màn hình TV.`;
+}
+
 async function handleCallNext() {
   if (!canCallNext.value || writing.value || transferRow.value !== null || cancelRow.value !== null || imagingRow.value !== null || absenceRow.value !== null || loading.value || cleanupOpen.value || needsReview.value) return;
   if (needsCallingDentist.value && (dentistsLoading.value || !Number.isInteger(callDentistId.value) || !dentists.value.some(d => d.dentistId === callDentistId.value))) { dentistError.value = 'Chọn nha sĩ hoạt động đã tải để gọi ca.'; return; }
@@ -188,7 +212,8 @@ async function handleCallNext() {
     const entry = await queueService.callNext(needsCallingDentist.value ? { dentistId: callDentistId.value } : undefined);
     if (ticket !== life) return;
     if (entry.status !== 6) throw new Error('Unexpected invitation status');
-    actionMsg.value = `Đã mời số ${numberLabel(entry.queueNumber)} - ${entry.patientName} ${locationLabel(entry)}; cần xác nhận bắt đầu khám riêng.`;
+    emitTvCall(entry);
+    actionMsg.value = `Đã mời số ${numberLabel(entry.queueNumber)} - ${entry.patientName} ${locationLabel(entry)}; đã gửi thông báo TV.`;
     needsReview.value = true;
     await load(page.value);
   } catch (err: unknown) {
@@ -378,6 +403,8 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 li { padding: 1.15rem; border: 1px solid #e2e8f0; background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); box-sizing: border-box; overflow-wrap: break-word; display: grid; gap: 0.45rem; }
 li.priority { border-left: 6px solid #13795b; }
 li button, li a { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 0.5rem 0.9rem; text-decoration: none; border-radius: 8px; margin-right: 0.5rem; margin-top: 0.35rem; }
+.btn-recall-tv { background: #fef08a; border: 1px solid #facc15; color: #854d0e; font-weight: 700; width: fit-content; }
+.btn-recall-tv:hover { background: #fde047; }
 li a { background: #0284c7; color: #fff; font-weight: 600; width: fit-content; }
 li a:hover { background: #0369a1; }
 [role=alert] { color: #b91c1c; font-weight: 500; overflow-wrap: break-word; }

@@ -97,8 +97,109 @@ async function refresh() {
 onUnmounted(() => { version++; lastPayment.value = null; invoice.value = null; code.value = ''; confirmed.value = false; paymentOpen.value = false; });
 </script>
 <style scoped>
-.invoice-desk { max-width: 900px; margin: 2rem auto; padding: 1rem; }
-label { display: block; margin: 1rem 0; }
-input, button { padding: .5rem; }
-section { border: 1px solid #ccc; padding: 1rem; margin-top: 1rem; }
+.invoice-desk {
+  max-width: 960px;
+  margin: 1.5rem auto;
+  padding: 1.5rem;
+  box-sizing: border-box;
+  font-family: inherit;
+  color: #1e293b;
+}
+
+h1 {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 1.25rem;
+}
+
+form {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+  margin: 1.5rem 0;
+  background: #f8fafc;
+  padding: 1.25rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-weight: 600;
+  flex: 1;
+}
+
+input, button {
+  font: inherit;
+  min-height: 44px;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  box-sizing: border-box;
+}
+
+input {
+  background: #fff;
+}
+
+button {
+  cursor: pointer;
+  background: #0284c7;
+  color: #fff;
+  border: none;
+  font-weight: 600;
+  transition: all 0.2s;
+  padding: 0.65rem 1.25rem;
+}
+button:hover:not(:disabled) {
+  background: #0369a1;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+section {
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-top: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+section h2 {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #0284c7;
+  margin-top: 0;
+}
+
+[role=alert] {
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-weight: 500;
+  margin: 1rem 0;
+}
+
+[role=status] {
+  color: #0284c7;
+  font-weight: 600;
+}
+
+@media (max-width: 600px) {
+  .invoice-desk {
+    padding: 0.75rem;
+  }
+  form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
 </style>

@@ -1,4 +1,8 @@
+using System.Security.Cryptography;
+using System.Text;
+using Dental.Domain.Constants;
 using Dental.Domain.Entities;
+using Dental.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace Dental.Infrastructure.Data.Seeders;
@@ -23,16 +27,32 @@ public static partial class ClinicalDemoDataSeeder
 
     private static async Task<(Patient P1, Patient P2, Patient P3, Patient P4)> SeedPatientsAsync(DentalDbContext db, User u1, User? u2, User? u3, DateTime now, CancellationToken ct)
     {
+        const string cccd1 = "074088001234";
+        const string cccd2 = "074095005678";
+        const string cccd4 = "074082009012";
+
         var p1 = new Patient
         {
             FullName = "Nguyễn Văn An", DateOfBirth = new DateOnly(1988, 5, 12), Gender = "Nam",
             Phone = "0900000005", Email = "nguyenvanan@demo.vn", Address = "45 Lê Lợi, TP. Thủ Dầu Một, Bình Dương",
+            CitizenIdHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(cccd1))),
+            CitizenIdMasked = cccd1[..3] + "******" + cccd1[^3..],
+            DocumentType = IdentityDocumentType.CitizenId,
+            HashScheme = IdentityHashScheme.HmacCanonical,
+            IdentityKeyVersion = IdentityDocumentConstants.CurrentHmacKeyVersion,
+            CitizenIdVersion = 1,
             UserId = u1.UserId, IsActive = true, CreatedAt = now.AddDays(-10),
         };
         var p2 = new Patient
         {
             FullName = "Trần Thị Bích", DateOfBirth = new DateOnly(1995, 10, 24), Gender = "Nữ",
             Phone = "0900000021", Email = "tranthibich@demo.vn", Address = "128 Cách Mạng Tháng Tám, Thuận An, Bình Dương",
+            CitizenIdHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(cccd2))),
+            CitizenIdMasked = cccd2[..3] + "******" + cccd2[^3..],
+            DocumentType = IdentityDocumentType.CitizenId,
+            HashScheme = IdentityHashScheme.HmacCanonical,
+            IdentityKeyVersion = IdentityDocumentConstants.CurrentHmacKeyVersion,
+            CitizenIdVersion = 1,
             UserId = u2?.UserId, IsActive = true, CreatedAt = now.AddDays(-5),
         };
         var p3 = new Patient
@@ -45,6 +65,12 @@ public static partial class ClinicalDemoDataSeeder
         {
             FullName = "Phạm Đức Huy", DateOfBirth = new DateOnly(1982, 3, 30), Gender = "Nam",
             Phone = "0900000023", Email = "phamduchuy@demo.vn", Address = "72 Đại Lộ Bình Dương, Thủ Dầu Một",
+            CitizenIdHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(cccd4))),
+            CitizenIdMasked = cccd4[..3] + "******" + cccd4[^3..],
+            DocumentType = IdentityDocumentType.CitizenId,
+            HashScheme = IdentityHashScheme.HmacCanonical,
+            IdentityKeyVersion = IdentityDocumentConstants.CurrentHmacKeyVersion,
+            CitizenIdVersion = 1,
             UserId = u3?.UserId, IsActive = true, CreatedAt = now.AddDays(-2),
         };
         db.Patients.AddRange(p1, p2, p3, p4);

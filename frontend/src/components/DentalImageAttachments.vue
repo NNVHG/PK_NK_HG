@@ -1,7 +1,7 @@
 <template>
   <section class="image-attachments" aria-labelledby="image-heading">
     <h2 id="image-heading">Ảnh hồ sơ</h2>
-    <p>Ảnh nhận muộn có thể lưu theo bệnh nhân. Chỉ gắn vào ca đang mở hoặc đính chính hợp lệ, chưa thu tiền.</p>
+    <p v-if="auth.role !== 'PATIENT'">Ảnh nhận muộn có thể lưu theo bệnh nhân. Chỉ gắn vào ca đang mở hoặc đính chính hợp lệ, chưa thu tiền.</p>
     <form v-if="canUpload" @submit.prevent="upload">
       <fieldset :disabled="busy">
         <legend>Tải ảnh và gắn thông tin</legend>
@@ -124,12 +124,152 @@ onUnmounted(() => { generation++; viewerImages.value = []; comparisonIds.value =
 </script>
 
 <style scoped>
-.image-attachments { overflow-wrap: anywhere; }
-fieldset { display: grid; gap: .65rem; border: 1px solid #cbd5e1; border-radius: .5rem; padding: 1rem; max-width: 40rem; }
-input, select, button, textarea { font: inherit; padding: .6rem; min-width: 0; }
-.image-notes { white-space: pre-wrap; }
-.image-list { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: 1rem; }
-.image-list li { border: 1px solid #cbd5e1; padding: 1rem; border-radius: .5rem; }
-.image-list select { max-width: 100%; }
-.error { color: #9f1239; }
+.image-attachments {
+  overflow-wrap: anywhere;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+#image-heading {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+}
+
+fieldset {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem 1.25rem;
+  border: 1px solid #bae6fd;
+  background: linear-gradient(180deg, #f0f9ff 0%, #ffffff 100%);
+  border-radius: 14px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.06);
+  box-sizing: border-box;
+}
+
+legend {
+  font-weight: 800;
+  color: #0284c7;
+  padding: 0 0.65rem;
+  font-size: 1.05rem;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid #bae6fd;
+}
+
+fieldset > label, fieldset > input, fieldset > select, fieldset > textarea, fieldset > small, fieldset > button, fieldset > p {
+  grid-column: span 1;
+}
+
+fieldset > label[for="image-file"],
+fieldset > input#image-file,
+fieldset > small#image-rules,
+fieldset > label[for="image-notes"],
+fieldset > textarea#image-notes {
+  grid-column: span 2;
+}
+
+input, select, button, textarea {
+  font: inherit;
+  padding: 0.65rem 0.85rem;
+  min-height: 44px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  box-sizing: border-box;
+  background: #fff;
+  min-width: 0;
+}
+
+button {
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+  background: #0284c7;
+  color: #fff;
+  border: none;
+}
+button:hover:not(:disabled) {
+  background: #0369a1;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.image-notes {
+  white-space: pre-wrap;
+  background: #f8fafc;
+  padding: 0.6rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+}
+
+.image-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.35rem;
+}
+
+.image-list li {
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  padding: 1.25rem;
+  border-radius: 14px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+}
+
+.image-list li:hover {
+  transform: translateY(-2px);
+  border-color: #38bdf8;
+  box-shadow: 0 8px 20px rgba(2, 132, 199, 0.12);
+}
+
+.image-list strong {
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.image-list p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #64748b;
+}
+
+.image-list select {
+  max-width: 100%;
+}
+
+.error {
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+@media (max-width: 768px) {
+  fieldset {
+    grid-template-columns: 1fr;
+  }
+  fieldset > * {
+    grid-column: span 1 !important;
+  }
+  .image-list {
+    grid-template-columns: 1fr;
+  }
+}
 </style>
