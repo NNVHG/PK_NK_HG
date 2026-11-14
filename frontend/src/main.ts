@@ -3,6 +3,7 @@ import { createPinia } from 'pinia';
 import App from './App.vue';
 import router from './router';
 import { setUnauthorizedHandler } from './services/api';
+import './assets/modern-dental-theme.css';
 
 const app = createApp(App);
 const pinia = createPinia();

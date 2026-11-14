@@ -41,6 +41,9 @@
         <button class="btn btn-primary" :disabled="busy || searching || !keyword.trim()">
           {{ searching ? 'Đang tìm…' : 'Tìm kiếm' }}
         </button>
+        <button type="button" class="btn btn-outline" :disabled="busy || searching" @click="isCameraOpen = true">
+          📷 Quét CCCD
+        </button>
       </form>
 
       <div v-if="searched && !patients.length" class="empty-state">
@@ -141,6 +144,13 @@
       <span v-if="success.queueNumber"> Đã tự động tạo số chờ tiếp đón hôm nay: <strong>#{{ success.queueNumber }}</strong>.</span>
     </div>
     <CounterPatientPhoneRequest v-if="success" :key="success.appointmentId" :appointment-id="success.appointmentId" />
+
+    <!-- Camera CCCD Scanner Modal -->
+    <CameraCccdScanner
+      :is-open="isCameraOpen"
+      @close="isCameraOpen = false"
+      @success="onCccdScanned"
+    />
   </main>
 </template>
 
@@ -148,9 +158,13 @@
 import { onMounted, onUnmounted, ref, watch } from 'vue';
 import axios from 'axios';
 import CounterPatientPhoneRequest from '@/components/CounterPatientPhoneRequest.vue';
+import CameraCccdScanner from '@/components/CameraCccdScanner.vue';
+import { qrPatientIntakeService, type ScannedIdentity } from '@/services/qrPatientIntake';
 import { patientsService, type PatientSummary } from '@/services/patients';
 import { appointmentsService, type AppointmentResponse, type BookingDentist } from '@/services/appointments';
 import { useBookingSchedule } from '@/composables/useBookingSchedule';
+
+const isCameraOpen = ref(false);
 const keyword = ref(''), patients = ref<PatientSummary[]>([]), selected = ref<PatientSummary | null>(null);
 const day = ref(''), slot = ref(''), notes = ref(''), confirmed = ref(false);
 const dentists = ref<BookingDentist[]>([]), dentistId = ref(0), loadingDentists = ref(true), dentistError = ref('');
@@ -179,6 +193,36 @@ async function search() {
     if (ticket === version) { patients.value = result.items; searched.value = true; }
   } catch { if (ticket === version) error.value = 'Không thể tìm hồ sơ. Vui lòng thử lại.'; }
   finally { if (ticket === version) searching.value = false; }
+}
+
+async function onCccdScanned(data: { raw: string; identity: ScannedIdentity }) {
+  isCameraOpen.value = false;
+  error.value = '';
+  busy.value = true;
+  try {
+    const lookup = await qrPatientIntakeService.lookup(data.identity.citizenId);
+    if (lookup.existing?.isActive) {
+      const patient = await patientsService.getById(lookup.existing.patientId);
+      if (patient) {
+        patients.value = [patient];
+        selected.value = patient;
+        searched.value = true;
+        keyword.value = patient.fullName;
+        confirmed.value = false;
+        notes.value = '';
+        return;
+      }
+    }
+    keyword.value = data.identity.fullName;
+    await search();
+    if (!patients.value.length) {
+      error.value = `Chưa tìm thấy hồ sơ cho CCCD ${data.identity.citizenId} (${data.identity.fullName}). Vui lòng tạo hồ sơ bệnh nhân mới trước khi đặt lịch.`;
+    }
+  } catch {
+    error.value = 'Không thể tra cứu CCCD. Vui lòng thử tìm kiếm bằng số điện thoại hoặc mã hồ sơ.';
+  } finally {
+    busy.value = false;
+  }
 }
 function choose(patient: PatientSummary) {
   if (busy.value || searching.value || !patients.value.some(p => p.patientId === patient.patientId)) return;

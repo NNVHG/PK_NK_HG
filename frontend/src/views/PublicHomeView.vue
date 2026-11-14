@@ -670,7 +670,6 @@
           <h4>Dành cho khách hàng</h4>
           <RouterLink to="/book-appointment">Đặt lịch khám trực tuyến</RouterLink>
           <RouterLink to="/login">Đăng nhập Cổng bệnh nhân</RouterLink>
-          <RouterLink to="/activate-account">Kích hoạt tài khoản lần đầu (OTP)</RouterLink>
           <RouterLink to="/forgot-password">Khôi phục mật khẩu</RouterLink>
         </div>
         <div class="footer-col">

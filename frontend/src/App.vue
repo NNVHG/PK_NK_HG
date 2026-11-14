@@ -164,15 +164,9 @@
               <span class="nav-icon">📊</span> Bảng điều khiển
             </router-link>
 
-            <span class="nav-caption">📅 Lịch hẹn & Đặt lịch</span>
-            <router-link to="/management/appointments/requests">
-              <span class="nav-icon">📑</span> Yêu cầu đặt lịch
-            </router-link>
-            <router-link to="/management/appointments/counter">
-              <span class="nav-icon">🛎️</span> Đặt lịch tại quầy
-            </router-link>
-            <router-link to="/management/appointments/desk">
-              <span class="nav-icon">🗓️</span> Quản lý lịch hẹn
+            <span class="nav-caption">📅 Lịch hẹn</span>
+            <router-link to="/management/appointments">
+              <span class="nav-icon">📅</span> Lịch hẹn
             </router-link>
 
             <span class="nav-caption">📋 Tiếp đón & Thanh toán</span>
@@ -304,9 +298,7 @@
         <nav class="nav-links nav-links--actors" aria-label="Nghiệp vụ các vai trò khác">
           <span class="nav-caption caption-reception">📋 Tiếp Đón & Thu Ngân</span>
           <router-link to="/management/queue/check-in">Tiếp đón & Check-in</router-link>
-          <router-link to="/management/appointments/requests">Yêu cầu đặt lịch</router-link>
-          <router-link to="/management/appointments/counter">Đặt lịch tại quầy</router-link>
-          <router-link to="/management/appointments/desk">Lịch hẹn tại quầy</router-link>
+          <router-link to="/management/appointments">Lịch hẹn</router-link>
           <router-link to="/management/invoices">Tra cứu & Thu hóa đơn</router-link>
 
           <span class="nav-caption caption-dentist">🦷 Khám & Điều Trị</span>
