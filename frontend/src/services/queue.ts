@@ -130,6 +130,20 @@ export const queueService = {
     return response.data;
   },
 
+  async pauseVisit(queueEntryId: number, reason: string | null): Promise<QueueEntryResponse> {
+    const response = await apiClient.post<QueueEntryResponse>(`/queue/${queueEntryId}/pause`, {
+      confirmed: true, reason
+    });
+    return response.data;
+  },
+
+  async resumeVisit(queueEntryId: number, dentistId: number | null, reason: string | null): Promise<QueueEntryResponse> {
+    const response = await apiClient.post<QueueEntryResponse>(`/queue/${queueEntryId}/resume`, {
+      confirmed: true, dentistId, reason
+    });
+    return response.data;
+  },
+
   async getPublicDisplay(): Promise<PublicQueueMonitorResponse> {
     const response = await apiClient.get<PublicQueueMonitorResponse>('/queue/display');
     return response.data;

@@ -356,6 +356,164 @@ public sealed class QueueService
         { return Result<QueueEntryResponse>.Failure(Error.QueueWaitingCancellationConcurrent); }
     }
 
+    // §1.6: Pause visit, release room/chair, keep VisitId, ticket number and position.
+    public async Task<Result<QueueEntryResponse>> PauseVisitAsync(
+        int queueEntryId, int actorUserId, string actorRole, PauseVisitRequest request,
+        string? ipAddress, CancellationToken ct = default)
+    {
+        if (actorRole is not (RoleCodes.Admin or RoleCodes.Dentist))
+            return Result<QueueEntryResponse>.Failure(Error.QueueTransitionForbidden);
+        if (queueEntryId <= 0 || actorUserId <= 0 || !request.Confirmed || request.Reason?.Length > 500)
+            return Result<QueueEntryResponse>.Failure(Error.Validation);
+
+        try
+        {
+            return await _unitOfWork.ExecuteSerializableTransactionAsync(async transactionCt =>
+            {
+                var entry = await _queueRepository.GetByIdAsync(queueEntryId, transactionCt);
+                if (entry is null) return Result<QueueEntryResponse>.Failure(Error.QueueEntryNotFound);
+
+                var transition = QueueStateMachine.ValidateTransition(entry.Status, QueueStatus.Paused, actorRole);
+                if (transition.IsFailure) return Result<QueueEntryResponse>.Failure(transition.Error);
+
+                if (entry.QueueDate != _vietnamClock.Today || entry.Visit is null || entry.Visit.IsLocked ||
+                    entry.Visit.Status != VisitStatuses.InProgress)
+                    return Result<QueueEntryResponse>.Failure(Error.QueueInvalidStateTransition);
+
+                if (actorRole == RoleCodes.Dentist && entry.DentistId != actorUserId)
+                    return Result<QueueEntryResponse>.Failure(Error.QueueTransitionForbidden);
+
+                var release = await _visitChairs.ReleaseAsync(entry.Visit, actorUserId, transactionCt);
+                if (release.IsFailure) return Result<QueueEntryResponse>.Failure(release.Error);
+
+                var now = DateTime.UtcNow;
+                var previousStatus = entry.Status;
+                entry.Status = QueueStatus.Paused;
+                entry.UpdatedAt = now;
+                entry.Visit.UpdatedAt = now;
+
+                var reason = string.IsNullOrWhiteSpace(request.Reason) ? "Tạm dừng ca khám (§1.6)" : request.Reason.Trim();
+                await _queueRepository.AddStatusHistoryAsync(new QueueStatusHistory
+                {
+                    QueueEntryId = entry.QueueEntryId,
+                    FromStatus = previousStatus,
+                    ToStatus = QueueStatus.Paused,
+                    ChangedByUserId = actorUserId,
+                    ChangedAt = now,
+                    Reason = reason
+                }, transactionCt);
+
+                await _unitOfWork.SaveChangesAsync(transactionCt);
+                await _auditLogger.LogRequiredAsync(AuditActions.QueueStatusChanged, "QueueEntry", entry.QueueEntryId,
+                    actorUserId, JsonSerializer.Serialize(new
+                    {
+                        action = "PauseVisit",
+                        visitId = entry.VisitId,
+                        fromStatus = (int)previousStatus,
+                        toStatus = (int)QueueStatus.Paused,
+                        reason
+                    }), ipAddress, transactionCt);
+
+                var refreshed = await _queueRepository.GetByIdAsync(entry.QueueEntryId, transactionCt);
+                return Result<QueueEntryResponse>.Success(await ToResponseAsync(refreshed ?? entry, transactionCt));
+            }, ct);
+        }
+        catch (ConcurrentOperationException)
+        {
+            return Result<QueueEntryResponse>.Failure(Error.QueueConcurrent);
+        }
+    }
+
+    // §1.6: Resume paused visit, new or original dentist takes over with own room/chair.
+    public async Task<Result<QueueEntryResponse>> ResumeVisitAsync(
+        int queueEntryId, int actorUserId, string actorRole, ResumeVisitRequest request,
+        string? ipAddress, CancellationToken ct = default)
+    {
+        if (actorRole is not (RoleCodes.Admin or RoleCodes.Dentist))
+            return Result<QueueEntryResponse>.Failure(Error.QueueTransitionForbidden);
+        if (queueEntryId <= 0 || actorUserId <= 0 || !request.Confirmed || request.Reason?.Length > 500)
+            return Result<QueueEntryResponse>.Failure(Error.Validation);
+
+        try
+        {
+            return await _unitOfWork.ExecuteSerializableTransactionAsync(async transactionCt =>
+            {
+                var entry = await _queueRepository.GetByIdAsync(queueEntryId, transactionCt);
+                if (entry is null) return Result<QueueEntryResponse>.Failure(Error.QueueEntryNotFound);
+
+                var transition = QueueStateMachine.ValidateTransition(entry.Status, QueueStatus.InConsultation, actorRole);
+                if (transition.IsFailure) return Result<QueueEntryResponse>.Failure(transition.Error);
+
+                if (entry.QueueDate != _vietnamClock.Today || entry.Visit is null || entry.Visit.IsLocked ||
+                    entry.Visit.Status != VisitStatuses.InProgress)
+                    return Result<QueueEntryResponse>.Failure(Error.QueueInvalidStateTransition);
+
+                var targetDentistId = actorRole == RoleCodes.Dentist ? actorUserId : request.DentistId ?? entry.DentistId;
+                if (!targetDentistId.HasValue)
+                    return Result<QueueEntryResponse>.Failure(Error.QueueDentistRequired);
+
+                var dentist = await _userRepository.FindByIdAsync(targetDentistId.Value, transactionCt);
+                if (dentist is null || !dentist.IsActive || dentist.Role?.RoleCode != RoleCodes.Dentist)
+                    return Result<QueueEntryResponse>.Failure(Error.Validation.Code, "Nha sĩ không hợp lệ hoặc không hoạt động.");
+
+                if (await _visitRepository.HasActiveVisitForDentistAsync(targetDentistId.Value, transactionCt, entry.VisitId ?? entry.Visit.VisitId))
+                    return Result<QueueEntryResponse>.Failure(Error.DentistHasActiveVisit);
+
+                if (await _queueRepository.HasCallingForDentistAsync(_vietnamClock.Today, targetDentistId.Value, transactionCt, entry.QueueEntryId))
+                    return Result<QueueEntryResponse>.Failure(Error.QueueDentistAlreadyCalling);
+
+                var allocation = await _visitChairs.AcquireAsync(entry.Visit, targetDentistId.Value, actorUserId, transactionCt);
+                if (allocation.IsFailure) return Result<QueueEntryResponse>.Failure(allocation.Error);
+
+                var now = DateTime.UtcNow;
+                var previousStatus = entry.Status;
+                var previousDentistId = entry.DentistId;
+
+                entry.Status = QueueStatus.InConsultation;
+                entry.DentistId = targetDentistId;
+                entry.Dentist = dentist;
+                entry.UpdatedAt = now;
+
+                entry.Visit.DentistId = targetDentistId;
+                entry.Visit.Dentist = dentist;
+                entry.Visit.UpdatedAt = now;
+
+                var reason = string.IsNullOrWhiteSpace(request.Reason) ? "Tiếp tục ca khám (§1.6)" : request.Reason.Trim();
+                await _queueRepository.AddStatusHistoryAsync(new QueueStatusHistory
+                {
+                    QueueEntryId = entry.QueueEntryId,
+                    FromStatus = previousStatus,
+                    ToStatus = QueueStatus.InConsultation,
+                    ChangedByUserId = actorUserId,
+                    ChangedAt = now,
+                    Reason = reason
+                }, transactionCt);
+
+                await _unitOfWork.SaveChangesAsync(transactionCt);
+                await _auditLogger.LogRequiredAsync(AuditActions.QueueStatusChanged, "QueueEntry", entry.QueueEntryId,
+                    actorUserId, JsonSerializer.Serialize(new
+                    {
+                        action = "ResumeVisit",
+                        visitId = entry.VisitId,
+                        fromStatus = (int)previousStatus,
+                        toStatus = (int)QueueStatus.InConsultation,
+                        previousDentistId,
+                        newDentistId = targetDentistId,
+                        chairId = entry.Visit.ChairId,
+                        roomId = entry.Visit.RoomId,
+                        reason
+                    }), ipAddress, transactionCt);
+
+                var refreshed = await _queueRepository.GetByIdAsync(entry.QueueEntryId, transactionCt);
+                return Result<QueueEntryResponse>.Success(await ToResponseAsync(refreshed ?? entry, transactionCt));
+            }, ct);
+        }
+        catch (ConcurrentOperationException)
+        {
+            return Result<QueueEntryResponse>.Failure(Error.QueueConcurrent);
+        }
+    }
+
     // MOD_CHK / DL-126, DL-259: absence never pauses or closes a clinical Visit.
     public async Task<Result<QueueEntryResponse>> ChangeAbsenceAsync(
         int queueEntryId, int actorUserId, string actorRole, bool recall, QueueAbsenceRequest request,
@@ -536,7 +694,7 @@ public sealed class QueueService
 
         var targetStatus = (QueueStatus)request.NewStatus;
         var clinicalCancellation = targetStatus == QueueStatus.Cancelled && entry.Visit?.Status == VisitStatuses.InProgress &&
-            entry.Status is (QueueStatus.Waiting or QueueStatus.Calling or QueueStatus.InConsultation or QueueStatus.InImaging);
+            entry.Status is (QueueStatus.Waiting or QueueStatus.Calling or QueueStatus.InConsultation or QueueStatus.InImaging or QueueStatus.Paused);
         if (clinicalCancellation)
         {
             if (entry.Visit!.IsLocked) return Result<QueueEntryResponse>.Failure(Error.QueueInvalidStateTransition);
@@ -918,7 +1076,7 @@ public sealed class QueueService
             location?.ChairNumber,
             location?.RoomName,
             q.Visit is { Status: VisitStatuses.InProgress, IsLocked: false } &&
-                q.Status is (QueueStatus.Waiting or QueueStatus.Calling or QueueStatus.InConsultation or QueueStatus.InImaging),
+                q.Status is (QueueStatus.Waiting or QueueStatus.Calling or QueueStatus.InConsultation or QueueStatus.InImaging or QueueStatus.Paused),
             q.Appointment?.IsEmergency ?? false
         );
 
@@ -942,25 +1100,16 @@ public sealed class QueueService
         var entries = await _queueRepository.GetPublicDisplayQueueAsync(today, ct);
 
         var locations = await LocationsAsync(entries.Select(q => q.DentistId), ct);
+        // §1.6 & §6.2: TV phòng chờ chỉ phát active call khi Nha sĩ nhấn Gọi bệnh nhân (Calling);
+        // không công khai danh sách chờ (Waiting), không công khai các lượt khác.
         var inConsultation = entries
-            .Where(q => q.Status is QueueStatus.InConsultation or QueueStatus.Calling)
-            .OrderByDescending(q => q.Status == QueueStatus.Calling)
-            .ThenByDescending(q => q.UpdatedAt ?? q.CreatedAt)
+            .Where(q => q.Status == QueueStatus.Calling)
+            .OrderByDescending(q => q.UpdatedAt ?? q.CreatedAt)
             .Take(5)
             .Select(q => ToPublicResponse(q, LocationFor(q, locations)))
             .ToList();
 
-        var waiting = entries
-            .Where(q => q.Status == QueueStatus.Waiting)
-            .OrderByDescending(q => q.StatusHistories.Any(h => h.FromStatus == QueueStatus.InImaging && h.ToStatus == QueueStatus.Waiting))
-            .ThenByDescending(q => q.StatusHistories.Any(h => h.FromStatus == QueueStatus.Skipped && h.ToStatus == QueueStatus.Waiting))
-            .ThenByDescending(q => q.IsPriority)
-            .ThenBy(q => q.IsPriority && q.Appointment != null ? q.Appointment.SlotTime : TimeOnly.MaxValue)
-            .ThenBy(q => q.CheckInTime)
-            .ThenBy(q => q.QueueNumber)
-            .Take(15)
-            .Select(q => ToPublicResponse(q, LocationFor(q, locations)))
-            .ToList();
+        var waiting = Array.Empty<PublicQueueItemResponse>();
 
         return Result<PublicQueueMonitorResponse>.Success(new PublicQueueMonitorResponse(inConsultation, waiting));
     }

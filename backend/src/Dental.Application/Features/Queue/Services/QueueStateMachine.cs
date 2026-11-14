@@ -79,6 +79,24 @@ public static class QueueStateMachine
                     ? Result.Success()
                     : Result.Failure(Error.QueueTransitionForbidden.Code, "Bạn không có quyền hủy lượt chụp ảnh này."),
 
+            // Tạm dừng ca khám đang diễn ra: Nha sĩ, Admin (§1.6: nhả phòng, về trạng thái Tạm dừng)
+            (QueueStatus.InConsultation, QueueStatus.Paused) =>
+                roleCode is RoleCodes.Dentist or RoleCodes.Admin
+                    ? Result.Success()
+                    : Result.Failure(Error.QueueTransitionForbidden.Code, "Chỉ Nha sĩ hoặc Quản trị viên mới có quyền tạm dừng phiên khám."),
+
+            // Tiếp tục ca tạm dừng: Nha sĩ, Admin
+            (QueueStatus.Paused, QueueStatus.InConsultation) =>
+                roleCode is RoleCodes.Dentist or RoleCodes.Admin
+                    ? Result.Success()
+                    : Result.Failure(Error.QueueTransitionForbidden.Code, "Chỉ Nha sĩ hoặc Quản trị viên mới có quyền tiếp tục phiên khám."),
+
+            // Hủy ca đang tạm dừng: Nha sĩ, Admin
+            (QueueStatus.Paused, QueueStatus.Cancelled) =>
+                roleCode is RoleCodes.Dentist or RoleCodes.Admin
+                    ? Result.Success()
+                    : Result.Failure(Error.QueueTransitionForbidden.Code, "Chỉ Nha sĩ hoặc Quản trị viên mới có quyền hủy phiên khám."),
+
             // Mọi chuyển trạng thái khác đều không hợp lệ (ví dụ: Waiting -> Completed)
             _ => Result.Failure(
                 Error.QueueInvalidStateTransition.Code,

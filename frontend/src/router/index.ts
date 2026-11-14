@@ -49,7 +49,7 @@ const router = createRouter({
   routes: [
     // ==================== KHU VỰC BỆNH NHÂN (/patient/*) ====================
     { path: '/patient/my-record', name: 'patient-portal-my-record', component: () => import('@/views/MyPatientRecordView.vue'), meta: { requiresAuth: true, roles: ['PATIENT'] } },
-    { path: '/patient/appointments', name: 'patient-portal-appointments', component: () => import('@/views/AppointmentsView.vue'), meta: { requiresAuth: true, roles: ['PATIENT'] } },
+    { path: '/patient/appointments', redirect: { path: '/patient/appointments/mine', query: { tab: 'book' } } },
     { path: '/patient/appointments/mine', name: 'patient-portal-appointments-history', component: () => import('@/views/PatientAppointmentHistoryView.vue'), meta: { requiresAuth: true, roles: ['PATIENT'] } },
     { path: '/patient/invoices/mine', name: 'patient-portal-invoices', component: () => import('@/views/PatientInvoicesView.vue'), meta: { requiresAuth: true, roles: ['PATIENT'] } },
     { path: '/patient/dashboard', name: 'patient-portal-dashboard', component: () => import('@/views/PatientDashboardView.vue'), meta: { requiresAuth: true, roles: ['PATIENT'] } },

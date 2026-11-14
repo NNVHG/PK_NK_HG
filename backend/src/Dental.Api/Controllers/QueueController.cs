@@ -253,6 +253,46 @@ public sealed class QueueController : ControllerBase
         return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
     }
 
+    [HttpPost("{id:int}/pause")]
+    [Authorize(Policy = AppPolicies.QueueStatusUpdate)]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
+    [ProducesResponseType(typeof(QueueEntryResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> PauseVisit(int id, [FromBody] PauseVisitRequest request,
+        [FromServices] PauseVisitRequestValidator validator, CancellationToken ct)
+    {
+        if (id <= 0) return Failure(Error.Validation);
+        var validation = await validator.ValidateAsync(request, ct);
+        if (!validation.IsValid) return ToValidationProblem(validation);
+        if (_currentUser.UserId is not int actorId) return Unauthorized();
+
+        var result = await _queueService.PauseVisitAsync(id, actorId, _currentUser.RoleCode ?? string.Empty,
+            request, HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
+        return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
+    }
+
+    [HttpPost("{id:int}/resume")]
+    [Authorize(Policy = AppPolicies.QueueStatusUpdate)]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
+    [ProducesResponseType(typeof(QueueEntryResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ResumeVisit(int id, [FromBody] ResumeVisitRequest request,
+        [FromServices] ResumeVisitRequestValidator validator, CancellationToken ct)
+    {
+        if (id <= 0) return Failure(Error.Validation);
+        var validation = await validator.ValidateAsync(request, ct);
+        if (!validation.IsValid) return ToValidationProblem(validation);
+        if (_currentUser.UserId is not int actorId) return Unauthorized();
+
+        var result = await _queueService.ResumeVisitAsync(id, actorId, _currentUser.RoleCode ?? string.Empty,
+            request, HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
+        return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
+    }
+
     [HttpGet("display")]
     [HttpGet("public-monitor")]
     [AllowAnonymous]

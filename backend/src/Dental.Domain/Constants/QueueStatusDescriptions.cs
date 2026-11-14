@@ -14,6 +14,7 @@ public static class QueueStatusDescriptions
     public const string InImaging = "Đang chụp ảnh";
     public const string Calling = "Đang mời vào phòng";
     public const string Skipped = "Vắng mặt";
+    public const string Paused = "Tạm dừng";
 
     public static string GetDescription(QueueStatus status) => status switch
     {
@@ -24,6 +25,7 @@ public static class QueueStatusDescriptions
         QueueStatus.InImaging => InImaging,
         QueueStatus.Calling => Calling,
         QueueStatus.Skipped => Skipped,
+        QueueStatus.Paused => Paused,
         _ => "Không xác định"
     };
 }

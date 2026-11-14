@@ -141,7 +141,7 @@ async function handleSubmit() {
     const country = loginMode.value === 'passport' ? nationalityCode.value.trim().toUpperCase() : null;
 
     await authStore.login(phone.value, password.value, docType, country);
-    const defaultRoute = authStore.role === 'PATIENT' ? '/patient/dashboard' : '/management/dashboard';
+    const defaultRoute = authStore.role === 'PATIENT' ? '/' : '/management/dashboard';
     const redirect = (route.query.redirect as string) || defaultRoute;
     router.push(redirect);
   } catch (err: any) {

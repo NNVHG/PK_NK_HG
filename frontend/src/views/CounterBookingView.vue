@@ -138,6 +138,7 @@
     <div v-if="error" class="alert-box alert-error" role="alert">⚠️ {{ error }}</div>
     <div v-if="success" class="alert-box alert-success" role="status">
       ✅ Đã đặt lịch thành công <strong>#{{ success.appointmentId }}</strong> cho bệnh nhân <strong>{{ success.patientName }}</strong> vào ngày {{ success.appointmentDate }} lúc {{ success.slotTime.slice(0, 5) }} (Nha sĩ: {{ success.dentistName || 'Chưa phân công' }}).
+      <span v-if="success.queueNumber"> Đã tự động tạo số chờ tiếp đón hôm nay: <strong>#{{ success.queueNumber }}</strong>.</span>
     </div>
     <CounterPatientPhoneRequest v-if="success" :key="success.appointmentId" :appointment-id="success.appointmentId" />
   </main>

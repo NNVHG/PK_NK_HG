@@ -16,6 +16,7 @@ export interface AppointmentResponse {
   isEmergency?: boolean;
   emergencyReason?: string | null;
   slotDurationMinutes?: number;
+  queueNumber?: number | null;
 }
 
 export interface CreateAppointmentPayload {

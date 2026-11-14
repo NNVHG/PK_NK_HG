@@ -9,7 +9,7 @@
       <label for="status">Trạng thái</label>
       <select id="status" v-model.number="status" :disabled="writing" @change="load(1)">
         <option :value="0">Tất cả</option><option :value="1">Đang chờ</option><option :value="2">Đang khám</option>
-        <option :value="7">Vắng mặt</option><option :value="6">Đang mời vào phòng</option><option :value="5">Đang chụp ảnh</option><option :value="3">Khám xong</option><option :value="4">Đã hủy</option>
+        <option :value="8">Tạm dừng</option><option :value="7">Vắng mặt</option><option :value="6">Đang mời vào phòng</option><option :value="5">Đang chụp ảnh</option><option :value="3">Khám xong</option><option :value="4">Đã hủy</option>
       </select>
       <button :disabled="loading || writing" @click="load(page)">Tải lại</button>
       <template v-if="needsCallingDentist">
@@ -47,17 +47,23 @@
       <button v-if="canRouteImaging(row)" :disabled="loading || writing || cancelRow !== null || absenceRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openImaging(row)">
         {{ row.status === 2 ? 'Chỉ định chụp ảnh' : 'Hoàn tất chụp → chờ nha sĩ' }}
       </button>
-      <button v-if="canChangeAbsence(row)" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || absenceRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openAbsence(row)">
+      <button v-if="canChangeAbsence(row)" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || absenceRow !== null || pauseRow !== null || resumeRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openAbsence(row)">
         {{ row.status === 7 ? 'Gọi lại → hàng chờ' : 'Vắng mặt' }}
       </button>
-      <button v-if="canTransfer(row)" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || absenceRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openTransfer(row)">
+      <button v-if="canPause(row)" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || absenceRow !== null || pauseRow !== null || resumeRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openPause(row)">
+        Tạm dừng ca
+      </button>
+      <button v-if="canResume(row)" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || absenceRow !== null || pauseRow !== null || resumeRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openResume(row)">
+        Tiếp tục ca
+      </button>
+      <button v-if="canTransfer(row)" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || absenceRow !== null || pauseRow !== null || resumeRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openTransfer(row)">
         Chuyển nha sĩ
       </button>
     </li></ol>
     <section v-if="cancelRow" aria-labelledby="cancel-title" class="cancel-panel">
       <h2 id="cancel-title">{{ cancelClinical ? 'Hủy ca đã bắt đầu khám' : 'Hủy lượt chờ chưa khám' }}</h2>
       <p>{{ numberLabel(cancelRow.queueNumber) }} · {{ cancelRow.patientName }} · {{ cancelRow.patientCode }} · {{ cancelRow.queueDate }}</p>
-      <p v-if="cancelClinical">Hủy ca sẽ giải phóng ghế và tự hủy hóa đơn Draft chưa thu trong cùng thao tác. Giữ lịch sử, lý do và các dòng hóa đơn. Ca đã phát sinh thanh toán không thể hủy qua thao tác này.</p>
+      <p v-if="cancelClinical">Hủy ca sẽ nhả phòng điều trị và tự hủy hóa đơn Draft chưa thu trong cùng thao tác. Giữ lịch sử, lý do và các dòng hóa đơn. Ca đã phát sinh thanh toán không thể hủy qua thao tác này.</p>
       <p v-else>Chỉ hủy lượt đang chờ trước lần khám. Lượt đã bắt đầu khám hoặc trở về sau chụp ảnh cần xử lý theo quy trình chuyên môn.</p>
       <form @submit.prevent="handleCancellation">
         <label for="cancel-reason">Lý do ({{ cancelClinical ? 'bắt buộc' : 'không bắt buộc' }}, tối đa 500 ký tự)</label>
@@ -85,7 +91,7 @@
     <section v-if="transferRow" class="transfer-panel" aria-labelledby="transfer-title">
       <h2 id="transfer-title">Chuyển nha sĩ phụ trách</h2>
       <p>{{ numberLabel(transferRow.queueNumber) }} · {{ transferRow.patientName }} · {{ transferRow.patientCode }}</p>
-      <p v-if="transferRow.canCancelConsultation">Ca đang diễn ra sẽ chuyển sang ghế nha sĩ mới đang chọn. Ghế đích phải sẵn sàng.</p>
+      <p v-if="transferRow.canCancelConsultation">Ca đang diễn ra sẽ chuyển sang phòng nha sĩ mới đang chọn. Phòng đích phải sẵn sàng.</p>
       <p v-else>Lượt chưa bắt đầu khám sẽ giữ nguyên số thứ tự và trạng thái.</p>
       <form @submit.prevent="handleTransfer">
         <label for="transfer-dentist">Nha sĩ tiếp nhận</label>
@@ -117,6 +123,39 @@
         <button type="button" :disabled="changingAbsence" @click="closeAbsence">Quay lại</button>
       </form>
     </section>
+    <section v-if="pauseRow" class="absence-panel" aria-labelledby="pause-title">
+      <h2 id="pause-title">Tạm dừng ca khám (§1.6)</h2>
+      <p>{{ numberLabel(pauseRow.queueNumber) }} · {{ pauseRow.patientName }} · {{ pauseRow.patientCode }}</p>
+      <p>Hệ thống sẽ nhả phòng/ghế điều trị hiện tại, giữ nguyên Visit, lịch sử khám và số thứ tự chờ; đưa ca về hàng đợi trạng thái Tạm dừng mà không chen lên trước ca khác.</p>
+      <form @submit.prevent="handlePause">
+        <label for="pause-reason">Lý do tạm dừng (không bắt buộc, tối đa 500 ký tự)</label>
+        <textarea id="pause-reason" v-model="pauseReason" maxlength="500" :disabled="pausing" />
+        <label><input v-model="pauseConfirmed" type="checkbox" :disabled="pausing || cleanupOpen || needsReview" /> Tôi xác nhận tạm dừng ca và nhả phòng/ghế hiện tại.</label>
+        <button type="submit" :disabled="pausing || loading || cleanupOpen || needsReview || !pauseConfirmed">{{ pausing ? 'Đang tạm dừng…' : 'Xác nhận tạm dừng' }}</button>
+        <button type="button" :disabled="pausing" @click="closePause">Quay lại</button>
+      </form>
+    </section>
+    <section v-if="resumeRow" class="absence-panel" aria-labelledby="resume-title">
+      <h2 id="resume-title">Tiếp tục ca khám tạm dừng (§1.6)</h2>
+      <p>{{ numberLabel(resumeRow.queueNumber) }} · {{ resumeRow.patientName }} · {{ resumeRow.patientCode }}</p>
+      <p>Nha sĩ tiếp nhận sẽ liên kết phòng/ghế làm việc của mình và tiếp tục cùng Visit ban đầu.</p>
+      <form @submit.prevent="handleResume">
+        <template v-if="authStore.role === 'ADMIN'">
+          <label for="resume-dentist">Nha sĩ tiếp nhận</label>
+          <select id="resume-dentist" v-model.number="resumeDentistId" required :disabled="resuming || dentistsLoading || needsReview">
+            <option :value="0" disabled>Chọn nha sĩ</option>
+            <option v-for="dentist in dentists" :key="dentist.dentistId" :value="dentist.dentistId">
+              {{ dentist.dentistName }} · {{ locationLabel(dentist) }} · #{{ dentist.dentistId }}
+            </option>
+          </select>
+        </template>
+        <label for="resume-reason">Ghi chú (không bắt buộc, tối đa 500 ký tự)</label>
+        <textarea id="resume-reason" v-model="resumeReason" maxlength="500" :disabled="resuming" />
+        <label><input v-model="resumeConfirmed" type="checkbox" :disabled="resuming || cleanupOpen || needsReview" /> Tôi xác nhận tiếp tục ca khám.</label>
+        <button type="submit" :disabled="resuming || loading || cleanupOpen || needsReview || !resumeConfirmed || (authStore.role === 'ADMIN' && !resumeDentistId)">{{ resuming ? 'Đang tiếp tục…' : 'Xác nhận tiếp tục' }}</button>
+        <button type="button" :disabled="resuming" @click="closeResume">Quay lại</button>
+      </form>
+    </section>
     <section v-if="cleanupOpen" class="absence-panel" aria-labelledby="cleanup-title">
       <h2 id="cleanup-title">Dọn lượt chưa khám quá hạn</h2>
       <p>Hệ thống đóng lượt chưa khám sau 23:30 giờ Việt Nam và bù những ngày trước. Ca đã bắt đầu khám được giữ nguyên. Lịch sử vẫn còn; không tự tạo lịch hẹn mới.</p>
@@ -138,7 +177,7 @@ import { useAuthStore } from '@/stores/auth';
 import { queueService, type QueueEntryResponse, type CallingDentist } from '@/services/queue';
 const rows = ref<QueueEntryResponse[]>([]), status = ref(1), page = ref(1), total = ref(0), hasNext = ref(false);
 function locationLabel(item: { roomName?: string | null; chairNumber?: string | null }): string {
-  return [item.roomName, item.chairNumber ? `Ghế ${item.chairNumber}` : null].filter(Boolean).join(' · ') || 'Chưa có phòng/ghế';
+  return item.roomName ? `Phòng ${item.roomName}` : 'Chưa nhận phòng';
 }
 const loading = ref(false), callingNext = ref(false), error = ref(''), actionMsg = ref(''), updatedAt = ref('');
 const authStore = useAuthStore(), canCallNext = computed(() => ['ADMIN', 'DENTIST', 'ASSISTANT'].includes(authStore.role));
@@ -149,9 +188,11 @@ const cancelClinical = ref(false);
 const cancelRow = ref<QueueEntryResponse | null>(null), cancelReason = ref(''), cancelConfirmed = ref(false), cancelling = ref(false);
 const imagingRow = ref<QueueEntryResponse | null>(null), imagingReason = ref(''), imagingConfirmed = ref(false), routingImaging = ref(false);
 const absenceRow = ref<QueueEntryResponse | null>(null), absenceReason = ref(''), absenceConfirmed = ref(false), changingAbsence = ref(false);
+const pauseRow = ref<QueueEntryResponse | null>(null), pauseReason = ref(''), pauseConfirmed = ref(false), pausing = ref(false);
+const resumeRow = ref<QueueEntryResponse | null>(null), resumeDentistId = ref(0), resumeReason = ref(''), resumeConfirmed = ref(false), resuming = ref(false);
 const transferRow = ref<QueueEntryResponse | null>(null), transferDentistId = ref(0), transferReason = ref(''), transferConfirmed = ref(false), transferring = ref(false);
 const cleanupOpen = ref(false), cleanupConfirmed = ref(false), cleaningUp = ref(false);
-const writing = computed(() => callingNext.value || cancelling.value || routingImaging.value || changingAbsence.value || transferring.value || cleaningUp.value);
+const writing = computed(() => callingNext.value || cancelling.value || routingImaging.value || changingAbsence.value || pausing.value || resuming.value || transferring.value || cleaningUp.value);
 const dentists = ref<CallingDentist[]>([]), callDentistId = ref(0), dentistsLoading = ref(false), dentistError = ref(''), needsReview = ref(false);
 const transferTargets = computed(() => dentists.value.filter(dentist => dentist.dentistId !== transferRow.value?.dentistId));
 let version = 0, life = 0, dentistVersion = 0;
@@ -165,11 +206,13 @@ async function loadDentists() {
   finally { if (ticket === dentistVersion) dentistsLoading.value = false; }
 }
 async function load(targetPage = 1) {
-  if (cancelling.value || routingImaging.value || changingAbsence.value || transferring.value || cleaningUp.value) return;
-  if (!Number.isInteger(targetPage) || targetPage < 1 || targetPage > 1_000_000 || ![0, 1, 2, 3, 4, 5, 6, 7].includes(status.value)) return;
+  if (cancelling.value || routingImaging.value || changingAbsence.value || pausing.value || resuming.value || transferring.value || cleaningUp.value) return;
+  if (!Number.isInteger(targetPage) || targetPage < 1 || targetPage > 1_000_000 || ![0, 1, 2, 3, 4, 5, 6, 7, 8].includes(status.value)) return;
   closeCancellation();
   closeImaging();
   closeAbsence();
+  closePause();
+  closeResume();
   closeTransfer();
   closeCleanup();
   const ticket = ++version; loading.value = true; rows.value = []; error.value = ''; updatedAt.value = ''; total.value = 0; hasNext.value = false;
@@ -288,6 +331,65 @@ async function handleImaging() {
     imagingConfirmed.value = false; needsReview.value = true;
   } finally { if (ticket === life) routingImaging.value = false; }
 }
+function canPause(row: QueueEntryResponse) {
+  if (row.status !== 2) return false;
+  return authStore.role === 'ADMIN' || (authStore.role === 'DENTIST' && row.dentistId === authStore.user?.userId);
+}
+function canResume(row: QueueEntryResponse) {
+  if (row.status !== 8) return false;
+  return ['ADMIN', 'DENTIST'].includes(authStore.role);
+}
+function clearPause() { pauseRow.value = null; pauseReason.value = ''; pauseConfirmed.value = false; }
+function closePause() { if (!pausing.value) clearPause(); }
+function openPause(row: QueueEntryResponse) {
+  if (!canPause(row) || writing.value || loading.value || cancelRow.value || imagingRow.value || absenceRow.value || pauseRow.value || resumeRow.value || cleanupOpen.value || needsReview.value) return;
+  clearPause(); pauseRow.value = { ...row }; error.value = ''; actionMsg.value = '';
+}
+async function handlePause() {
+  const selected = pauseRow.value;
+  if (!selected || !canPause(selected) || writing.value || loading.value || cleanupOpen.value || needsReview.value || !pauseConfirmed.value) return;
+  if (pauseReason.value.length > 500) { error.value = 'Lý do tối đa 500 ký tự.'; return; }
+  const ticket = life; pausing.value = true; error.value = ''; actionMsg.value = '';
+  try {
+    const result = await queueService.pauseVisit(selected.queueEntryId, pauseReason.value.trim() || null);
+    if (ticket !== life) return;
+    actionMsg.value = `Đã tạm dừng ca ${numberLabel(result.queueNumber)} - ${result.patientName}, giải phóng phòng làm việc.`;
+    clearPause(); needsReview.value = true; pausing.value = false; await load(page.value);
+  } catch (err: unknown) {
+    if (ticket !== life) return;
+    const response = err as { response?: { data?: { message?: string } } };
+    error.value = response?.response?.data?.message || 'Chưa xác minh được kết quả tạm dừng.';
+    pauseConfirmed.value = false; needsReview.value = true;
+  } finally { if (ticket === life) pausing.value = false; }
+}
+
+function clearResume() { resumeRow.value = null; resumeDentistId.value = 0; resumeReason.value = ''; resumeConfirmed.value = false; }
+function closeResume() { if (!resuming.value) clearResume(); }
+function openResume(row: QueueEntryResponse) {
+  if (!canResume(row) || writing.value || loading.value || cancelRow.value || imagingRow.value || absenceRow.value || pauseRow.value || resumeRow.value || cleanupOpen.value || needsReview.value) return;
+  clearResume(); resumeRow.value = { ...row }; error.value = ''; actionMsg.value = '';
+  if (authStore.role === 'ADMIN' && !dentists.value.length) void loadDentists();
+}
+async function handleResume() {
+  const selected = resumeRow.value;
+  if (!selected || !canResume(selected) || writing.value || loading.value || cleanupOpen.value || needsReview.value || !resumeConfirmed.value) return;
+  if (authStore.role === 'ADMIN' && !resumeDentistId.value) { error.value = 'Vui lòng chọn nha sĩ tiếp nhận ca.'; return; }
+  if (resumeReason.value.length > 500) { error.value = 'Ghi chú tối đa 500 ký tự.'; return; }
+  const ticket = life; resuming.value = true; error.value = ''; actionMsg.value = '';
+  try {
+    const targetDentist = authStore.role === 'DENTIST' ? authStore.user?.userId || null : resumeDentistId.value || null;
+    const result = await queueService.resumeVisit(selected.queueEntryId, targetDentist, resumeReason.value.trim() || null);
+    if (ticket !== life) return;
+    actionMsg.value = `Đã tiếp tục ca ${numberLabel(result.queueNumber)} - ${result.patientName} tại ${locationLabel(result)}.`;
+    clearResume(); needsReview.value = true; resuming.value = false; await load(page.value);
+  } catch (err: unknown) {
+    if (ticket !== life) return;
+    const response = err as { response?: { data?: { message?: string } } };
+    error.value = response?.response?.data?.message || 'Chưa xác minh được kết quả tiếp tục ca.';
+    resumeConfirmed.value = false; needsReview.value = true;
+  } finally { if (ticket === life) resuming.value = false; }
+}
+
 function canChangeAbsence(row: QueueEntryResponse) {
   if (row.status === 7) return ['ADMIN', 'RECEPTIONIST'].includes(authStore.role);
   return row.status === 6 && row.canMarkAbsent === true &&

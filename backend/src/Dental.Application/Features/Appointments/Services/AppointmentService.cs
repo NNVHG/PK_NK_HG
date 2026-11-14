@@ -4,6 +4,7 @@ using Dental.Application.Features.Appointments.DTOs;
 using Dental.Application.Interfaces;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
+using Dental.Domain.Enums;
 using Dental.Application.Features.MOD_MST.Services;
 
 namespace Dental.Application.Features.Appointments.Services;
@@ -17,6 +18,8 @@ public sealed class AppointmentService
     private readonly IAuditLogger _auditLogger;
     private readonly VietnamClock _vietnamClock;
     private readonly IPatientGuardianRepository? _guardianRepository;
+    private readonly IVisitRepository? _visitRepository;
+    private readonly IQueueRepository? _queueRepository;
 
 
     public AppointmentService(
@@ -51,6 +54,28 @@ public sealed class AppointmentService
         _auditLogger = auditLogger;
         _vietnamClock = vietnamClock;
         _guardianRepository = guardianRepository;
+    }
+
+    public AppointmentService(
+        IAppointmentRepository appointmentRepository,
+        IPatientRepository patientRepository,
+        IUserRepository userRepository,
+        IUnitOfWork unitOfWork,
+        IAuditLogger auditLogger,
+        VietnamClock vietnamClock,
+        IPatientGuardianRepository guardianRepository,
+        IVisitRepository visitRepository,
+        IQueueRepository queueRepository)
+    {
+        _appointmentRepository = appointmentRepository;
+        _patientRepository = patientRepository;
+        _userRepository = userRepository;
+        _unitOfWork = unitOfWork;
+        _auditLogger = auditLogger;
+        _vietnamClock = vietnamClock;
+        _guardianRepository = guardianRepository;
+        _visitRepository = visitRepository;
+        _queueRepository = queueRepository;
     }
 
     public async Task<Result<AppointmentResponse>> CreateAppointmentAsync(
@@ -110,11 +135,13 @@ public sealed class AppointmentService
         if (request.AppointmentDate < today)
             return Result<AppointmentResponse>.Failure(Error.AppointmentDateInPast);
 
-        if (request.AppointmentDate == today)
+        var isToday = request.AppointmentDate == today;
+        var nowVietnamTime = TimeOnly.FromDateTime(_vietnamClock.Now);
+        var isCounterWalkIn = actorRoleCode is (RoleCodes.Admin or RoleCodes.Receptionist) && isToday && nowVietnamTime >= request.SlotTime;
+
+        if (isToday && !isCounterWalkIn && request.SlotTime <= nowVietnamTime)
         {
-            var nowVietnamTime = TimeOnly.FromDateTime(_vietnamClock.Now);
-            if (request.SlotTime <= nowVietnamTime)
-                return Result<AppointmentResponse>.Failure(Error.AppointmentInvalidTime.Code, "Không thể đặt lịch cho khung giờ đã qua trong ngày.");
+            return Result<AppointmentResponse>.Failure(Error.AppointmentInvalidTime.Code, "Không thể đặt lịch cho khung giờ đã qua trong ngày.");
         }
 
         if (await _appointmentRepository.HasActiveAppointmentOnDateAsync(request.PatientId, request.AppointmentDate, ct))
@@ -151,7 +178,7 @@ public sealed class AppointmentService
             SlotTime = request.SlotTime,
             SlotDurationMinutes = snapshot.Schedule.DurationMinutes,
             DentistId = request.DentistId,
-            Status = AppointmentStatuses.Scheduled,
+            Status = isCounterWalkIn ? AppointmentStatuses.CheckedIn : AppointmentStatuses.Scheduled,
             Notes = request.Notes?.Trim(),
             CreatedByUserId = actorUserId,
             CreatedAt = DateTime.UtcNow
@@ -159,6 +186,66 @@ public sealed class AppointmentService
 
         await _appointmentRepository.AddAsync(appointment, ct);
         await _unitOfWork.SaveChangesAsync(ct);
+
+        int? generatedQueueNumber = null;
+        if (isCounterWalkIn && _visitRepository is not null && _queueRepository is not null)
+        {
+            var visit = new Visit
+            {
+                PatientId = request.PatientId,
+                Status = VisitStatuses.Created,
+                DentistId = request.DentistId,
+                CreatedByUserId = actorUserId,
+                CreatedAt = _vietnamClock.UtcNow
+            };
+            await _visitRepository.AddAsync(visit, ct);
+            await _unitOfWork.SaveChangesAsync(ct);
+
+            var nextNumber = await _queueRepository.GetNextQueueNumberAsync(today, ct);
+            generatedQueueNumber = nextNumber;
+            var queueEntry = new QueueEntry
+            {
+                PatientId = request.PatientId,
+                AppointmentId = appointment.AppointmentId,
+                DentistId = request.DentistId,
+                VisitId = visit.VisitId,
+                QueueDate = today,
+                QueueNumber = nextNumber,
+                IsPriority = false,
+                CheckInTime = _vietnamClock.UtcNow,
+                Status = QueueStatus.Waiting,
+                Notes = request.Notes?.Trim(),
+                CreatedAt = _vietnamClock.UtcNow
+            };
+            await _queueRepository.AddAsync(queueEntry, ct);
+            await _unitOfWork.SaveChangesAsync(ct);
+
+            await _queueRepository.AddStatusHistoryAsync(new QueueStatusHistory
+            {
+                QueueEntryId = queueEntry.QueueEntryId,
+                FromStatus = null,
+                ToStatus = QueueStatus.Waiting,
+                ChangedByUserId = actorUserId,
+                ChangedAt = _vietnamClock.UtcNow,
+                Reason = "Đặt lịch tại quầy hôm nay - tự động tiếp đón (§1.6)"
+            }, ct);
+            await _unitOfWork.SaveChangesAsync(ct);
+
+            await _auditLogger.LogRequiredAsync(
+                action: AuditActions.QueueCheckedIn,
+                entityType: "QueueEntry",
+                entityId: queueEntry.QueueEntryId,
+                userId: actorUserId,
+                detail: JsonSerializer.Serialize(new
+                {
+                    source = "CounterWalkInAutoCheckIn",
+                    appointmentId = appointment.AppointmentId,
+                    visitId = visit.VisitId,
+                    queueNumber = nextNumber
+                }),
+                ipAddress: ipAddress,
+                ct: ct);
+        }
 
         await _auditLogger.LogAsync(
             action: AuditActions.AppointmentCreated,
@@ -182,7 +269,12 @@ public sealed class AppointmentService
             ct: ct);
 
         var created = await _appointmentRepository.GetByIdAsync(appointment.AppointmentId, ct);
-        return Result<AppointmentResponse>.Success(ToResponse(created ?? appointment));
+        var resp = ToResponse(created ?? appointment);
+        if (generatedQueueNumber.HasValue)
+        {
+            resp = resp with { QueueNumber = generatedQueueNumber.Value };
+        }
+        return Result<AppointmentResponse>.Success(resp);
     }
 
     public async Task<Result<IReadOnlyList<BookingDentistResponse>>> GetBookingDentistsAsync(
