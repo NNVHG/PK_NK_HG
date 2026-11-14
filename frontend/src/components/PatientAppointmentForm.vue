@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="booking-grid">
     <div class="panel form-panel">
       <div class="panel-header">

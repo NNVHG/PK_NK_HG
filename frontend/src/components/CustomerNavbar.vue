@@ -30,21 +30,17 @@
             <svg class="p-nav-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
             <span>Tổng quan</span>
           </RouterLink>
-          <RouterLink to="/patient/appointments/mine" class="patient-nav-item">
-            <svg class="p-nav-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            <span>Lịch hẹn & Đặt lịch</span>
-          </RouterLink>
           <RouterLink to="/patient/my-record" class="patient-nav-item">
             <svg class="p-nav-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
             <span>Hồ sơ của tôi</span>
           </RouterLink>
+          <RouterLink to="/patient/appointments/mine" class="patient-nav-item">
+            <svg class="p-nav-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span>Lịch hẹn</span>
+          </RouterLink>
           <RouterLink to="/patient/invoices/mine" class="patient-nav-item">
             <svg class="p-nav-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-            <span>Hóa đơn của tôi</span>
-          </RouterLink>
-          <RouterLink to="/patient/profile" class="patient-nav-item">
-            <svg class="p-nav-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            <span>Hồ sơ cá nhân</span>
+            <span>Hóa đơn</span>
           </RouterLink>
         </template>
         <template v-else>

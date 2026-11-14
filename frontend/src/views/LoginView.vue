@@ -134,9 +134,8 @@ async function handleSubmit() {
     const country = loginMode.value === 'passport' ? nationalityCode.value.trim().toUpperCase() : null;
 
     await authStore.login(phone.value, password.value, docType, country);
-    const defaultRoute = authStore.role === 'PATIENT' ? '/' : '/management/dashboard';
-    const redirect = (route.query.redirect as string) || defaultRoute;
-    router.push(redirect);
+    const dashboardRoute = authStore.role === 'PATIENT' ? '/patient/dashboard' : '/management/dashboard';
+    router.push(dashboardRoute);
   } catch (err: any) {
     if (err.response?.status === 401 && err.response?.data?.code === 'AUTH_ACTIVATION_REQUIRED') {
       stageActivationPrefill({

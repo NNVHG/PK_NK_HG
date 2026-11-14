@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <main class="page-container">
     <div class="page-header">
       <div>
@@ -8,54 +8,17 @@
       </div>
       <div class="header-actions">
         <button
-          v-if="activeTab === 'list'"
           type="button"
           class="button button-primary"
-          @click="activeTab = 'book'"
+          @click="openBookingModal"
         >
           <span>📅 Đặt lịch khám mới</span>
-        </button>
-        <button
-          v-else
-          type="button"
-          class="button button-secondary"
-          @click="activeTab = 'list'"
-        >
-          <span>📋 Xem danh sách lịch hẹn</span>
         </button>
       </div>
     </div>
 
-    <!-- Navigation Tabs -->
-    <div class="appointment-tabs-bar" role="tablist" aria-label="Khu vực lịch hẹn bệnh nhân">
-      <button
-        type="button"
-        role="tab"
-        :aria-selected="activeTab === 'list'"
-        class="tab-btn"
-        :class="{ active: activeTab === 'list' }"
-        @click="activeTab = 'list'"
-      >
-        <span class="tab-icon">📋</span>
-        <span>Lịch hẹn của tôi</span>
-        <span v-if="total > 0" class="tab-badge">{{ total }}</span>
-      </button>
-
-      <button
-        type="button"
-        role="tab"
-        :aria-selected="activeTab === 'book'"
-        class="tab-btn"
-        :class="{ active: activeTab === 'book' }"
-        @click="activeTab = 'book'"
-      >
-        <span class="tab-icon">✨</span>
-        <span>Đặt lịch khám điều trị</span>
-      </button>
-    </div>
-
-    <!-- ==================== TAB 1: DANH SÁCH LỊCH HẸN ==================== -->
-    <div v-show="activeTab === 'list'" class="tab-content">
+    <!-- ==================== DANH SÁCH LỊCH HẸN ==================== -->
+    <div class="tab-content">
       <!-- Alert / Notice -->
       <div v-if="notice" class="alert alert-success" role="status">
         <span class="alert-icon">✅</span>
@@ -98,7 +61,7 @@
         <span class="empty-icon">📅</span>
         <h3>Không có lịch hẹn phù hợp</h3>
         <p>Bạn chưa có ca hẹn nào thuộc trạng thái này hoặc chưa đặt lịch khám.</p>
-        <button type="button" class="button button-primary" @click="activeTab = 'book'">
+        <button type="button" class="button button-primary" @click="openBookingModal">
           Đặt lịch khám ngay
         </button>
       </div>
@@ -193,29 +156,75 @@
       </aside>
     </div>
 
-    <!-- ==================== TAB 2: ĐẶT LỊCH KHÁM MỚI ==================== -->
-    <div v-show="activeTab === 'book'" class="tab-content">
-      <PatientAppointmentForm @success="onBookingSuccess" />
+    <!-- ==================== POPUP ĐẶT LỊCH KHÁM MỚI ==================== -->
+    <div
+      v-if="showBookingModal"
+      class="booking-modal-backdrop"
+      role="presentation"
+      @click.self="closeBookingModal"
+    >
+      <div
+        class="booking-modal-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="booking-modal-title"
+      >
+        <div class="booking-modal-header">
+          <div>
+            <h2 id="booking-modal-title" class="booking-modal-title">📅 Đặt lịch khám mới</h2>
+            <p class="booking-modal-subtitle">Chọn ngày và khung giờ phù hợp để đặt lịch trực tuyến</p>
+          </div>
+          <button
+            type="button"
+            class="booking-modal-close"
+            aria-label="Đóng cửa sổ đặt lịch"
+            @click="closeBookingModal"
+          >
+            ✕
+          </button>
+        </div>
+        <div class="booking-modal-body">
+          <PatientAppointmentForm @success="onBookingSuccess" />
+        </div>
+      </div>
     </div>
   </main>
 </template>
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import PatientAppointmentCancellation from '@/components/PatientAppointmentCancellation.vue';
 import AppointmentRescheduling from '@/components/AppointmentRescheduling.vue';
 import PatientAppointmentForm from '@/components/PatientAppointmentForm.vue';
 import { appointmentsService, type AppointmentResponse } from '@/services/appointments';
 
 const route = useRoute();
+const router = useRouter();
 
-// Tab state: 'list' | 'book'
-const activeTab = ref<'list' | 'book'>('list');
+const showBookingModal = ref(false);
+
+function openBookingModal() {
+  showBookingModal.value = true;
+}
+
+function closeBookingModal() {
+  showBookingModal.value = false;
+  if (route.query.tab === 'book') {
+    const query = { ...route.query };
+    delete query.tab;
+    void router.replace({ query });
+  }
+}
+
+function onKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && showBookingModal.value) {
+    closeBookingModal();
+  }
+}
 
 watch(() => route.query.tab, (tab) => {
-  if (tab === 'book') activeTab.value = 'book';
-  else if (tab === 'list') activeTab.value = 'list';
+  if (tab === 'book') showBookingModal.value = true;
 }, { immediate: true });
 
 const status = ref('');
@@ -274,12 +283,16 @@ async function rescheduled() {
 
 function onBookingSuccess(_appointment: AppointmentResponse) {
   notice.value = 'Đặt lịch thành công! Ca hẹn mới đã được thêm vào danh sách.';
-  activeTab.value = 'list';
+  closeBookingModal();
   void load(1);
 }
 
-onMounted(refresh);
+onMounted(() => {
+  document.addEventListener('keydown', onKeydown);
+  void refresh();
+});
 onUnmounted(() => {
+  document.removeEventListener('keydown', onKeydown);
   version++;
   rows.value = [];
   total.value = 0;
@@ -329,53 +342,79 @@ h1 {
   margin: 0;
 }
 
-/* Tabs Bar */
-.appointment-tabs-bar {
+/* Centered Booking Modal */
+.booking-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(2px);
   display: flex;
-  gap: 0.5rem;
-  border-bottom: 2px solid #e2e8f0;
-  padding-bottom: 0.25rem;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
 }
 
-.tab-btn {
+.booking-modal-dialog {
+  width: 100%;
+  max-width: 960px;
+  max-height: 90vh;
+  background: #f8fafc;
+  border-radius: 16px;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.22);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.booking-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.booking-modal-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.booking-modal-subtitle {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.booking-modal-close {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #475569;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  background: transparent;
-  border: none;
-  border-bottom: 3px solid transparent;
-  padding: 0.65rem 1.15rem;
-  font-size: 0.95rem;
-  font-weight: 750;
-  color: #64748b;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  margin-bottom: -0.35rem;
-  border-radius: 6px 6px 0 0;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
-.tab-btn:hover {
-  color: #0284c7;
-  background: #f0f9ff;
+.booking-modal-close:hover {
+  background: #f1f5f9;
+  color: #0f172a;
 }
 
-.tab-btn.active {
-  color: #0284c7;
-  border-bottom-color: #0284c7;
-  background: #ffffff;
-}
-
-.tab-icon {
-  font-size: 1.1rem;
-}
-
-.tab-badge {
-  background: #e0f2fe;
-  color: #0369a1;
-  font-size: 0.75rem;
-  padding: 0.1rem 0.45rem;
-  border-radius: 999px;
-  font-weight: 800;
+.booking-modal-body {
+  padding: 1.25rem;
+  overflow-y: auto;
 }
 
 .tab-content {

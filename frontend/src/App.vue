@@ -47,12 +47,12 @@
 
           <router-link to="/patient/appointments/mine" class="patient-nav-item">
             <svg class="p-nav-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            <span>Lịch hẹn & Đặt lịch</span>
+            <span>Lịch hẹn</span>
           </router-link>
 
           <router-link to="/patient/invoices/mine" class="patient-nav-item">
             <svg class="p-nav-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-            <span>Hóa đơn & Chi phí</span>
+            <span>Hóa đơn</span>
           </router-link>
 
         </nav>
