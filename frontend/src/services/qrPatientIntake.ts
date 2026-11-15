@@ -57,7 +57,10 @@ export async function decodeCitizenQr(raw: string): Promise<ScannedIdentity> {
 }
 export const qrPatientIntakeService={
  async lookup(citizenId: string): Promise<{existing:QrExistingPatient|null}> { return (await apiClient.post('/patients/check-cccd',{citizenId})).data; },
+ async createWithCitizenId(citizenId: string,patient:PatientPayload): Promise<PatientDetails> {
+  return (await apiClient.post('/patients/qr-intake',{citizenId,patient,confirmed:true})).data;
+ },
  async create(identity:ScannedIdentity,patient:PatientPayload): Promise<PatientDetails> {
-  return (await apiClient.post('/patients/qr-intake',{citizenId:identity.citizenId,patient,confirmed:true})).data;
+  return this.createWithCitizenId(identity.citizenId,patient);
  }
 };

@@ -16,6 +16,8 @@ export interface AppointmentResponse {
   isEmergency?: boolean;
   emergencyReason?: string | null;
   slotDurationMinutes?: number;
+  queueNumber?: number | null;
+  patientAccountCreated?: boolean;
 }
 
 export interface CreateAppointmentPayload {
@@ -25,6 +27,13 @@ export interface CreateAppointmentPayload {
   notes: string | null;
   dentistId?: number | null;
   expectedScheduleRevision?: string;
+  citizenId?: string | null;
+  contactPhone?: string | null;
+  guardianFullName?: string | null;
+  guardianRelationship?: string | null;
+  guardianVerifiedAtCounter?: boolean;
+  documentType?: 1 | 2 | null;
+  nationalityCode?: string | null;
 }
 
 export interface BookingDentist { dentistId: number; dentistName: string; }

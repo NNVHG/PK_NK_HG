@@ -64,6 +64,12 @@ public sealed class PatientGuardianRepository(DentalDbContext db, IPasswordHashe
             if (guardian is null || !guardian.IsActive)
                 return Result<PatientGuardianResponse>.Failure(new Error("PAT_GUARDIAN_NOT_FOUND", "Hồ sơ người giám hộ không tồn tại hoặc đã ngừng hoạt động."));
 
+            if (!guardian.UserId.HasValue || !await db.Users.AnyAsync(user =>
+                    user.UserId == guardian.UserId.Value && user.IsActive && user.Role.RoleCode == RoleCodes.Patient, ct))
+                return Result<PatientGuardianResponse>.Failure(new Error(
+                    "PAT_GUARDIAN_ACCOUNT_REQUIRED",
+                    "Người giám hộ phải có tài khoản Bệnh nhân đang hoạt động. Số điện thoại trùng không đủ để cấp quyền."));
+
             var ward = await db.Patients.FirstOrDefaultAsync(p => p.PatientId == request.WardPatientId, ct);
             if (ward is null || !ward.IsActive)
                 return Result<PatientGuardianResponse>.Failure(new Error("PAT_WARD_NOT_FOUND", "Hồ sơ người được giám hộ không tồn tại hoặc đã ngừng hoạt động."));

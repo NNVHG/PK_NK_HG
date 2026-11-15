@@ -1,35 +1,175 @@
 <template>
-  <main class="invoice-desk">
-    <h1>Tra cứu hóa đơn tại quầy</h1>
-    <InvoiceHistoryPanel v-if="!paymentOpen" :disabled="busy" @selected="selectFromHistory" />
-    <form @submit.prevent="lookup">
-      <label>Mã hóa đơn <input v-model="code" maxlength="50" autocomplete="off" :disabled="busy || paymentOpen" /></label>
-      <button :disabled="busy || paymentOpen || !allowed">Tra cứu</button>
-    </form>
-    <p v-if="busy" role="status">Đang đối chiếu hóa đơn…</p>
-    <p v-if="error" role="alert">{{ error }}</p>
-    <section v-if="invoice" aria-label="Thông tin đối chiếu">
-      <h2>{{ invoice.invoiceCode }}</h2>
-      <p>Bệnh nhân: {{ invoice.patientCode }} · {{ invoice.patientName }}</p>
-      <p>Ngày lập: {{ new Date(invoice.createdAt).toLocaleString('vi-VN') }}</p>
-      <p>Trạng thái: {{ statuses[invoice.status] ?? 'Không xác định' }}</p>
-      <p>Tổng tiền: {{ money(invoice.totalAmount) }} · Đã trả: {{ money(invoice.paidAmount) }} · Còn nợ: {{ money(invoice.remainingAmount) }}</p>
-      <template v-if="!paymentOpen && eligible">
-        <label><input v-model="confirmed" type="checkbox" /> Tôi đã đối chiếu đúng mã hóa đơn, bệnh nhân và công nợ</label>
-        <button :disabled="!confirmed || busy" @click="openPayment">Mở thu tiền / biên lai</button>
-      </template>
-      <p v-else-if="!eligible">Hóa đơn nháp hoặc đã hủy không thể mở thu tiền.</p>
-      <template v-if="paymentOpen">
-        <p>Đang xử lý hóa đơn này. Hoàn tất đối chiếu lần thu trước trước khi tải lại trang để tra cứu mã khác.</p>
-        <button :disabled="busy" @click="refresh">Đối chiếu lại công nợ</button>
-        <InvoiceCashPayment :invoice-id="invoice.invoiceId" :remaining-amount="reviewRequired ? 0 : invoice.remainingAmount"
-          :status="reviewRequired ? 0 : invoice.status" @paid="onPaid" />
-        <section v-if="lastPayment" aria-label="Biên lai lần thu vừa ghi nhận">
-          <p>Đã ghi nhận khoản thu #{{ lastPayment.id }} · {{ money(lastPayment.amount) }} · Tiền thối {{ money(lastPayment.changeAmount ?? 0) }}</p>
-          <PaymentReceiptModal :invoice-id="invoice.invoiceId" :payment-id="lastPayment.id" />
-        </section>
-      </template>
-    </section>
+  <main class="invoice-desk-page">
+    <header class="invoice-desk-header">
+      <div class="header-badge-row">
+        <span class="app-badge app-badge--info">Quầy Thu Ngân · Tài Chính</span>
+      </div>
+      <h1 class="invoice-desk-title">Tra Cứu &amp; Thu Hóa Đơn Điều Trị</h1>
+      <p class="invoice-desk-desc">
+        Tra cứu mã hóa đơn, đối chiếu số tiền đã thanh toán và dư nợ còn lại, ghi nhận thu tiền mặt hoặc chuyển khoản và in biên lai thu ngân.
+      </p>
+    </header>
+
+    <div class="invoice-desk-grid">
+      <!-- Cột 1: Form tra cứu & Lịch sử thao tác -->
+      <div class="desk-col-left">
+        <article class="app-card">
+          <div class="app-card-header">
+            <div class="app-card-title-group">
+              <span class="app-card-icon">💳</span>
+              <div>
+                <h2 class="app-card-title">Tra Cứu Hóa Đơn</h2>
+                <p class="app-card-subtitle">Nhập mã hóa đơn (ví dụ: HD-202611-001)</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="app-card-body">
+            <form class="lookup-form" @submit.prevent="lookup">
+              <div class="app-form-group">
+                <label class="app-label" for="invoice-code-input">
+                  <span>Mã hóa đơn thanh toán</span>
+                  <span class="app-label-required">*</span>
+                </label>
+                <div class="search-input-row">
+                  <input
+                    id="invoice-code-input"
+                    v-model="code"
+                    class="app-input search-input"
+                    maxlength="50"
+                    autocomplete="off"
+                    autocorrect="off"
+                    autocapitalize="characters"
+                    spellcheck="false"
+                    enterkeyhint="search"
+                    placeholder="Nhập mã hóa đơn..."
+                    :disabled="busy || paymentOpen"
+                  />
+                  <button
+                    type="submit"
+                    class="app-btn app-btn--primary"
+                    :disabled="busy || paymentOpen || !allowed"
+                  >
+                    {{ busy ? 'Đang tìm…' : 'Tra cứu' }}
+                  </button>
+                </div>
+              </div>
+            </form>
+
+            <p v-if="busy" class="app-hint" role="status">Đang đối chiếu dữ liệu hóa đơn…</p>
+            <p v-if="error" class="error-banner" role="alert">{{ error }}</p>
+
+            <div v-if="!paymentOpen" class="history-block">
+              <h3 class="history-title">Hóa đơn thao tác gần đây</h3>
+              <InvoiceHistoryPanel :disabled="busy" @selected="selectFromHistory" />
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <!-- Cột 2: Chi tiết hóa đơn & Màn hình thu tiền -->
+      <div class="desk-col-right">
+        <article v-if="invoice" class="app-card invoice-detail-card" aria-label="Thông tin đối chiếu">
+          <div class="app-card-header">
+            <div class="app-card-title-group">
+              <span class="app-card-icon">🧾</span>
+              <div>
+                <h2 class="app-card-title">{{ invoice.invoiceCode }}</h2>
+                <p class="app-card-subtitle">Bệnh nhân: <strong>{{ invoice.patientName }}</strong> ({{ invoice.patientCode }})</p>
+              </div>
+            </div>
+            <span
+              class="app-badge"
+              :class="{
+                'app-badge--success': invoice.status === 3,
+                'app-badge--warning': invoice.status === 2,
+                'app-badge--danger': invoice.status === 4,
+                'app-badge--info': [0, 1].includes(invoice.status)
+              }"
+            >
+              {{ statuses[invoice.status] ?? 'Không xác định' }}
+            </span>
+          </div>
+
+          <div class="app-card-body">
+            <!-- Thống kê tài chính 3 cột -->
+            <div class="financial-summary-grid">
+              <div class="summary-box">
+                <span class="summary-label">TỔNG CHI PHÍ</span>
+                <strong class="summary-val">{{ money(invoice.totalAmount) }}</strong>
+              </div>
+              <div class="summary-box summary-box--paid">
+                <span class="summary-label">ĐÃ THANH TOÁN</span>
+                <strong class="summary-val">{{ money(invoice.paidAmount) }}</strong>
+              </div>
+              <div class="summary-box summary-box--debt">
+                <span class="summary-label">DƯ NỢ CÒN LẠI</span>
+                <strong class="summary-val">{{ money(invoice.remainingAmount) }}</strong>
+              </div>
+            </div>
+
+            <div class="invoice-meta-info">
+              <span>📅 Ngày tạo: <strong>{{ new Date(invoice.createdAt).toLocaleString('vi-VN') }}</strong></span>
+            </div>
+
+            <!-- Khối xác nhận đối chiếu trước khi mở cổng thu tiền -->
+            <div v-if="!paymentOpen && eligible" class="confirmation-section">
+              <label class="confirm-checkbox-card">
+                <input v-model="confirmed" type="checkbox" class="confirm-input" />
+                <span class="confirm-text">Tôi đã đối chiếu khớp thông tin mã hóa đơn, họ tên bệnh nhân và số dư nợ</span>
+              </label>
+              <button
+                class="app-btn app-btn--gold app-btn--lg open-payment-btn"
+                :disabled="!confirmed || busy"
+                @click="openPayment"
+              >
+                💰 Mở Cổng Thu Tiền / Xuất Biên Lai
+              </button>
+            </div>
+
+            <p v-else-if="!eligible" class="app-hint">
+              Hóa đơn nháp hoặc đã hủy không thể mở tiếp nhận thanh toán.
+            </p>
+
+            <!-- Cổng thu tiền tiền mặt / QR khi đã mở -->
+            <div v-if="paymentOpen" class="payment-processing-area">
+              <div class="processing-notice-box">
+                <p>Đang trong phiên thu tiền cho hóa đơn <strong>{{ invoice.invoiceCode }}</strong>. Vui lòng hoàn tất lần thu hiện tại trước khi chuyển sang hóa đơn khác.</p>
+                <button type="button" class="app-btn app-btn--secondary app-btn--sm" :disabled="busy" @click="refresh">
+                  🔄 Đối chiếu lại công nợ
+                </button>
+              </div>
+
+              <InvoiceCashPayment
+                :invoice-id="invoice.invoiceId"
+                :remaining-amount="reviewRequired ? 0 : invoice.remainingAmount"
+                :status="reviewRequired ? 0 : invoice.status"
+                @paid="onPaid"
+              />
+
+              <div v-if="lastPayment" class="receipt-success-card" aria-label="Biên lai lần thu vừa ghi nhận">
+                <div class="receipt-success-header">
+                  <span class="app-badge app-badge--success">✓ Giao dịch thành công</span>
+                  <span class="receipt-id">Mã giao dịch #{{ lastPayment.id }}</span>
+                </div>
+                <div class="receipt-success-amounts">
+                  <div>Số tiền thực thu: <strong>{{ money(lastPayment.amount) }}</strong></div>
+                  <div v-if="lastPayment.changeAmount && lastPayment.changeAmount > 0">Tiền thối lại khách: <strong>{{ money(lastPayment.changeAmount) }}</strong></div>
+                </div>
+                <PaymentReceiptModal :invoice-id="invoice.invoiceId" :payment-id="lastPayment.id" />
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- Placeholder khi chưa tra cứu -->
+        <article v-else class="app-card empty-invoice-placeholder">
+          <div class="empty-icon">🧾</div>
+          <h3>Chưa Chọn Hóa Đơn</h3>
+          <p>Nhập mã hóa đơn hoặc bấm vào một mã từ lịch sử thao tác để xem chi tiết đối soát công nợ.</p>
+        </article>
+      </div>
+    </div>
   </main>
 </template>
 <script setup lang="ts">
@@ -97,109 +237,259 @@ async function refresh() {
 onUnmounted(() => { version++; lastPayment.value = null; invoice.value = null; code.value = ''; confirmed.value = false; paymentOpen.value = false; });
 </script>
 <style scoped>
-.invoice-desk {
-  max-width: 960px;
-  margin: 1.5rem auto;
-  padding: 1.5rem;
+.invoice-desk-page {
+  max-width: 1380px;
+  margin: 0 auto;
+  padding: var(--spacing-6);
   box-sizing: border-box;
-  font-family: inherit;
-  color: #1e293b;
 }
 
-h1 {
-  font-size: 1.75rem;
-  font-weight: 800;
-  color: #0f172a;
-  margin-bottom: 1.25rem;
+.invoice-desk-header {
+  margin-block-end: var(--spacing-6);
+  padding-block-end: var(--spacing-4);
+  border-block-end: 1px solid var(--color-border-subtle);
 }
 
-form {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-end;
-  margin: 1.5rem 0;
-  background: #f8fafc;
-  padding: 1.25rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
+.header-badge-row {
+  margin-block-end: 0.35rem;
 }
 
-label {
+.invoice-desk-title {
+  font-size: var(--font-size-2xl);
+  font-weight: 850;
+  color: var(--color-primary);
+  margin: 0 0 0.35rem;
+  letter-spacing: -0.01em;
+}
+
+.invoice-desk-desc {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  margin: 0;
+  max-width: 75ch;
+}
+
+.invoice-desk-grid {
+  display: grid;
+  grid-template-columns: 420px 1fr;
+  gap: var(--spacing-6);
+  align-items: start;
+}
+
+.desk-col-left,
+.desk-col-right {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  font-weight: 600;
+  gap: var(--spacing-6);
+}
+
+.search-input-row {
+  display: flex;
+  gap: var(--spacing-2);
+}
+
+.search-input {
   flex: 1;
 }
 
-input, button {
-  font: inherit;
-  min-height: 44px;
-  padding: 0.65rem 0.9rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  box-sizing: border-box;
+.history-block {
+  margin-block-start: var(--spacing-4);
+  border-block-start: 1px solid var(--color-border-subtle);
+  padding-block-start: var(--spacing-4);
 }
 
-input {
-  background: #fff;
-}
-
-button {
-  cursor: pointer;
-  background: #0284c7;
-  color: #fff;
-  border: none;
-  font-weight: 600;
-  transition: all 0.2s;
-  padding: 0.65rem 1.25rem;
-}
-button:hover:not(:disabled) {
-  background: #0369a1;
-}
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-section {
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin-top: 1.5rem;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-}
-
-section h2 {
-  font-size: 1.5rem;
+.history-title {
+  font-size: var(--font-size-sm);
   font-weight: 800;
-  color: #0284c7;
-  margin-top: 0;
+  color: var(--color-primary);
+  margin: 0 0 var(--spacing-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
-[role=alert] {
-  color: #b91c1c;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  font-weight: 500;
-  margin: 1rem 0;
+/* Thống kê tài chính 3 khối */
+.financial-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-3);
+  margin-block: var(--spacing-3);
 }
 
-[role=status] {
-  color: #0284c7;
-  font-weight: 600;
+.summary-box {
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-3);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
-@media (max-width: 600px) {
-  .invoice-desk {
-    padding: 0.75rem;
+.summary-label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--color-text-subtle);
+  letter-spacing: 0.05em;
+}
+
+.summary-val {
+  font-size: var(--font-size-lg);
+  font-weight: 850;
+  color: var(--color-primary);
+}
+
+.summary-box--paid .summary-val {
+  color: var(--color-success);
+}
+
+.summary-box--debt .summary-val {
+  color: var(--color-danger);
+}
+
+.invoice-meta-info {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-subtle);
+  padding-block-end: var(--spacing-3);
+  border-block-end: 1px solid var(--color-border-subtle);
+}
+
+/* Khối checkbox xác nhận đối chiếu */
+.confirmation-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+  margin-block-start: var(--spacing-4);
+}
+
+.confirm-checkbox-card {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3) var(--spacing-4);
+  background: #f8fafc;
+  border: 1px solid var(--color-border-medium);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.confirm-checkbox-card:hover {
+  background: #f1f5f9;
+}
+
+.confirm-input {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--color-medical);
+}
+
+.confirm-text {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  color: var(--color-text-main);
+}
+
+.open-payment-btn {
+  inline-size: 100%;
+  min-block-size: 48px;
+  font-size: var(--font-size-base);
+}
+
+/* Khu vực xử lý thanh toán */
+.payment-processing-area {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+  margin-block-start: var(--spacing-4);
+}
+
+.processing-notice-box {
+  background: var(--color-warning-light);
+  border: 1px solid var(--color-warning-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-3) var(--spacing-4);
+  font-size: var(--font-size-xs);
+  color: #9a3412;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-3);
+  flex-wrap: wrap;
+}
+
+.receipt-success-card {
+  background: var(--color-success-light);
+  border: 1px solid var(--color-success-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.receipt-success-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.receipt-id {
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  color: #166534;
+}
+
+.receipt-success-amounts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: var(--font-size-sm);
+  color: #14532d;
+}
+
+.empty-invoice-placeholder {
+  text-align: center;
+  padding: 5rem 2rem;
+  color: var(--color-text-subtle);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.empty-icon {
+  font-size: 3.5rem;
+}
+
+.empty-invoice-placeholder h3 {
+  margin: 0;
+  color: var(--color-primary);
+  font-size: var(--font-size-lg);
+}
+
+.empty-invoice-placeholder p {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  max-width: 45ch;
+}
+
+.error-banner {
+  padding: var(--spacing-2) var(--spacing-3);
+  background: var(--color-danger-light);
+  border: 1px solid var(--color-danger-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  color: #991b1b;
+  margin: 0.25rem 0;
+}
+
+@media (max-width: 900px) {
+  .invoice-desk-grid {
+    grid-template-columns: 1fr;
   }
-  form {
-    flex-direction: column;
-    align-items: stretch;
+  .financial-summary-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

@@ -1,10 +1,10 @@
 <template>
   <main class="page">
     <div class="header-banner">
-      <div class="header-icon">📍</div>
+      <div class="header-icon">🏥</div>
       <div>
-        <h1>Vị trí làm việc nha sĩ & phụ tá</h1>
-        <p class="subtitle">Nha sĩ chọn ghế/phòng điều trị và xác nhận theo ngày; phụ tá kết nối theo nha sĩ. Vị trí lưu giữ xuyên suốt ca làm việc.</p>
+        <h1>Phòng làm việc nha sĩ & phụ tá</h1>
+        <p class="subtitle">Nha sĩ chọn phòng điều trị làm việc trong ngày; phụ tá kết nối theo nha sĩ để đồng bộ phòng. Vị trí lưu giữ xuyên suốt ca làm việc.</p>
       </div>
     </div>
 
@@ -61,12 +61,12 @@
         <div v-if="store.snapshot.isLocationUsable && store.snapshot.chairId" class="location-card location-active">
           <div class="loc-icon">🟢</div>
           <div class="loc-info">
-            <div class="loc-label">Vị trí đã xác nhận hôm nay</div>
-            <div class="loc-val">{{ store.snapshot.roomName || 'Chưa có phòng' }} · {{ store.snapshot.chairNumber || 'Chưa có ghế' }}</div>
+            <div class="loc-label">Phòng điều trị đã xác nhận hôm nay</div>
+            <div class="loc-val">{{ store.snapshot.roomName || 'Chưa có phòng' }}</div>
           </div>
         </div>
         <div v-else class="unconfirmed-warning" role="alert">
-          ⚠️ Chưa xác nhận phòng làm việc hôm nay. Vui lòng chọn ghế/phòng bên dưới và xác nhận để bắt đầu đón bệnh nhân.
+          ⚠️ Chưa xác nhận phòng làm việc hôm nay. Vui lòng chọn phòng làm việc bên dưới và xác nhận để bắt đầu đón bệnh nhân.
         </div>
       </div>
 
@@ -75,12 +75,12 @@
           <div v-if="store.snapshot.isLocationUsable && store.snapshot.roomName" class="location-card location-active">
             <div class="loc-icon">🟢</div>
             <div class="loc-info">
-              <div class="loc-label">Vị trí theo nha sĩ hôm nay</div>
-              <div class="loc-val">{{ store.snapshot.roomName }} · {{ store.snapshot.chairNumber || 'Chưa có ghế' }}</div>
+              <div class="loc-label">Phòng làm việc theo nha sĩ hôm nay</div>
+              <div class="loc-val">{{ store.snapshot.roomName }}</div>
             </div>
           </div>
           <div v-else class="unconfirmed-warning" role="alert">
-            ⚠️ Nha sĩ ({{ store.snapshot.dentistName }}) chưa xác nhận phòng làm việc hôm nay. Vị trí sẽ tự cập nhật ngay khi nha sĩ xác nhận.
+            ⚠️ Nha sĩ ({{ store.snapshot.dentistName }}) chưa xác nhận phòng làm việc hôm nay. Phòng sẽ tự cập nhật ngay khi nha sĩ xác nhận.
           </div>
         </template>
         <div v-else class="empty-dentist-prompt">
@@ -90,36 +90,36 @@
 
       <div v-else class="location-card">
         <div class="loc-info">
-          <div class="loc-label">Vị trí hiện tại</div>
-          <div class="loc-val">{{ store.snapshot.roomName || 'Chưa có phòng' }} · {{ store.snapshot.chairNumber || 'Chưa có ghế' }}</div>
+          <div class="loc-label">Phòng làm việc hiện tại</div>
+          <div class="loc-val">{{ store.snapshot.roomName || 'Chưa có phòng' }}</div>
         </div>
       </div>
 
       <div v-if="!store.snapshot.canChange" class="alert alert-warning" role="alert">
-        🔒 Nha sĩ đang có ca khám hoặc lời mời chờ tiếp nhận. Vui lòng hoàn tất lượt khám trước khi đổi vị trí làm việc.
+        🔒 Nha sĩ đang có ca khám hoặc lời mời chờ tiếp nhận. Vui lòng hoàn tất lượt khám trước khi đổi phòng làm việc.
       </div>
 
       <form class="workspace-form" @submit.prevent="save">
         <div v-if="store.snapshot.isActive && store.snapshot.roleCode === 'DENTIST'" class="form-group">
-          <label for="chair-choice-select">Chọn ghế và phòng làm việc hôm nay</label>
+          <label for="chair-choice-select">Chọn phòng điều trị làm việc hôm nay</label>
           <select id="chair-choice-select" v-model.number="chairChoice" :disabled="saving || loading || needsReview || !store.snapshot.canChange" @change="markDirty">
-            <option :value="0">❌ Bỏ chọn vị trí hiện tại</option>
+            <option :value="0">❌ Bỏ chọn phòng làm việc hiện tại</option>
             <option v-for="chair in options?.chairs ?? []" :key="chair.id" :value="chair.id" :disabled="!chair.isActive || chair.status !== 1 || (chair.claimedByUserId !== null && chair.claimedByUserId !== store.snapshot.userId)">
-              {{ chair.roomName }} · {{ chair.chairNumber }}{{ chair.status !== 1 ? ' · [Không sẵn sàng]' : '' }}{{ chair.claimedByUserId !== null && chair.claimedByUserId !== store.snapshot.userId ? ' · [Đã có nha sĩ chọn]' : '' }}
+              {{ chair.roomName }}{{ chair.status !== 1 ? ' · [Không sẵn sàng]' : '' }}{{ chair.claimedByUserId !== null && chair.claimedByUserId !== store.snapshot.userId ? ' · [Đã có nha sĩ chọn]' : '' }}
             </option>
           </select>
         </div>
 
         <div v-else-if="store.snapshot.isActive && store.snapshot.roleCode === 'ASSISTANT'" class="form-group">
-          <label for="dentist-choice-select">Chọn nha sĩ làm cùng hôm nay</label>
+          <label for="dentist-choice-select">Chọn nha sĩ hỗ trợ hôm nay</label>
           <select id="dentist-choice-select" v-model.number="dentistChoice" :disabled="saving || loading || needsReview || !store.snapshot.canChange" @change="markDirty">
             <option :value="0">❌ Bỏ liên kết nha sĩ</option>
             <option v-for="dentist in options?.dentists ?? []" :key="dentist.dentistId" :value="dentist.dentistId" :disabled="!dentist.isReady">
-              {{ dentist.dentistName }} · {{ dentist.roomName || 'Chưa có phòng' }} · {{ dentist.chairNumber || 'Chưa có ghế' }} (Đã có {{ dentist.assistantCount }} phụ tá){{ !dentist.isReady ? ' · [Chưa sẵn sàng]' : '' }}
+              {{ dentist.dentistName }} · {{ dentist.roomName || 'Chưa nhận phòng' }} (Đã có {{ dentist.assistantCount }} phụ tá){{ !dentist.isReady ? ' · [Chưa sẵn sàng]' : '' }}
             </option>
           </select>
           <p v-if="dentistChoice" class="sync-preview">
-            📍 Phòng sẽ tự đồng bộ theo nha sĩ: <strong>{{ selectedDentist?.roomName || 'Chưa có phòng' }} · {{ selectedDentist?.chairNumber || 'Chưa có ghế' }}</strong>
+            📍 Phòng sẽ tự đồng bộ theo nha sĩ: <strong>{{ selectedDentist?.roomName || 'Chưa nhận phòng' }}</strong>
           </p>
         </div>
 
@@ -182,7 +182,7 @@ async function save() {
   let chairId: number | null = null, dentistId: number | null = null;
   if (snapshot.isActive && snapshot.roleCode === 'DENTIST') {
     if (!Number.isInteger(chairChoice.value) || chairChoice.value < 0) return;
-    if (chairChoice.value) { const chair = options.value?.chairs.find(c => c.id === chairChoice.value); if (!chair || !chair.isActive || chair.status !== 1 || (chair.claimedByUserId !== null && chair.claimedByUserId !== snapshot.userId)) { error.value = 'Chọn ghế sẵn sàng chưa có nha sĩ khác sử dụng.'; return; } chairId = chairChoice.value; }
+    if (chairChoice.value) { const chair = options.value?.chairs.find(c => c.id === chairChoice.value); if (!chair || !chair.isActive || chair.status !== 1 || (chair.claimedByUserId !== null && chair.claimedByUserId !== snapshot.userId)) { error.value = 'Chọn phòng sẵn sàng chưa có nha sĩ khác sử dụng.'; return; } chairId = chairChoice.value; }
   } else if (snapshot.isActive && snapshot.roleCode === 'ASSISTANT') {
     if (!Number.isInteger(dentistChoice.value) || dentistChoice.value < 0) return;
     if (dentistChoice.value) { const dentist = selectedDentist.value; if (!dentist || !dentist.isReady) { error.value = 'Chọn nha sĩ đang hoạt động.'; return; } dentistId = dentistChoice.value; }
@@ -192,7 +192,7 @@ async function save() {
     const result = await workspacesService.change(snapshot.userId, { chairId, dentistId, expectedVersion: snapshot.version, confirmed: true });
     if (ticket !== life || !permitted() || principal !== auth.user?.userId) return;
     if (result.userId !== snapshot.userId || result.version < snapshot.version) throw new Error('Invalid workspace result');
-    message.value = 'Đã lưu vị trí/nhóm làm việc. Phụ tá lấy phòng trực tiếp từ nha sĩ.';
+    message.value = 'Đã lưu phòng/nhóm làm việc thành công. Phụ tá lấy phòng trực tiếp từ nha sĩ.';
     confirmed.value = false; dirty.value = false; needsReview.value = true; saving.value = false; await load(snapshot.userId);
   } catch (err: unknown) {
     if (ticket !== life || principal !== auth.user?.userId) return;

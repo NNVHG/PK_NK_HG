@@ -6,10 +6,13 @@ export interface CheckInPayload {
   appointmentId: number | null;
   dentistId: number | null;
   notes: string | null;
-  citizenId: string;
+  citizenId: string | null;
   phone: string;
-  documentType?: 1 | 2;
+  documentType?: 1 | 2 | null;
   nationalityCode?: string | null;
+  guardianFullName?: string | null;
+  guardianRelationship?: string | null;
+  guardianVerifiedAtCounter?: boolean;
 }
 
 export interface QueueEntryResponse {
@@ -31,25 +34,32 @@ export interface QueueEntryResponse {
   statusText: string;
   canMarkAbsent: boolean;
   canCancelConsultation: boolean;
+  patientAccountCreated?: boolean;
   notes: string | null;
 }
 
 export interface PublicQueueItemResponse {
-  queueEntryId: number;
-  queueNumber: number;
   queueNumberDisplay: string;
   maskedPatientName: string;
-  dentistName: string | null;
-  chairNumber: string | null;
-  roomName: string | null;
   status: number;
-  statusText: string;
-  isPriority: boolean;
+  roomName: string | null;
 }
 
 export interface PublicQueueMonitorResponse {
   inConsultation: PublicQueueItemResponse[];
   waiting: PublicQueueItemResponse[];
+}
+
+export function maskPublicQueueName(fullName: string | null | undefined): string {
+  const parts = fullName?.trim().split(/\s+/).filter(Boolean) ?? [];
+  if (!parts.length) return 'Bệnh nhân';
+  if (parts.length === 1) {
+    const name = parts[0];
+    return name.length <= 2 ? name : `${name[0]}***${name[name.length - 1]}`;
+  }
+  if (parts.length === 2) return `${parts[0]} *** ${parts[1]}`;
+  const last = parts[parts.length - 1] ?? '';
+  return `${parts[0]} ${parts.slice(1, -1).map(part => `${part[0]}***`).join(' ')} ${last}`;
 }
 
 export interface CallNextPayload {
@@ -126,6 +136,20 @@ export const queueService = {
   async cancelWaiting(queueEntryId: number, reason: string | null): Promise<QueueEntryResponse> {
     const response = await apiClient.post<QueueEntryResponse>(`/queue/${queueEntryId}/cancel-waiting`, {
       confirmed: true, reason
+    });
+    return response.data;
+  },
+
+  async pauseVisit(queueEntryId: number, reason: string | null): Promise<QueueEntryResponse> {
+    const response = await apiClient.post<QueueEntryResponse>(`/queue/${queueEntryId}/pause`, {
+      confirmed: true, reason
+    });
+    return response.data;
+  },
+
+  async resumeVisit(queueEntryId: number, dentistId: number | null, reason: string | null): Promise<QueueEntryResponse> {
+    const response = await apiClient.post<QueueEntryResponse>(`/queue/${queueEntryId}/resume`, {
+      confirmed: true, dentistId, reason
     });
     return response.data;
   },

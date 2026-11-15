@@ -131,14 +131,46 @@ public sealed class QueueService
                 return Result<QueueEntryResponse>.Failure(Error.Validation.Code, "Nha sĩ được chọn không hợp lệ hoặc không hoạt động.");
         }
 
-        // Existing internal callers are validated at the API boundary; keep the service usable
-        // by legacy queue maintenance flows that do not supply identity input.
         var citizenIdChanged = false;
         var identityVerified = false;
         var documentType = request.DocumentType ?? IdentityDocumentType.CitizenId;
-        if (!string.IsNullOrWhiteSpace(request.CitizenId) || !string.IsNullOrWhiteSpace(request.Phone) ||
-            request.DocumentType.HasValue || !string.IsNullOrWhiteSpace(request.NationalityCode))
+        var hasIdentityDocumentInput = !string.IsNullOrWhiteSpace(request.CitizenId) ||
+            request.DocumentType.HasValue || !string.IsNullOrWhiteSpace(request.NationalityCode);
+        var isChild = patient.DateOfBirth.AddYears(14) > today;
+        if (isChild)
         {
+            if (hasIdentityDocumentInput)
+                return Result<QueueEntryResponse>.Failure(Error.Validation.Code,
+                    "Trẻ dưới 14 tuổi không cần và không sử dụng giấy tờ định danh riêng khi tiếp đón.");
+
+            var phone = request.Phone?.Trim();
+            if (phone is not { Length: 10 } || phone[0] != '0' || phone.Any(c => c is < '0' or > '9') ||
+                !string.Equals(patient.Phone, phone, StringComparison.Ordinal))
+                return Result<QueueEntryResponse>.Failure(Error.Validation.Code,
+                    "Số điện thoại liên hệ của người giám hộ không khớp hồ sơ. Hãy đối chiếu tại quầy.");
+
+            var guardianName = request.GuardianFullName?.Trim();
+            var guardianRelationship = request.GuardianRelationship?.Trim();
+            if (!request.GuardianVerifiedAtCounter || guardianName is not { Length: >= 2 and <= 100 } ||
+                guardianName.Any(char.IsControl) || string.IsNullOrWhiteSpace(guardianRelationship) || guardianRelationship.Length > 50)
+                return Result<QueueEntryResponse>.Failure(Error.Validation.Code,
+                    "Vui lòng ghi nhận họ tên, quan hệ và xác nhận đã đối chiếu người giám hộ trực tiếp tại quầy.");
+
+            var guardianNote = $"Người giám hộ đã xác minh tại quầy: {guardianName} ({guardianRelationship})";
+            var receptionNotes = string.IsNullOrWhiteSpace(request.Notes)
+                ? guardianNote
+                : $"{request.Notes.Trim()} | {guardianNote}";
+            if (receptionNotes.Length > 500)
+                return Result<QueueEntryResponse>.Failure(Error.Validation.Code,
+                    "Ghi chú tiếp đón quá dài khi kèm thông tin người giám hộ. Vui lòng rút gọn ghi chú.");
+            request = request with { Notes = receptionNotes };
+        }
+        else
+        {
+            if (!hasIdentityDocumentInput)
+                return Result<QueueEntryResponse>.Failure(Error.Validation.Code,
+                    "Vui lòng đối chiếu CCCD hoặc hộ chiếu của người bệnh trước khi tiếp đón.");
+
             // DL-367: đối soát giấy tờ và số liên hệ tại quầy; chỉ lưu HMAC và số đã che.
             var identifier = request.CitizenId?.Trim() ?? string.Empty;
             var nationalityCode = request.NationalityCode?.Trim().ToUpperInvariant();
@@ -158,12 +190,26 @@ public sealed class QueueService
                 return Result<QueueEntryResponse>.Failure(Error.Validation.Code,
                     $"{documentName} hoặc số điện thoại không khớp hồ sơ. Hãy đối soát thông tin trước khi check-in.");
 
-            identityVerified = true;
             if (_identityHasher is null) return Result<QueueEntryResponse>.Failure(Error.ServerError);
             var citizenIdHash = _identityHasher.Hash(identifier, documentType, nationalityCode);
             if (patient.CitizenIdHash is not null && !_identityHasher.Matches(patient.CitizenIdHash, identifier, documentType, nationalityCode))
                 return Result<QueueEntryResponse>.Failure(Error.Validation.Code,
                     $"{documentName} không khớp hồ sơ. Hãy đối soát thông tin trước khi check-in.");
+
+            if (patient.UserId.HasValue)
+            {
+                var owner = await _userRepository.FindByIdAsync(patient.UserId.Value, ct);
+                if (owner is null || !owner.IsActive || owner.Role?.RoleCode != RoleCodes.Patient)
+                    return Result<QueueEntryResponse>.Failure(Error.Conflict);
+            }
+            else
+            {
+                var patientRole = await _userRepository.FindRoleByCodeAsync(RoleCodes.Patient, ct);
+                if (patientRole is null || _passwordHasher is null)
+                    return Result<QueueEntryResponse>.Failure(Error.Conflict);
+            }
+
+            identityVerified = true;
             if (patient.CitizenIdHash is null || patient.CitizenIdHash != citizenIdHash ||
                 patient.DocumentType != documentType || patient.IssuingCountryCode != nationalityCode ||
                 patient.HashScheme != IdentityHashScheme.HmacCanonical ||
@@ -205,12 +251,14 @@ public sealed class QueueService
             await _auditLogger.LogRequiredAsync(AuditActions.PatientUpdated, "Patient", patient.PatientId, actorUserId,
                 JsonSerializer.Serialize(new { changedFields = new[] { nameof(patient.CitizenIdHash), nameof(patient.CitizenIdMasked) }, source = "CheckInIdentityVerification" }),
                 ipAddress, ct);
+        var patientAccountCreated = false;
         if (identityVerified)
         {
             var accountResult = await EnsurePatientAccountAsync(patient, documentType, actorUserId, ipAddress, ct);
             if (accountResult.IsFailure) return Result<QueueEntryResponse>.Failure(accountResult.Error);
+            patientAccountCreated = accountResult.Value;
         }
-        return await CreateCheckInAsync(actorUserId, request, today, isPriority, ipAddress, ct);
+        return await CreateCheckInAsync(actorUserId, request, today, isPriority, patientAccountCreated, ipAddress, ct);
     }
 
       private async Task<Result<bool>> EnsurePatientAccountAsync(Dental.Domain.Entities.Patient patient, IdentityDocumentType documentType, int actorUserId, string? ipAddress, CancellationToken ct)
@@ -218,8 +266,9 @@ public sealed class QueueService
           if (patient.UserId.HasValue)
           {
               var owner = await _userRepository.FindByIdAsync(patient.UserId.Value, ct);
-              if (owner is null || !owner.IsActive) return Result<bool>.Failure(Error.Conflict);
-              return Result<bool>.Success(true); // An individually owned legacy account remains attached to this Patient.
+              if (owner is null || !owner.IsActive || owner.Role?.RoleCode != RoleCodes.Patient)
+                  return Result<bool>.Failure(Error.Conflict);
+              return Result<bool>.Success(false); // Existing Patient account remains attached to this profile.
           }
 
           var patientRole = await _userRepository.FindRoleByCodeAsync(RoleCodes.Patient, ct);
@@ -257,6 +306,7 @@ public sealed class QueueService
         CheckInRequest request,
         DateOnly today,
         bool isPriority,
+        bool patientAccountCreated,
         string? ipAddress,
         CancellationToken ct)
     {
@@ -314,7 +364,8 @@ public sealed class QueueService
             ct: ct);
 
         var createdEntry = await _queueRepository.GetByIdAsync(entry.QueueEntryId, ct);
-        return Result<QueueEntryResponse>.Success(await ToResponseAsync(createdEntry ?? entry, ct));
+        var response = await ToResponseAsync(createdEntry ?? entry, ct);
+        return Result<QueueEntryResponse>.Success(response with { PatientAccountCreated = patientAccountCreated });
     }
 
     public async Task<Result<QueueEntryResponse>> CancelWaitingAsync(
@@ -354,6 +405,164 @@ public sealed class QueueService
         }
         catch (ConcurrentOperationException)
         { return Result<QueueEntryResponse>.Failure(Error.QueueWaitingCancellationConcurrent); }
+    }
+
+    // §1.6: Pause visit, release room/chair, keep VisitId, ticket number and position.
+    public async Task<Result<QueueEntryResponse>> PauseVisitAsync(
+        int queueEntryId, int actorUserId, string actorRole, PauseVisitRequest request,
+        string? ipAddress, CancellationToken ct = default)
+    {
+        if (actorRole is not (RoleCodes.Admin or RoleCodes.Dentist))
+            return Result<QueueEntryResponse>.Failure(Error.QueueTransitionForbidden);
+        if (queueEntryId <= 0 || actorUserId <= 0 || !request.Confirmed || request.Reason?.Length > 500)
+            return Result<QueueEntryResponse>.Failure(Error.Validation);
+
+        try
+        {
+            return await _unitOfWork.ExecuteSerializableTransactionAsync(async transactionCt =>
+            {
+                var entry = await _queueRepository.GetByIdAsync(queueEntryId, transactionCt);
+                if (entry is null) return Result<QueueEntryResponse>.Failure(Error.QueueEntryNotFound);
+
+                var transition = QueueStateMachine.ValidateTransition(entry.Status, QueueStatus.Paused, actorRole);
+                if (transition.IsFailure) return Result<QueueEntryResponse>.Failure(transition.Error);
+
+                if (entry.QueueDate != _vietnamClock.Today || entry.Visit is null || entry.Visit.IsLocked ||
+                    entry.Visit.Status != VisitStatuses.InProgress)
+                    return Result<QueueEntryResponse>.Failure(Error.QueueInvalidStateTransition);
+
+                if (actorRole == RoleCodes.Dentist && entry.DentistId != actorUserId)
+                    return Result<QueueEntryResponse>.Failure(Error.QueueTransitionForbidden);
+
+                var release = await _visitChairs.ReleaseAsync(entry.Visit, actorUserId, transactionCt);
+                if (release.IsFailure) return Result<QueueEntryResponse>.Failure(release.Error);
+
+                var now = DateTime.UtcNow;
+                var previousStatus = entry.Status;
+                entry.Status = QueueStatus.Paused;
+                entry.UpdatedAt = now;
+                entry.Visit.UpdatedAt = now;
+
+                var reason = string.IsNullOrWhiteSpace(request.Reason) ? "Tạm dừng ca khám (§1.6)" : request.Reason.Trim();
+                await _queueRepository.AddStatusHistoryAsync(new QueueStatusHistory
+                {
+                    QueueEntryId = entry.QueueEntryId,
+                    FromStatus = previousStatus,
+                    ToStatus = QueueStatus.Paused,
+                    ChangedByUserId = actorUserId,
+                    ChangedAt = now,
+                    Reason = reason
+                }, transactionCt);
+
+                await _unitOfWork.SaveChangesAsync(transactionCt);
+                await _auditLogger.LogRequiredAsync(AuditActions.QueueStatusChanged, "QueueEntry", entry.QueueEntryId,
+                    actorUserId, JsonSerializer.Serialize(new
+                    {
+                        action = "PauseVisit",
+                        visitId = entry.VisitId,
+                        fromStatus = (int)previousStatus,
+                        toStatus = (int)QueueStatus.Paused,
+                        reason
+                    }), ipAddress, transactionCt);
+
+                var refreshed = await _queueRepository.GetByIdAsync(entry.QueueEntryId, transactionCt);
+                return Result<QueueEntryResponse>.Success(await ToResponseAsync(refreshed ?? entry, transactionCt));
+            }, ct);
+        }
+        catch (ConcurrentOperationException)
+        {
+            return Result<QueueEntryResponse>.Failure(Error.QueueConcurrent);
+        }
+    }
+
+    // §1.6: Resume paused visit, new or original dentist takes over with own room/chair.
+    public async Task<Result<QueueEntryResponse>> ResumeVisitAsync(
+        int queueEntryId, int actorUserId, string actorRole, ResumeVisitRequest request,
+        string? ipAddress, CancellationToken ct = default)
+    {
+        if (actorRole is not (RoleCodes.Admin or RoleCodes.Dentist))
+            return Result<QueueEntryResponse>.Failure(Error.QueueTransitionForbidden);
+        if (queueEntryId <= 0 || actorUserId <= 0 || !request.Confirmed || request.Reason?.Length > 500)
+            return Result<QueueEntryResponse>.Failure(Error.Validation);
+
+        try
+        {
+            return await _unitOfWork.ExecuteSerializableTransactionAsync(async transactionCt =>
+            {
+                var entry = await _queueRepository.GetByIdAsync(queueEntryId, transactionCt);
+                if (entry is null) return Result<QueueEntryResponse>.Failure(Error.QueueEntryNotFound);
+
+                var transition = QueueStateMachine.ValidateTransition(entry.Status, QueueStatus.InConsultation, actorRole);
+                if (transition.IsFailure) return Result<QueueEntryResponse>.Failure(transition.Error);
+
+                if (entry.QueueDate != _vietnamClock.Today || entry.Visit is null || entry.Visit.IsLocked ||
+                    entry.Visit.Status != VisitStatuses.InProgress)
+                    return Result<QueueEntryResponse>.Failure(Error.QueueInvalidStateTransition);
+
+                var targetDentistId = actorRole == RoleCodes.Dentist ? actorUserId : request.DentistId ?? entry.DentistId;
+                if (!targetDentistId.HasValue)
+                    return Result<QueueEntryResponse>.Failure(Error.QueueDentistRequired);
+
+                var dentist = await _userRepository.FindByIdAsync(targetDentistId.Value, transactionCt);
+                if (dentist is null || !dentist.IsActive || dentist.Role?.RoleCode != RoleCodes.Dentist)
+                    return Result<QueueEntryResponse>.Failure(Error.Validation.Code, "Nha sĩ không hợp lệ hoặc không hoạt động.");
+
+                if (await _visitRepository.HasActiveVisitForDentistAsync(targetDentistId.Value, transactionCt, entry.VisitId ?? entry.Visit.VisitId))
+                    return Result<QueueEntryResponse>.Failure(Error.DentistHasActiveVisit);
+
+                if (await _queueRepository.HasCallingForDentistAsync(_vietnamClock.Today, targetDentistId.Value, transactionCt, entry.QueueEntryId))
+                    return Result<QueueEntryResponse>.Failure(Error.QueueDentistAlreadyCalling);
+
+                var allocation = await _visitChairs.AcquireAsync(entry.Visit, targetDentistId.Value, actorUserId, transactionCt);
+                if (allocation.IsFailure) return Result<QueueEntryResponse>.Failure(allocation.Error);
+
+                var now = DateTime.UtcNow;
+                var previousStatus = entry.Status;
+                var previousDentistId = entry.DentistId;
+
+                entry.Status = QueueStatus.InConsultation;
+                entry.DentistId = targetDentistId;
+                entry.Dentist = dentist;
+                entry.UpdatedAt = now;
+
+                entry.Visit.DentistId = targetDentistId;
+                entry.Visit.Dentist = dentist;
+                entry.Visit.UpdatedAt = now;
+
+                var reason = string.IsNullOrWhiteSpace(request.Reason) ? "Tiếp tục ca khám (§1.6)" : request.Reason.Trim();
+                await _queueRepository.AddStatusHistoryAsync(new QueueStatusHistory
+                {
+                    QueueEntryId = entry.QueueEntryId,
+                    FromStatus = previousStatus,
+                    ToStatus = QueueStatus.InConsultation,
+                    ChangedByUserId = actorUserId,
+                    ChangedAt = now,
+                    Reason = reason
+                }, transactionCt);
+
+                await _unitOfWork.SaveChangesAsync(transactionCt);
+                await _auditLogger.LogRequiredAsync(AuditActions.QueueStatusChanged, "QueueEntry", entry.QueueEntryId,
+                    actorUserId, JsonSerializer.Serialize(new
+                    {
+                        action = "ResumeVisit",
+                        visitId = entry.VisitId,
+                        fromStatus = (int)previousStatus,
+                        toStatus = (int)QueueStatus.InConsultation,
+                        previousDentistId,
+                        newDentistId = targetDentistId,
+                        chairId = entry.Visit.ChairId,
+                        roomId = entry.Visit.RoomId,
+                        reason
+                    }), ipAddress, transactionCt);
+
+                var refreshed = await _queueRepository.GetByIdAsync(entry.QueueEntryId, transactionCt);
+                return Result<QueueEntryResponse>.Success(await ToResponseAsync(refreshed ?? entry, transactionCt));
+            }, ct);
+        }
+        catch (ConcurrentOperationException)
+        {
+            return Result<QueueEntryResponse>.Failure(Error.QueueConcurrent);
+        }
     }
 
     // MOD_CHK / DL-126, DL-259: absence never pauses or closes a clinical Visit.
@@ -536,7 +745,7 @@ public sealed class QueueService
 
         var targetStatus = (QueueStatus)request.NewStatus;
         var clinicalCancellation = targetStatus == QueueStatus.Cancelled && entry.Visit?.Status == VisitStatuses.InProgress &&
-            entry.Status is (QueueStatus.Waiting or QueueStatus.Calling or QueueStatus.InConsultation or QueueStatus.InImaging);
+            entry.Status is (QueueStatus.Waiting or QueueStatus.Calling or QueueStatus.InConsultation or QueueStatus.InImaging or QueueStatus.Paused);
         if (clinicalCancellation)
         {
             if (entry.Visit!.IsLocked) return Result<QueueEntryResponse>.Failure(Error.QueueInvalidStateTransition);
@@ -918,7 +1127,7 @@ public sealed class QueueService
             location?.ChairNumber,
             location?.RoomName,
             q.Visit is { Status: VisitStatuses.InProgress, IsLocked: false } &&
-                q.Status is (QueueStatus.Waiting or QueueStatus.Calling or QueueStatus.InConsultation or QueueStatus.InImaging),
+                q.Status is (QueueStatus.Waiting or QueueStatus.Calling or QueueStatus.InConsultation or QueueStatus.InImaging or QueueStatus.Paused),
             q.Appointment?.IsEmergency ?? false
         );
 
@@ -942,25 +1151,16 @@ public sealed class QueueService
         var entries = await _queueRepository.GetPublicDisplayQueueAsync(today, ct);
 
         var locations = await LocationsAsync(entries.Select(q => q.DentistId), ct);
+        // §1.6 & §6.2: TV phòng chờ chỉ phát active call khi Nha sĩ nhấn Gọi bệnh nhân (Calling);
+        // không công khai danh sách chờ (Waiting), không công khai các lượt khác.
         var inConsultation = entries
-            .Where(q => q.Status is QueueStatus.InConsultation or QueueStatus.Calling)
-            .OrderByDescending(q => q.Status == QueueStatus.Calling)
-            .ThenByDescending(q => q.UpdatedAt ?? q.CreatedAt)
+            .Where(q => q.Status == QueueStatus.Calling)
+            .OrderByDescending(q => q.UpdatedAt ?? q.CreatedAt)
             .Take(5)
             .Select(q => ToPublicResponse(q, LocationFor(q, locations)))
             .ToList();
 
-        var waiting = entries
-            .Where(q => q.Status == QueueStatus.Waiting)
-            .OrderByDescending(q => q.StatusHistories.Any(h => h.FromStatus == QueueStatus.InImaging && h.ToStatus == QueueStatus.Waiting))
-            .ThenByDescending(q => q.StatusHistories.Any(h => h.FromStatus == QueueStatus.Skipped && h.ToStatus == QueueStatus.Waiting))
-            .ThenByDescending(q => q.IsPriority)
-            .ThenBy(q => q.IsPriority && q.Appointment != null ? q.Appointment.SlotTime : TimeOnly.MaxValue)
-            .ThenBy(q => q.CheckInTime)
-            .ThenBy(q => q.QueueNumber)
-            .Take(15)
-            .Select(q => ToPublicResponse(q, LocationFor(q, locations)))
-            .ToList();
+        var waiting = Array.Empty<PublicQueueItemResponse>();
 
         return Result<PublicQueueMonitorResponse>.Success(new PublicQueueMonitorResponse(inConsultation, waiting));
     }
@@ -996,15 +1196,9 @@ public sealed class QueueService
 
     private static PublicQueueItemResponse ToPublicResponse(QueueEntry q, QueueDentistLocation? location)
         => new(
-            q.QueueEntryId,
-            q.QueueNumber,
             FormatQueueNumber(q.QueueNumber, q.IsPriority),
             MaskPatientName(q.Patient?.FullName),
-            q.Dentist?.FullName,
             (int)q.Status,
-            QueueStatusDescriptions.GetDescription(q.Status),
-            q.IsPriority,
-            location?.ChairNumber,
             location?.RoomName
         );
 

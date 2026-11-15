@@ -46,7 +46,7 @@
           <div class="wide"><dt>Địa chỉ</dt><dd>{{ patient.address || 'Chưa cập nhật' }}</dd></div>
         </dl>
         <PatientCitizenId :patient-id="patient.patientId" />
-        <PatientGuardianPanel :patient-id="patient.patientId" @promoted="loadPatient" />
+        <PatientGuardianPanel :patient-id="patient.patientId" :ward-date-of-birth="patient.dateOfBirth" @promoted="loadPatient" />
 
       </section>
 

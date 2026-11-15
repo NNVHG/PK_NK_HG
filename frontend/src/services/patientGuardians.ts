@@ -34,6 +34,7 @@ export interface AssignGuardianPayload {
   wardPatientId: number;
   relationship: string;
   notes?: string | null;
+  verifiedAtCounter: true;
 }
 
 export interface PromoteWardPayload {

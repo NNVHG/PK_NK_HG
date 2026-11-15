@@ -1,5 +1,5 @@
 <template>
-  <!-- [CẦN XÁC NHẬN] Màn hình TV phòng chờ: demo_11 F_CHK_02 ghi danh sách chờ không công khai; giữ nguyên hai endpoint ẩn danh đã che dữ liệu theo DL-090/DL-132 cho đến khi Gia chốt. -->
+  <!-- §1.6/§6.2: TV chỉ hiển thị thông báo gọi đang hoạt động; không hiển thị danh sách chờ hoặc dữ liệu khám. -->
   <div class="tv-monitor">
     <header class="header">
       <div class="brand">
@@ -37,9 +37,7 @@
       <div class="call-banner-number">{{ activeCall.queueNumberDisplay }}</div>
       <div class="call-banner-name">{{ activeCall.maskedPatientName }}</div>
       <div class="call-banner-meta">
-        <span class="banner-pill">🏢 {{ activeCall.roomName || 'Phòng khám tổng quát' }}</span>
-        <span class="banner-pill">💺 {{ activeCall.chairNumber ? 'Ghế số ' + activeCall.chairNumber : 'Bàn khám số 1' }}</span>
-        <span class="banner-pill">👨‍⚕️ {{ activeCall.dentistName || 'Bác sĩ phụ trách' }}</span>
+        <span class="banner-pill">🏢 {{ locationLabel(activeCall) }}</span>
       </div>
       <div class="call-progress-track">
         <div class="call-progress-fill" :style="{ width: ((remainingCallSeconds / 30) * 100) + '%' }"></div>
@@ -55,7 +53,7 @@
         <div class="welcome-tag">HỆ THỐNG Y TẾ NHA KHOA KỸ THUẬT CAO</div>
         <h2 class="welcome-heading">Chào Mừng Quý Khách Đến Khám & Chăm Sóc Răng Miệng</h2>
         <p class="welcome-desc">
-          Vui lòng thư giãn tại sảnh tiếp đón. Loa phát thanh và màn hình sẽ thông báo ngay khi đến lượt khám của quý khách.
+          Vui lòng thư giãn tại sảnh tiếp đón. Loa sẽ đọc tên người bệnh và màn hình hiển thị số thứ tự cùng phòng khi Nha sĩ gọi.
         </p>
       </div>
 
@@ -72,7 +70,7 @@
           <div class="tip-icon">📢</div>
           <div class="tip-content">
             <h3>Lắng nghe gọi tên & số thứ tự</h3>
-            <p>Hệ thống tự động phát âm thanh chuông báo và đọc tên kèm phòng khám trong vòng 30 giây khi đến lượt.</p>
+            <p>Hệ thống phát âm thanh chuông báo, đọc tên và hiển thị số thứ tự cùng phòng trong 30 giây sau khi được gọi.</p>
           </div>
         </div>
 
@@ -120,12 +118,10 @@ const currentTime = ref('');
 const soundEnabled = ref(false);
 
 interface ActiveCallData {
-  queueEntryId?: number;
   queueNumberDisplay: string;
   maskedPatientName: string;
   roomName: string | null;
-  chairNumber: string | null;
-  dentistName: string | null;
+  status: number;
 }
 
 const activeCall = ref<ActiveCallData | null>(null);
@@ -149,17 +145,15 @@ function triggerCallBanner(data: ActiveCallData) {
 }
 
 interface AudioQueueItem {
-  queueNumber: string;
   patientName: string;
-  destination: string;
 }
 
-function locationLabel(item: { roomName?: string | null; chairNumber?: string | null }): string {
-  return [item.roomName, item.chairNumber ? `Ghế ${item.chairNumber}` : null].filter(Boolean).join(' · ') || 'Chưa có phòng/ghế — vui lòng hỏi tiếp đón';
+function locationLabel(item: { roomName?: string | null }): string {
+  return item.roomName || 'Vui lòng hỏi quầy tiếp đón để được hướng dẫn';
 }
 const audioQueue: AudioQueueItem[] = [];
 let isPlayingAudio = false;
-const seenCallIds = new Set<number>();
+const seenCallNumbers = new Set<string>();
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let clockTimer: ReturnType<typeof setInterval> | null = null;
 let audioCtx: AudioContext | null = null;
@@ -213,7 +207,7 @@ function processAudioQueue() {
   playDingDong();
 
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-    const text = `Mời bệnh nhân số ${item.queueNumber}, ${item.patientName}, vui lòng đến ${item.destination}`;
+    const text = `Mời ${item.patientName}`;
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'vi-VN';
     utterance.rate = 0.9;
@@ -243,15 +237,11 @@ function processAudioQueue() {
   }
 }
 
-function enqueueCallAudio(item: PublicQueueItemResponse) {
+function enqueueCallAudio(item: Pick<PublicQueueItemResponse, 'maskedPatientName'>) {
   if (audioQueue.length >= 3) {
     audioQueue.shift();
   }
-  audioQueue.push({
-    queueNumber: item.queueNumberDisplay,
-    patientName: item.maskedPatientName,
-    destination: item.roomName ? `${item.roomName}${item.chairNumber ? `, ghế ${item.chairNumber}` : ''}` : 'khu vực tiếp đón để được hướng dẫn'
-  });
+  audioQueue.push({ patientName: item.maskedPatientName });
   processAudioQueue();
 }
 
@@ -279,25 +269,26 @@ async function loadQueueData() {
 
     const currentCalls = data.inConsultation.filter(item => item.status === 6);
     for (const item of currentCalls) {
-      if (!seenCallIds.has(item.queueEntryId)) {
+      if (!seenCallNumbers.has(item.queueNumberDisplay)) {
         triggerCallBanner({
-          queueEntryId: item.queueEntryId,
           queueNumberDisplay: item.queueNumberDisplay,
           maskedPatientName: item.maskedPatientName,
           roomName: item.roomName,
-          chairNumber: item.chairNumber,
-          dentistName: item.dentistName
+          status: item.status
         });
         if (soundEnabled.value) {
           enqueueCallAudio(item);
         }
       }
     }
-    seenCallIds.clear();
-    for (const item of currentCalls) seenCallIds.add(item.queueEntryId);
+    const currentCallNumbers = new Set(currentCalls.map(item => item.queueNumberDisplay));
+    for (const number of seenCallNumbers) {
+      if (!currentCallNumbers.has(number)) seenCallNumbers.delete(number);
+    }
+    for (const item of currentCalls) seenCallNumbers.add(item.queueNumberDisplay);
 
-    inConsultation.value = data.inConsultation;
-    waiting.value = data.waiting;
+    inConsultation.value = currentCalls;
+    waiting.value = [];
   } catch {
     if (active && ticket === requestVersion) error.value = 'Mất kết nối máy chủ. Đang tự động kết nối lại...';
   }
@@ -307,51 +298,18 @@ function setupExternalListeners() {
   try {
     broadcastChannel = new BroadcastChannel('dental_tv_call_channel');
     broadcastChannel.onmessage = (event) => {
-      if (event.data && typeof event.data === 'object' && event.data.queueNumberDisplay) {
+      if (event.data && typeof event.data === 'object' && event.data.status === 6 &&
+          typeof event.data.queueNumberDisplay === 'string' && typeof event.data.maskedPatientName === 'string') {
         const item = event.data as ActiveCallData;
+        seenCallNumbers.add(item.queueNumberDisplay);
         triggerCallBanner(item);
         if (soundEnabled.value) {
-          enqueueCallAudio({
-            queueEntryId: item.queueEntryId || 0,
-            queueNumber: 0,
-            queueNumberDisplay: item.queueNumberDisplay,
-            maskedPatientName: item.maskedPatientName,
-            status: 6,
-            statusText: 'Đang mời khám',
-            isPriority: false,
-            roomName: item.roomName,
-            chairNumber: item.chairNumber,
-            dentistName: item.dentistName
-          });
+          enqueueCallAudio({ maskedPatientName: item.maskedPatientName });
         }
       }
     };
   } catch {}
 
-  window.addEventListener('storage', (e) => {
-    if (e.key === 'dental_tv_call_event' && e.newValue) {
-      try {
-        const item = JSON.parse(e.newValue) as ActiveCallData;
-        if (item && item.queueNumberDisplay) {
-          triggerCallBanner(item);
-          if (soundEnabled.value) {
-            enqueueCallAudio({
-              queueEntryId: item.queueEntryId || 0,
-              queueNumber: 0,
-              queueNumberDisplay: item.queueNumberDisplay,
-              maskedPatientName: item.maskedPatientName,
-              status: 6,
-              statusText: 'Đang mời khám',
-              isPriority: false,
-              roomName: item.roomName,
-              chairNumber: item.chairNumber,
-              dentistName: item.dentistName
-            });
-          }
-        }
-      } catch {}
-    }
-  });
 }
 
 onMounted(() => {
@@ -363,7 +321,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  active = false; requestVersion++; seenCallIds.clear(); soundEnabled.value = false;
+  active = false; requestVersion++; seenCallNumbers.clear(); soundEnabled.value = false;
   if (clockTimer) clearInterval(clockTimer);
   if (pollTimer) clearInterval(pollTimer);
   if (callTimer) clearInterval(callTimer);

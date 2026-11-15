@@ -1,111 +1,104 @@
 <template>
   <div class="login-page">
-    <header class="topbar">
-      <div class="topbar-inner">
-        <RouterLink class="brand" to="/" aria-label="Nha khoa Hoàng Gia - Trang chủ">
-          <img src="/logo-ngang.svg" alt="" width="164" height="44" />
+    <div class="login-container">
+      <!-- Left side: Clinical brand showcase -->
+      <div class="hero-copy">
+        <RouterLink class="brand-link" to="/" aria-label="Nha khoa Hoàng Gia - Trang chủ" title="Về trang chủ">
+          <img src="/logo-ngang.svg" alt="Nha Khoa Hoàng Gia" class="brand-image" width="180" height="48" />
         </RouterLink>
-        <nav class="navigation" aria-label="Điều hướng chính">
-          <RouterLink class="nav-about" to="/">Trang chủ</RouterLink>
-          <RouterLink class="login-link" to="/login">Đăng nhập</RouterLink>
-          <RouterLink class="button button-gold nav-book" to="/book-appointment">Đặt lịch khám</RouterLink>
-        </nav>
-      </div>
-    </header>
-
-    <section class="hero" aria-labelledby="login-heading">
-      <div class="hero-inner">
-        <div class="hero-copy">
-          <p class="eyebrow"><span aria-hidden="true">✦</span> Phòng khám Nha khoa Hoàng Gia</p>
-          <h1 id="login-heading">Nụ cười Hoàng Gia <span>tỏa sáng mỗi ngày</span></h1>
-          <p class="intro">Đăng nhập để tra cứu hồ sơ khám răng, sơ đồ răng giải phẫu FDI, đơn thuốc điện tử và theo dõi các đợt thanh toán.</p>
-          <div class="hero-actions">
-            <RouterLink class="button button-gold" to="/book-appointment">Đặt lịch khám <span aria-hidden="true">→</span></RouterLink>
-            <RouterLink class="button button-outline" to="/activate-account">Kích hoạt lần đầu (OTP)</RouterLink>
-          </div>
-          <p class="hero-note">Khách hàng mới sẽ được Lễ tân đối chiếu giấy tờ định danh tại quầy để cấp tài khoản.</p>
+        <p class="eyebrow"><span aria-hidden="true">✦</span> Hệ thống Vận hành Phòng khám</p>
+        <h1 id="login-heading">Nụ cười Hoàng Gia <span>tỏa sáng mỗi ngày</span></h1>
+        <p class="intro">
+          Cổng thông tin chuyên môn nha khoa: hồ sơ bệnh án điện tử, sơ đồ răng giải phẫu FDI 32/20, đơn thuốc điện tử và theo dõi tiến trình điều trị.
+        </p>
+        <div class="feature-badges">
+          <span class="badge"><span class="badge-icon">🦷</span> Sơ đồ răng FDI</span>
+          <span class="badge"><span class="badge-icon">🛡️</span> Cảnh báo an toàn & dị ứng</span>
+          <span class="badge"><span class="badge-icon">📋</span> Kê đơn & hồ sơ trực tuyến</span>
         </div>
+        <p class="hero-note">
+          Tài khoản kích hoạt lần đầu sẽ được hệ thống tự động nhận diện và chuyển tiếp sang bước xác thực OTP an toàn.
+        </p>
+      </div>
 
-        <div class="login-wrapper">
-          <div class="login-card">
-            <div class="login-brand">
+      <!-- Right side: Authentication card -->
+      <div class="login-wrapper">
+        <div class="login-card">
+          <div class="login-brand">
+            <RouterLink to="/" title="Về trang chủ">
               <img src="/logo-icon.svg" alt="Nha Khoa Hoàng Gia" class="brand-logo" width="48" height="48" />
-            </div>
-            <h2>Đăng Nhập Hệ Thống</h2>
-            <p class="subtitle">Nha Khoa Hoàng Gia</p>
-            <div v-if="registrationNotice" class="success-alert">{{ registrationNotice }}</div>
-
-            <p v-if="$route.query.phoneChanged === '1'" role="status">Đã đổi SĐT. Nhân viên đăng nhập bằng số mới. Bệnh nhân đăng nhập bằng CCCD/Hộ chiếu và mật khẩu hiện tại, sau đó xác minh OTP gửi tới số mới.</p>
-
-            <div class="document-type-selector">
-              <label class="doc-radio">
-                <input type="radio" value="cccd" v-model="loginMode" />
-                <span>SĐT / CCCD</span>
-              </label>
-              <label class="doc-radio">
-                <input type="radio" value="passport" v-model="loginMode" />
-                <span>Hộ chiếu</span>
-              </label>
-            </div>
-
-            <form @submit.prevent="handleSubmit">
-              <div class="form-group" v-if="loginMode === 'passport'">
-                <label for="country">Quốc gia cấp hộ chiếu</label>
-                <input
-                  id="country"
-                  v-model="nationalityCode"
-                  type="text"
-                  placeholder="Ví dụ: VN, USA, JPN"
-                  required
-                  maxlength="3"
-                  autocomplete="country-name"
-                />
-              </div>
-
-              <div class="form-group">
-                <label for="phone">{{ loginMode === 'passport' ? 'Số Hộ chiếu' : 'SĐT (nhân viên/tài khoản cũ) hoặc CCCD (bệnh nhân)' }}</label>
-                <input
-                  id="phone"
-                  v-model="phone"
-                  type="text"
-                  :placeholder="loginMode === 'passport' ? 'Nhập số hộ chiếu' : 'Số điện thoại hoặc CCCD'"
-                  required
-                  autocomplete="username"
-                />
-              </div>
-
-              <div class="form-group">
-                <label for="password">Mật khẩu</label>
-                <input
-                  id="password"
-                  v-model="password"
-                  type="password"
-                  placeholder="••••••••"
-                  required
-                  autocomplete="current-password"
-                />
-              </div>
-
-              <div v-if="errorMessage" class="error-alert">
-                {{ errorMessage }}
-              </div>
-
-              <button type="submit" class="btn-submit" :disabled="loading">
-                {{ loading ? 'Đang xác thực...' : 'Đăng nhập' }}
-              </button>
-            </form>
-            <p class="register-link"><RouterLink to="/forgot-password">Quên mật khẩu?</RouterLink></p>
-            <p class="register-link"><RouterLink to="/book-appointment">Gửi yêu cầu đặt lịch trước khi có tài khoản</RouterLink></p>
-            <p class="register-link"><RouterLink to="/activate-account">Kích hoạt tài khoản mới của bệnh nhân hoặc nhân viên</RouterLink></p>
+            </RouterLink>
           </div>
+          <h2>Đăng Nhập Hệ Thống</h2>
+          <p class="subtitle">Nha Khoa Hoàng Gia</p>
+          <div v-if="registrationNotice" class="success-alert">{{ registrationNotice }}</div>
+
+          <p v-if="$route.query.phoneChanged === '1'" class="info-alert" role="status">
+            Đã đổi SĐT. Nhân viên đăng nhập bằng số mới. Bệnh nhân đăng nhập bằng CCCD/Hộ chiếu và mật khẩu hiện tại, sau đó xác minh OTP gửi tới số mới.
+          </p>
+
+          <div class="document-type-selector">
+            <label class="doc-radio">
+              <input type="radio" value="cccd" v-model="loginMode" />
+              <span>SĐT / CCCD</span>
+            </label>
+            <label class="doc-radio">
+              <input type="radio" value="passport" v-model="loginMode" />
+              <span>Hộ chiếu</span>
+            </label>
+          </div>
+
+          <form @submit.prevent="handleSubmit">
+            <div class="form-group" v-if="loginMode === 'passport'">
+              <label for="country">Quốc gia cấp hộ chiếu</label>
+              <input
+                id="country"
+                v-model="nationalityCode"
+                type="text"
+                placeholder="Ví dụ: VN, USA, JPN"
+                required
+                maxlength="3"
+                autocomplete="country-name"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="phone">{{ loginMode === 'passport' ? 'Số Hộ chiếu' : 'SĐT (nhân viên) hoặc CCCD (bệnh nhân)' }}</label>
+              <input
+                id="phone"
+                v-model="phone"
+                type="text"
+                :placeholder="loginMode === 'passport' ? 'Nhập số hộ chiếu' : 'Số điện thoại hoặc CCCD'"
+                required
+                autocomplete="username"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="password">Mật khẩu</label>
+              <input
+                id="password"
+                v-model="password"
+                type="password"
+                placeholder="••••••••"
+                required
+                autocomplete="current-password"
+              />
+            </div>
+
+            <div v-if="errorMessage" class="error-alert">
+              {{ errorMessage }}
+            </div>
+
+            <button type="submit" class="btn-submit" :disabled="loading">
+              {{ loading ? 'Đang xác thực...' : 'Đăng nhập' }}
+            </button>
+          </form>
+
+          <p class="register-link"><RouterLink to="/forgot-password">Quên mật khẩu?</RouterLink></p>
         </div>
       </div>
-    </section>
-
-    <footer class="footer">
-      <span>Nha khoa Hoàng Gia</span>
-      <RouterLink to="/book-appointment">Đặt lịch khám</RouterLink>
-    </footer>
+    </div>
   </div>
 </template>
 
@@ -141,9 +134,8 @@ async function handleSubmit() {
     const country = loginMode.value === 'passport' ? nationalityCode.value.trim().toUpperCase() : null;
 
     await authStore.login(phone.value, password.value, docType, country);
-    const defaultRoute = authStore.role === 'PATIENT' ? '/patient/dashboard' : '/management/dashboard';
-    const redirect = (route.query.redirect as string) || defaultRoute;
-    router.push(redirect);
+    const dashboardRoute = authStore.role === 'PATIENT' ? '/' : '/management/dashboard';
+    router.push(dashboardRoute);
   } catch (err: any) {
     if (err.response?.status === 401 && err.response?.data?.code === 'AUTH_ACTIVATION_REQUIRED') {
       stageActivationPrefill({
@@ -169,207 +161,129 @@ async function handleSubmit() {
 <style scoped>
 .login-page {
   min-height: 100vh;
-  color: #18354c;
-  background: #fff;
+  width: 100%;
+  color: var(--color-text-main, #0f172a);
+  background: radial-gradient(circle at 10% 20%, #e8f3fc 0%, #f7fafd 50%, #ffffff 100%);
   display: flex;
-  flex-direction: column;
-}
-
-.topbar {
-  background: #fff;
-  border-bottom: 1px solid #e6eff6;
-  padding-top: max(0px, env(safe-area-inset-top, 0px));
-}
-
-.topbar-inner {
-  max-width: 1200px;
-  min-height: 76px;
-  margin: auto;
-  padding: 0 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-}
-
-.brand {
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-}
-
-.brand img {
-  display: block;
-  width: 164px;
-  height: auto;
-}
-
-.navigation {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-}
-
-.navigation > a {
-  font-size: 0.9rem;
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.nav-about {
-  color: #425c73;
-}
-
-.login-link {
-  color: #1857b6;
-  border: 1px solid #c5d8eb;
-  border-radius: 9px;
-  padding: 11px 17px;
-  background: #edf6fd;
-}
-
-.button {
-  display: inline-flex;
-  min-height: 48px;
-  box-sizing: border-box;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 0 22px;
-  border-radius: 10px;
-  text-decoration: none;
-  font-weight: 750;
-  transition: background-color 0.15s, color 0.15s;
+  padding: 2rem 1.5rem;
+  box-sizing: border-box;
 }
 
-.button-gold {
-  background: #e5b95e;
-  color: #102e56;
-}
-
-.button-gold:hover {
-  background: #d9a948;
-}
-
-.button-outline {
-  border: 1px solid #b9d0e6;
-  background: #fff;
-  color: #1857b6;
-}
-
-.button-outline:hover {
-  background: #edf6fd;
-}
-
-.hero {
-  flex: 1;
-  overflow: hidden;
-  background: #f1f9ff;
-}
-
-.hero-inner {
-  max-width: 1200px;
-  min-height: 540px;
+.login-container {
+  width: 100%;
+  max-width: 1120px;
   margin: auto;
-  padding: 40px 24px;
   display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
+  grid-template-columns: 1.15fr 0.85fr;
   align-items: center;
-  gap: 28px;
+  gap: 3.5rem;
   box-sizing: border-box;
 }
 
 .hero-copy {
-  position: relative;
-  z-index: 1;
-  padding: 24px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.brand-link {
+  display: inline-block;
+  margin-bottom: 0.5rem;
+  text-decoration: none;
+}
+
+.brand-image {
+  display: block;
+  width: 180px;
+  height: auto;
 }
 
 .eyebrow {
-  color: #1857b6;
+  color: var(--color-primary-hover, #1857b6);
   text-transform: uppercase;
-  letter-spacing: 0.09em;
-  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  font-size: var(--font-size-xs, 0.75rem);
   font-weight: 800;
+  margin: 0;
 }
 
 .eyebrow span {
-  color: #cc9b3a;
-  margin-right: 5px;
+  color: var(--color-accent, #e5b95e);
+  margin-right: 4px;
 }
 
 h1 {
-  margin: 16px 0 20px;
-  color: #102e56;
-  max-width: 14ch;
-  font-size: clamp(2.2rem, 4vw, 3.6rem);
-  line-height: 1.12;
-  letter-spacing: -0.035em;
+  margin: 0.25rem 0 0.5rem;
+  color: var(--color-primary, #102e56);
+  font-size: clamp(2rem, 3.5vw, 3rem);
+  line-height: var(--line-height-tight, 1.2);
+  letter-spacing: -0.03em;
+  font-weight: 800;
 }
 
 h1 span {
-  color: #397bcc;
+  color: var(--color-medical, #0284c7);
 }
 
 .intro {
+  margin: 0;
   max-width: 520px;
-  color: #4a6479;
-  font-size: 1.02rem;
-  line-height: 1.7;
+  color: var(--color-text-muted, #475569);
+  font-size: var(--font-size-base, 1rem);
+  line-height: var(--line-height-relaxed, 1.625);
 }
 
-.hero-actions {
+.feature-badges {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 24px;
+  gap: 0.65rem;
+  margin-top: 0.5rem;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--color-primary-border, #bfdbfe);
+  border-radius: var(--radius-pill, 9999px);
+  padding: 0.35rem 0.85rem;
+  font-size: var(--font-size-xs, 0.75rem);
+  font-weight: 600;
+  color: var(--color-primary, #102e56);
+  box-shadow: 0 2px 4px rgba(16, 46, 86, 0.04);
+}
+
+.badge-icon {
+  font-size: 0.85rem;
 }
 
 .hero-note {
-  margin: 18px 0 0;
-  color: #526c80;
-  font-size: 0.88rem;
+  margin: 0.5rem 0 0;
+  color: var(--color-text-subtle, #64748b);
+  font-size: var(--font-size-xs, 0.825rem);
   line-height: 1.5;
+  font-style: italic;
 }
 
 .login-wrapper {
   display: flex;
   justify-content: center;
   align-items: center;
+  width: 100%;
 }
 
 .login-card {
-  background: #fff;
-  padding: 2rem 2.25rem;
-  border-radius: 16px;
-  border: 1px solid #d8ecfa;
-  box-shadow: 0 16px 48px rgba(24, 87, 182, 0.12);
+  background: var(--color-surface-card, #ffffff);
+  padding: 2.25rem;
+  border-radius: var(--radius-xl, 20px);
+  border: 1px solid var(--color-primary-border, #bfdbfe);
+  box-shadow: 0 20px 45px -12px rgba(16, 46, 86, 0.15), 0 2px 8px rgba(16, 46, 86, 0.05);
   width: 100%;
   max-width: 440px;
   box-sizing: border-box;
-}
-
-.document-type-selector {
-  display: flex;
-  gap: 1.5rem;
-  justify-content: center;
-  margin-bottom: 1.25rem;
-  padding: 0.5rem;
-  background: #f8fafc;
-  border-radius: 6px;
-}
-
-.doc-radio {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.9rem;
-  cursor: pointer;
-  color: #475569;
-}
-
-.doc-radio input[type="radio"] {
-  accent-color: #0284c7;
 }
 
 .login-brand {
@@ -380,152 +294,191 @@ h1 span {
 
 .brand-logo {
   display: block;
+  transition: transform 0.2s ease;
+}
+
+.brand-logo:hover {
+  transform: scale(1.08);
 }
 
 .login-card h2 {
-  font-size: 1.5rem;
-  margin-bottom: 0.25rem;
+  font-size: 1.45rem;
+  margin: 0 0 0.25rem;
   text-align: center;
-  color: #102e56;
+  color: var(--color-primary, #102e56);
+  font-weight: 750;
 }
 
 .subtitle {
-  color: #7f8c8d;
-  font-size: 0.9rem;
+  color: var(--color-text-subtle, #64748b);
+  font-size: var(--font-size-sm, 0.875rem);
   text-align: center;
-  margin-bottom: 1.5rem;
+  margin: 0 0 1.25rem;
+}
+
+.document-type-selector {
+  display: flex;
+  gap: 1.25rem;
+  justify-content: center;
+  margin-bottom: 1.25rem;
+  padding: 0.45rem;
+  background: var(--color-surface-subtle, #f8fafc);
+  border: 1px solid var(--color-border-subtle, #e2e8f0);
+  border-radius: var(--radius-md, 10px);
+}
+
+.doc-radio {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: var(--font-size-sm, 0.875rem);
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--color-text-muted, #475569);
+}
+
+.doc-radio input[type="radio"] {
+  accent-color: var(--color-medical, #0284c7);
+  width: 16px;
+  height: 16px;
 }
 
 .form-group {
-  margin-bottom: 1.25rem;
+  margin-bottom: 1.15rem;
 }
 
 .form-group label {
   display: block;
-  font-weight: 500;
+  font-weight: 600;
   margin-bottom: 0.4rem;
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm, 0.875rem);
+  color: var(--color-text-main, #0f172a);
 }
 
 .form-group input {
   width: 100%;
-  padding: 0.6rem 0.8rem;
-  border: 1px solid #ccd1d9;
-  border-radius: 8px;
-  font-size: 0.95rem;
+  min-height: var(--input-height, 44px);
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--color-border-medium, #cbd5e1);
+  border-radius: var(--radius-md, 10px);
+  font-size: var(--font-size-base, 0.95rem);
+  background-color: #ffffff;
+  color: var(--color-text-main, #0f172a);
   box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .form-group input:focus {
   outline: none;
-  border-color: #1857b6;
+  border-color: var(--color-medical, #0284c7);
+  box-shadow: var(--shadow-focus, 0 0 0 3px rgba(2, 132, 199, 0.2));
 }
 
 .error-alert {
-  background-color: #fde8e8;
-  color: #c81e1e;
-  padding: 0.6rem 0.8rem;
-  border-radius: 6px;
-  font-size: 0.85rem;
+  background-color: var(--color-danger-light, #fee2e2);
+  color: var(--color-danger, #dc2626);
+  border: 1px solid var(--color-danger-border, #fca5a5);
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius-md, 8px);
+  font-size: var(--font-size-sm, 0.85rem);
   margin-bottom: 1.25rem;
+  font-weight: 500;
 }
 
 .success-alert {
-  background-color: #e8f7ee;
-  color: #187044;
-  padding: 0.6rem 0.8rem;
-  border-radius: 6px;
-  font-size: 0.85rem;
+  background-color: var(--color-success-light, #dcfce7);
+  color: var(--color-success, #16a34a);
+  border: 1px solid var(--color-success-border, #86efac);
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius-md, 8px);
+  font-size: var(--font-size-sm, 0.85rem);
   margin-bottom: 1.25rem;
+  font-weight: 500;
 }
 
-.register-link {
-  margin: 1rem 0 0;
-  text-align: center;
-  color: #59636e;
-  font-size: 0.9rem;
-}
-
-.register-link a {
-  color: #1857b6;
-  font-weight: 600;
+.info-alert {
+  background-color: var(--color-medical-light, #e0f2fe);
+  color: var(--color-medical-hover, #0369a1);
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius-md, 8px);
+  font-size: var(--font-size-sm, 0.85rem);
+  margin-bottom: 1.25rem;
+  line-height: 1.45;
 }
 
 .btn-submit {
   width: 100%;
-  background-color: #1857b6;
-  color: white;
+  min-height: 48px;
+  background-color: var(--color-primary-hover, #1857b6);
+  color: #ffffff;
   border: none;
-  padding: 0.75rem;
-  font-size: 1rem;
-  font-weight: 600;
-  border-radius: 10px;
+  padding: 0.75rem 1.25rem;
+  font-size: var(--font-size-base, 1rem);
+  font-weight: 700;
+  border-radius: var(--radius-md, 10px);
   cursor: pointer;
-  transition: background-color 0.2s;
+  box-shadow: 0 4px 12px rgba(24, 87, 182, 0.25);
+  transition: background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
 }
 
 .btn-submit:hover:not(:disabled) {
   background-color: #124794;
+  box-shadow: 0 6px 16px rgba(24, 87, 182, 0.35);
+}
+
+.btn-submit:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .btn-submit:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
-.footer {
-  border-top: 1px solid #e6eff6;
-  padding: 24px max(24px, calc((100% - 1152px) / 2));
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  color: #526c80;
-  font-size: 0.875rem;
-  background: #fff;
+.register-link {
+  margin: 1.15rem 0 0;
+  text-align: center;
+  color: var(--color-text-subtle, #64748b);
+  font-size: var(--font-size-sm, 0.875rem);
 }
 
-.footer a {
-  color: #1857b6;
+.register-link a {
+  color: var(--color-primary-hover, #1857b6);
+  font-weight: 600;
+  text-decoration: none;
 }
 
-@media (max-width: 820px) {
-  .topbar-inner {
-    min-height: 68px;
-    padding: 0 16px;
-    gap: 8px;
-  }
-  .brand img {
-    width: 130px;
-  }
-  .navigation {
-    gap: 10px;
-  }
-  .nav-about {
-    display: none;
-  }
-  .navigation > a {
-    font-size: 0.8rem;
-  }
-  .login-link {
-    padding: 10px;
-  }
-  .nav-book {
-    min-height: 40px;
-    padding: 0 10px;
-  }
-  .hero-inner {
+.register-link a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 900px) {
+  .login-container {
     grid-template-columns: 1fr;
-    gap: 20px;
-    padding: 24px 16px 36px;
+    gap: 2rem;
+    padding: 1rem 0;
   }
+
   .hero-copy {
-    padding: 12px 0 4px;
+    text-align: center;
+    align-items: center;
   }
+
+  .brand-link {
+    margin: 0 auto;
+  }
+
+  .feature-badges {
+    justify-content: center;
+  }
+
+  .intro {
+    max-width: 100%;
+  }
+
   .login-card {
-    padding: 1.5rem 1.25rem;
-  }
-  .footer {
-    padding: 20px 16px;
+    padding: 1.75rem 1.25rem;
   }
 }
 </style>

@@ -1,3 +1,5 @@
+using Dental.Domain.Enums;
+
 namespace Dental.Application.Features.Appointments.DTOs;
 
 public sealed record CreateAppointmentRequest(
@@ -11,5 +13,12 @@ public sealed record CreateAppointmentRequest(
     string? EmergencyReason = null,
     int? ConfirmedDentistConflictAppointmentId = null,
     string? ExpectedScheduleRevision = null,
-    int? ConfirmedDentistConflictRequestId = null
+    int? ConfirmedDentistConflictRequestId = null,
+    string? CitizenId = null,
+    string? ContactPhone = null,
+    string? GuardianFullName = null,
+    string? GuardianRelationship = null,
+    bool GuardianVerifiedAtCounter = false,
+    IdentityDocumentType? DocumentType = null,
+    string? NationalityCode = null
 );

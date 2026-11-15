@@ -4,7 +4,8 @@ public sealed record AssignPatientGuardianRequest(
     int GuardianPatientId,
     int WardPatientId,
     string Relationship,
-    string? Notes = null
+    string? Notes = null,
+    bool VerifiedAtCounter = false
 );
 
 public sealed record RevokePatientGuardianRequest(

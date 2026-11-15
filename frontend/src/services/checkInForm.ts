@@ -1,9 +1,25 @@
-export type CheckInField = 'citizenId' | 'nationalityCode' | 'phone' | 'notes';
+export type CheckInField = 'citizenId' | 'nationalityCode' | 'phone' | 'notes' | 'guardian' | 'guardianVerifiedAtCounter';
 export type CheckInErrors = Partial<Record<CheckInField, string>>;
 
-export function validateCheckIn(citizenId: string, phone: string, notes: string, documentType: 'citizenId' | 'passport' = 'citizenId', nationalityCode = ''): CheckInErrors {
+export function validateCheckIn(
+  citizenId: string,
+  phone: string,
+  notes: string,
+  documentType: 'citizenId' | 'passport' = 'citizenId',
+  nationalityCode = '',
+  isChild = false,
+  guardianFullName = '',
+  guardianRelationship = '',
+  guardianVerifiedAtCounter = false
+): CheckInErrors {
   const errors: CheckInErrors = {};
-  if (documentType === 'passport') {
+  if (isChild) {
+    if (citizenId.trim() || nationalityCode.trim()) errors.citizenId = 'Trẻ dưới 14 tuổi không cần CCCD hoặc hộ chiếu riêng.';
+    if (!guardianFullName.trim() || guardianFullName.trim().length > 100 || !guardianRelationship.trim()) {
+      errors.guardian = 'Vui lòng nhập họ tên và quan hệ của người giám hộ.';
+    }
+    if (!guardianVerifiedAtCounter) errors.guardianVerifiedAtCounter = 'Vui lòng xác nhận đã đối chiếu người giám hộ trực tiếp tại quầy.';
+  } else if (documentType === 'passport') {
     if (!/^[A-Za-z0-9]{6,12}$/.test(citizenId.trim())) errors.citizenId = 'Số hộ chiếu phải gồm 6–12 chữ cái hoặc chữ số.';
     if (!/^[A-Za-z]{2,3}$/.test(nationalityCode.trim())) errors.nationalityCode = 'Mã quốc gia cấp hộ chiếu phải gồm 2–3 chữ cái.';
   } else if (!/^[0-9]{12}$/.test(citizenId.trim())) errors.citizenId = 'CCCD phải gồm 12 chữ số để đối chiếu tại quầy.';
@@ -26,6 +42,8 @@ export function checkInProblem(problem: unknown): { fields: CheckInErrors; messa
     if (field === 'nationalitycode') fields.nationalityCode ??= value;
     if (field === 'phone') fields.phone ??= value;
     if (field === 'notes') fields.notes ??= value;
+    if (field === 'guardian' || field === 'guardianfullname' || field === 'guardianrelationship') fields.guardian ??= value;
+    if (field === 'guardianverifiedatcounter') fields.guardianVerifiedAtCounter ??= value;
   }
   if (Array.isArray(data.errors)) {
     for (const error of data.errors) {

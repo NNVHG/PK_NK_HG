@@ -52,6 +52,9 @@
       </div>
     </div>
 
+    <p v-else-if="isChild" class="empty-state" role="status">
+      Thiếu tài khoản người giám hộ. Hồ sơ trẻ vẫn được giữ; chỉ liên kết khi nhân viên đã xác minh tại quầy và người giám hộ có tài khoản Bệnh nhân đang hoạt động.
+    </p>
     <p v-else class="empty-state">Bệnh nhân chưa có người giám hộ hiệu lực nào.</p>
 
     <div v-if="canManage && history.length > 0" class="history-section">
@@ -108,9 +111,13 @@
             Ghi chú / Chứng từ đối soát:
             <textarea v-model="assignForm.notes" rows="2" maxlength="500" placeholder="Số giấy khai sinh, giấy tờ pháp lý..."></textarea>
           </label>
+          <label class="verification-label">
+            <input v-model="assignForm.verifiedAtCounter" type="checkbox" />
+            Tôi xác nhận đã đối chiếu người giám hộ trực tiếp tại quầy.
+          </label>
           <div class="modal-actions">
             <button type="button" class="button button-quiet" @click="showAssignModal = false">Hủy</button>
-            <button type="submit" class="button button-primary" :disabled="actionLoading">
+            <button type="submit" class="button button-primary" :disabled="actionLoading || !assignForm.verifiedAtCounter">
               {{ actionLoading ? 'Đang lưu...' : 'Xác nhận gán' }}
             </button>
           </div>
@@ -171,9 +178,11 @@
 import { ref, onMounted, computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { patientGuardiansService, type PatientGuardianSummary } from '@/services/patientGuardians';
+import { isUnderFourteen } from '@/services/patientAge';
 
 const props = defineProps<{
   patientId: number;
+  wardDateOfBirth: string;
 }>();
 
 const emit = defineEmits<{
@@ -182,6 +191,7 @@ const emit = defineEmits<{
 
 const authStore = useAuthStore();
 const canManage = computed(() => ['ADMIN', 'RECEPTIONIST'].includes(authStore.role));
+const isChild = computed(() => isUnderFourteen(props.wardDateOfBirth));
 
 const loading = ref(false);
 const actionLoading = ref(false);
@@ -194,7 +204,7 @@ const showAssignModal = ref(false);
 const showRevokeModal = ref(false);
 const showPromoteModal = ref(false);
 
-const assignForm = ref({ guardianPatientId: 0, relationship: 'Cha', notes: '' });
+const assignForm = ref({ guardianPatientId: 0, relationship: 'Cha', notes: '', verifiedAtCounter: false });
 const revokeForm = ref({ notes: '' });
 const promoteForm = ref({ rawCitizenId: '', phone: '', notes: '' });
 
@@ -225,6 +235,10 @@ async function loadData() {
 }
 
 async function submitAssign() {
+  if (!assignForm.value.verifiedAtCounter) {
+    errorMessage.value = 'Chỉ gán người giám hộ sau khi đã xác minh trực tiếp tại quầy.';
+    return;
+  }
   actionLoading.value = true;
   errorMessage.value = '';
   successMessage.value = '';
@@ -233,11 +247,12 @@ async function submitAssign() {
       guardianPatientId: assignForm.value.guardianPatientId,
       wardPatientId: props.patientId,
       relationship: assignForm.value.relationship,
-      notes: assignForm.value.notes
+      notes: assignForm.value.notes,
+      verifiedAtCounter: true
     });
     successMessage.value = 'Gán người giám hộ thành công.';
     showAssignModal.value = false;
-    assignForm.value = { guardianPatientId: 0, relationship: 'Cha', notes: '' };
+    assignForm.value = { guardianPatientId: 0, relationship: 'Cha', notes: '', verifiedAtCounter: false };
     await loadData();
   } catch (e: any) {
     errorMessage.value = e.response?.data?.message || 'Không thể gán người giám hộ.';
@@ -309,6 +324,8 @@ onMounted(loadData);
 .modal-content { background: #fff; padding: 1.5rem; border-radius: 8px; max-width: 28rem; width: 100%; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
 .modal-content label { display: block; margin-top: 0.75rem; font-size: 0.875rem; font-weight: 500; }
 .modal-content input, .modal-content select, .modal-content textarea { width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 4px; margin-top: 0.25rem; font: inherit; }
+.verification-label { display: flex !important; align-items: flex-start; gap: 0.5rem; font-weight: 400 !important; line-height: 1.45; }
+.verification-label input { width: auto; margin-top: 0.15rem; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.25rem; }
 .button-danger { background: #ef4444; color: #fff; border: none; padding: 0.5rem 0.85rem; border-radius: 4px; cursor: pointer; }
 .button-success { background: #10b981; color: #fff; border: none; padding: 0.5rem 0.85rem; border-radius: 4px; cursor: pointer; }

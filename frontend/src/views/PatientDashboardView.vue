@@ -41,7 +41,7 @@
             <span class="pd-quick-icon">📅</span>
             <div>
               <strong>Đặt lịch khám mới</strong>
-              <span>Chọn nha sĩ và khung giờ trực tuyến</span>
+              <span>Chọn ngày và khung giờ trực tuyến</span>
             </div>
           </RouterLink>
 

@@ -22,5 +22,6 @@ public sealed record QueueEntryResponse(
     string? ChairNumber = null,
     string? RoomName = null,
     bool CanCancelConsultation = false,
-    bool IsEmergency = false
+    bool IsEmergency = false,
+    bool PatientAccountCreated = false
 );

@@ -3,36 +3,36 @@
     <div class="page-header">
       <div>
         <p class="eyebrow">CƠ SỞ VẬT CHẤT</p>
-        <h1>Phòng khám & Ghế nha khoa</h1>
-        <p class="subtitle">Khai báo danh mục phòng, phân bổ ghế nha khoa và quản lý trạng thái phục vụ.</p>
+        <h1>Danh mục phòng điều trị</h1>
+        <p class="subtitle">Khai báo danh mục phòng điều trị, quản lý tính sẵn sàng và trạng thái vận hành của phòng khám.</p>
       </div>
       <div class="header-actions">
         <button class="button button-primary" :disabled="saving || loading || needsReview" @click="openCreate">
-          <span class="btn-icon">+</span> Khai báo ghế mới
+          <span class="btn-icon">+</span> Khai báo phòng mới
         </button>
       </div>
     </div>
 
     <div class="info-banner">
-      <div class="banner-icon">🦷</div>
+      <div class="banner-icon">🏥</div>
       <div class="banner-content">
-        <strong>Lưu ý vận hành phòng khám:</strong> Ghế "Bảo trì" hoặc "Ngừng sử dụng" sẽ bị khóa khỏi luồng điều phối ca khám. Ghế "Đang phục vụ" do ca khám thực tế quản lý; chỉ chỉnh sửa cấu hình sau khi ca khám kết thúc.
+        <strong>Lưu ý vận hành phòng khám:</strong> Phòng điều trị ở trạng thái "Bảo trì" hoặc "Ngừng sử dụng" sẽ bị khóa khỏi luồng điều phối ca khám. Phòng "Đang phục vụ" do ca khám thực tế quản lý; chỉ chỉnh sửa cấu hình sau khi ca khám kết thúc.
       </div>
     </div>
 
     <div v-if="error" class="alert alert-error" role="alert">{{ error }}</div>
     <div v-if="message" class="alert alert-success" role="status">{{ message }}</div>
     <div v-if="needsReview" class="alert alert-warning" role="alert">
-      Dữ liệu ghế vừa được cập nhật. Bấm <button class="link-btn" @click="load(1)">Tải lại danh sách</button> để đối chiếu trước khi thao tác tiếp.
+      Dữ liệu phòng vừa được cập nhật. Bấm <button class="link-btn" @click="load(1)">Tải lại danh sách</button> để đối chiếu trước khi thao tác tiếp.
     </div>
 
     <div class="panel filters-panel">
       <form class="filters-grid" @submit.prevent="load(1)">
         <div class="filter-field">
-          <label for="chair-search">Tìm kiếm ghế / phòng</label>
+          <label for="chair-search">Tìm kiếm phòng điều trị</label>
           <div class="input-icon-wrapper">
             <span class="field-icon">🔍</span>
-            <input id="chair-search" v-model="keyword" placeholder="Mã ghế hoặc tên phòng..." maxlength="100" :disabled="saving" />
+            <input id="chair-search" v-model="keyword" placeholder="Tên phòng hoặc mã cấu hình..." maxlength="100" :disabled="saving" />
           </div>
         </div>
 
@@ -66,12 +66,12 @@
 
     <div class="panel list-panel">
       <div class="panel-header">
-        <h2 class="panel-title">Danh sách ghế nha khoa phòng khám</h2>
-        <span class="count-badge">{{ store.result?.totalCount ?? 0 }} ghế</span>
+        <h2 class="panel-title">Danh sách phòng điều trị</h2>
+        <span class="count-badge">{{ store.result?.totalCount ?? 0 }} phòng</span>
       </div>
 
       <div class="panel-body">
-        <div v-if="loading" class="loading-state">Đang tải danh mục ghế...</div>
+        <div v-if="loading" class="loading-state">Đang tải danh mục phòng...</div>
 
         <div v-else-if="store.result?.items && store.result.items.length > 0" class="chairs-grid">
           <div
@@ -86,8 +86,8 @@
           >
             <div class="chair-card-header">
               <div class="chair-badge-group">
-                <span class="chair-number">{{ chair.chairNumber }}</span>
                 <span class="room-pill">{{ chair.roomName }}</span>
+                <span class="chair-number">Mã: {{ chair.chairNumber }}</span>
               </div>
               <span
                 class="status-pill"
@@ -124,10 +124,10 @@
           </div>
         </div>
 
-        <div v-else class="empty-state">Không tìm thấy ghế nha khoa phù hợp.</div>
+        <div v-else class="empty-state">Không tìm thấy phòng điều trị phù hợp.</div>
 
         <div v-if="store.result && store.result.totalCount > 0" class="pagination">
-          <span class="page-info">Trang {{ store.result.page }} (Tổng {{ store.result.totalCount }} ghế)</span>
+          <span class="page-info">Trang {{ store.result.page }} (Tổng {{ store.result.totalCount }} phòng)</span>
           <div class="page-btns">
             <button class="button button-secondary" :disabled="saving || loading || store.result.page <= 1" @click="load(store.result.page - 1)">
               ← Trang trước
@@ -142,32 +142,32 @@
     <div v-if="formOpen" class="modal-overlay" @click.self="closeForm">
       <div class="modal-card">
         <div class="modal-header">
-          <h2>{{ selected ? 'Cập nhật cấu hình ghế: ' + selected.chairNumber : 'Khai báo ghế nha khoa mới' }}</h2>
+          <h2>{{ selected ? 'Cập nhật cấu hình phòng: ' + selected.roomName : 'Khai báo phòng điều trị mới' }}</h2>
           <button class="close-btn" type="button" :disabled="saving" @click="closeForm">✕</button>
         </div>
 
         <form class="modal-form" @submit.prevent="save">
           <div class="form-grid">
             <div class="form-field">
-              <label>Mã số ghế nha khoa <b>*</b></label>
-              <input v-model="chairNumber" maxlength="50" required placeholder="VD: GHE-01" :disabled="saving || selected !== null" />
-              <span v-if="selected" class="form-hint">Mã định danh ghế không thể sửa sau khi khai báo.</span>
-            </div>
-
-            <div class="form-field">
-              <label>Tên phòng chức năng <b>*</b></label>
+              <label>Tên phòng điều trị <b>*</b></label>
               <input v-model="roomName" maxlength="100" required placeholder="VD: Phòng điều trị 1..." :disabled="saving" />
             </div>
 
+            <div class="form-field">
+              <label>Mã thiết lập / nhận diện <b>*</b></label>
+              <input v-model="chairNumber" maxlength="50" required placeholder="VD: P-01 hoặc GHE-01" :disabled="saving || selected !== null" />
+              <span v-if="selected" class="form-hint">Mã thiết lập không thể sửa sau khi khai báo.</span>
+            </div>
+
             <div class="form-field form-field--wide">
-              <label>Trạng thái vận hành ghế <b>*</b></label>
+              <label>Trạng thái vận hành phòng <b>*</b></label>
               <select v-model.number="formStatus" :disabled="saving">
                 <option :value="1">🟢 Sẵn sàng phục vụ bệnh nhân</option>
                 <option :value="3">🟡 Đang bảo trì / Kiểm tra kỹ thuật</option>
                 <option :value="4">🔴 Ngừng sử dụng (Khóa chọn)</option>
               </select>
               <p v-if="formStatus === 4" class="form-hint text-warning">
-                Ghế ngừng sử dụng sẽ bị ẩn khỏi danh sách chỉ định ca khám nhưng vẫn bảo tồn lịch sử.
+                Phòng ngừng sử dụng sẽ bị ẩn khỏi danh sách chỉ định ca khám nhưng vẫn bảo tồn lịch sử.
               </p>
             </div>
 

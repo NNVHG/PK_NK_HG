@@ -4,7 +4,9 @@ using Dental.Application.Features.Appointments.DTOs;
 using Dental.Application.Interfaces;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
+using Dental.Domain.Enums;
 using Dental.Application.Features.MOD_MST.Services;
+using Dental.Application.Features.MOD_PAT;
 
 namespace Dental.Application.Features.Appointments.Services;
 
@@ -17,6 +19,10 @@ public sealed class AppointmentService
     private readonly IAuditLogger _auditLogger;
     private readonly VietnamClock _vietnamClock;
     private readonly IPatientGuardianRepository? _guardianRepository;
+    private readonly IVisitRepository? _visitRepository;
+    private readonly IQueueRepository? _queueRepository;
+    private readonly IKeyedIdentityHasher? _identityHasher;
+    private readonly IPasswordHasher? _passwordHasher;
 
 
     public AppointmentService(
@@ -51,6 +57,32 @@ public sealed class AppointmentService
         _auditLogger = auditLogger;
         _vietnamClock = vietnamClock;
         _guardianRepository = guardianRepository;
+    }
+
+    public AppointmentService(
+        IAppointmentRepository appointmentRepository,
+        IPatientRepository patientRepository,
+        IUserRepository userRepository,
+        IUnitOfWork unitOfWork,
+        IAuditLogger auditLogger,
+        VietnamClock vietnamClock,
+        IPatientGuardianRepository guardianRepository,
+        IVisitRepository visitRepository,
+        IQueueRepository queueRepository,
+        IKeyedIdentityHasher? identityHasher = null,
+        IPasswordHasher? passwordHasher = null)
+    {
+        _appointmentRepository = appointmentRepository;
+        _patientRepository = patientRepository;
+        _userRepository = userRepository;
+        _unitOfWork = unitOfWork;
+        _auditLogger = auditLogger;
+        _vietnamClock = vietnamClock;
+        _guardianRepository = guardianRepository;
+        _visitRepository = visitRepository;
+        _queueRepository = queueRepository;
+        _identityHasher = identityHasher;
+        _passwordHasher = passwordHasher;
     }
 
     public async Task<Result<AppointmentResponse>> CreateAppointmentAsync(
@@ -110,11 +142,14 @@ public sealed class AppointmentService
         if (request.AppointmentDate < today)
             return Result<AppointmentResponse>.Failure(Error.AppointmentDateInPast);
 
-        if (request.AppointmentDate == today)
+        var isToday = request.AppointmentDate == today;
+        var nowVietnamTime = TimeOnly.FromDateTime(_vietnamClock.Now);
+        var isCounterActor = actorRoleCode is RoleCodes.Admin or RoleCodes.Receptionist;
+        var isCounterWalkIn = isCounterActor && isToday && nowVietnamTime >= request.SlotTime;
+
+        if (isToday && !isCounterActor && request.SlotTime <= nowVietnamTime)
         {
-            var nowVietnamTime = TimeOnly.FromDateTime(_vietnamClock.Now);
-            if (request.SlotTime <= nowVietnamTime)
-                return Result<AppointmentResponse>.Failure(Error.AppointmentInvalidTime.Code, "Không thể đặt lịch cho khung giờ đã qua trong ngày.");
+            return Result<AppointmentResponse>.Failure(Error.AppointmentInvalidTime.Code, "Không thể đặt lịch cho khung giờ đã qua trong ngày.");
         }
 
         if (await _appointmentRepository.HasActiveAppointmentOnDateAsync(request.PatientId, request.AppointmentDate, ct))
@@ -144,6 +179,149 @@ public sealed class AppointmentService
             }
         }
 
+        var patientAccountCreated = false;
+        if (isCounterActor)
+        {
+            var contactPhone = request.ContactPhone?.Trim();
+            if (contactPhone is not { Length: 10 } || contactPhone[0] != '0' ||
+                contactPhone.Any(c => c is < '0' or > '9') ||
+                !string.Equals(patient.Phone, contactPhone, StringComparison.Ordinal))
+                return Result<AppointmentResponse>.Failure(Error.Validation.Code,
+                    "Số điện thoại liên hệ không khớp hồ sơ. Hãy đối chiếu thông tin trước khi tiếp đón.");
+
+            var isChild = patient.DateOfBirth.AddYears(14) > today;
+            if (isChild)
+            {
+                if (!string.IsNullOrWhiteSpace(request.CitizenId))
+                    return Result<AppointmentResponse>.Failure(Error.Validation.Code,
+                        "Trẻ dưới 14 tuổi không cần và không sử dụng CCCD riêng khi tiếp đón.");
+
+                var guardianName = request.GuardianFullName?.Trim();
+                var guardianRelationship = request.GuardianRelationship?.Trim();
+                if (!request.GuardianVerifiedAtCounter || guardianName is not { Length: >= 2 and <= 100 } ||
+                    guardianName.Any(char.IsControl) || string.IsNullOrWhiteSpace(guardianRelationship) || guardianRelationship.Length > 50)
+                    return Result<AppointmentResponse>.Failure(Error.Validation.Code,
+                        "Vui lòng ghi nhận họ tên, quan hệ và xác nhận đã đối chiếu người giám hộ trực tiếp tại quầy.");
+
+                var guardianNote = $"Người giám hộ đã xác minh tại quầy: {guardianName} ({guardianRelationship})";
+                var notes = string.IsNullOrWhiteSpace(request.Notes)
+                    ? guardianNote
+                    : $"{request.Notes.Trim()} | {guardianNote}";
+                if (notes.Length > 500)
+                    return Result<AppointmentResponse>.Failure(Error.Validation.Code,
+                        "Ghi chú đặt lịch quá dài khi kèm thông tin người giám hộ. Vui lòng rút gọn ghi chú.");
+                request = request with { Notes = notes };
+            }
+            else
+            {
+                var identifier = request.CitizenId?.Trim();
+                var documentType = request.DocumentType ?? IdentityDocumentType.CitizenId;
+                var nationalityCode = documentType == IdentityDocumentType.Passport
+                    ? request.NationalityCode?.Trim().ToUpperInvariant()
+                    : null;
+                var validIdentifier = documentType switch
+                {
+                    IdentityDocumentType.CitizenId => identifier is { Length: 12 } && identifier.All(char.IsAsciiDigit) &&
+                        string.IsNullOrWhiteSpace(request.NationalityCode),
+                    IdentityDocumentType.Passport => identifier is { Length: >= 6 and <= 12 } &&
+                        identifier.All(char.IsAsciiLetterOrDigit) && nationalityCode is { Length: 2 or 3 } &&
+                        nationalityCode.All(char.IsAsciiLetter),
+                    _ => false
+                };
+                if (!validIdentifier)
+                    return Result<AppointmentResponse>.Failure(Error.Validation.Code,
+                        "Vui lòng đối chiếu CCCD hoặc hộ chiếu kèm quốc gia cấp trước khi xác nhận tại quầy.");
+                if (_identityHasher is null)
+                    return Result<AppointmentResponse>.Failure(Error.ServerError);
+
+                var identityHash = _identityHasher.Hash(identifier!, documentType, nationalityCode);
+                if (patient.CitizenIdHash is not null && !_identityHasher.Matches(patient.CitizenIdHash, identifier!,
+                        documentType, nationalityCode, expectedKeyVersion: patient.IdentityKeyVersion))
+                    return Result<AppointmentResponse>.Failure(Error.Validation.Code,
+                        "Giấy tờ định danh không khớp hồ sơ bệnh nhân. Hãy đối soát thông tin trước khi tiếp đón.");
+
+                var duplicate = await _patientRepository.FindByCitizenIdHashAsync(identityHash, patient.PatientId, ct);
+                if (documentType == IdentityDocumentType.CitizenId)
+                    duplicate ??= await _patientRepository.FindByCitizenIdHashAsync(
+                        CitizenIdIdentity.Hash(identifier!), patient.PatientId, ct);
+                if (duplicate is not null)
+                    return Result<AppointmentResponse>.Failure(Error.Validation.Code,
+                        "Giấy tờ định danh đã liên kết với hồ sơ khác. Hãy đối soát thông tin trước khi tiếp đón.");
+
+                Role? patientRole = null;
+                var accountPasswordHasher = _passwordHasher;
+                if (patient.UserId.HasValue)
+                {
+                    var owner = await _userRepository.FindByIdAsync(patient.UserId.Value, ct);
+                    if (owner is null || !owner.IsActive || owner.Role?.RoleCode != RoleCodes.Patient)
+                        return Result<AppointmentResponse>.Failure(Error.Conflict);
+                }
+                else
+                {
+                    patientRole = await _userRepository.FindRoleByCodeAsync(RoleCodes.Patient, ct);
+                    if (patientRole is null || accountPasswordHasher is null)
+                        return Result<AppointmentResponse>.Failure(Error.ServerError);
+                }
+
+                var identityChanged = patient.CitizenIdHash != identityHash ||
+                    patient.DocumentType != documentType ||
+                    patient.IssuingCountryCode != nationalityCode ||
+                    patient.HashScheme != IdentityHashScheme.HmacCanonical ||
+                    patient.IdentityKeyVersion != _identityHasher.CurrentVersion;
+                if (identityChanged)
+                {
+                    patient.CitizenIdHash = identityHash;
+                    patient.CitizenIdMasked = _identityHasher.Mask(identifier!, documentType);
+                    patient.DocumentType = documentType;
+                    patient.IssuingCountryCode = nationalityCode;
+                    patient.HashScheme = IdentityHashScheme.HmacCanonical;
+                    patient.IdentityKeyVersion = _identityHasher.CurrentVersion;
+                    patient.CitizenIdVersion++;
+                    patient.UpdatedAt = _vietnamClock.UtcNow;
+                    await _unitOfWork.SaveChangesAsync(ct);
+                    await _auditLogger.LogRequiredAsync(AuditActions.PatientUpdated, "Patient", patient.PatientId, actorUserId,
+                        JsonSerializer.Serialize(new
+                        {
+                            changedFields = new[] { nameof(patient.CitizenIdHash), nameof(patient.CitizenIdMasked) },
+                            source = "CounterBookingIdentityVerification"
+                        }), ipAddress, ct);
+                }
+
+                if (!patient.UserId.HasValue)
+                {
+                    var now = _vietnamClock.UtcNow;
+                    var account = new User
+                    {
+                        Phone = patient.Phone,
+                        PasswordHash = accountPasswordHasher!.Hash(patient.Phone),
+                        LoginByCitizenId = true,
+                        RequiresPhoneActivation = true,
+                        FullName = patient.FullName,
+                        Email = patient.Email,
+                        DateOfBirth = patient.DateOfBirth,
+                        Gender = patient.Gender,
+                        RoleId = patientRole!.RoleId,
+                        IsActive = true,
+                        CreatedAt = now,
+                        UpdatedAt = now
+                    };
+                    await _userRepository.AddAsync(account, ct);
+                    await _unitOfWork.SaveChangesAsync(ct);
+                    patient.UserId = account.UserId;
+                    patient.UpdatedAt = now;
+                    await _unitOfWork.SaveChangesAsync(ct);
+                    await _auditLogger.LogRequiredAsync("MOD_AUTH_PATIENT_ACCOUNT_CREATED", "User", account.UserId, actorUserId,
+                        JsonSerializer.Serialize(new
+                        {
+                            patientId = patient.PatientId,
+                            activationRequired = true,
+                            loginIdentifier = documentType.ToString()
+                        }), ipAddress, ct);
+                    patientAccountCreated = true;
+                }
+            }
+        }
+
         var appointment = new Appointment
         {
             PatientId = request.PatientId,
@@ -151,7 +329,7 @@ public sealed class AppointmentService
             SlotTime = request.SlotTime,
             SlotDurationMinutes = snapshot.Schedule.DurationMinutes,
             DentistId = request.DentistId,
-            Status = AppointmentStatuses.Scheduled,
+            Status = isCounterWalkIn ? AppointmentStatuses.CheckedIn : AppointmentStatuses.Scheduled,
             Notes = request.Notes?.Trim(),
             CreatedByUserId = actorUserId,
             CreatedAt = DateTime.UtcNow
@@ -159,6 +337,66 @@ public sealed class AppointmentService
 
         await _appointmentRepository.AddAsync(appointment, ct);
         await _unitOfWork.SaveChangesAsync(ct);
+
+        int? generatedQueueNumber = null;
+        if (isCounterWalkIn && _visitRepository is not null && _queueRepository is not null)
+        {
+            var visit = new Visit
+            {
+                PatientId = request.PatientId,
+                Status = VisitStatuses.Created,
+                DentistId = null,
+                CreatedByUserId = actorUserId,
+                CreatedAt = _vietnamClock.UtcNow
+            };
+            await _visitRepository.AddAsync(visit, ct);
+            await _unitOfWork.SaveChangesAsync(ct);
+
+            var nextNumber = await _queueRepository.GetNextQueueNumberAsync(today, ct);
+            generatedQueueNumber = nextNumber;
+            var queueEntry = new QueueEntry
+            {
+                PatientId = request.PatientId,
+                AppointmentId = appointment.AppointmentId,
+                DentistId = null,
+                VisitId = visit.VisitId,
+                QueueDate = today,
+                QueueNumber = nextNumber,
+                IsPriority = false,
+                CheckInTime = _vietnamClock.UtcNow,
+                Status = QueueStatus.Waiting,
+                Notes = request.Notes?.Trim(),
+                CreatedAt = _vietnamClock.UtcNow
+            };
+            await _queueRepository.AddAsync(queueEntry, ct);
+            await _unitOfWork.SaveChangesAsync(ct);
+
+            await _queueRepository.AddStatusHistoryAsync(new QueueStatusHistory
+            {
+                QueueEntryId = queueEntry.QueueEntryId,
+                FromStatus = null,
+                ToStatus = QueueStatus.Waiting,
+                ChangedByUserId = actorUserId,
+                ChangedAt = _vietnamClock.UtcNow,
+                Reason = "Đặt lịch tại quầy hôm nay - tự động tiếp đón (§1.6)"
+            }, ct);
+            await _unitOfWork.SaveChangesAsync(ct);
+
+            await _auditLogger.LogRequiredAsync(
+                action: AuditActions.QueueCheckedIn,
+                entityType: "QueueEntry",
+                entityId: queueEntry.QueueEntryId,
+                userId: actorUserId,
+                detail: JsonSerializer.Serialize(new
+                {
+                    source = "CounterWalkInAutoCheckIn",
+                    appointmentId = appointment.AppointmentId,
+                    visitId = visit.VisitId,
+                    queueNumber = nextNumber
+                }),
+                ipAddress: ipAddress,
+                ct: ct);
+        }
 
         await _auditLogger.LogAsync(
             action: AuditActions.AppointmentCreated,
@@ -182,7 +420,13 @@ public sealed class AppointmentService
             ct: ct);
 
         var created = await _appointmentRepository.GetByIdAsync(appointment.AppointmentId, ct);
-        return Result<AppointmentResponse>.Success(ToResponse(created ?? appointment));
+        var resp = ToResponse(created ?? appointment);
+        if (generatedQueueNumber.HasValue)
+        {
+            resp = resp with { QueueNumber = generatedQueueNumber.Value };
+        }
+        resp = resp with { PatientAccountCreated = patientAccountCreated };
+        return Result<AppointmentResponse>.Success(resp);
     }
 
     public async Task<Result<IReadOnlyList<BookingDentistResponse>>> GetBookingDentistsAsync(

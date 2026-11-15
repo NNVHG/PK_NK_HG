@@ -47,6 +47,17 @@
                   <label class="field"><span>Email <span class="optional">(không bắt buộc)</span></span><input v-model="form.email" type="email" maxlength="100" autocomplete="email" /></label>
                 </div>
 
+                <div v-if="isChild" class="guardian-section">
+                  <div class="child-badge-notice">
+                    <span>👶 <strong>Đối tượng: Trẻ em (&lt; 14 tuổi)</strong></span>
+                    <p class="field-hint">Theo quy định (§1.6), trẻ dưới 14 tuổi không yêu cầu CCCD. Vui lòng cung cấp thông tin người giám hộ đi cùng.</p>
+                  </div>
+                  <div class="field-grid">
+                    <label class="field"><span>Họ tên người giám hộ <span class="required" aria-hidden="true">*</span></span><input v-model="guardianForm.fullName" maxlength="100" placeholder="Họ tên cha/mẹ/người giám hộ" :required="isChild" /></label>
+                    <label class="field"><span>Quan hệ với trẻ <span class="required" aria-hidden="true">*</span></span><select v-model="guardianForm.relationship" :required="isChild"><option value="Bố/Mẹ">Bố/Mẹ</option><option value="Ông/Bà">Ông/Bà</option><option value="Người giám hộ hợp pháp">Người giám hộ hợp pháp</option></select></label>
+                  </div>
+                </div>
+
                 <div class="section-divider"></div>
                 <div class="section-heading"><div><p class="card-kicker">Thời gian phù hợp</p><h3>Chọn lịch khám</h3></div></div>
                 <div class="field-grid">
@@ -89,13 +100,16 @@
   </div>
 </template>
 <script setup lang="ts">
-import {onMounted,onUnmounted,reactive,ref,watch} from 'vue';
+import {computed,onMounted,onUnmounted,reactive,ref,watch} from 'vue';
 import {isAxiosError} from 'axios';
 import {useAuthStore} from '@/stores/auth';
 import {patientsService,type PatientSummary} from '@/services/patients';
 import {bookingRequestsService,type BookingCatalog,type BookingIntent,type BookingSubmission,type BookingReceipt} from '@/services/bookingRequests';
+import {isUnderFourteen} from '@/services/patientAge';
 const auth=useAuthStore(),catalog=ref<BookingCatalog|null>(null),patient=ref<PatientSummary|null>(null),patientId=ref(0),profilesError=ref('');
 const form=reactive({fullName:'',phone:'',dateOfBirth:'',gender:'',email:'',appointmentDate:'',slot:'',notes:''});
+const guardianForm=reactive({fullName:'',relationship:'Bố/Mẹ'});
+const isChild=computed(()=>!!form.dateOfBirth&&isUnderFourteen(form.dateOfBirth,catalog.value?.today));
 const busy=ref(false),confirmed=ref(false),error=ref(''),receipt=ref<BookingReceipt|null>(null),retryBody=ref<BookingSubmission|null>(null);let snapshot:BookingIntent|null=null,generation=0,disposed=false;
 const identity=()=>`${auth.user?.userId}/${auth.role}`;
 function alive(ticket:number,owner:string){return !disposed&&ticket===generation&&owner===identity();}
@@ -113,11 +127,18 @@ function validDay(value:string){const d=new Date(value+'T00:00:00Z');return /^\d
 function intent():BookingIntent|null{
  const s=catalog.value;if(!s)return null;const minBirth=new Date(s.today+'T00:00:00Z'),month=minBirth.getUTCMonth();minBirth.setUTCFullYear(minBirth.getUTCFullYear()-120);if(minBirth.getUTCMonth()!==month)minBirth.setUTCDate(0);
  if(!form.fullName.trim()||form.fullName.length>100||form.fullName.includes('\0')||!/^0\d{9}$/.test(form.phone)||!validDay(form.dateOfBirth)||form.dateOfBirth<minBirth.toISOString().slice(0,10)||form.dateOfBirth>s.today||!['Male','Female','Other'].includes(form.gender)||!validDay(form.appointmentDate)||form.appointmentDate<s.today||!s.slots.includes(form.slot)||form.notes.length>500||form.notes.includes('\0')||form.email.length>100||form.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)||patientId.value>0&&(!patient.value||patient.value.patientId!==patientId.value||patient.value.fullName!==form.fullName.trim()||patient.value.dateOfBirth!==form.dateOfBirth))return null;
- return{fullName:form.fullName.trim(),phone:form.phone,dateOfBirth:form.dateOfBirth,gender:form.gender,email:form.email.trim()||null,appointmentDate:form.appointmentDate,slotTime:form.slot+':00',dentistId:null,notes:form.notes.trim()||null,scheduleRevision:s.revision,patientId:patientId.value||null};
+ if(isChild.value&&(!guardianForm.fullName.trim()||guardianForm.fullName.length>100))return null;
+ let combinedNotes=form.notes.trim()||'';
+ if(isChild.value){
+   const guardianNote=`[Giám hộ: ${guardianForm.fullName.trim()} - ${guardianForm.relationship}]`;
+   combinedNotes=combinedNotes?`${combinedNotes} ${guardianNote}`:guardianNote;
+   if(combinedNotes.length>500)return null;
+ }
+ return{fullName:form.fullName.trim(),phone:form.phone,dateOfBirth:form.dateOfBirth,gender:form.gender,email:form.email.trim()||null,appointmentDate:form.appointmentDate,slotTime:form.slot+':00',dentistId:null,notes:combinedNotes||null,scheduleRevision:s.revision,patientId:patientId.value||null};
 }
 async function submit(){
  if(disposed||busy.value||receipt.value)return;
- if(!retryBody.value){const payload=intent();if(!confirmed.value||!payload){error.value='Kiểm tra lại thông tin cá nhân, ngày và khung giờ.';return;}snapshot=payload;retryBody.value={intent:payload,clientRequestId:crypto.randomUUID(),confirmed:true};}
+ if(!retryBody.value){const payload=intent();if(!confirmed.value||!payload){error.value='Kiểm tra lại thông tin cá nhân, người giám hộ, ngày và khung giờ; rút gọn ghi chú nếu cần.';return;}snapshot=payload;retryBody.value={intent:payload,clientRequestId:crypto.randomUUID(),confirmed:true};}
  const body=retryBody.value,ticket=generation,owner=identity();busy.value=true;error.value='';
  try{const data=await bookingRequestsService.submit(body);if(!alive(ticket,owner))return;if(data.requestId!==body.clientRequestId||!['Pending','Rejected','Approved'].includes(data.status))throw Error();receipt.value=data;retryBody.value=null;snapshot=null;confirmed.value=false;Object.assign(form,{fullName:'',phone:'',dateOfBirth:'',gender:'',email:'',notes:''});patient.value=null;patientId.value=0;}
  catch(cause){if(alive(ticket,owner)){
@@ -130,6 +151,9 @@ async function submit(){
 watch(identity,()=>{generation++;busy.value=false;clear();if(!disposed)void load();});onMounted(()=>void load());onUnmounted(()=>{disposed=true;generation++;clear();});
 </script>
 <style scoped>
+.guardian-section{margin-top:16px;padding:14px;background:#f0f7ff;border:1px solid #cce3f8;border-radius:10px}
+.child-badge-notice{margin-bottom:12px;color:#1857b6}
+.child-badge-notice strong{font-size:.95rem}
 .booking-page{min-height:100vh;background:var(--hg-canvas,#f4f8fc);color:var(--hg-ink,#18354c);font-family:var(--hg-font,"Segoe UI",system-ui,sans-serif)}
 .booking-header{background:#fff;border-bottom:1px solid #e4edf5}
 .header-inner{max-width:1160px;min-height:76px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;box-sizing:border-box}

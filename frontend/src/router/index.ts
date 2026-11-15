@@ -3,7 +3,7 @@ import { useAuthStore } from '@/stores/auth';
 
 const legacyDestinations: Record<string, string> = {
   'my-patient-record': 'patient-portal-my-record',
-  'booking-request-review': 'management-booking-request-review',
+  'booking-request-review': 'management-appointments',
   'medicine-stock': 'management-medicine-stock',
   'chair-status': 'management-chair-status',
   'scheduling-settings': 'management-scheduling-settings',
@@ -21,9 +21,9 @@ const legacyDestinations: Record<string, string> = {
   'service-catalog': 'management-service-catalog',
   'patient-invoices': 'patient-portal-invoices',
   'invoice-desk': 'management-invoices',
-  'counter-booking': 'management-counter-booking',
+  'counter-booking': 'management-appointments',
   'daily-queue': 'management-daily-queue',
-  'appointment-desk': 'management-appointment-desk',
+  'appointment-desk': 'management-appointments',
   'patient-appointment-history': 'patient-portal-appointments-history',
   'admin-staff': 'management-admin-staff',
   'admin-audit-logs': 'management-audit-logs',
@@ -49,7 +49,7 @@ const router = createRouter({
   routes: [
     // ==================== KHU VỰC BỆNH NHÂN (/patient/*) ====================
     { path: '/patient/my-record', name: 'patient-portal-my-record', component: () => import('@/views/MyPatientRecordView.vue'), meta: { requiresAuth: true, roles: ['PATIENT'] } },
-    { path: '/patient/appointments', name: 'patient-portal-appointments', component: () => import('@/views/AppointmentsView.vue'), meta: { requiresAuth: true, roles: ['PATIENT'] } },
+    { path: '/patient/appointments', redirect: { path: '/patient/appointments/mine', query: { tab: 'book' } } },
     { path: '/patient/appointments/mine', name: 'patient-portal-appointments-history', component: () => import('@/views/PatientAppointmentHistoryView.vue'), meta: { requiresAuth: true, roles: ['PATIENT'] } },
     { path: '/patient/invoices/mine', name: 'patient-portal-invoices', component: () => import('@/views/PatientInvoicesView.vue'), meta: { requiresAuth: true, roles: ['PATIENT'] } },
     { path: '/patient/dashboard', name: 'patient-portal-dashboard', component: () => import('@/views/PatientDashboardView.vue'), meta: { requiresAuth: true, roles: ['PATIENT'] } },
@@ -67,9 +67,10 @@ const router = createRouter({
     { path: '/management/queue/check-in', name: 'management-queue-check-in', component: () => import('@/views/QueueCheckInView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST'] } },
     { path: '/management/patients', name: 'management-patients', component: () => import('@/views/PatientsView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST', 'DENTIST', 'ASSISTANT'] } },
     { path: '/management/patients/:id(\\d+)', name: 'management-patient-detail', component: () => import('@/views/PatientDetailView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST', 'DENTIST', 'ASSISTANT'] } },
-    { path: '/management/appointments/requests', name: 'management-booking-request-review', component: () => import('@/views/BookingRequestReviewView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST'] } },
-    { path: '/management/appointments/counter', name: 'management-counter-booking', component: () => import('@/views/CounterBookingView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST'] } },
-    { path: '/management/appointments/desk', name: 'management-appointment-desk', component: () => import('@/views/AppointmentDeskView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST'] } },
+    { path: '/management/appointments', name: 'management-appointments', component: () => import('@/views/AppointmentsManagementView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST'] } },
+    { path: '/management/appointments/requests', redirect: (to) => ({ path: '/management/appointments', query: { ...to.query, tab: 'requests' } }) },
+    { path: '/management/appointments/counter', redirect: (to) => ({ path: '/management/appointments', query: { ...to.query, tab: 'counter' } }) },
+    { path: '/management/appointments/desk', redirect: (to) => ({ path: '/management/appointments', query: { ...to.query, tab: 'desk' } }) },
     { path: '/management/invoices', name: 'management-invoices', component: () => import('@/views/InvoicesView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'RECEPTIONIST'] } },
     { path: '/management/clinical/diagnosis', name: 'management-clinical-diagnosis', component: () => import('@/views/ClinicalDiagnosisView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'DENTIST'] } },
     { path: '/management/clinical/visits/:visitId/images', name: 'management-tooth-images', component: () => import('@/views/ToothImageLookupView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'DENTIST', 'RECEPTIONIST'] } },

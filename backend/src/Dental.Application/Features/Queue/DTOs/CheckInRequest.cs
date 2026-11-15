@@ -10,5 +10,8 @@ public sealed record CheckInRequest(
     string? CitizenId = null,
     string? Phone = null,
     IdentityDocumentType? DocumentType = null,
-    string? NationalityCode = null
+    string? NationalityCode = null,
+    string? GuardianFullName = null,
+    string? GuardianRelationship = null,
+    bool GuardianVerifiedAtCounter = false
 );

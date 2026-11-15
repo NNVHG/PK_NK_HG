@@ -11,5 +11,6 @@ public enum QueueStatus
     Cancelled = 4,        // Đã hủy
     InImaging = 5,        // Đang chụp ảnh
     Calling = 6,         // Đang mời vào phòng, chưa bắt đầu khám
-    Skipped = 7          // Vắng mặt trước khi khám; giữ InImaging=5 (DL-259)
+    Skipped = 7,         // Vắng mặt trước khi khám; giữ InImaging=5 (DL-259)
+    Paused = 8           // Tạm dừng khám, nhả phòng/ghế để bàn giao hoặc chờ tiếp tục
 }

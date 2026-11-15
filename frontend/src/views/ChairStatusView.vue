@@ -1,34 +1,34 @@
 <template>
   <section class="chair-status" aria-labelledby="chair-status-title">
     <div class="header-banner">
-      <div class="header-icon">💺</div>
+      <div class="header-icon">🏥</div>
       <div>
-        <h1 id="chair-status-title">Trạng thái ghế và phòng điều trị</h1>
-        <p class="subtitle">Quản lý khả năng sẵn sàng, bảo trì hoặc ngừng sử dụng của từng ghế điều trị theo thời gian thực.</p>
+        <h1 id="chair-status-title">Trạng thái phòng điều trị</h1>
+        <p class="subtitle">Quản lý khả năng sẵn sàng, bảo trì hoặc ngừng sử dụng của từng phòng điều trị theo thời gian thực.</p>
       </div>
     </div>
 
     <div class="rules-card">
       <div class="rule-item">
         <span class="rule-icon">ℹ️</span>
-        <span>Ghế đã được nha sĩ chọn cần được nha sĩ/Admin đổi hoặc bỏ vị trí trước. <router-link to="/management/staff/workspace" class="link-btn">Mở vị trí làm việc →</router-link></span>
+        <span>Phòng đã được nha sĩ chọn nhận ca cần được nha sĩ/Admin đổi hoặc bỏ phòng trước. <router-link to="/management/staff/workspace" class="link-btn">Mở phân bổ phòng làm việc →</router-link></span>
       </div>
       <div class="rule-item">
         <span class="rule-icon">🔒</span>
-        <span>Ghế <strong>Đang phục vụ</strong> chỉ được giải phóng tự động khi ca khám hoàn tất hoặc bị hủy hợp lệ.</span>
+        <span>Phòng <strong>Đang phục vụ</strong> chỉ được giải phóng tự động khi ca khám hoàn tất hoặc bị hủy hợp lệ.</span>
       </div>
     </div>
 
     <form class="filters-card" @submit.prevent="load(1)">
       <div class="filter-group">
-        <label for="chair-search-input">Tìm mã ghế hoặc phòng</label>
+        <label for="chair-search-input">Tìm phòng điều trị</label>
         <div class="input-with-icon">
           <span class="input-icon">🔍</span>
-          <input id="chair-search-input" v-model="keyword" placeholder="Nhập mã ghế hoặc tên phòng..." maxlength="100" :disabled="saving" />
+          <input id="chair-search-input" v-model="keyword" placeholder="Nhập tên phòng điều trị..." maxlength="100" :disabled="saving" />
         </div>
       </div>
       <div class="filter-group">
-        <label for="chair-status-filter">Trạng thái ghế</label>
+        <label for="chair-status-filter">Trạng thái phòng</label>
         <select id="chair-status-filter" v-model.number="filterStatus" :disabled="saving">
           <option :value="0">Tất cả trạng thái</option>
           <option :value="1">🟢 Sẵn sàng</option>
@@ -49,11 +49,11 @@
 
     <div v-if="loading" class="loading-state" role="status">
       <div class="spinner"></div>
-      <p>Đang tải danh sách ghế điều trị…</p>
+      <p>Đang tải danh sách phòng điều trị…</p>
     </div>
 
     <div v-else-if="store.result && !store.result.items.length" class="empty-state">
-      <p>Không tìm thấy ghế điều trị nào phù hợp với bộ lọc hiện tại.</p>
+      <p>Không tìm thấy phòng điều trị nào phù hợp với bộ lọc hiện tại.</p>
     </div>
     <div v-else class="chairs-grid">
       <article
@@ -68,7 +68,7 @@
         }"
       >
         <div class="chair-card-header">
-          <div class="chair-badge-id">{{ chair.chairNumber }}</div>
+          <div class="chair-badge-id">Phòng: {{ chair.roomName }}</div>
           <span
             class="chair-status-badge"
             :class="{
@@ -82,14 +82,14 @@
           </span>
         </div>
 
-        <div class="chair-room-name">📍 {{ chair.roomName }}</div>
+        <div class="chair-room-name">🏷️ Mã thiết lập: {{ chair.chairNumber }}</div>
 
         <div class="chair-card-notes">
           <p v-if="chair.status === 2 || chair.hasActiveVisit" class="note-busy">
-            🔒 Ghế đang phục vụ ca khám thực tế; không thể đổi thủ công.
+            🔒 Phòng đang phục vụ ca khám thực tế; không thể đổi thủ công.
           </p>
           <p v-else-if="chair.isAssigned" class="note-assigned">
-            👤 Đã có nha sĩ nhận ghế hôm nay. Cần đổi vị trí trước khi thay đổi trạng thái.
+            👤 Đã có nha sĩ nhận phòng hôm nay. Cần đổi phòng trước khi thay đổi trạng thái.
           </p>
           <p v-else class="note-ready">
             ✨ Sẵn sàng tiếp nhận bệnh nhân hoặc điều chỉnh trạng thái bảo trì.
@@ -101,7 +101,7 @@
             type="button"
             class="btn btn-action"
             :disabled="!canEdit(chair)"
-            :aria-label="'Đổi trạng thái ghế ' + chair.chairNumber"
+            :aria-label="'Đổi trạng thái phòng ' + chair.roomName"
             @click="open(chair, $event)"
           >
             ⚙️ Đổi trạng thái
@@ -110,9 +110,9 @@
       </article>
     </div>
 
-    <nav v-if="store.result && store.result.totalCount > 0" class="pagination-bar" aria-label="Phân trang trạng thái ghế">
+    <nav v-if="store.result && store.result.totalCount > 0" class="pagination-bar" aria-label="Phân trang trạng thái phòng điều trị">
       <div class="pagination-info">
-        Tổng số: <strong>{{ store.result.totalCount }}</strong> ghế · Trang <strong>{{ store.result.page }}</strong>
+        Tổng số: <strong>{{ store.result.totalCount }}</strong> phòng · Trang <strong>{{ store.result.page }}</strong>
       </div>
       <div class="pagination-controls">
         <button class="btn btn-outline" :disabled="loading || saving || store.result.page <= 1" @click="load(store.result.page - 1)">
@@ -128,14 +128,14 @@
       <div class="editor-card" role="dialog" aria-labelledby="chair-edit-title" aria-modal="true">
         <div class="editor-header">
           <h2 id="chair-edit-title" ref="editorHeading" tabindex="-1">
-            Đổi trạng thái: {{ selected.chairNumber }}
+            Đổi trạng thái: {{ selected.roomName }}
           </h2>
           <button type="button" class="btn-close" :disabled="saving" @click="close" aria-label="Đóng">✕</button>
         </div>
 
         <form class="editor-form" @submit.prevent="save">
           <div class="current-meta">
-            <div>Phòng: <strong>{{ selected.roomName }}</strong></div>
+            <div>Phòng điều trị: <strong>{{ selected.roomName }}</strong> (Mã: {{ selected.chairNumber }})</div>
             <div>Trạng thái hiện tại: <span class="badge-current">{{ selected.statusText }}</span></div>
           </div>
 
@@ -150,7 +150,7 @@
 
           <label class="confirmation-label">
             <input v-model="confirmed" type="checkbox" :disabled="saving || needsReview" />
-            <span>Tôi đã kiểm tra đúng ghế và xác nhận chuyển sang trạng thái mới.</span>
+            <span>Tôi đã kiểm tra đúng phòng điều trị và xác nhận chuyển sang trạng thái mới.</span>
           </label>
 
           <div class="editor-actions">

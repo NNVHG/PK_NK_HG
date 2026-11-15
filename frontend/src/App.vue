@@ -45,19 +45,14 @@
             <span>Hồ sơ của tôi</span>
           </router-link>
 
-          <router-link to="/patient/appointments" class="patient-nav-item">
-            <svg class="p-nav-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            <span>Đặt lịch khám</span>
-          </router-link>
-
           <router-link to="/patient/appointments/mine" class="patient-nav-item">
             <svg class="p-nav-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            <span>Lịch hẹn của tôi</span>
+            <span>Lịch hẹn</span>
           </router-link>
 
           <router-link to="/patient/invoices/mine" class="patient-nav-item">
             <svg class="p-nav-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-            <span>Hóa đơn & Chi phí</span>
+            <span>Hóa đơn</span>
           </router-link>
 
         </nav>
@@ -152,7 +147,10 @@
 
             <span class="nav-caption caption-admin">⚙️ Thiết Lập Phòng Khám</span>
             <router-link to="/management/admin/chairs">
-              <span class="nav-icon">🪑</span> Phòng & ghế nha khoa
+              <span class="nav-icon">🏥</span> Danh mục phòng điều trị
+            </router-link>
+            <router-link to="/management/staff/chair-status">
+              <span class="nav-icon">🪑</span> Trạng thái phòng điều trị
             </router-link>
             <router-link to="/management/admin/scheduling-settings">
               <span class="nav-icon">⏰</span> Giờ làm việc & hẹn
@@ -165,49 +163,87 @@
           <!-- Lễ tân / Thu ngân -->
           <template v-else-if="authStore.role === 'RECEPTIONIST'">
             <span class="nav-caption">Tổng quan</span>
-            <router-link to="/management/dashboard">Bảng điều khiển</router-link>
+            <router-link to="/management/dashboard">
+              <span class="nav-icon">📊</span> Bảng điều khiển
+            </router-link>
 
-            <span class="nav-caption">📋 Lễ tân / Thu ngân</span>
-            <router-link to="/management/appointments/requests">Yêu cầu đặt lịch</router-link>
-            <router-link to="/management/appointments/counter">Đặt lịch tại quầy</router-link>
-            <router-link to="/management/appointments/desk">Lịch hẹn tại quầy</router-link>
-            <router-link to="/management/invoices">Tra cứu hóa đơn</router-link>
-            <router-link to="/management/queue/check-in">Tiếp đón & Check-in</router-link>
+            <span class="nav-caption">📅 Lịch hẹn</span>
+            <router-link to="/management/appointments">
+              <span class="nav-icon">📅</span> Lịch hẹn
+            </router-link>
 
-            <span class="nav-caption">👥 Dùng chung (2+ vai trò)</span>
-            <router-link to="/management/queue/today">Hàng đợi hôm nay</router-link>
-            <router-link to="/management/patients">Bệnh nhân</router-link>
+            <span class="nav-caption">📋 Tiếp đón & Thanh toán</span>
+            <router-link to="/management/queue/check-in">
+              <span class="nav-icon">🎫</span> Tiếp đón & Check-in
+            </router-link>
+            <router-link to="/management/invoices">
+              <span class="nav-icon">💳</span> Tra cứu & Thu tiền
+            </router-link>
+
+            <span class="nav-caption">👥 Dùng chung</span>
+            <router-link to="/management/queue/today">
+              <span class="nav-icon">⏳</span> Hàng đợi hôm nay
+            </router-link>
+            <router-link to="/management/patients">
+              <span class="nav-icon">👤</span> Hồ sơ bệnh nhân
+            </router-link>
           </template>
 
           <!-- Nha sĩ -->
           <template v-else-if="authStore.role === 'DENTIST'">
             <span class="nav-caption">Tổng quan</span>
-            <router-link to="/management/dashboard">Bảng điều khiển</router-link>
+            <router-link to="/management/dashboard">
+              <span class="nav-icon">📊</span> Bảng điều khiển
+            </router-link>
 
             <span class="nav-caption">🦷 Nghiệp vụ Nha sĩ</span>
-            <router-link to="/management/clinical/diagnosis">Khám & chẩn đoán</router-link>
-            <router-link to="/management/inventory/receipts">Xem tồn vật tư</router-link>
+            <router-link to="/management/clinical/diagnosis">
+              <span class="nav-icon">🩺</span> Khám & chẩn đoán FDI
+            </router-link>
+            <router-link to="/management/inventory/receipts">
+              <span class="nav-icon">📦</span> Xem tồn vật tư
+            </router-link>
 
-            <span class="nav-caption">👥 Dùng chung (2+ vai trò)</span>
-            <router-link to="/management/queue/today">Hàng đợi hôm nay</router-link>
-            <router-link to="/management/patients">Bệnh nhân</router-link>
-            <router-link to="/management/staff/workspace">Vị trí nha sĩ/phụ tá</router-link>
+            <span class="nav-caption">👥 Dùng chung</span>
+            <router-link to="/management/queue/today">
+              <span class="nav-icon">⏳</span> Hàng đợi hôm nay
+            </router-link>
+            <router-link to="/management/patients">
+              <span class="nav-icon">👤</span> Hồ sơ bệnh nhân
+            </router-link>
+            <router-link to="/management/staff/workspace">
+              <span class="nav-icon">🏥</span> Phòng làm việc
+            </router-link>
           </template>
 
           <!-- Phụ tá -->
           <template v-else-if="authStore.role === 'ASSISTANT'">
             <span class="nav-caption">Tổng quan</span>
-            <router-link to="/management/dashboard">Bảng điều khiển</router-link>
+            <router-link to="/management/dashboard">
+              <span class="nav-icon">📊</span> Bảng điều khiển
+            </router-link>
 
             <span class="nav-caption">🧤 Nghiệp vụ Phụ tá</span>
-            <router-link to="/management/staff/chair-status">Trạng thái ghế</router-link>
-            <router-link to="/management/inventory/receipts">Tồn kho & nhập kho</router-link>
-            <router-link to="/management/inventory/issues">Tiêu hao theo ca</router-link>
+            <router-link to="/management/staff/chair-status">
+              <span class="nav-icon">🏥</span> Trạng thái phòng điều trị
+            </router-link>
+            <router-link to="/management/inventory/receipts">
+              <span class="nav-icon">📥</span> Tồn kho & nhập kho
+            </router-link>
+            <router-link to="/management/inventory/issues">
+              <span class="nav-icon">📋</span> Tiêu hao theo ca
+            </router-link>
 
-            <span class="nav-caption">👥 Dùng chung (2+ vai trò)</span>
-            <router-link to="/management/queue/today">Hàng đợi hôm nay</router-link>
-            <router-link to="/management/patients">Bệnh nhân</router-link>
-            <router-link to="/management/staff/workspace">Vị trí nha sĩ/phụ tá</router-link>
+            <span class="nav-caption">👥 Dùng chung</span>
+            <router-link to="/management/queue/today">
+              <span class="nav-icon">⏳</span> Hàng đợi hôm nay
+            </router-link>
+            <router-link to="/management/patients">
+              <span class="nav-icon">👤</span> Hồ sơ bệnh nhân
+            </router-link>
+            <router-link to="/management/staff/workspace">
+              <span class="nav-icon">📍</span> Nhóm & phòng làm việc
+            </router-link>
           </template>
         </nav>
 
@@ -265,23 +301,21 @@
         <nav class="nav-links nav-links--actors" aria-label="Nghiệp vụ các vai trò khác">
           <span class="nav-caption caption-reception">📋 Tiếp Đón & Thu Ngân</span>
           <router-link to="/management/queue/check-in">Tiếp đón & Check-in</router-link>
-          <router-link to="/management/appointments/requests">Yêu cầu đặt lịch</router-link>
-          <router-link to="/management/appointments/counter">Đặt lịch tại quầy</router-link>
-          <router-link to="/management/appointments/desk">Lịch hẹn tại quầy</router-link>
+          <router-link to="/management/appointments">Lịch hẹn</router-link>
           <router-link to="/management/invoices">Tra cứu & Thu hóa đơn</router-link>
 
           <span class="nav-caption caption-dentist">🦷 Khám & Điều Trị</span>
           <router-link to="/management/clinical/diagnosis">Khám lâm sàng & FDI</router-link>
 
           <span class="nav-caption caption-assistant">🧤 Phụ Tá Điều Trị</span>
-          <router-link to="/management/staff/chair-status">Trạng thái 6 ghế</router-link>
+          <router-link to="/management/staff/chair-status">Trạng thái phòng điều trị</router-link>
           <router-link to="/management/inventory/receipts">Tồn kho & nhập kho</router-link>
           <router-link to="/management/inventory/issues">Tiêu hao theo ca</router-link>
 
           <span class="nav-caption caption-shared">🔄 Phối Hợp Lâm Sàng</span>
           <router-link to="/management/queue/today">Hàng đợi hôm nay</router-link>
           <router-link to="/management/patients">Bệnh nhân & CCCD</router-link>
-          <router-link to="/management/staff/workspace">Vị trí nha sĩ/phụ tá</router-link>
+          <router-link to="/management/staff/workspace">Phòng làm việc nhân sự</router-link>
         </nav>
       </div>
     </aside>
@@ -779,6 +813,7 @@ async function handleLogout() {
 .user-name {
   font-weight: 750;
   color: #ffffff;
+  overflow-wrap: anywhere;
 }
 
 .user-role-badge {
@@ -789,6 +824,8 @@ async function handleLogout() {
 
 .btn-logout {
   width: 100%;
+  box-sizing: border-box;
+  flex-shrink: 0;
   border: 1px solid #758ca9;
   border-radius: 6px;
   color: #ffffff;
