@@ -211,7 +211,7 @@ onMounted(() => { void loadStock(); void loadHistory(); });
 
             <label class="confirm-checkbox">
               <input v-model="confirmed" type="checkbox" required />
-              <span>Tôi đã kiểm tra kỹ tên vật tư, đơn vị tính và số lượng thực tế. Bấm xác nhận sẽ chính thức <strong>cộng tồn kho và sinh phiếu nhập</strong>.</span>
+              <span>Tôi đã kiểm tra vật tư, bao gồm tên, đơn vị tính và số lượng thực tế. Bấm xác nhận sẽ chính thức <strong>cộng tồn kho và sinh phiếu nhập</strong>.</span>
             </label>
           </fieldset>
 
