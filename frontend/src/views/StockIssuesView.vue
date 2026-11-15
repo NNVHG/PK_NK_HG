@@ -145,7 +145,7 @@ onMounted(() => { void loadTargets(); void loadStock(); if (visitId.value > 0) v
             <h3>📜 Tiêu hao đã xác nhận của ca này</h3>
             <button class="btn btn-outline-sm" :disabled="historyBusy" @click="loadHistory()">🔄 Tải lại lịch sử</button>
           </div>
-          <p class="history-hint">Đối chiếu danh sách dưới đây để tránh ghi trùng lượng vật tư đã trừ tồn kho trước đó.</p>
+          <p class="history-hint">Mỗi phiếu mới chỉ ghi phần bổ sung; hãy đối chiếu danh sách dưới đây để tránh ghi trùng lượng vật tư đã trừ tồn kho trước đó.</p>
 
           <div v-if="historyError" class="alert-box alert-error" role="alert">⚠️ {{ historyError }}</div>
           <div v-if="historyBusy" class="loading-state-sm" role="status">Đang đối chiếu lịch sử…</div>
@@ -313,7 +313,7 @@ onMounted(() => { void loadTargets(); void loadStock(); if (visitId.value > 0) v
 
             <label class="confirm-checkbox">
               <input v-model="confirmed" type="checkbox" required />
-              <span>Tôi đã đối chiếu đúng ca điều trị, đơn vị tính và số lượng thực tế. Xác nhận sẽ chính thức <strong>trừ tồn kho và lưu phiếu</strong>.</span>
+              <span>Tôi đã đối chiếu ca điều trị, đơn vị tính và số lượng thực tế. Xác nhận sẽ chính thức <strong>trừ tồn kho và lưu phiếu</strong>.</span>
             </label>
           </fieldset>
 
