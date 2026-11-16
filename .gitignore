@@ -46,6 +46,7 @@ PROJECT_STATUS.md
 /.security-audit/
 /.audit/
 /runs/
+LUONG_HOAT_DONG_VAI_TRO.md
 
 # Bản xuất bộ nhận diện lưu riêng; tài nguyên web nằm trong frontend/public.
 /frontend/src/assets/nha-khoa-hoang-gia-brand-kit/
@@ -77,3 +78,5 @@ ehthumbs.db
 
 # Private uploaded clinical files are runtime data, never source files.
 **/uploads/
+
+
