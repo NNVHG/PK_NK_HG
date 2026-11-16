@@ -37,14 +37,14 @@ public static partial class ClinicalDemoDataSeeder
         // 1. Phân công ghế và phòng khám (MOD_MST / MOD_ASS)
         await SeedWorkspacesAsync(db, dentist1, dentist2, assistant1, assistant2, adminId, now, ct);
 
-        // 2. Hồ sơ bệnh nhân (MOD_PAT)
-        var (p1, p2, p3, p4) = await SeedPatientsAsync(db, patientUser1, patientUser2, patientUser3, now, ct);
+        // 2. Hồ sơ bệnh nhân & quan hệ giám hộ (MOD_PAT)
+        var (p1, p2, p3, p4, p5) = await SeedPatientsAsync(db, patientUser1, patientUser2, patientUser3, receptionist1, now, ct);
 
-        // 3. Lịch hẹn, Hàng đợi tiếp đón, Ca khám (MOD_APP / MOD_CHK)
-        var (appt1, appt2, v1, v2) = await SeedVisitsAndQueueAsync(db, p1, p2, p3, p4, dentist1, dentist2, receptionist1, today, now, ct);
+        // 3. Yêu cầu đặt lịch trực tuyến, Lịch hẹn, Hàng đợi tiếp đón, Ca khám (MOD_APP / MOD_CHK)
+        var (appt1, appt2, v1, v2, v3, v4) = await SeedVisitsAndQueueAsync(db, p1, p2, p3, p4, p5, dentist1, dentist2, receptionist1, today, now, ct);
 
         // 4. Nghiệp vụ chuyên môn, Dược, Tài chính & Kho (MOD_FDI / MOD_RX / MOD_BIL / MOD_INV)
-        await SeedClinicalAndInventoryAsync(db, p1, p2, v1, v2, dentist1, receptionist1, assistant1, adminId, today, now, ct);
+        await SeedClinicalAndInventoryAsync(db, p1, p2, p4, v1, v2, v3, v4, dentist1, dentist2, receptionist1, assistant1, adminId, today, now, ct);
 
         logger.LogInformation("ClinicalDemoDataSeeder: Hoàn tất seed dữ liệu lâm sàng và vận hành demo.");
     }

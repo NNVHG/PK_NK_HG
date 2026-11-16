@@ -1,118 +1,192 @@
-# ==============================================================================
-# SCRIPT KHOI CHAY TU DONG HE THONG PHONG KHAM NHA KHOA HOANG GIA (PK_NK_HG)
-# Tuong thich: Windows PowerShell 5.1+ va PowerShell 7+
-# ==============================================================================
+﻿# Khởi chạy hệ thống phòng khám Hoàng Gia trên Windows.
+# Cần .NET SDK 10, Node.js 20+ và Docker Desktop đang chạy.
 param(
     [switch]$SkipDocker
 )
 
-$ErrorActionPreference = "Stop"
-Set-Location $PSScriptRoot
+$ErrorActionPreference = 'Stop'
+Set-Location -LiteralPath $PSScriptRoot
 
-function Test-PortListening([int]$Port) {
-    $conn = Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue
-    return ($null -ne $conn)
-}
-
-Write-Host "======================================================" -ForegroundColor Cyan
-Write-Host "  KHOI CHAY HE THONG PHONG KHAM NHA KHOA HOANG GIA    " -ForegroundColor Cyan
-Write-Host "======================================================" -ForegroundColor Cyan
-
-# 1. Kiem tra cong cu bat buoc (.NET SDK & Node.js)
-Write-Host "`n[1/5] Kiem tra cong cu yeu cau (.NET SDK & Node.js)..." -ForegroundColor Yellow
-if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
-    Write-Host "  [LOI] Chua cai dat .NET SDK 10.0. Tai tai: https://dotnet.microsoft.com/download/dotnet/10.0" -ForegroundColor Red
+function Stop-WithMessage([string]$Message) {
+    Write-Host "`n[LỖI] $Message" -ForegroundColor Red
     exit 1
 }
-if (-not (Get-Command node -ErrorAction SilentlyContinue) -or -not (Get-Command npm.cmd -ErrorAction SilentlyContinue)) {
-    Write-Host "  [LOI] Chua cai dat Node.js. Tai tai: https://nodejs.org/" -ForegroundColor Red
-    exit 1
-}
-Write-Host "  -> .NET SDK: $(dotnet --version) | Node.js: $(node -v)" -ForegroundColor Green
 
-# 2. Tu dong tao cau hinh Development mau neu chua co
-Write-Host "`n[2/5] Kiem tra tep cau hinh moi truong Development..." -ForegroundColor Yellow
-$devConfigPath = Join-Path $PSScriptRoot "backend/src/Dental.Api/appsettings.Development.json"
-$exampleConfigPath = Join-Path $PSScriptRoot "backend/src/Dental.Api/appsettings.Development.example.json"
-
-if (-not (Test-Path $devConfigPath)) {
-    if (Test-Path $exampleConfigPath) {
-        Copy-Item -Path $exampleConfigPath -Destination $devConfigPath -Force
-        Write-Host "  -> Da tu dong tao appsettings.Development.json tu tep mau (bat san du lieu demo 5 vai tro)." -ForegroundColor Green
-    } else {
-        Write-Host "  [LOI] Khong tim thay tep mau: $exampleConfigPath" -ForegroundColor Red
-        exit 1
+function Test-TcpPort([int]$Port) {
+    $client = New-Object System.Net.Sockets.TcpClient
+    try {
+        $task = $client.ConnectAsync('127.0.0.1', $Port)
+        return $task.Wait(500) -and $client.Connected
     }
-} else {
-    Write-Host "  -> Da co san appsettings.Development.json." -ForegroundColor Green
+    catch {
+        return $false
+    }
+    finally {
+        $client.Dispose()
+    }
 }
 
-# 3. Khoi dong co so du lieu PostgreSQL 16
-Write-Host "`n[3/5] Kiem tra va khoi dong PostgreSQL (cong 5432)..." -ForegroundColor Yellow
-if (-not $SkipDocker -and (Get-Command docker -ErrorAction SilentlyContinue)) {
-    $existingContainer = docker ps -a --filter "name=^/dental_db$" --format "{{.Names}}" 2>$null
-    if ($existingContainer -eq "dental_db") {
-        docker start dental_db *> $null
-    } else {
-        docker compose up -d postgres
-    }
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "  [CANH BAO] Khong the khoi dong container 'dental_db'. Hay bat Docker Desktop hoac dam bao PostgreSQL 16 local dang chay cong 5432." -ForegroundColor Magenta
-    } else {
-        Write-Host "  -> Dang doi PostgreSQL trong container 'dental_db' san sang..." -ForegroundColor Gray
-        for ($i = 0; $i -lt 30; $i++) {
-            docker exec dental_db pg_isready -U postgres -d dental_clinic *> $null
-            if ($LASTEXITCODE -eq 0) { break }
-            Start-Sleep -Seconds 1
+function Wait-HttpEndpoint([string]$Url, [string]$Name, [int]$TimeoutSeconds = 120) {
+    Write-Host "  Đang chờ $Name sẵn sàng..." -ForegroundColor Gray
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        try {
+            $null = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 3
+            Write-Host "  Đã sẵn sàng: $Url" -ForegroundColor Green
+            return $true
         }
-        Write-Host "  -> Co so du lieu PostgreSQL (dental_db) da san sang tai cong 5432." -ForegroundColor Green
+        catch {
+            Start-Sleep -Seconds 2
+        }
     }
-} else {
-    Write-Host "  -> Bo qua Docker. Dam bao PostgreSQL 16 local dang chay cong 5432 (Database: dental_clinic)." -ForegroundColor Magenta
+    return $false
 }
 
-# 4. Cai dat thu vien Frontend lan dau (neu chua co node_modules)
-Write-Host "`n[4/5] Kiem tra thu vien giao dien (frontend/node_modules)..." -ForegroundColor Yellow
-$nodeModulesPath = Join-Path $PSScriptRoot "frontend/node_modules"
-if (-not (Test-Path $nodeModulesPath)) {
-    Write-Host "  -> Lan chay dau tien: dang cai dat thu vien npm cho Frontend (vui long doi 15-30 giay)..." -ForegroundColor Cyan
-    npm.cmd --prefix (Join-Path $PSScriptRoot "frontend") install
+Write-Host '======================================================' -ForegroundColor Cyan
+Write-Host '  KHỞI CHẠY PHÒNG KHÁM NHA KHOA HOÀNG GIA' -ForegroundColor Cyan
+Write-Host '======================================================' -ForegroundColor Cyan
+
+# 1. Kiểm tra công cụ và phiên bản tối thiểu.
+Write-Host "`n[1/5] Kiểm tra công cụ..." -ForegroundColor Yellow
+$dotnetCommand = Get-Command dotnet -ErrorAction SilentlyContinue
+if (-not $dotnetCommand) {
+    Stop-WithMessage 'Chưa cài .NET SDK 10. Tải tại https://dotnet.microsoft.com/download/dotnet/10.0 rồi mở PowerShell mới.'
+}
+$dotnetVersion = (& dotnet --version).Trim()
+if ($LASTEXITCODE -ne 0 -or $dotnetVersion -notmatch '^10\.') {
+    Stop-WithMessage "Dự án cần .NET SDK 10.x, nhưng máy đang chọn phiên bản '$dotnetVersion'. Hãy cài SDK 10 và kiểm tra global.json nếu có."
+}
+
+$nodeCommand = Get-Command node -ErrorAction SilentlyContinue
+$npmCommand = Get-Command npm.cmd -ErrorAction SilentlyContinue
+if (-not $nodeCommand -or -not $npmCommand) {
+    Stop-WithMessage 'Chưa cài Node.js 20+ kèm npm. Cài bản LTS từ https://nodejs.org/ rồi mở PowerShell mới.'
+}
+$nodeVersion = (& node -p 'process.versions.node').Trim()
+$nodeMajor = 0
+if ($nodeVersion -notmatch '^(\d+)\.' -or -not [int]::TryParse($Matches[1], [ref]$nodeMajor) -or $nodeMajor -lt 20) {
+    Stop-WithMessage "Dự án cần Node.js 20 trở lên, nhưng đang có '$nodeVersion'."
+}
+Write-Host "  .NET SDK $dotnetVersion | Node.js $nodeVersion" -ForegroundColor Green
+
+Write-Host "`n[2/6] Khôi phục package Backend..." -ForegroundColor Yellow
+& dotnet restore (Join-Path $PSScriptRoot 'backend/DentalClinic.sln')
+if ($LASTEXITCODE -ne 0) {
+    Stop-WithMessage 'Không khôi phục được NuGet package. Kiểm tra kết nối Internet và chạy lại start-dev.ps1.'
+}
+Write-Host '  NuGet package đã sẵn sàng.' -ForegroundColor Green
+
+# 2. Tạo cấu hình Development từ mẫu nếu chưa có; không ghi đè cấu hình sẵn có.
+Write-Host "`n[3/6] Kiểm tra cấu hình Development..." -ForegroundColor Yellow
+$apiDirectory = Join-Path $PSScriptRoot 'backend/src/Dental.Api'
+$devConfigPath = Join-Path $apiDirectory 'appsettings.Development.json'
+$exampleConfigPath = Join-Path $apiDirectory 'appsettings.Development.example.json'
+if (-not (Test-Path -LiteralPath $devConfigPath)) {
+    if (-not (Test-Path -LiteralPath $exampleConfigPath)) {
+        Stop-WithMessage "Không tìm thấy file cấu hình mẫu: $exampleConfigPath"
+    }
+    Copy-Item -LiteralPath $exampleConfigPath -Destination $devConfigPath
+    Write-Host '  Đã tạo cấu hình Development mẫu. File này chỉ dùng cục bộ và không được commit.' -ForegroundColor Green
+}
+else {
+    Write-Host '  Giữ nguyên cấu hình Development đang có.' -ForegroundColor Green
+}
+try {
+    $null = Get-Content -LiteralPath $devConfigPath -Raw | ConvertFrom-Json
+}
+catch {
+    Stop-WithMessage "File appsettings.Development.json không phải JSON hợp lệ: $($_.Exception.Message)"
+}
+
+# 3. Khởi động PostgreSQL và đợi database sẵn sàng.
+Write-Host "`n[4/6] Kiểm tra PostgreSQL..." -ForegroundColor Yellow
+if (-not $SkipDocker) {
+    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+        Stop-WithMessage 'Chưa cài Docker Desktop. Cài và khởi động Docker Desktop, hoặc dùng -SkipDocker với PostgreSQL 16 đang chạy cục bộ.'
+    }
+    & docker info *> $null
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "  [LOI] Cai dat thu vien npm that bai." -ForegroundColor Red
-        exit 1
+        Stop-WithMessage 'Docker Engine chưa sẵn sàng. Mở Docker Desktop, chờ trạng thái Engine running rồi chạy lại.'
     }
-    Write-Host "  -> Da cai dat xong thu vien Frontend." -ForegroundColor Green
-} else {
-    Write-Host "  -> Da co san frontend/node_modules." -ForegroundColor Green
+    & docker compose up -d postgres
+    if ($LASTEXITCODE -ne 0) {
+        Stop-WithMessage 'Không khởi động được PostgreSQL bằng Docker Compose. Kiểm tra cửa sổ Docker Desktop và cổng 5432.'
+    }
+
+    $databaseReady = $false
+    for ($attempt = 0; $attempt -lt 60; $attempt++) {
+        & docker exec dental_db pg_isready -U postgres -d dental_clinic *> $null
+        if ($LASTEXITCODE -eq 0) {
+            $databaseReady = $true
+            break
+        }
+        Start-Sleep -Seconds 2
+    }
+    if (-not $databaseReady) {
+        Stop-WithMessage 'PostgreSQL không sẵn sàng sau 2 phút. Xem log container bằng: docker logs dental_db'
+    }
+}
+elseif (-not (Test-TcpPort -Port 5432)) {
+    Stop-WithMessage 'Đã chọn -SkipDocker nhưng không kết nối được PostgreSQL tại localhost:5432.'
+}
+Write-Host '  PostgreSQL đã sẵn sàng tại localhost:5432.' -ForegroundColor Green
+
+# 4. Cài đúng phiên bản package trong package-lock.json ở lần chạy đầu.
+Write-Host "`n[5/6] Kiểm tra package Frontend..." -ForegroundColor Yellow
+$frontendDirectory = Join-Path $PSScriptRoot 'frontend'
+$nodeModulesPath = Join-Path $frontendDirectory 'node_modules'
+$packageLockPath = Join-Path $frontendDirectory 'package-lock.json'
+if (-not (Test-Path -LiteralPath $packageLockPath)) {
+    Stop-WithMessage "Không tìm thấy package-lock.json: $packageLockPath"
+}
+if (-not (Test-Path -LiteralPath $nodeModulesPath)) {
+    Write-Host '  Lần đầu chạy: npm ci đang tải package theo lock file...' -ForegroundColor Cyan
+    & npm.cmd --prefix $frontendDirectory ci
+    if ($LASTEXITCODE -ne 0) {
+        Stop-WithMessage 'npm ci thất bại. Kiểm tra kết nối Internet và thử lại.'
+    }
+}
+else {
+    Write-Host '  Đã có frontend/node_modules; bỏ qua cài package.' -ForegroundColor Green
 }
 
-# 5. Khoi chay Backend API (cong 5000) va Frontend Vite (cong 5173)
-Write-Host "`n[5/5] Khoi dong Backend Web API (.NET 10) va Frontend (Vue 3)..." -ForegroundColor Yellow
-
-if (Test-PortListening -Port 5000) {
-    Write-Host "  -> Cong 5000 dang hoat dong (Backend API da chay san)." -ForegroundColor Green
-} else {
-    Start-Process powershell -WorkingDirectory $PSScriptRoot -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", "Write-Host 'Dang chay Backend API tai http://localhost:5000 (tu dong migrate & seed du lieu demo)...' -ForegroundColor Green; dotnet run --project backend/src/Dental.Api"
-    Write-Host "  -> Da mo cua so chay Backend API (http://localhost:5000)." -ForegroundColor Green
+# 5. Mở API và web ở cửa sổ riêng, sau đó xác nhận hai dịch vụ trả lời HTTP.
+Write-Host "`n[6/6] Khởi động Backend API và Frontend..." -ForegroundColor Yellow
+$shellPath = (Get-Process -Id $PID).Path
+if (-not $shellPath) {
+    Stop-WithMessage 'Không xác định được PowerShell hiện tại để mở cửa sổ chạy dịch vụ.'
 }
 
-if (Test-PortListening -Port 5173) {
-    Write-Host "  -> Cong 5173 dang hoat dong (Frontend da chay san)." -ForegroundColor Green
-} else {
-    Start-Process powershell -WorkingDirectory (Join-Path $PSScriptRoot "frontend") -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", "Write-Host 'Dang chay Frontend SPA tai http://localhost:5173...' -ForegroundColor Green; npm.cmd run dev"
-    Write-Host "  -> Da mo cua so chay Frontend SPA (http://localhost:5173)." -ForegroundColor Green
+if (-not (Test-TcpPort -Port 5000)) {
+    Start-Process -FilePath $shellPath -WorkingDirectory $PSScriptRoot -ArgumentList @(
+        '-NoExit', '-ExecutionPolicy', 'Bypass', '-Command', 'dotnet run --project .\backend\src\Dental.Api'
+    ) | Out-Null
+}
+else {
+    Write-Host '  Cổng 5000 đã có dịch vụ; dùng dịch vụ đang chạy.' -ForegroundColor Gray
+}
+
+if (-not (Test-TcpPort -Port 5173)) {
+    Start-Process -FilePath $shellPath -WorkingDirectory $frontendDirectory -ArgumentList @(
+        '-NoExit', '-ExecutionPolicy', 'Bypass', '-Command', 'npm.cmd run dev -- --strictPort'
+    ) | Out-Null
+}
+else {
+    Write-Host '  Cổng 5173 đã có dịch vụ; dùng dịch vụ đang chạy.' -ForegroundColor Gray
+}
+
+$apiReady = Wait-HttpEndpoint -Url 'http://localhost:5000/swagger/index.html' -Name 'Backend API' -TimeoutSeconds 180
+$webReady = Wait-HttpEndpoint -Url 'http://localhost:5173/' -Name 'Frontend' -TimeoutSeconds 90
+if (-not $apiReady -or -not $webReady) {
+    Write-Host 'Kiểm tra cửa sổ Backend/Frontend để xem lỗi chi tiết. Database hiện có không bị xóa bởi script này.' -ForegroundColor Yellow
+    exit 1
 }
 
 Write-Host "`n======================================================" -ForegroundColor Cyan
-Write-Host "  HE THONG DANG KHOI DONG! DIA CHI TRUY CAP:          " -ForegroundColor Green
-Write-Host "  - Giao dien Web : http://localhost:5173" -ForegroundColor White
-Write-Host "  - Backend API   : http://localhost:5000" -ForegroundColor White
-Write-Host "  - Swagger UI    : http://localhost:5000/swagger" -ForegroundColor White
-Write-Host "------------------------------------------------------" -ForegroundColor Cyan
-Write-Host "  TAI KHOAN THU NGHIEM (chi dung cho moi truong Demo):" -ForegroundColor Yellow
-Write-Host "  - Admin         : 0900000001 / AdminPassword@123" -ForegroundColor White
-Write-Host "  - Le tan        : 0900000002 / DemoPassword@123" -ForegroundColor White
-Write-Host "  - Nha si        : 0900000003 / DemoPassword@123" -ForegroundColor White
-Write-Host "  - Phu ta        : 0900000004 / DemoPassword@123" -ForegroundColor White
-Write-Host "  - Benh nhan     : 0900000005 / DemoPassword@123" -ForegroundColor White
-Write-Host "======================================================" -ForegroundColor Cyan
+Write-Host '  HỆ THỐNG ĐÃ SẴN SÀNG' -ForegroundColor Green
+Write-Host '  Web       : http://localhost:5173' -ForegroundColor White
+Write-Host '  Backend   : http://localhost:5000' -ForegroundColor White
+Write-Host '  Swagger   : http://localhost:5000/swagger' -ForegroundColor White
+Write-Host '  Tài khoản demo: xem bảng ở mục 5 của README.md.' -ForegroundColor Yellow
+Write-Host '  Dừng API/web bằng cách đóng các cửa sổ dịch vụ tương ứng.' -ForegroundColor Gray
+Write-Host '======================================================' -ForegroundColor Cyan

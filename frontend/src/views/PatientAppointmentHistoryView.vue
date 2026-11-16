@@ -97,11 +97,11 @@
                 </div>
               </div>
 
-              <div v-if="row.dentistName" class="meta-item">
-                <span class="meta-icon">👨‍⚕️</span>
+              <div v-if="row.notes && row.notes.trim()" class="meta-item">
+                <span class="meta-icon">📝</span>
                 <div>
-                  <span class="meta-title">Nha sĩ phụ trách</span>
-                  <span class="meta-data">{{ row.dentistName }}</span>
+                  <span class="meta-title">Lý do khám bệnh</span>
+                  <span class="meta-data">{{ row.notes }}</span>
                 </div>
               </div>
             </div>
@@ -157,37 +157,39 @@
     </div>
 
     <!-- ==================== POPUP ĐẶT LỊCH KHÁM MỚI ==================== -->
-    <div
-      v-if="showBookingModal"
-      class="booking-modal-backdrop"
-      role="presentation"
-      @click.self="closeBookingModal"
-    >
+    <Teleport to="body">
       <div
-        class="booking-modal-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="booking-modal-title"
+        v-if="showBookingModal"
+        class="booking-modal-backdrop"
+        role="presentation"
+        @click.self="closeBookingModal"
       >
-        <div class="booking-modal-header">
-          <div>
-            <h2 id="booking-modal-title" class="booking-modal-title">📅 Đặt lịch khám mới</h2>
-            <p class="booking-modal-subtitle">Chọn ngày và khung giờ phù hợp để đặt lịch trực tuyến</p>
+        <div
+          class="booking-modal-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="booking-modal-title"
+        >
+          <div class="booking-modal-header">
+            <div>
+              <h2 id="booking-modal-title" class="booking-modal-title">📅 Đặt lịch khám mới</h2>
+              <p class="booking-modal-subtitle">Chọn ngày và khung giờ phù hợp để đặt lịch trực tuyến</p>
+            </div>
+            <button
+              type="button"
+              class="booking-modal-close"
+              aria-label="Đóng cửa sổ đặt lịch"
+              @click="closeBookingModal"
+            >
+              ✕
+            </button>
           </div>
-          <button
-            type="button"
-            class="booking-modal-close"
-            aria-label="Đóng cửa sổ đặt lịch"
-            @click="closeBookingModal"
-          >
-            ✕
-          </button>
-        </div>
-        <div class="booking-modal-body">
-          <PatientAppointmentForm @success="onBookingSuccess" />
+          <div class="booking-modal-body">
+            <PatientAppointmentForm @success="onBookingSuccess" />
+          </div>
         </div>
       </div>
-    </div>
+    </Teleport>
   </main>
 </template>
 

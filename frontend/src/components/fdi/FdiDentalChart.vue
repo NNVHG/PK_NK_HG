@@ -679,10 +679,10 @@ const selectionSummaryText = computed(() => {
 .chart-viewport {
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 12px 4px;
-  background: #f8fafc;
-  border-radius: 8px;
-  border: 1px solid #f1f5f9;
+  padding: 14px 12px;
+  background: #f8fbff;
+  border-radius: 16px;
+  border: 1px solid #e2edf7;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -690,7 +690,7 @@ const selectionSummaryText = computed(() => {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
-  min-width: 780px;
+  min-width: 760px;
   width: 100%;
   gap: 10px;
   transition: transform 0.2s ease;
@@ -701,17 +701,17 @@ const selectionSummaryText = computed(() => {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  max-width: 760px;
+  max-width: 740px;
   padding: 2px 8px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
-  color: #64748b;
-  letter-spacing: 0.5px;
+  color: #526c80;
+  letter-spacing: 0.03em;
 }
 
 .midline-label {
-  color: #94a3b8;
-  font-weight: 600;
+  color: #64748b;
+  font-weight: 700;
 }
 
 .arch-section {
@@ -723,60 +723,59 @@ const selectionSummaryText = computed(() => {
 }
 
 .arch-tag {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
-  color: #475569;
-  letter-spacing: 0.8px;
+  color: #526c80;
+  letter-spacing: 0.04em;
 }
 
 .arch-row {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   width: 100%;
 }
 
 .arch-row.primary-row {
-  opacity: 0.95;
+  opacity: 0.96;
 }
 
 .quadrant {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
 }
 
 .midline-divider {
   width: 2px;
-  height: 48px;
+  height: 92px;
   background-color: #cbd5e1;
-  border-radius: 1px;
-  margin: 0 6px;
+  border-radius: 2px;
+  margin: 0 4px;
 }
 
 .occlusal-plane {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
-  max-width: 760px;
-  margin: 4px 0;
+  max-width: 740px;
+  margin: 6px 0;
 }
 
 .plane-line {
   flex: 1;
-  height: 1px;
-  background: #cbd5e1;
+  height: 0;
+  border-top: 1px dashed #cbd5e1;
 }
 
 .plane-text {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
+  color: #64748b;
+  letter-spacing: 0.03em;
 }
 
 .chart-footer {

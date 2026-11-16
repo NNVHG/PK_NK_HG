@@ -1,8 +1,7 @@
 <template>
   <main class="activation">
     <div class="activation-brand">
-      <img src="/logo-icon.svg" alt="Nha Khoa Hoàng Gia" class="brand-logo" width="44" height="44" />
-      <span class="brand-badge">Nha Khoa Hoàng Gia</span>
+      <img src="/logo-ngang.svg" alt="Nha Khoa Hoàng Gia" class="brand-logo" width="158" height="42" />
     </div>
     <h1>Xác minh số điện thoại</h1>
     <p>Dành cho bệnh nhân mới sau khi Lễ tân đối soát tại quầy, nhân viên mới do Admin tạo và bệnh nhân cần xác minh lại sau khi đổi SĐT. Tài khoản cũ tiếp tục đăng nhập theo trạng thái xác minh hiện tại.</p>
@@ -201,6 +200,9 @@ onUnmounted(() => { disposed = true; generation++; clear(); message.value = ''; 
 
 .brand-logo {
   display: block;
+  width: 158px;
+  height: 42px;
+  object-fit: contain;
 }
 
 h1 {

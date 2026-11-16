@@ -1,14 +1,19 @@
 <template>
   <div
     class="fdi-tooth"
-    :class="{
-      'is-selected': isWholeToothSelected || selectedSurfaces.length > 0,
-      'is-fully-selected': isWholeToothSelected,
-      'is-readonly': readonly
-    }"
+    :class="[
+      {
+        'is-selected': isWholeToothSelected || selectedSurfaces.length > 0,
+        'is-fully-selected': isWholeToothSelected,
+        'is-readonly': readonly,
+        'is-missing': missingTooth
+      },
+      toothStateClass
+    ]"
     role="group"
     :aria-label="toothAriaLabel"
   >
+    <!-- Hàm trên: Số răng -> Hình giải phẫu -> 5 mặt răng -->
     <button
       v-if="showNumber && effectiveNumberPosition === 'top'"
       type="button"
@@ -25,10 +30,34 @@
       {{ toothNumber }}
     </button>
 
+    <button
+      v-if="effectiveNumberPosition === 'top'"
+      type="button"
+      class="tooth-anat-btn"
+      :disabled="readonly"
+      :tabindex="-1"
+      :title="`Chọn cả răng #${toothNumber} (${toothInfo.nameVi})`"
+      @click="onToothNumberClick"
+    >
+      <svg class="t-anat-svg" viewBox="0 0 40 60" aria-hidden="true">
+        <path :d="anatPaths.root" class="svg-root" />
+        <path d="M6,29 Q20,32 34,29" class="svg-gum" />
+        <path :d="anatPaths.crown" class="svg-crown" />
+        <path :d="anatPaths.groove" class="svg-groove" />
+        <circle v-if="dominantColor === 'caries'" cx="20" cy="43" r="4.5" class="svg-caries" />
+        <ellipse v-if="dominantColor === 'restored'" cx="20" cy="43" rx="5.5" ry="3.8" class="svg-filling" />
+        <path v-if="dominantColor === 'treatment'" d="M16,10 L18,42 M24,10 L22,42 M16,42 H24" class="svg-rct" />
+        <g v-if="missingTooth" class="missing-anat-mark">
+          <line x1="9" y1="30" x2="31" y2="52" />
+          <line x1="31" y1="30" x2="9" y2="52" />
+        </g>
+      </svg>
+    </button>
+
     <div class="tooth-surface-target-wrap">
       <svg
-        :width="size"
-        :height="size"
+        :width="surfaceSvgSize"
+        :height="surfaceSvgSize"
         viewBox="0 0 48 48"
         class="tooth-svg"
         xmlns="http://www.w3.org/2000/svg"
@@ -75,6 +104,33 @@
         </text>
       </svg>
     </div>
+
+    <!-- Hàm dưới: 5 mặt răng -> Hình giải phẫu -> Số răng -->
+    <button
+      v-if="effectiveNumberPosition === 'bottom'"
+      type="button"
+      class="tooth-anat-btn"
+      :disabled="readonly"
+      :tabindex="-1"
+      :title="`Chọn cả răng #${toothNumber} (${toothInfo.nameVi})`"
+      @click="onToothNumberClick"
+    >
+      <svg class="t-anat-svg" viewBox="0 0 40 60" aria-hidden="true">
+        <g transform="translate(0,60) scale(1,-1)">
+          <path :d="anatPaths.root" class="svg-root" />
+          <path d="M6,29 Q20,32 34,29" class="svg-gum" />
+          <path :d="anatPaths.crown" class="svg-crown" />
+          <path :d="anatPaths.groove" class="svg-groove" />
+          <circle v-if="dominantColor === 'caries'" cx="20" cy="43" r="4.5" class="svg-caries" />
+          <ellipse v-if="dominantColor === 'restored'" cx="20" cy="43" rx="5.5" ry="3.8" class="svg-filling" />
+          <path v-if="dominantColor === 'treatment'" d="M16,10 L18,42 M24,10 L22,42 M16,42 H24" class="svg-rct" />
+          <g v-if="missingTooth" class="missing-anat-mark">
+            <line x1="9" y1="30" x2="31" y2="52" />
+            <line x1="31" y1="30" x2="9" y2="52" />
+          </g>
+        </g>
+      </svg>
+    </button>
 
     <button
       v-if="showNumber && effectiveNumberPosition === 'bottom'"
@@ -198,6 +254,64 @@ const numberBtnAriaLabel = computed(() => {
   return `Răng ${props.toothNumber}: ${toothInfo.value.nameVi}. ${state}. Nhấn để chọn toàn bộ răng.`;
 });
 
+const surfaceSvgSize = computed(() => Math.min(props.size, 32));
+
+const anatPaths = computed(() => {
+  const num = props.toothNumber;
+  const pos = num % 10;
+  const isChild = num >= 51;
+  const isMolar = isChild ? pos >= 4 : pos >= 6;
+  const isPremolar = !isChild && (pos === 4 || pos === 5);
+  const isCanine = pos === 3;
+  const isUpper = isUpperArch(num);
+
+  if (isMolar) {
+    return {
+      root: isUpper
+        ? 'M8,30 C6,16 8,5 12,4 C14,4 15,15 16,21 C18,12 19,3 20,3 C21,3 22,12 24,21 C25,15 26,4 28,4 C32,5 34,16 32,30 Z'
+        : 'M8,30 C6,16 9,4 14,4 C17,5 18,15 20,21 C22,15 23,5 26,4 C31,4 34,16 32,30 Z',
+      crown: 'M5,29 C3,35 3,47 7,53 C9,56 13,56 16,53 C18,56 22,56 24,53 C27,56 31,56 33,53 C37,47 37,35 35,29 C28,27 12,27 5,29 Z',
+      groove: 'M10,43 Q20,46 30,43 M16,36 L16,51 M24,36 L24,51'
+    };
+  }
+  if (isPremolar) {
+    return {
+      root: 'M12,30 C11,17 13,5 16,4 C18,4 19,12 20,19 C21,12 22,4 24,4 C27,5 29,17 28,30 Z',
+      crown: 'M8,29 C5,34 5,47 9,53 C12,56 17,55 20,52 C23,55 28,56 31,53 C35,47 35,34 32,29 C26,27 14,27 8,29 Z',
+      groove: 'M12,43 Q20,46 28,43 M20,37 L20,50'
+    };
+  }
+  if (isCanine) {
+    return {
+      root: 'M14,30 C13,12 16,2 20,2 C24,2 27,12 26,30 Z',
+      crown: 'M9,29 C7,34 8,45 11,51 L20,58 L29,51 C32,45 33,34 31,29 C26,27 14,27 9,29 Z',
+      groove: 'M20,37 L20,53'
+    };
+  }
+  return {
+    root: 'M14,30 C13,14 16,3 20,3 C24,3 27,14 26,30 Z',
+    crown: 'M9,29 C7,34 7,46 9,53 C13,55 27,55 31,53 C33,46 33,34 31,29 C26,27 14,27 9,29 Z',
+    groove: 'M13,50 H27'
+  };
+});
+
+const dominantColor = computed(() => {
+  if (props.missingTooth) return 'missing';
+  const colors = Object.values(props.conditionBySurface)
+    .map((code) => toothConditionColor(code))
+    .filter((c): c is NonNullable<typeof c> => Boolean(c) && c !== 'healthy');
+  if (colors.includes('caries')) return 'caries';
+  if (colors.includes('treatment')) return 'treatment';
+  if (colors.includes('prosthetic')) return 'prosthetic';
+  if (colors.includes('restored')) return 'restored';
+  return undefined;
+});
+
+const toothStateClass = computed(() => {
+  if (!dominantColor.value) return '';
+  return `st-${dominantColor.value}`;
+});
+
 function onSurfaceClick(surface: ToothSurface) {
   if (props.readonly) return;
   emit('surfaceClick', surface);
@@ -214,34 +328,86 @@ function onToothNumberClick() {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   user-select: none;
-  padding: 3px;
-  border-radius: 8px;
-  transition: background-color 0.15s ease;
-  min-width: 44px;
+  width: 42px;
+  padding: 4px 2px;
+  border: 1.5px solid #dce7f3;
+  border-radius: 10px;
+  background: #ffffff;
+  transition: transform 0.14s ease, border-color 0.14s ease, background-color 0.14s ease, box-shadow 0.14s ease;
 }
+
+.fdi-tooth:hover:not(.is-readonly) {
+  border-color: #397bcc;
+  background: #f4faff;
+  transform: translateY(-1px);
+}
+
+.fdi-tooth.is-selected {
+  border-color: #1857b6;
+  background: #e8f4fd;
+  box-shadow: 0 0 0 2px rgba(24, 87, 182, 0.16);
+}
+
+.fdi-tooth.is-missing {
+  background: #f8fafc;
+  opacity: 0.78;
+}
+
+.tooth-anat-btn {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.tooth-anat-btn:disabled {
+  cursor: default;
+}
+
+.t-anat-svg {
+  width: 30px;
+  height: 44px;
+  display: block;
+}
+
+.svg-root { fill: #f6e7cb; stroke: #948368; stroke-width: 1.3; stroke-linejoin: round; }
+.svg-gum { fill: none; stroke: #f4a5ae; stroke-width: 2.2; stroke-linecap: round; opacity: 0.75; }
+.svg-crown { fill: #ffffff; stroke: #64748b; stroke-width: 1.4; stroke-linejoin: round; }
+.svg-groove { fill: none; stroke: #cbd5e1; stroke-width: 1.1; stroke-linecap: round; }
+.svg-caries { fill: #ef4444; stroke: #991b1b; stroke-width: 1; }
+.svg-filling { fill: #3b82f6; stroke: #1d4ed8; stroke-width: 1; }
+.svg-rct { fill: none; stroke: #8b5cf6; stroke-width: 2; stroke-linecap: round; }
+.missing-anat-mark { stroke: #475569; stroke-width: 2.4; stroke-linecap: round; }
+
+.st-prosthetic .svg-crown { fill: #ede9fe; stroke: #7c3aed; }
+.st-treatment .svg-crown { fill: #fef3c7; stroke: #d97706; }
 
 .tooth-surface-target-wrap {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 44px;
-  min-height: 44px;
+  min-width: 32px;
+  min-height: 32px;
 }
 
 .tooth-number-btn {
   font-family: inherit;
   font-size: 11px;
-  font-weight: 700;
-  color: #18354c;
-  background: #f4faff;
-  border: 1px solid #cbd5e1;
+  font-weight: 800;
+  color: #102e56;
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: 6px;
-  min-width: 32px;
-  min-height: 24px;
-  line-height: 22px;
-  padding: 0 4px;
+  min-width: 30px;
+  min-height: 20px;
+  line-height: 18px;
+  padding: 0 3px;
   cursor: pointer;
   transition: all 0.15s ease;
   display: inline-flex;

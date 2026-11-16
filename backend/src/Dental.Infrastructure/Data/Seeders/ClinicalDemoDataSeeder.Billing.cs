@@ -8,8 +8,8 @@ namespace Dental.Infrastructure.Data.Seeders;
 public static partial class ClinicalDemoDataSeeder
 {
     private static async Task SeedRxAndInvoiceAsync(
-        DentalDbContext db, Visit v1, VisitService vs1, VisitService vs2,
-        User dentist1, User receptionist1, User assistant1, int adminId,
+        DentalDbContext db, Visit v1, Visit v3, VisitService vs1, VisitService vs2, VisitService vs4,
+        User dentist1, User dentist2, User receptionist1, User assistant1, int adminId,
         DateOnly today, DateTime now, CancellationToken ct)
     {
         var medParacetamol = await db.Medicines.FirstOrDefaultAsync(m => m.Code == "MED011", ct);
@@ -48,11 +48,35 @@ public static partial class ClinicalDemoDataSeeder
                 }
             ]
         };
-        db.Prescriptions.Add(rx1);
+        var rx2 = new Prescription
+        {
+            VisitId = v3.VisitId, DoctorId = dentist2.UserId, PrescriptionCode = $"RX-{today.AddDays(-2):yyyyMMdd}-0001",
+            Diagnosis = "Viêm tủy không hồi phục răng 46 (đã mở tủy)",
+            DoctorAdvice = "Tránh nhai bên phải cho đến khi hàn ống tủy vĩnh viễn",
+            RevisitDate = today.AddDays(3), IsCancelled = false,
+            CreatedAt = now.Date.AddDays(-2).AddHours(10).AddMinutes(40), CreatedByUserId = dentist2.UserId, Version = 1,
+            Items =
+            [
+                new PrescriptionItem
+                {
+                    MedicineId = medAmoxi!.Id, MedicineCode = medAmoxi.Code, MedicineName = medAmoxi.Name,
+                    ActiveIngredient = medAmoxi.ActiveIngredient, Strength = "500mg", Unit = medAmoxi.Unit,
+                    Quantity = 15, UnitPrice = 5000m, UsageInstructions = "Uống 1 viên x 3 lần/ngày sau ăn", TreatmentDays = 5,
+                },
+                new PrescriptionItem
+                {
+                    MedicineId = medIbu!.Id, MedicineCode = medIbu.Code, MedicineName = medIbu.Name,
+                    ActiveIngredient = medIbu.ActiveIngredient, Strength = "400mg", Unit = medIbu.Unit,
+                    Quantity = 10, UnitPrice = 3000m, UsageInstructions = "Uống 1 viên khi đau sau ăn", TreatmentDays = 3,
+                }
+            ]
+        };
+        db.Prescriptions.AddRange(rx1, rx2);
         await db.SaveChangesAsync(ct);
 
         var presetFix50 = await db.DiscountPresets.FirstOrDefaultAsync(p => p.Code == "FIX50", ct);
         var rxItems = rx1.Items.ToList();
+        var rx2Items = rx2.Items.ToList();
 
         var invoice1 = new Invoice
         {
@@ -68,8 +92,26 @@ public static partial class ClinicalDemoDataSeeder
                 new InvoiceItem { SourceVisitServiceId = 0, SourcePrescriptionItemId = rxItems[1].Id, ItemType = "Medicine", Code = rxItems[1].MedicineCode, Name = rxItems[1].MedicineName, Quantity = 1, UnitPrice = 65000m, TotalAmount = 65000m }
             ]
         };
-        db.Invoices.Add(invoice1);
+
+        var rx2Total = rx2Items.Sum(x => x.UnitPrice * x.Quantity);
+        var inv2Total = vs4.UnitPrice + rx2Total;
+        var inv2Paid = Math.Min(inv2Total, 800000m);
+        var invoice2 = new Invoice
+        {
+            VisitId = v3.VisitId, InvoiceCode = $"HD-{today.AddDays(-2):yyyyMMdd}-0001",
+            Status = inv2Paid >= inv2Total ? InvoiceStatus.Paid : InvoiceStatus.PartiallyPaid,
+            TotalAmount = inv2Total, PaidAmount = inv2Paid, DiscountAmount = 0m,
+            CreatedByUserId = receptionist1.UserId, CreatedAt = now.Date.AddDays(-2).AddHours(10).AddMinutes(52),
+            Items =
+            [
+                new InvoiceItem { SourceVisitServiceId = vs4.Id, ItemType = "Service", Code = vs4.ServiceCode, Name = vs4.ServiceName, ToothNumber = 46, Surface = "O", Quantity = 1, UnitPrice = vs4.UnitPrice, TotalAmount = vs4.UnitPrice },
+                new InvoiceItem { SourceVisitServiceId = 0, SourcePrescriptionItemId = rx2Items[0].Id, ItemType = "Medicine", Code = rx2Items[0].MedicineCode, Name = rx2Items[0].MedicineName, Quantity = rx2Items[0].Quantity, UnitPrice = rx2Items[0].UnitPrice, TotalAmount = rx2Items[0].UnitPrice * rx2Items[0].Quantity },
+                new InvoiceItem { SourceVisitServiceId = 0, SourcePrescriptionItemId = rx2Items[1].Id, ItemType = "Medicine", Code = rx2Items[1].MedicineCode, Name = rx2Items[1].MedicineName, Quantity = rx2Items[1].Quantity, UnitPrice = rx2Items[1].UnitPrice, TotalAmount = rx2Items[1].UnitPrice * rx2Items[1].Quantity }
+            ]
+        };
+        db.Invoices.AddRange(invoice1, invoice2);
         rx1.Invoice = invoice1;
+        rx2.Invoice = invoice2;
         await db.SaveChangesAsync(ct);
 
         invoice1.Status = InvoiceStatus.Paid;
@@ -80,7 +122,15 @@ public static partial class ClinicalDemoDataSeeder
             PaymentMethod = "Cash", CashierId = receptionist1.UserId, PaidAt = now.Date.AddHours(9).AddMinutes(18),
             RequestId = Guid.NewGuid(), TransactionType = "Receipt", PrintCount = 1, Note = "Thu tiền mặt đủ, đã in biên lai",
         };
-        db.PaymentTransactions.Add(paymentTx1);
+        var paymentTx2 = new PaymentTransaction
+        {
+            InvoiceId = invoice2.Id, Amount = inv2Paid, AmountTendered = inv2Paid, ChangeAmount = 0m,
+            PaymentMethod = "BankTransfer", TransactionReference = "VCB-DEMO-202611-001", Source = "ManualConfirm", BankReceivedAmount = inv2Paid,
+            CashierId = receptionist1.UserId,
+            PaidAt = now.Date.AddDays(-2).AddHours(10).AddMinutes(55),
+            RequestId = Guid.NewGuid(), TransactionType = "Receipt", PrintCount = 1, Note = "Thu đợt 1 bằng chuyển khoản thủ công (trả góp theo tiến độ điều trị)",
+        };
+        db.PaymentTransactions.AddRange(paymentTx1, paymentTx2);
         await db.SaveChangesAsync(ct);
 
         rx1.DispensedAt = now.Date.AddHours(9).AddMinutes(20);
@@ -95,6 +145,14 @@ public static partial class ClinicalDemoDataSeeder
             PerformedAt = now.Date.AddHours(9).AddMinutes(20), PerformedBy = assistant1.UserId, ReceivedByProxy = false,
         });
         await db.SavePrescriptionHandoverAsync(ct);
+
+        db.AuditLogs.AddRange(
+            new AuditLog { UserId = adminId, Action = AuditActions.Create, EntityType = "SystemInit", Detail = "{\"source\":\"demo_seed\"}", CreatedAt = now.AddDays(-7) },
+            new AuditLog { UserId = receptionist1.UserId, Action = AuditActions.QueueCheckedIn, EntityType = "QueueEntry", Detail = "{\"queueNumber\":1}", CreatedAt = now.Date.AddHours(8).AddMinutes(25) },
+            new AuditLog { UserId = receptionist1.UserId, Action = "PAYMENT_CONFIRMED", EntityType = "Invoice", EntityId = invoice1.Id, Detail = "{\"method\":\"Cash\",\"amount\":585000}", CreatedAt = now.Date.AddHours(9).AddMinutes(18) },
+            new AuditLog { UserId = receptionist1.UserId, Action = "PAYMENT_CONFIRMED", EntityType = "Invoice", EntityId = invoice2.Id, Detail = "{\"method\":\"BankTransfer\",\"amount\":800000}", CreatedAt = now.Date.AddDays(-2).AddHours(10).AddMinutes(55) }
+        );
+        await db.SaveChangesAsync(ct);
 
         await SeedStockAsync(db, v1, assistant1, adminId, rx1, now, ct);
     }

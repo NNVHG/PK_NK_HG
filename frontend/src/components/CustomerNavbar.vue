@@ -3,12 +3,9 @@
     <div class="patient-topbar-inner">
       <div class="patient-brand-block">
         <RouterLink :to="isPatient ? '/patient/dashboard' : '/'" class="patient-brand-link" :aria-label="isPatient ? 'Nha khoa Hoàng Gia - Bảng điều khiển' : 'Nha khoa Hoàng Gia - Trang chủ'">
-          <img src="/logo-icon.svg" alt="" class="patient-brand-logo" width="34" height="34" />
-          <div class="patient-brand-text">
-            <span class="patient-brand-title">Nha Khoa Hoàng Gia</span>
-            <span v-if="isPatient" class="patient-badge-portal">Cổng Bệnh Nhân</span>
-            <span v-else class="patient-badge-portal guest-tag">Chăm sóc nụ cười</span>
-          </div>
+          <img src="/logo-ngang.svg" alt="Nha Khoa Hoàng Gia" class="patient-brand-logo" width="158" height="42" />
+          <span v-if="isPatient" class="patient-badge-portal">Cổng Bệnh Nhân</span>
+          <span v-else class="patient-badge-portal guest-tag">Chăm sóc nụ cười</span>
         </RouterLink>
       </div>
 
@@ -189,8 +186,9 @@ onBeforeUnmount(() => {
 .patient-brand-logo {
   display: block;
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
+  width: 158px;
+  height: 42px;
+  object-fit: contain;
 }
 
 .patient-brand-text {
@@ -209,7 +207,7 @@ onBeforeUnmount(() => {
 
 .patient-badge-portal {
   display: inline-block;
-  align-self: flex-start;
+  align-self: center;
   font-size: 0.68rem;
   font-weight: 800;
   text-transform: uppercase;

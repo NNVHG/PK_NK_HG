@@ -3,8 +3,7 @@
     <header class="booking-header">
       <div class="header-inner">
         <RouterLink to="/" class="brand-link" aria-label="Nha khoa Hoàng Gia - Trang chủ">
-          <img src="/logo-icon.svg" alt="" class="brand-logo" width="36" height="36" />
-          <span>Nha khoa <strong>Hoàng Gia</strong></span>
+          <img src="/logo-ngang.svg" alt="Nha khoa Hoàng Gia" class="brand-logo" width="158" height="42" />
         </RouterLink>
         <nav class="header-actions" aria-label="Điều hướng công khai">
           <RouterLink to="/" class="header-link">Trang chủ</RouterLink>
@@ -157,7 +156,7 @@ watch(identity,()=>{generation++;busy.value=false;clear();if(!disposed)void load
 .booking-page{min-height:100vh;background:var(--hg-canvas,#f4f8fc);color:var(--hg-ink,#18354c);font-family:var(--hg-font,"Segoe UI",system-ui,sans-serif)}
 .booking-header{background:#fff;border-bottom:1px solid #e4edf5}
 .header-inner{max-width:1160px;min-height:76px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;box-sizing:border-box}
-.brand-link{display:inline-flex;align-items:center;gap:10px;text-decoration:none;color:var(--hg-navy,#102e56);font-size:1.05rem;line-height:1.2}.brand-link span{display:flex;flex-direction:column;font-size:.75rem}.brand-link strong{font-size:1.12rem}.brand-logo{flex-shrink:0}
+.brand-link{display:inline-flex;align-items:center;gap:10px;text-decoration:none;color:var(--hg-navy,#102e56);font-size:1.05rem;line-height:1.2}.brand-logo{flex-shrink:0;display:block;width:158px;height:42px;object-fit:contain}
 .header-actions{display:flex;align-items:center;gap:18px}.header-link,.back-link{font-size:.9rem;font-weight:600;text-decoration:none;color:#35556f}.login-link,.secondary-link{color:var(--hg-primary,#1857b6);font-weight:700;text-decoration:none}.login-link{border:1px solid #c8deeb;border-radius:9px;padding:9px 14px;white-space:nowrap}
 .booking-content{max-width:1160px;margin:0 auto;padding:30px 24px 80px;box-sizing:border-box}.intro{margin-bottom:26px}.back-link{display:inline-block;margin-bottom:23px;color:var(--hg-primary,#1857b6)}.eyebrow,.card-kicker{margin:0 0 6px;font-size:.75rem;font-weight:750;letter-spacing:.07em;text-transform:uppercase;color:var(--hg-primary,#1857b6)}h1,h2,h3,p{margin-top:0}h1,h2,h3{color:var(--hg-navy,#102e56)}h1{font-size:clamp(1.75rem,3vw,2.35rem);line-height:1.2;margin-bottom:9px}.intro-copy{color:#4a6176;line-height:1.6;max-width:660px;margin-bottom:0}
 .booking-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(250px,320px);align-items:start;gap:24px}.form-card,.summary-card{background:#fff;border:1px solid #e0ebf4;border-radius:16px;box-shadow:0 4px 18px rgba(16,46,86,.05);min-width:0}.card-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:22px 26px;border-bottom:1px solid #edf2f7}.card-heading h2,.summary-card h2,.info-card h2{font-size:1.08rem;line-height:1.35;margin:0}.step-label{flex-shrink:0;border-radius:999px;background:#edf6fc;color:#1857b6;font-size:.75rem;font-weight:700;padding:6px 10px}.card-body{padding:24px 26px 28px}fieldset{min-width:0;margin:0;padding:0;border:0}fieldset:disabled{opacity:.72}.field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 20px}.field{display:flex;flex-direction:column;gap:8px;min-width:0;font-size:.9rem;font-weight:650;color:#18354c}.field-wide{grid-column:1/-1}.required{color:#b42318}.optional,.field-hint{font-weight:400;color:#536a7e}.field-hint{font-size:.78rem;line-height:1.4}

@@ -25,11 +25,13 @@ public static partial class ClinicalDemoDataSeeder
         await db.SaveChangesAsync(ct);
     }
 
-    private static async Task<(Patient P1, Patient P2, Patient P3, Patient P4)> SeedPatientsAsync(DentalDbContext db, User u1, User? u2, User? u3, DateTime now, CancellationToken ct)
+    private static async Task<(Patient P1, Patient P2, Patient P3, Patient P4, Patient P5)> SeedPatientsAsync(
+        DentalDbContext db, User u1, User? u2, User? u3, User receptionist1, DateTime now, CancellationToken ct)
     {
         const string cccd1 = "074088001234";
         const string cccd2 = "074095005678";
         const string cccd4 = "074082009012";
+        const string cccd5 = "074091003456";
 
         var p1 = new Patient
         {
@@ -73,8 +75,34 @@ public static partial class ClinicalDemoDataSeeder
             CitizenIdVersion = 1,
             UserId = u3?.UserId, IsActive = true, CreatedAt = now.AddDays(-2),
         };
-        db.Patients.AddRange(p1, p2, p3, p4);
+        var p5 = new Patient
+        {
+            FullName = "Hoàng Thị Mai", DateOfBirth = new DateOnly(1991, 7, 19), Gender = "Nữ",
+            Phone = "0900000025", Address = "18 Yersin, Phú Cường, Thủ Dầu Một, Bình Dương",
+            CitizenIdHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(cccd5))),
+            CitizenIdMasked = cccd5[..3] + "******" + cccd5[^3..],
+            DocumentType = IdentityDocumentType.CitizenId,
+            HashScheme = IdentityHashScheme.HmacCanonical,
+            IdentityKeyVersion = IdentityDocumentConstants.CurrentHmacKeyVersion,
+            CitizenIdVersion = 1,
+            UserId = null, IsActive = true, CreatedAt = now.AddDays(-1),
+        };
+        db.Patients.AddRange(p1, p2, p3, p4, p5);
         await db.SaveChangesAsync(ct);
-        return (p1, p2, p3, p4);
+
+        db.PatientGuardians.Add(new PatientGuardian
+        {
+            GuardianPatientId = p1.PatientId,
+            WardPatientId = p3.PatientId,
+            Relationship = "Cha",
+            IsActive = true,
+            AssignedAt = now.AddDays(-2),
+            AssignedByUserId = receptionist1.UserId,
+            Notes = "Đã xác minh giấy khai sinh và CCCD người giám hộ tại quầy (dữ liệu mẫu).",
+            CreatedAt = now.AddDays(-2),
+        });
+        await db.SaveChangesAsync(ct);
+
+        return (p1, p2, p3, p4, p5);
     }
 }

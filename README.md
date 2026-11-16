@@ -14,7 +14,7 @@
 1. [Giới thiệu dự án](#1-giới-thiệu-dự-án)
 2. [Kiến trúc và công nghệ](#2-kiến-trúc-và-công-nghệ)
 3. [Yêu cầu chuẩn bị trước khi chạy](#3-yêu-cầu-chuẩn-bị-trước-khi-chạy)
-4. [Chạy nhanh (Quick Start – Tải về là chạy)](#4-chạy-nhanh-quick-start--tải-về-là-chạy)
+4. [Chạy nhanh trên Windows](#4-chạy-nhanh-trên-windows)
 5. [Cơ sở dữ liệu demo và tài khoản thử nghiệm](#5-cơ-sở-dữ-liệu-demo-và-tài-khoản-thử-nghiệm)
 6. [Chạy thủ công từng bước và cấu hình tùy chọn](#6-chạy-thủ-công-từng-bước-và-cấu-hình-tùy-chọn)
 7. [Kiểm tra biên dịch và xử lý sự cố](#7-kiểm-tra-biên-dịch-và-xử-lý-sự-cố)
@@ -95,7 +95,7 @@ PK_NK_HG/
 │       ├── Dental.Api/                   # Tầng giao tiếp API, cấu hình JWT/RBAC, Swagger
 │       ├── Dental.Application/           # Tầng nghiệp vụ (Features theo từng phân hệ MOD_*)
 │       ├── Dental.Domain/                # Thực thể (Entities), hằng số và kiểu liệt kê
-│       └── Dental.Infrastructure/        # EF Core DbContext, 10 Migrations, 15 tệp Seeders
+│       └── Dental.Infrastructure/        # EF Core DbContext, migrations và dữ liệu Development
 ├── frontend/
 │   ├── src/                              # Mã nguồn Vue 3 (views, components, stores, services, router)
 │   ├── package.json                      # Khai báo thư viện Frontend
@@ -108,72 +108,82 @@ PK_NK_HG/
 
 ## 3. Yêu cầu chuẩn bị trước khi chạy
 
-Các phần mềm nền tảng dưới đây thuộc cấp hệ điều hành nên kịch bản của dự án không tự cài đặt thay người dùng. Vui lòng cài đặt trước khi chạy lần đầu (đã kiểm chứng trên **Windows 10/11 64-bit**):
+Các phần mềm nền tảng dưới đây cần được cài trước; `start-dev.ps1` không tự cài đặt chúng. Hướng dẫn khởi chạy tự động dành cho **Windows 10/11 64-bit**:
 
 | Phần mềm cần chuẩn bị | Phiên bản yêu cầu | Lệnh kiểm tra trên PowerShell | Ghi chú / Nguồn tải chính thức |
 |---|---|---|---|
-| **1. Git** | `>= 2.30` | `git --version` | Dùng để tải kho mã nguồn (`https://git-scm.com/`). |
-| **2. .NET SDK** | **`10.0.x`** | `dotnet --version` | Bắt buộc `.NET SDK 10.0` vì dự án nhắm tới `net10.0` (`https://dotnet.microsoft.com/download/dotnet/10.0`). |
-| **3. Node.js & npm** | `>= 20.x` (khuyên dùng `22+`) | `node -v` và `npm.cmd -v` | Dùng để biên dịch và chạy giao diện Vue 3 + Vite (`https://nodejs.org/`). |
-| **4. Docker Desktop** *(hoặc PostgreSQL 16)* | Docker Desktop (Linux containers) hoặc PostgreSQL `16.x` | `docker --version` | **Khuyên dùng Docker Desktop** (mở ứng dụng Docker Desktop chờ trạng thái *Engine running* trước khi chạy lệnh). Nếu không dùng Docker, có thể cài trực tiếp PostgreSQL 16 ở cổng `5432`. |
-| **5. PowerShell** | Windows PowerShell `5.1+` hoặc PowerShell `7+` | `$PSVersionTable.PSVersion` | Có sẵn mặc định trên mọi máy Windows 10/11. |
+| **1. Git** | `>= 2.30` | `git --version` | Dùng để tải kho mã nguồn: [git-scm.com](https://git-scm.com/). |
+| **2. .NET SDK** | **`10.0.x`** | `dotnet --version` | Cần SDK (không chỉ Runtime) vì dự án nhắm tới `net10.0`: [dotnet.microsoft.com](https://dotnet.microsoft.com/download/dotnet/10.0). |
+| **3. Node.js và npm** | Node.js `20.x` trở lên | `node -v` và `npm.cmd -v` | Cài bản LTS từ [nodejs.org](https://nodejs.org/). npm đi kèm Node.js. |
+| **4. Docker Desktop** | Bản hiện hành, Linux containers | `docker --version` và `docker info` | Cần để chạy PostgreSQL theo cách được khuyên dùng. Mở Docker Desktop và đợi Docker Engine sẵn sàng trước khi chạy dự án. |
+| **5. PowerShell** | Windows PowerShell `5.1+` hoặc PowerShell `7+` | `$PSVersionTable.PSVersion` | `start-dev.ps1` dành cho Windows. |
+
+> Cổng `5000` (API) và `5173` (web) cần còn trống. Cổng `5432` được PostgreSQL local hoặc Docker sử dụng. Lần chạy đầu cần Internet để .NET restore package và npm tải package theo lock file.
 
 ---
 
-## 4. Chạy nhanh (Quick Start – Tải về là chạy)
+## 4. Chạy nhanh trên Windows
 
-Sau khi đã mở **Docker Desktop**, bạn chỉ cần mở **PowerShell** và thực hiện đúng **2 bước** sau để tải và khởi chạy toàn bộ hệ thống kèm dữ liệu mẫu:
+Sau khi cài các công cụ ở mục 3 và mở **Docker Desktop**, mở **PowerShell** rồi chạy lần lượt:
 
-### Bước 1: Tải kho mã nguồn và di chuyển vào thư mục gốc
+### Bước 1: Clone mã nguồn từ GitHub
+Mở PowerShell tại thư mục bạn muốn lưu đồ án (không cần tạo thư mục `PK_NK_HG` trước), rồi chạy:
 ```powershell
 git clone https://github.com/NNVHG/PK_NK_HG.git
 Set-Location PK_NK_HG
 ```
 
-### Bước 2: Chạy kịch bản khởi động tự động
-*(Chạy tại thư mục gốc `PK_NK_HG`)*
+Nếu đã clone trước đó, vào thư mục repo và cập nhật mã nguồn trước khi chạy:
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\start-dev.ps1
+Set-Location <đường-dẫn-tới-thư-mục-PK_NK_HG>
+git pull
 ```
 
-**Những việc `start-dev.ps1` tự động thực hiện cho bạn ở lần chạy đầu tiên:**
-1. Tự động tạo tệp `backend/src/Dental.Api/appsettings.Development.json` từ tệp mẫu [`backend/src/Dental.Api/appsettings.Development.example.json`](backend/src/Dental.Api/appsettings.Development.example.json) (nếu chưa có).
-2. Tự động khởi tạo container PostgreSQL 16 (`dental_db`) ở cổng `5432` qua [`docker-compose.yml`](docker-compose.yml) và đợi cơ sở dữ liệu `dental_clinic` sẵn sàng.
-3. Tự động chạy `npm install` trong thư mục `frontend/` (nếu chưa có `node_modules`).
-4. Mở cửa sổ chạy **Backend API** (`http://localhost:5000`) — tự động áp dụng **10 bản di trú (EF Core migrations)** và nạp đầy đủ danh mục, 5 vai trò cùng dữ liệu lâm sàng mẫu.
-5. Mở cửa sổ chạy **Frontend SPA** (`http://localhost:5173`).
+Không cần tải riêng các thư mục `backend` hoặc `frontend`; hãy giữ nguyên cấu trúc repo. Không commit `appsettings.Development.json`, dữ liệu database, file upload hoặc thông tin thật.
+
+### Bước 2: Khởi động hệ thống
+Lệnh này chạy tại thư mục gốc `PK_NK_HG`. Nếu Windows chặn script, dùng lệnh dưới đây; không cần đổi Execution Policy toàn máy.
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start-dev.ps1
+```
+
+Script kiểm tra .NET SDK 10 và Node.js, tạo cấu hình Development mẫu nếu chưa có, khởi động PostgreSQL 16 bằng Docker Compose, đợi database sẵn sàng, cài frontend bằng `npm ci` theo `package-lock.json` nếu cần, rồi mở cửa sổ riêng cho API và web. Backend khôi phục NuGet package khi chạy lần đầu. Khi API khởi động, ứng dụng tự áp dụng các EF Core migration hiện có và chạy seeder Development theo cấu hình.
+
+Script không xóa database hoặc Docker volume hiện có. Đóng cửa sổ API/web để dừng ứng dụng; PostgreSQL vẫn chạy trong Docker.
+
+Lần chạy đầu cần Internet để Git clone, tải NuGet package và npm package. Nếu Windows báo chặn script, dùng đúng lệnh PowerShell ở trên; không cần đổi Execution Policy toàn máy.
+
+Luồng demo chính: khách đặt lịch công khai hoặc PATIENT đặt lịch trong portal → Lễ tân đối soát và xác nhận tiếp đón tại quầy → hàng đợi chung → Nha sĩ chọn phòng, xem cảnh báo an toàn, khám và cập nhật FDI → kê đơn/kết thúc khám → thu ngân xử lý hóa đơn. Đặt lịch công khai không tạo lượt chờ; gọi số không tự bắt đầu khám. Với trẻ dưới 14 tuổi không nhập CCCD trẻ; liên kết người giám hộ chỉ sau khi nhân viên xác minh trực tiếp. Menu không thay thế phân quyền backend.
 
 ### Bước 3: Mở trình duyệt và trải nghiệm
 - **Giao diện ứng dụng (Frontend):** `http://localhost:5173`
 - **Tài liệu API (Swagger UI):** `http://localhost:5000/swagger`
 
+Nếu cửa sổ API báo lỗi khởi động, hãy xử lý lỗi ở cửa sổ đó trước; giao diện web có thể mở được nhưng các chức năng cần API sẽ chưa hoạt động.
+
 ---
 
 ## 5. Cơ sở dữ liệu demo và tài khoản thử nghiệm
 
-Khi chạy ở môi trường `Development` với cấu hình mẫu (`Seed:DemoUsers = true`), hệ thống tự động nạp dữ liệu tổng hợp (không chứa dữ liệu cá nhân của người thật), bao gồm: danh mục dịch vụ nha khoa, bệnh lý, thuốc, vật tư, 6 ghế/phòng khám, 4 hồ sơ bệnh nhân mẫu, lịch hẹn trong ngày, hàng đợi tiếp đón, ca khám mẫu có sơ đồ răng FDI, đơn thuốc và hóa đơn.
+Khi chạy ở môi trường `Development` với cấu hình mẫu (`Seed:DemoUsers = true`), hệ thống nạp dữ liệu tổng hợp phục vụ demo, như danh mục, tài khoản theo vai trò và một số kịch bản lịch hẹn/khám/hóa đơn. Đây là dữ liệu phát triển cục bộ; không dùng trong môi trường thực tế. Dữ liệu seed có thể thay đổi theo mã nguồn nên không dựa vào số lượng bản ghi cố định.
 
 ### 5.1. Bảng tài khoản thử nghiệm 5 vai trò
 > **Lưu ý bảo mật:** Toàn bộ số điện thoại, CCCD, mật khẩu và khóa cấu hình dưới đây **chỉ dùng cho mục đích thử nghiệm cục bộ (Demo/Development)**, tuyệt đối không dùng cho môi trường thực tế.
 
 Tại màn hình đăng nhập (`http://localhost:5173/login`), giữ tùy chọn mặc định **`SĐT / CCCD`** và đăng nhập bằng một trong các tài khoản sau:
 
-| Vai trò | Mã vai trò | Tài khoản đăng nhập (SĐT) | Mật khẩu thử nghiệm | Chức năng trải nghiệm chính |
+| Vai trò | Mã vai trò | Tài khoản đăng nhập (SĐT / CCCD) | Mật khẩu thử nghiệm | Chức năng trải nghiệm chính |
 |---|---|---|---|---|
 | **Quản trị viên (Admin)** | `ADMIN` | `0900000001` | `AdminPassword@123` | Quản lý danh mục hệ thống, nhân sự, cấu hình, nhập/xuất kho, xem báo cáo doanh thu và nhật ký thao tác (Audit Log). |
 | **Lễ tân / Thu ngân** | `RECEPTIONIST` | `0900000002` | `DemoPassword@123` | Đặt lịch tại quầy, quét QR CCCD tiếp đón khách, quản lý hàng đợi, lập hóa đơn nháp, thu tiền mặt/chuyển khoản. |
 | **Nha sĩ** | `DENTIST` | `0900000003` | `DemoPassword@123` | Mở ca khám, xem cảnh báo an toàn, tương tác sơ đồ răng FDI 32/20 răng, chỉ định dịch vụ, kê đơn thuốc, chốt hồ sơ. |
 | **Phụ tá** | `ASSISTANT` | `0900000004` | `DemoPassword@123` | Quản lý trạng thái phòng/ghế nha, gọi số dẫn bệnh nhân, tải ảnh X-quang, lập phiếu nhập và xác nhận tiêu hao vật tư ca khám. |
-| **Bệnh nhân** | `PATIENT` | `0900000005` | `DemoPassword@123` | Xem hồ sơ khám răng cá nhân, lịch sử sơ đồ răng FDI, đơn thuốc điện tử, hóa đơn/công nợ và đặt lịch khám. |
+| **Bệnh nhân** | `PATIENT` | `074088001234` *(CCCD)* | `DemoPassword@123` | Xem hồ sơ khám răng cá nhân, lịch sử sơ đồ răng FDI, đơn thuốc điện tử, hóa đơn/công nợ và đặt lịch khám. |
 
-*(Ngoài ra còn có các tài khoản nhân sự/bệnh nhân phụ trong dữ liệu mẫu dùng chung mật khẩu `DemoPassword@123`: Lễ tân 2 `0900000012`, Nha sĩ 2 `0900000013`, Phụ tá 2 `0900000014`, Bệnh nhân 2 `0900000021`, Bệnh nhân 3 `0900000023`).*
+*(Ngoài ra còn có các tài khoản nhân sự/bệnh nhân phụ trong dữ liệu mẫu dùng chung mật khẩu `DemoPassword@123`: Lễ tân 2 `0900000012`, Nha sĩ 2 `0900000013`, Phụ tá 2 `0900000014`, Bệnh nhân 2 CCCD `074095005678`, Bệnh nhân 3 CCCD `074082009012`).*
 
-### 5.2. Chuỗi QR CCCD mẫu để thử nghiệm tiếp đón tại quầy
-Khi đăng nhập bằng tài khoản **Lễ tân (`0900000002`)** hoặc **Admin (`0900000001`)**, tại mục **Hồ sơ bệnh nhân / Tiếp đón bằng QR CCCD**, bạn có thể dán chuỗi chuẩn CCCD gắn chip (7 trường phân cách bằng dấu `|`) dưới đây để thử nghiệm giải mã tự động và tạo/tra cứu hồ sơ:
-
-```text
-074095001234|281234567|Nguyễn Minh Khôi|15051995|Nam|12 Đại lộ Bình Dương, Thủ Dầu Một, Bình Dương|20062022
-```
+### 5.2. Dữ liệu QR CCCD
+Chỉ dùng QR/CCCD tổng hợp dành cho demo hoặc dữ liệu do bạn tự tạo. Không đưa CCCD thật vào README, issue, log, URL hoặc commit. Khi đối soát, dữ liệu QR được gửi trong request body đến backend; không đặt CCCD trên URL.
 
 ---
 
@@ -182,8 +192,9 @@ Khi đăng nhập bằng tài khoản **Lễ tân (`0900000002`)** hoặc **Admi
 Nếu bạn không muốn dùng kịch bản tự động `start-dev.ps1` hoặc muốn chạy trên máy cài **PostgreSQL 16 trực tiếp (không dùng Docker)**, hãy thực hiện tuần tự các bước sau từ thư mục gốc `PK_NK_HG`:
 
 ### Bước 1: Chuẩn bị tệp cấu hình Development
+Chỉ tạo file này nếu chưa có; lệnh không dùng `-Force` để tránh ghi đè cấu hình local.
 ```powershell
-Copy-Item backend/src/Dental.Api/appsettings.Development.example.json backend/src/Dental.Api/appsettings.Development.json -Force
+Copy-Item backend/src/Dental.Api/appsettings.Development.example.json backend/src/Dental.Api/appsettings.Development.json
 ```
 
 ### Bước 2: Khởi động PostgreSQL 16
@@ -193,20 +204,25 @@ Copy-Item backend/src/Dental.Api/appsettings.Development.example.json backend/sr
   docker exec dental_db pg_isready -U postgres -d dental_clinic
   ```
 - **Nếu dùng PostgreSQL 16 cài trực tiếp trên máy (không dùng Docker):**
-  Tạo cơ sở dữ liệu trống tên `dental_clinic` bằng `psql` (hoặc pgAdmin), sau đó cập nhật lại `Username`/`Password` trong `backend/src/Dental.Api/appsettings.Development.json` cho khớp với máy của bạn:
+  Tạo cơ sở dữ liệu trống tên `dental_clinic` bằng `psql` (hoặc pgAdmin), sau đó sửa `Username`/`Password` trong file Development cho khớp máy của bạn. Không sửa file `.example.json` và không commit `appsettings.Development.json`:
   ```powershell
   psql -U postgres -h localhost -p 5432 -c "CREATE DATABASE dental_clinic;"
   ```
+  Có thể dùng script để mở API và web nhưng bỏ qua Docker:
+  ```powershell
+  .\start-dev.ps1 -SkipDocker
+  ```
+  Hoặc tiếp tục chạy thủ công ở các bước bên dưới.
 
-### Bước 3: Chạy Backend API (Cửa sổ PowerShell 1 – tại thư mục gốc `PK_NK_HG`)
-Khi khởi động, Backend sẽ tự động áp dụng 10 bản di trú để tạo bảng và nạp dữ liệu mẫu:
+### Bước 3: Chạy Backend API (PowerShell 1 – thư mục gốc)
+Ở Development, backend tự áp dụng các migration còn thiếu và nạp dữ liệu mẫu theo cấu hình:
 ```powershell
 dotnet run --project backend/src/Dental.Api
 ```
 
-### Bước 4: Cài đặt thư viện và chạy Frontend (Cửa sổ PowerShell 2 – tại thư mục gốc `PK_NK_HG`)
+### Bước 4: Cài package và chạy Frontend (PowerShell 2 – thư mục gốc)
 ```powershell
-npm.cmd --prefix frontend install
+npm.cmd --prefix frontend ci
 npm.cmd --prefix frontend run dev -- --strictPort
 ```
 
@@ -233,11 +249,11 @@ npm.cmd --prefix frontend run build
 
 | Triệu chứng / Thông báo lỗi | Nguyên nhân | Cách khắc phục |
 |---|---|---|
-| PowerShell báo `...cannot be loaded because running scripts is disabled on this system` | Chính sách `ExecutionPolicy` mặc định của Windows chặn chạy file `.ps1`. | Chạy bằng lệnh: `powershell -ExecutionPolicy Bypass -File .\start-dev.ps1`. |
-| Backend dừng ngay khi bật với lỗi `Thiếu khóa HMAC định danh hợp lệ...` hoặc lỗi kết nối DB `Password=CHANGE_ME` | Chưa có tệp `appsettings.Development.json` trong `backend/src/Dental.Api/`. | Chạy `Copy-Item backend/src/Dental.Api/appsettings.Development.example.json backend/src/Dental.Api/appsettings.Development.json -Force`. |
+| PowerShell báo `...cannot be loaded because running scripts is disabled on this system` | Chính sách `ExecutionPolicy` mặc định của Windows chặn chạy file `.ps1`. | Chạy bằng lệnh: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start-dev.ps1`. |
+| Backend báo thiếu khóa HMAC hoặc lỗi đăng nhập PostgreSQL | File Development bị thiếu, cấu hình sai hoặc không khớp PostgreSQL đang chạy. | Chạy lại `start-dev.ps1` để tạo file mẫu nếu file chưa có. Nếu đã có file, kiểm tra `ConnectionStrings:Default` và đối chiếu username/password với Docker Compose hoặc PostgreSQL cục bộ. Không ghi thông tin kết nối thật vào Git. |
 | Lỗi `error during connect... dockerDesktopLinuxEngine` khi chạy `docker compose up -d` | Ứng dụng **Docker Desktop** chưa được mở hoặc chưa khởi động xong. | Mở ứng dụng Docker Desktop trên Windows, đợi biểu tượng góc dưới bên trái báo *Engine running* rồi chạy lại. |
 | Lỗi báo cổng `5000`, `5173` hoặc `5432` đã được sử dụng (`Address already in use`) | Đã có một cửa sổ Backend/Frontend hoặc dịch vụ PostgreSQL khác đang chiếm cổng. | Đóng cửa sổ PowerShell đang chạy phiên cũ, hoặc kiểm tra tiến trình chiếm cổng bằng `Get-NetTCPConnection -LocalPort 5000,5173,5432`. |
-| Muốn xóa sạch dữ liệu đã thao tác để **khôi phục lại CSDL demo ban đầu** | Dữ liệu trong Docker volume `postgres_data` lưu giữ các thay đổi từ lần chạy trước. | Dừng Backend API, chạy `docker compose down -v` để xóa volume cũ, sau đó chạy lại `.\start-dev.ps1` để hệ thống tạo mới và nạp lại dữ liệu mẫu. |
+| Muốn xóa database demo | Docker volume `pgdata` giữ dữ liệu qua các lần chạy. | **Thao tác này xóa vĩnh viễn database cục bộ.** Chỉ khi chắc chắn không cần dữ liệu hiện tại: dừng backend, chạy `docker compose down -v`, rồi chạy lại `start-dev.ps1`. Không chạy nếu cần giữ dữ liệu. |
 
 ---
 

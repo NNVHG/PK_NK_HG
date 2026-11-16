@@ -1,6 +1,6 @@
 <template>
   <div class="dashboard-container">
-    <!-- Patient Portal banner (if patient account) -->
+    <!-- Patient Portal banner (fallback if patient visits /dashboard) -->
     <div v-if="!isStaff" class="patient-banner">
       <div class="patient-banner-content">
         <div class="patient-banner-text">
@@ -17,418 +17,424 @@
       </div>
     </div>
 
-    <!-- Executive Clinical Overview Dashboard (Staff & Admin) -->
+    <!-- ==================== STAFF & ADMIN MODERN ROLE DASHBOARD ==================== -->
     <div v-else class="executive-overview">
-      <!-- 1. Header Bar: Greeting & Quick Sync Status -->
-      <header class="overview-header">
-        <div class="header-left">
-          <div class="title-row">
-            <h1 class="header-title">Bảng Điều Khiển Tổng Quan</h1>
-            <div class="role-pill" :class="'role-pill--' + authStore.role?.toLowerCase()">
-              <span class="role-icon">{{ roleIcon }}</span>
-              <span>{{ authStore.user?.roleName || authStore.role }}</span>
-            </div>
+      <!-- 1. Actor-Themed Hero Header -->
+      <header class="actor-hero" :class="'actor-hero--' + roleSlug">
+        <div class="hero-left">
+          <div class="hero-badges">
+            <span class="role-pill">{{ actorMeta.badge }}</span>
             <span class="sync-status">
               <span class="pulse-dot"></span>
-              Đồng bộ trực tiếp
+              Dữ liệu trực tiếp
             </span>
           </div>
-          <p class="header-subtitle">
-            Phòng khám Nha khoa Hoàng Gia · <strong>{{ currentDateFormatted }}</strong> · Phiên làm việc: <strong>#{{ authStore.user?.userId }}</strong> ({{ authStore.user?.fullName }})
+          <h1 class="hero-title">{{ actorMeta.title }}</h1>
+          <p class="hero-subtitle">
+            Xin chào <strong>{{ authStore.user?.fullName }}</strong> · {{ currentDateFormatted }} · Phiên #{{ authStore.user?.userId }}
           </p>
         </div>
 
-        <div class="header-right">
-          <button class="btn-refresh" :disabled="loadingData" @click="refreshAllData" title="Cập nhật số liệu mới">
-            <span :class="{ 'spin-icon': loadingData }">🔄</span>
-            <span>{{ loadingData ? 'Đang cập nhật...' : 'Cập nhật số liệu' }}</span>
+        <div class="hero-actions">
+          <button class="btn-hero" :disabled="loadingData" @click="refreshAllData" title="Cập nhật số liệu mới">
+            <span :class="{ 'spin-icon': loadingData }">↻</span>
+            <span>{{ loadingData ? 'Đang đồng bộ...' : 'Làm mới số liệu' }}</span>
           </button>
-          <RouterLink class="btn-profile" to="/management/profile">
-            <span>👤 Hồ sơ cá nhân</span>
+          <RouterLink class="btn-hero btn-hero--ghost" to="/management/profile">
+            Hồ sơ cá nhân
           </RouterLink>
         </div>
       </header>
 
-      <!-- 2. KPI Metrics Strip (4 Thẻ nhanh) -->
-      <section class="kpi-grid">
-        <!-- Thẻ 1: Doanh thu ngày -->
-        <div class="kpi-box kpi-box--revenue">
-          <div class="kpi-box-top">
-            <span class="kpi-tag">Doanh thu hôm nay</span>
-            <span class="kpi-bubble">💰</span>
+      <!-- 2. Role-Specific 4-Card KPI Strip -->
+      <section class="kpi-grid" aria-label="Chỉ số tổng quan theo vai trò">
+        <div
+          v-for="kpi in roleKpis"
+          :key="kpi.label"
+          class="kpi-card"
+          :class="'kpi-card--' + kpi.tone"
+        >
+          <div class="kpi-card-top">
+            <span class="kpi-label">{{ kpi.label }}</span>
+            <span class="kpi-tag">{{ kpi.tag }}</span>
           </div>
-          <div class="kpi-box-val">{{ formatCurrency(revenueSummary.todayRevenue) }}</div>
-          <div class="kpi-box-bottom">
-            <span>{{ revenueSummary.todayTransactions }} giao dịch đã thanh toán</span>
-            <span class="kpi-code">Tài chính</span>
-          </div>
-        </div>
-
-        <!-- Thẻ 2: Doanh thu tuần -->
-        <div class="kpi-box kpi-box--weekly">
-          <div class="kpi-box-top">
-            <span class="kpi-tag">Doanh thu tuần này (7 ngày)</span>
-            <span class="kpi-bubble">📈</span>
-          </div>
-          <div class="kpi-box-val">{{ formatCurrency(revenueSummary.weeklyRevenue) }}</div>
-          <div class="kpi-box-bottom">
-            <span>Tổng dòng tiền thực thu</span>
-            <span class="kpi-positive">+100% minh bạch</span>
-          </div>
-        </div>
-
-        <!-- Thẻ 3: Ca tiếp đón hôm nay -->
-        <div class="kpi-box kpi-box--queue">
-          <div class="kpi-box-top">
-            <span class="kpi-tag">Tiếp đón & Hàng đợi</span>
-            <span class="kpi-bubble">👥</span>
-          </div>
-          <div class="kpi-box-val">{{ operationalStats.todayCheckIns }} ca</div>
-          <div class="kpi-box-bottom">
-            <span>{{ operationalStats.waitingQueueCount }} ca đang chờ tại ghế</span>
-            <span class="kpi-code">Tiếp nhận ca</span>
-          </div>
-        </div>
-
-        <!-- Thẻ 4: Trạng thái 6 ghế -->
-        <div class="kpi-box kpi-box--chairs">
-          <div class="kpi-box-top">
-            <span class="kpi-tag">Trạng thái ghế nha khoa</span>
-            <span class="kpi-bubble">🪑</span>
-          </div>
-          <div class="kpi-box-val">{{ operationalStats.occupiedChairs }}/{{ operationalStats.totalChairs }} ghế</div>
-          <div class="kpi-box-bottom">
-            <span>{{ operationalStats.availableChairs }} ghế trống sẵn sàng đón khách</span>
-            <span class="kpi-code">Ghế điều trị</span>
-          </div>
+          <div class="kpi-value">{{ kpi.value }}</div>
+          <div class="kpi-foot">{{ kpi.foot }}</div>
         </div>
       </section>
 
-      <!-- 2.5 Quick Action Bar (Phím tắt thực chiến cho Quản trị viên) -->
-      <section v-if="authStore.role === 'ADMIN'" class="admin-quick-actions" aria-label="Lối tắt thao tác nhanh của quản trị viên">
-        <div class="quick-actions-label">
-          <span class="quick-icon">⚡</span>
-          <div>
-            <strong>Thao tác nhanh Quản trị</strong>
-            <small>Lối tắt các nghiệp vụ cốt lõi dành riêng cho Quản trị viên phòng khám</small>
-          </div>
+      <!-- 3. Role-Specific Quick Action Bar -->
+      <section class="quick-bar" aria-label="Thao tác nhanh theo vai trò">
+        <div class="quick-bar-head">
+          <strong>Lối tắt nghiệp vụ · {{ authStore.user?.roleName || authStore.role }}</strong>
+          <small>{{ actorMeta.quickHint }}</small>
         </div>
-        <div class="quick-actions-btns">
-          <RouterLink class="quick-btn quick-btn--primary" to="/management/admin/staff">
-            <span>➕ Thêm nhân sự</span>
-          </RouterLink>
-          <RouterLink class="quick-btn" to="/management/admin/services">
-            <span>🏷️ Bảng giá dịch vụ</span>
-          </RouterLink>
-          <RouterLink class="quick-btn" to="/management/admin/medical-supplies">
-            <span>🧤 Quản lý vật tư</span>
-          </RouterLink>
-          <RouterLink class="quick-btn" to="/management/admin/medicines">
-            <span>💊 Danh mục thuốc</span>
-          </RouterLink>
-          <RouterLink class="quick-btn" to="/management/admin/reports/revenue">
-            <span>📊 Báo cáo doanh thu</span>
+        <div class="quick-bar-actions">
+          <RouterLink
+            v-for="act in roleQuickActions"
+            :key="act.to"
+            class="quick-pill"
+            :class="{ 'quick-pill--primary': act.primary }"
+            :to="act.to"
+          >
+            {{ act.label }}
           </RouterLink>
         </div>
       </section>
 
-      <!-- 3. Sơ đồ Doanh thu trong tuần (SVG Interactive Bar + Trend Chart) -->
-      <section class="panel chart-panel">
-        <div class="panel-header">
-          <div class="panel-title-wrap">
-            <span class="panel-icon">📊</span>
+      <!-- ==================== 4A. GIAO DIỆN RIÊNG CHO ADMIN ==================== -->
+      <template v-if="authStore.role === 'ADMIN'">
+        <!-- Biểu đồ doanh thu 7 ngày -->
+        <section class="panel chart-panel">
+          <div class="panel-header">
             <div>
-              <h3 class="panel-title">Sơ Đồ Doanh Thu Trong Tuần (7 Ngày)</h3>
-              <p class="panel-subtitle">Biến động dòng tiền thực thu (Tiền mặt & Chuyển khoản) từ Thứ Hai đến Chủ Nhật</p>
+              <h3 class="panel-title">Biểu Đồ Doanh Thu 7 Ngày Gần Nhất</h3>
+              <p class="panel-subtitle">Dòng tiền thực thu (Tiền mặt &amp; Chuyển khoản xác nhận)</p>
+            </div>
+            <div class="chart-summary-badges">
+              <span class="summary-pill"><small>Tổng tuần:</small> <strong>{{ formatCurrency(revenueSummary.weeklyRevenue) }}</strong></span>
+              <span class="summary-pill summary-pill--today"><small>Hôm nay:</small> <strong>{{ formatCurrency(revenueSummary.todayRevenue) }}</strong></span>
             </div>
           </div>
-          <div class="chart-summary-badges">
-            <span class="summary-pill">
-              <small>Tổng tuần:</small> <strong>{{ formatCurrency(revenueSummary.weeklyRevenue) }}</strong>
-            </span>
-            <span class="summary-pill summary-pill--today">
-              <small>Hôm nay:</small> <strong>{{ formatCurrency(revenueSummary.todayRevenue) }}</strong>
-            </span>
+
+          <div class="chart-wrapper">
+            <svg class="revenue-svg" viewBox="0 0 780 230" preserveAspectRatio="none" aria-label="Biểu đồ doanh thu tuần">
+              <defs>
+                <linearGradient id="barGradNormal" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#38bdf8" />
+                  <stop offset="100%" stop-color="#0284c7" />
+                </linearGradient>
+                <linearGradient id="barGradToday" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#3b82f6" />
+                  <stop offset="100%" stop-color="#1d4ed8" />
+                </linearGradient>
+                <linearGradient id="lineGlow" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="rgba(37, 99, 235, 0.22)" />
+                  <stop offset="100%" stop-color="rgba(37, 99, 235, 0.0)" />
+                </linearGradient>
+              </defs>
+
+              <line x1="55" y1="35" x2="755" y2="35" stroke="#e2e8f0" stroke-dasharray="4,4" />
+              <line x1="55" y1="85" x2="755" y2="85" stroke="#e2e8f0" stroke-dasharray="4,4" />
+              <line x1="55" y1="135" x2="755" y2="135" stroke="#e2e8f0" stroke-dasharray="4,4" />
+              <line x1="55" y1="185" x2="755" y2="185" stroke="#cbd5e1" stroke-width="1.5" />
+
+              <text x="50" y="38" text-anchor="end" class="svg-axis-text">{{ formatShortCurrency(maxWeeklyRevenue) }}</text>
+              <text x="50" y="88" text-anchor="end" class="svg-axis-text">{{ formatShortCurrency(maxWeeklyRevenue * 0.66) }}</text>
+              <text x="50" y="138" text-anchor="end" class="svg-axis-text">{{ formatShortCurrency(maxWeeklyRevenue * 0.33) }}</text>
+              <text x="50" y="188" text-anchor="end" class="svg-axis-text">0₫</text>
+
+              <polygon :points="areaPoints" fill="url(#lineGlow)" />
+              <polyline :points="trendLinePoints" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+
+              <g v-for="(day, idx) in weeklyChartData" :key="day.dateKey">
+                <rect
+                  :x="day.x - 26"
+                  :y="day.barY"
+                  width="52"
+                  :height="day.barHeight"
+                  rx="6"
+                  :fill="day.isToday ? 'url(#barGradToday)' : 'url(#barGradNormal)'"
+                  class="svg-bar"
+                  @mouseenter="hoveredDayIndex = idx"
+                  @mouseleave="hoveredDayIndex = null"
+                />
+                <circle :cx="day.x" :cy="day.nodeY" r="5" fill="#ffffff" stroke="#2563eb" stroke-width="2.5" class="svg-node" />
+                <text :x="day.x" :y="day.barY - 8" text-anchor="middle" class="svg-bar-val" :class="{ 'svg-bar-val--today': day.isToday }">
+                  {{ formatShortCurrency(day.revenue) }}
+                </text>
+                <text :x="day.x" :y="204" text-anchor="middle" class="svg-day-name" :class="{ 'svg-day-name--today': day.isToday }">{{ day.dayLabel }}</text>
+                <text :x="day.x" :y="220" text-anchor="middle" class="svg-day-date" :class="{ 'svg-day-date--today': day.isToday }">{{ day.shortDate }}</text>
+              </g>
+            </svg>
+
+            <div v-if="hoveredDayIndex !== null" class="chart-hover-card">
+              <span class="hover-date">{{ weeklyChartData[hoveredDayIndex].fullDateLabel }}</span>
+              <div class="hover-row"><span>Doanh thu:</span><strong class="hover-amt">{{ formatCurrency(weeklyChartData[hoveredDayIndex].revenue) }}</strong></div>
+              <div class="hover-row"><span>Giao dịch:</span><span>{{ weeklyChartData[hoveredDayIndex].transactionCount }} ca</span></div>
+            </div>
           </div>
+
+          <div class="chart-legend-strip">
+            <div class="legend-item"><span class="legend-swatch swatch-blue"></span> Ngày trong tuần</div>
+            <div class="legend-item"><span class="legend-swatch swatch-darkblue"></span> Hôm nay ({{ currentDateFormatted }})</div>
+            <RouterLink class="chart-link-more" to="/management/admin/reports/revenue">Xem báo cáo doanh thu chi tiết →</RouterLink>
+          </div>
+        </section>
+
+        <!-- Lưới 2 cột: Cảnh báo vận hành thực tế + Audit Log -->
+        <div class="workspace-grid">
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h3 class="panel-title">Cảnh Báo Vận Hành Phòng Khám</h3>
+                <p class="panel-subtitle">Tổng hợp trực tiếp từ kho vật tư, đặt lịch và hàng đợi</p>
+              </div>
+            </div>
+            <div class="alerts-stack">
+              <RouterLink class="alert-tile alert-tile--warn" to="/management/admin/medical-supplies">
+                <div class="alert-tile-head"><strong>Vật tư dưới ngưỡng tồn tối thiểu</strong><span>{{ lowStockItems.length }} mã</span></div>
+                <p v-if="lowStockItems.length">{{ lowStockItems.slice(0, 3).map(x => `${x.name} (${x.onHand}/${x.minimumStockThreshold} ${x.unit})`).join(' · ') }}</p>
+                <p v-else>Tất cả vật tư đang ở mức tồn an toàn.</p>
+              </RouterLink>
+
+              <RouterLink class="alert-tile alert-tile--info" to="/management/appointments">
+                <div class="alert-tile-head"><strong>Yêu cầu đặt lịch trực tuyến chờ duyệt</strong><span>{{ pendingRequests.length }} yêu cầu</span></div>
+                <p>Lễ tân/Admin kiểm tra thông tin và duyệt lịch hẹn để chuẩn bị tiếp đón.</p>
+              </RouterLink>
+
+              <RouterLink class="alert-tile alert-tile--neutral" to="/management/queue/today">
+                <div class="alert-tile-head"><strong>Trạng thái hàng đợi hôm nay</strong><span>{{ queueItems.length }} lượt</span></div>
+                <p>{{ waitingQueueCount }} đang chờ · {{ inConsultationCount }} đang khám · {{ pausedQueueCount }} tạm dừng bàn giao.</p>
+              </RouterLink>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h3 class="panel-title">Nhật Ký Thao Tác Gần Nhất</h3>
+                <p class="panel-subtitle">Ghi nhận bảo mật &amp; nghiệp vụ hệ thống</p>
+              </div>
+              <RouterLink class="panel-link" to="/management/admin/audit-logs">Xem tất cả →</RouterLink>
+            </div>
+            <div class="audit-table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr><th>Thời gian</th><th>Người thao tác</th><th>Hành động</th><th>Đối tượng</th></tr>
+                </thead>
+                <tbody>
+                  <tr v-if="!recentAuditLogs.length"><td colspan="4" class="empty-cell">Chưa có bản ghi nhật ký gần đây.</td></tr>
+                  <tr v-for="log in recentAuditLogs" :key="log.logId">
+                    <td class="mono-cell">{{ formatLogTime(log.createdAt) }}</td>
+                    <td><strong>{{ log.userName || `User #${log.userId || '?'}` }}</strong></td>
+                    <td><span class="action-badge" :class="getActionBadgeClass(log.action)">{{ getActionLabel(log.action) }}</span></td>
+                    <td>{{ log.entityType }} <span v-if="log.entityId">#{{ log.entityId }}</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
         </div>
+      </template>
 
-        <!-- SVG Chart -->
-        <div class="chart-wrapper">
-          <svg class="revenue-svg" viewBox="0 0 780 230" preserveAspectRatio="none" aria-label="Biểu đồ doanh thu tuần">
-            <defs>
-              <linearGradient id="barGradNormal" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#38bdf8" />
-                <stop offset="100%" stop-color="#0284c7" />
-              </linearGradient>
-              <linearGradient id="barGradToday" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#3b82f6" />
-                <stop offset="100%" stop-color="#1d4ed8" />
-              </linearGradient>
-              <linearGradient id="lineGlow" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="rgba(37, 99, 235, 0.22)" />
-                <stop offset="100%" stop-color="rgba(37, 99, 235, 0.0)" />
-              </linearGradient>
-            </defs>
-
-            <!-- Horizontal Grid Lines -->
-            <line x1="55" y1="35" x2="755" y2="35" stroke="#e2e8f0" stroke-dasharray="4,4" />
-            <line x1="55" y1="85" x2="755" y2="85" stroke="#e2e8f0" stroke-dasharray="4,4" />
-            <line x1="55" y1="135" x2="755" y2="135" stroke="#e2e8f0" stroke-dasharray="4,4" />
-            <line x1="55" y1="185" x2="755" y2="185" stroke="#cbd5e1" stroke-width="1.5" />
-
-            <!-- Left Axis Labels -->
-            <text x="50" y="38" text-anchor="end" class="svg-axis-text">{{ formatShortCurrency(maxWeeklyRevenue) }}</text>
-            <text x="50" y="88" text-anchor="end" class="svg-axis-text">{{ formatShortCurrency(maxWeeklyRevenue * 0.66) }}</text>
-            <text x="50" y="138" text-anchor="end" class="svg-axis-text">{{ formatShortCurrency(maxWeeklyRevenue * 0.33) }}</text>
-            <text x="50" y="188" text-anchor="end" class="svg-axis-text">0₫</text>
-
-            <!-- Area Fill Under Trend -->
-            <polygon :points="areaPoints" fill="url(#lineGlow)" />
-
-            <!-- Trend Line -->
-            <polyline :points="trendLinePoints" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
-
-            <!-- 7 Day Bars -->
-            <g v-for="(day, idx) in weeklyChartData" :key="day.dateKey">
-              <!-- Bar Rect -->
-              <rect
-                :x="day.x - 26"
-                :y="day.barY"
-                width="52"
-                :height="day.barHeight"
-                rx="6"
-                :fill="day.isToday ? 'url(#barGradToday)' : 'url(#barGradNormal)'"
-                class="svg-bar"
-                :class="{ 'svg-bar--today': day.isToday }"
-                @mouseenter="hoveredDayIndex = idx"
-                @mouseleave="hoveredDayIndex = null"
-              />
-
-              <!-- Trend Node Circle -->
-              <circle
-                :cx="day.x"
-                :cy="day.nodeY"
-                r="5"
-                fill="#ffffff"
-                stroke="#2563eb"
-                stroke-width="2.5"
-                class="svg-node"
-              />
-
-              <!-- Bar Value Text -->
-              <text
-                :x="day.x"
-                :y="day.barY - 8"
-                text-anchor="middle"
-                class="svg-bar-val"
-                :class="{ 'svg-bar-val--today': day.isToday }"
-              >
-                {{ formatShortCurrency(day.revenue) }}
-              </text>
-
-              <!-- Day Name -->
-              <text
-                :x="day.x"
-                :y="204"
-                text-anchor="middle"
-                class="svg-day-name"
-                :class="{ 'svg-day-name--today': day.isToday }"
-              >
-                {{ day.dayLabel }}
-              </text>
-
-              <!-- Short Date -->
-              <text
-                :x="day.x"
-                :y="220"
-                text-anchor="middle"
-                class="svg-day-date"
-                :class="{ 'svg-day-date--today': day.isToday }"
-              >
-                {{ day.shortDate }}
-              </text>
-            </g>
-          </svg>
-
-          <!-- Interactive Tooltip Box -->
-          <div v-if="hoveredDayIndex !== null" class="chart-hover-card">
-            <span class="hover-date">📅 {{ weeklyChartData[hoveredDayIndex].fullDateLabel }}</span>
-            <div class="hover-row">
-              <span>Doanh thu:</span>
-              <strong class="hover-amt">{{ formatCurrency(weeklyChartData[hoveredDayIndex].revenue) }}</strong>
+      <!-- ==================== 4B. GIAO DIỆN RIÊNG CHO LỄ TÂN / THU NGÂN ==================== -->
+      <template v-else-if="authStore.role === 'RECEPTIONIST'">
+        <div class="workspace-grid">
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h3 class="panel-title">Hàng Đợi Tiếp Đón Hôm Nay</h3>
+                <p class="panel-subtitle">Theo dõi số thứ tự và trạng thái xử lý tại phòng khám</p>
+              </div>
+              <RouterLink class="panel-link" to="/management/queue/today">Mở hàng đợi →</RouterLink>
             </div>
-            <div class="hover-row">
-              <span>Số ca thanh toán:</span>
-              <span>{{ weeklyChartData[hoveredDayIndex].transactionCount }} ca</span>
+            <p v-if="!queueItems.length" class="empty-box">Chưa có lượt chờ nào trong ngày hôm nay.</p>
+            <ul v-else class="work-list">
+              <li v-for="q in queueItems.slice(0, 6)" :key="q.queueEntryId" class="work-item">
+                <div class="work-item-left">
+                  <span class="queue-num">#{{ q.queueNumber }}</span>
+                  <div>
+                    <strong>{{ q.patientName }}</strong>
+                    <small>{{ q.patientCode }}<template v-if="q.roomName"> · {{ q.roomName }}</template></small>
+                  </div>
+                </div>
+                <span class="status-chip" :class="queueStatusClass(q.status)">{{ queueStatusLabel(q.status, q.statusText) }}</span>
+              </li>
+            </ul>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h3 class="panel-title">Yêu Cầu Đặt Lịch &amp; Lịch Hẹn Hôm Nay</h3>
+                <p class="panel-subtitle">Duyệt yêu cầu trực tuyến và tiếp đón khách có lịch hẹn</p>
+              </div>
+              <RouterLink class="panel-link" to="/management/appointments">Quản lý lịch hẹn →</RouterLink>
             </div>
-          </div>
+            <div class="sub-block">
+              <div class="sub-block-title">Yêu cầu trực tuyến chờ duyệt ({{ pendingRequests.length }})</div>
+              <p v-if="!pendingRequests.length" class="empty-box">Không có yêu cầu đặt lịch mới chờ duyệt.</p>
+              <ul v-else class="work-list">
+                <li v-for="req in pendingRequests.slice(0, 3)" :key="req.id" class="work-item">
+                  <div class="work-item-left">
+                    <span class="time-pill">{{ req.slotTime.slice(0, 5) }}</span>
+                    <div>
+                      <strong>{{ req.fullName }}</strong>
+                      <small>{{ formatDateOnly(req.appointmentDate) }} · {{ req.phone }}</small>
+                    </div>
+                  </div>
+                  <span class="status-chip chip-warn">Chờ duyệt</span>
+                </li>
+              </ul>
+            </div>
+
+            <div class="sub-block">
+              <div class="sub-block-title">Lịch hẹn tại phòng khám hôm nay ({{ deskAppointments.length }})</div>
+              <p v-if="!deskAppointments.length" class="empty-box">Không có lịch hẹn nào trong ngày hôm nay.</p>
+              <ul v-else class="work-list">
+                <li v-for="a in deskAppointments.slice(0, 4)" :key="a.appointmentId" class="work-item">
+                  <div class="work-item-left">
+                    <span class="time-pill">{{ a.slotTime.slice(0, 5) }}</span>
+                    <div>
+                      <strong>{{ a.patientName }}</strong>
+                      <small>{{ a.patientCode }}<template v-if="a.notes"> · {{ a.notes }}</template></small>
+                    </div>
+                  </div>
+                  <span class="status-chip" :class="apptStatusClass(a.status)">{{ apptStatusLabel(a.status) }}</span>
+                </li>
+              </ul>
+            </div>
+          </section>
         </div>
+      </template>
 
-        <div class="chart-legend-strip">
-          <div class="legend-item"><span class="legend-swatch swatch-blue"></span> Doanh thu các ngày trong tuần</div>
-          <div class="legend-item"><span class="legend-swatch swatch-darkblue"></span> Hôm nay ({{ currentDateFormatted }})</div>
-          <div class="legend-item"><span class="legend-line"></span> Đường xu hướng dòng tiền</div>
-          <RouterLink class="chart-link-more" to="/management/admin/reports/revenue">Xem báo cáo chi tiết & xuất CSV →</RouterLink>
-        </div>
-      </section>
-
-      <!-- 4. Khối Thông Tin Lưu Ý Quan Trọng (Notice Board & Safety Alerts) -->
-      <section class="panel notices-panel">
-        <div class="panel-header">
-          <div class="panel-title-wrap">
-            <span class="panel-icon">⚠️</span>
-            <div>
-              <h3 class="panel-title">Thông Tin Lưu Ý & Cảnh Báo Phòng Khám</h3>
-              <p class="panel-subtitle">Các sự vụ quan trọng cần nhân sự kiểm tra, xử lý ngay trong ca trực</p>
+      <!-- ==================== 4C. GIAO DIỆN RIÊNG CHO NHA SĨ ==================== -->
+      <template v-else-if="authStore.role === 'DENTIST'">
+        <div class="workspace-grid">
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h3 class="panel-title">Danh Sách Bệnh Nhân Cần Khám Hôm Nay</h3>
+                <p class="panel-subtitle">Bao gồm bệnh nhân đang chờ, đang khám và ca tạm dừng bàn giao</p>
+              </div>
+              <RouterLink class="panel-link" to="/management/clinical/diagnosis">Vào khám &amp; FDI →</RouterLink>
             </div>
-          </div>
-          <span class="badge-notice-count">4 cảnh báo đang hoạt động</span>
-        </div>
+            <p v-if="!queueItems.length" class="empty-box">Hiện chưa có bệnh nhân nào trong hàng đợi hôm nay.</p>
+            <ul v-else class="work-list">
+              <li v-for="q in queueItems.slice(0, 7)" :key="q.queueEntryId" class="work-item">
+                <div class="work-item-left">
+                  <span class="queue-num">#{{ q.queueNumber }}</span>
+                  <div>
+                    <strong>{{ q.patientName }}</strong>
+                    <small>{{ q.patientCode }}<template v-if="q.dentistName"> · {{ q.dentistName }}</template><template v-if="q.notes"> · {{ q.notes }}</template></small>
+                  </div>
+                </div>
+                <span class="status-chip" :class="queueStatusClass(q.status)">{{ queueStatusLabel(q.status, q.statusText) }}</span>
+              </li>
+            </ul>
+          </section>
 
-        <div class="notices-grid">
-          <!-- Notice 1: Kho vật tư chạm ngưỡng tồn -->
-          <div class="notice-card notice-card--warning" @click="goTo('/management/admin/medical-supplies')">
-            <div class="notice-badge-line">
-              <span class="notice-badge badge-warn">Kho Vật Tư Y Tế</span>
-              <span class="notice-time">Cần nhập kho</span>
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h3 class="panel-title">Phòng Làm Việc &amp; Quy Tắc Lâm Sàng</h3>
+                <p class="panel-subtitle">Trạng thái phòng hiện tại và lưu ý an toàn điều trị</p>
+              </div>
+              <RouterLink class="panel-link" to="/management/staff/workspace">Đổi phòng →</RouterLink>
             </div>
-            <h4 class="notice-title">2 vật tư tiêu hao chạm ngưỡng an toàn</h4>
-            <p class="notice-desc">
-              <strong>Găng tay y tế cao su</strong> (còn 6/10 hộp) và <strong>Kim tiêm tê 27G</strong> (còn 3/5 hộp) đang ở mức tối thiểu.
-            </p>
-            <span class="notice-action-link">Kiểm tra danh mục & lập phiếu nhập kho →</span>
-          </div>
 
-          <!-- Notice 2: Yêu cầu đặt lịch online chờ duyệt -->
-          <div class="notice-card notice-card--info" @click="goTo('/management/appointments/requests')">
-            <div class="notice-badge-line">
-              <span class="notice-badge badge-info">Đặt Lịch Trực Tuyến</span>
-              <span class="notice-time">Lễ tân duyệt</span>
+            <div class="workspace-card" :class="{ 'workspace-card--empty': !myWorkspace?.roomName }">
+              <div class="ws-row">
+                <span class="ws-label">Phòng điều trị hiện tại</span>
+                <strong class="ws-val">{{ myWorkspace?.roomName || 'Chưa chọn phòng làm việc hôm nay' }}</strong>
+              </div>
+              <p v-if="!myWorkspace?.roomName" class="ws-hint">
+                Vui lòng chọn phòng làm việc trước khi gọi bệnh nhân và bắt đầu ca khám.
+              </p>
+              <p v-else class="ws-hint">
+                Phòng đang đồng bộ tới màn hình hàng đợi, phụ tá hỗ trợ và TV gọi số.
+              </p>
             </div>
-            <h4 class="notice-title">{{ operationalStats.pendingBookingRequests }} yêu cầu đặt lịch trực tuyến mới</h4>
-            <p class="notice-desc">
-              Bệnh nhân đã gửi yêu cầu từ trang chủ website. Lễ tân cần gọi điện đối soát và xếp slot hẹn phù hợp.
-            </p>
-            <span class="notice-action-link">Duyệt yêu cầu đặt lịch ngay →</span>
-          </div>
 
-          <!-- Notice 3: Phòng & Ghế nha khoa -->
-          <div class="notice-card notice-card--chairs" @click="goTo('/management/staff/chair-status')">
-            <div class="notice-badge-line">
-              <span class="notice-badge badge-chair">Phòng Ghế Điều Trị</span>
-              <span class="notice-time">Phụ tá trực</span>
+            <ul class="safety-checklist">
+              <li><strong>Kiểm tra tiền sử &amp; sinh hiệu:</strong> Luôn xem cảnh báo dị ứng thuốc và huyết áp trước khi tiêm tê/thủ thuật.</li>
+              <li><strong>Sơ đồ răng FDI:</strong> Chọn đúng bộ răng 32/20 răng và 5 mặt răng; cập nhật trạng thái sau điều trị dưới dạng bản ghi mới.</li>
+              <li><strong>Bàn giao ca (Tạm dừng):</strong> Tạm dừng Visit để nhả phòng nhưng giữ nguyên thứ tự hàng đợi cho nha sĩ kế tiếp.</li>
+              <li><strong>Kê đơn &amp; Chốt hồ sơ:</strong> Kết thúc khám để khóa hồ sơ và chuyển hóa đơn nháp sang thu ngân.</li>
+            </ul>
+          </section>
+        </div>
+      </template>
+
+      <!-- ==================== 4D. GIAO DIỆN RIÊNG CHO PHỤ TÁ ==================== -->
+      <template v-else-if="authStore.role === 'ASSISTANT'">
+        <div class="workspace-grid">
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h3 class="panel-title">Trạng Thái Phòng &amp; Ghế Điều Trị</h3>
+                <p class="panel-subtitle">Theo dõi tình trạng sẵn sàng phục vụ và khử khuẩn theo ca</p>
+              </div>
+              <RouterLink class="panel-link" to="/management/staff/chair-status">Cập nhật trạng thái →</RouterLink>
             </div>
-            <h4 class="notice-title">Ghế #03 đang khử khuẩn, Ghế #05 bảo trì</h4>
-            <p class="notice-desc">
-              Phụ tá cần hoàn tất quy trình khử trùng ghế #03 trước 10:30 để đón ca nhổ răng tiếp theo của BS. Hoàng.
-            </p>
-            <span class="notice-action-link">Cập nhật trạng thái ghế điều trị →</span>
-          </div>
-
-          <!-- Notice 4: An toàn lâm sàng & tiền sử dị ứng -->
-          <div class="notice-card notice-card--safety" @click="goTo('/management/patients')">
-            <div class="notice-badge-line">
-              <span class="notice-badge badge-alert">An Toàn Lâm Sàng</span>
-              <span class="notice-time">Quy tắc 3 lớp</span>
+            <p v-if="!chairItems.length" class="empty-box">Không có dữ liệu phòng/ghế.</p>
+            <div v-else class="chairs-grid">
+              <div v-for="c in chairItems" :key="c.id" class="chair-tile" :class="chairToneClass(c.status)">
+                <div class="chair-tile-top">
+                  <strong>{{ c.roomName }}</strong>
+                  <span class="chair-code">{{ c.chairNumber }}</span>
+                </div>
+                <span class="status-chip" :class="chairStatusChipClass(c.status)">{{ chairStatusLabel(c.status, c.statusText) }}</span>
+              </div>
             </div>
-            <h4 class="notice-title">Cảnh báo tiền sử tim mạch & dị ứng thuốc tê</h4>
-            <p class="notice-desc">
-              Kiểm tra sinh hiệu (huyết áp, SpO₂) và tiền sử dị ứng kháng sinh/thuốc tê trước khi tiêm tê hoặc làm thủ thuật.
-            </p>
-            <span class="notice-action-link">Xem danh sách hồ sơ & cảnh báo →</span>
-          </div>
-        </div>
-      </section>
+          </section>
 
-      <!-- 5. Danh Sách Audit Log Rút Gọn (Nhật ký thao tác gần nhất) -->
-      <section class="panel audit-panel">
-        <div class="panel-header">
-          <div class="panel-title-wrap">
-            <span class="panel-icon">📜</span>
-            <div>
-              <h3 class="panel-title">Nhật Ký Thao Tác Gần Nhất (Audit Log Rút Gọn)</h3>
-              <p class="panel-subtitle">Ghi nhận minh bạch lịch sử các hoạt động vận hành &amp; bảo mật trong hệ thống</p>
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h3 class="panel-title">Cảnh Báo Tồn Kho &amp; Hàng Đợi Hỗ Trợ</h3>
+                <p class="panel-subtitle">Vật tư chạm ngưỡng tối thiểu và danh sách bệnh nhân chờ gọi số</p>
+              </div>
+              <RouterLink class="panel-link" to="/management/inventory/issues">Tiêu hao theo ca →</RouterLink>
             </div>
-          </div>
-          <RouterLink class="btn-more-logs" to="/management/admin/audit-logs">
-            Xem toàn bộ nhật ký →
-          </RouterLink>
-        </div>
 
-        <div class="audit-table-wrap">
-          <table class="audit-table">
-            <thead>
-              <tr>
-                <th>Thời gian</th>
-                <th>Người thực hiện</th>
-                <th>Hành động</th>
-                <th>Đối tượng</th>
-                <th>Chi tiết tóm tắt</th>
-                <th>IP</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="loadingLogs">
-                <td colspan="6" class="text-center py-4">Đang tải nhật ký thao tác...</td>
-              </tr>
-              <tr v-else-if="!recentAuditLogs.length">
-                <td colspan="6" class="text-center py-4 text-muted">Chưa có nhật ký nào được ghi nhận hôm nay.</td>
-              </tr>
-              <tr v-for="log in recentAuditLogs" :key="log.logId" class="audit-row">
-                <td class="log-time">{{ formatLogTime(log.createdAt) }}</td>
-                <td class="log-user">
-                  <span class="user-name">{{ log.userName || 'Hệ thống' }}</span>
-                  <small v-if="log.userId" class="user-id">#{{ log.userId }}</small>
-                </td>
-                <td>
-                  <span class="action-badge" :class="getActionBadgeClass(log.action)">
-                    {{ getActionLabel(log.action) }}
-                  </span>
-                </td>
-                <td class="log-entity">
-                  <span class="entity-type">{{ log.entityType }}</span>
-                  <small v-if="log.entityId" class="entity-id">#{{ log.entityId }}</small>
-                </td>
-                <td class="log-detail">{{ log.detail || 'Thao tác hợp lệ qua API' }}</td>
-                <td class="log-ip">{{ log.ipAddress || '—' }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+            <div class="sub-block">
+              <div class="sub-block-title">Vật tư cần nhập thêm ({{ lowStockItems.length }})</div>
+              <p v-if="!lowStockItems.length" class="empty-box">Tất cả vật tư đang đủ định mức tồn kho an toàn.</p>
+              <ul v-else class="work-list">
+                <li v-for="item in lowStockItems.slice(0, 5)" :key="item.medicalSupplyId" class="work-item">
+                  <div class="work-item-left">
+                    <span class="code-pill">{{ item.code }}</span>
+                    <div>
+                      <strong>{{ item.name }}</strong>
+                      <small>Tồn hiện tại: {{ item.onHand }} {{ item.unit }} · Tối thiểu: {{ item.minimumStockThreshold }} {{ item.unit }}</small>
+                    </div>
+                  </div>
+                  <span class="status-chip chip-danger">Tồn thấp</span>
+                </li>
+              </ul>
+            </div>
 
-        <div class="panel-footer-action">
-          <span>Đang hiển thị <strong>{{ recentAuditLogs.length }}</strong> thao tác mới nhất</span>
-          <RouterLink class="link-view-all" to="/management/admin/audit-logs">
-            Tra cứu nhật ký nâng cao & lọc ngày →
-          </RouterLink>
+            <div class="sub-block">
+              <div class="sub-block-title">Nha sĩ đồng hành &amp; Hàng đợi ({{ queueItems.length }} lượt)</div>
+              <div class="workspace-card" :class="{ 'workspace-card--empty': !myWorkspace?.dentistName }">
+                <div class="ws-row">
+                  <span class="ws-label">Nha sĩ đang hỗ trợ</span>
+                  <strong class="ws-val">{{ myWorkspace?.dentistName || 'Chưa chọn nha sĩ hỗ trợ' }}</strong>
+                </div>
+                <p class="ws-hint" v-if="myWorkspace?.roomName">Phòng đồng bộ: <strong>{{ myWorkspace.roomName }}</strong></p>
+                <p class="ws-hint" v-else>Chọn nha sĩ tại mục Nhóm &amp; phòng làm việc để đồng bộ phòng điều trị.</p>
+              </div>
+            </div>
+          </section>
         </div>
-      </section>
+      </template>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { apiClient } from '@/services/api';
 import { reportsService } from '@/services/reports';
+import { queueService, type QueueEntryResponse } from '@/services/queue';
+import { bookingRequestsService, type BookingRequestRow } from '@/services/bookingRequests';
+import { appointmentsService, type AppointmentResponse } from '@/services/appointments';
+import { chairStatusService, type ChairStatusRow } from '@/services/chairStatus';
+import { stockReceiptsService, type StockItem } from '@/services/stockReceipts';
+import { workspacesService, type WorkspaceSnapshot } from '@/services/workspaces';
 
 const authStore = useAuthStore();
-const router = useRouter();
 
-// State
 const loadingData = ref(false);
-const loadingLogs = ref(false);
 const hoveredDayIndex = ref<number | null>(null);
 
-// Revenue Data State
 const revenueSummary = ref({
   todayRevenue: 0,
   todayTransactions: 0,
-  weeklyRevenue: 585000,
-  totalInvoiced: 585000,
-  outstanding: 0,
+  weeklyRevenue: 0,
 });
 
 interface DayRevenueItem {
@@ -448,18 +454,6 @@ interface DayRevenueItem {
 const weeklyChartData = ref<DayRevenueItem[]>([]);
 const maxWeeklyRevenue = ref(1000000);
 
-// Operational Stats
-const operationalStats = ref({
-  todayCheckIns: 18,
-  waitingQueueCount: 3,
-  totalChairs: 6,
-  occupiedChairs: 4,
-  availableChairs: 2,
-  pendingBookingRequests: 2,
-  lowStockItemsCount: 2,
-});
-
-// Audit Logs State
 interface SimpleAuditLog {
   logId: number;
   userId: number | null;
@@ -467,31 +461,139 @@ interface SimpleAuditLog {
   action: string;
   entityType: string;
   entityId: number | null;
-  detail: string | null;
-  ipAddress: string | null;
   createdAt: string;
 }
-const recentAuditLogs = ref<SimpleAuditLog[]>([]);
 
-// Computed
-const isStaff = computed(() => {
-  const staffRoles = ['ADMIN', 'RECEPTIONIST', 'DENTIST', 'ASSISTANT'];
-  return staffRoles.includes(authStore.role);
+const recentAuditLogs = ref<SimpleAuditLog[]>([]);
+const queueItems = ref<QueueEntryResponse[]>([]);
+const pendingRequests = ref<BookingRequestRow[]>([]);
+const deskAppointments = ref<AppointmentResponse[]>([]);
+const chairItems = ref<ChairStatusRow[]>([]);
+const lowStockItems = ref<StockItem[]>([]);
+const myWorkspace = ref<WorkspaceSnapshot | null>(null);
+
+const isStaff = computed(() => ['ADMIN', 'RECEPTIONIST', 'DENTIST', 'ASSISTANT'].includes(authStore.role));
+const roleSlug = computed(() => (authStore.role || 'staff').toLowerCase());
+
+const waitingQueueCount = computed(() => queueItems.value.filter(q => q.status === 1 || q.status === 6).length);
+const inConsultationCount = computed(() => queueItems.value.filter(q => q.status === 2).length);
+const pausedQueueCount = computed(() => queueItems.value.filter(q => q.status === 8).length);
+const completedQueueCount = computed(() => queueItems.value.filter(q => q.status === 3).length);
+const availableChairsCount = computed(() => chairItems.value.filter(c => c.status === 1 && c.isActive).length);
+const occupiedChairsCount = computed(() => chairItems.value.filter(c => c.status === 2).length);
+
+const actorMeta = computed(() => {
+  switch (authStore.role) {
+    case 'ADMIN':
+      return {
+        badge: 'Quản trị viên phòng khám',
+        title: 'Tổng Quan Điều Hành Phòng Khám',
+        quickHint: 'Quản lý nhân sự, danh mục chuyên môn, cấu hình và báo cáo doanh thu'
+      };
+    case 'RECEPTIONIST':
+      return {
+        badge: 'Lễ tân / Thu ngân',
+        title: 'Bàn Làm Việc Tiếp Đón & Thu Ngân',
+        quickHint: 'Duyệt lịch hẹn, quét QR CCCD check-in hàng đợi và thu ngân'
+      };
+    case 'DENTIST':
+      return {
+        badge: 'Nha sĩ điều trị',
+        title: 'Bảng Điều Khiển Lâm Sàng Nha Sĩ',
+        quickHint: 'Chọn phòng làm việc, gọi bệnh nhân từ hàng đợi và cập nhật sơ đồ FDI'
+      };
+    case 'ASSISTANT':
+      return {
+        badge: 'Phụ tá điều trị',
+        title: 'Điều Phối Phòng Ghế & Kho Vật Tư',
+        quickHint: 'Cập nhật phòng/ghế, hỗ trợ hàng đợi và xác nhận tiêu hao vật tư theo ca'
+      };
+    default:
+      return {
+        badge: 'Nhân viên',
+        title: 'Bảng Điều Khiển Tổng Quan',
+        quickHint: 'Truy cập nhanh các nghiệp vụ được phân quyền'
+      };
+  }
 });
 
-const roleIcon = computed(() => {
+const roleKpis = computed(() => {
   switch (authStore.role) {
-    case 'ADMIN': return '👑';
-    case 'RECEPTIONIST': return '📋';
-    case 'DENTIST': return '🦷';
-    case 'ASSISTANT': return '🧤';
-    default: return '👤';
+    case 'ADMIN':
+      return [
+        { label: 'Doanh thu hôm nay', tag: 'Tài chính', value: formatCurrency(revenueSummary.value.todayRevenue), foot: `${revenueSummary.value.todayTransactions} giao dịch thực thu`, tone: 'blue' },
+        { label: 'Doanh thu 7 ngày', tag: 'Tuần này', value: formatCurrency(revenueSummary.value.weeklyRevenue), foot: 'Tiền mặt & chuyển khoản xác nhận', tone: 'indigo' },
+        { label: 'Hàng đợi hôm nay', tag: 'Tiếp đón', value: `${queueItems.value.length} lượt`, foot: `${waitingQueueCount.value} chờ · ${inConsultationCount.value} đang khám`, tone: 'teal' },
+        { label: 'Phòng / Ghế điều trị', tag: 'Vận hành', value: `${occupiedChairsCount.value}/${chairItems.value.length || 0}`, foot: `${availableChairsCount.value} phòng sẵn sàng · ${lowStockItems.value.length} vật tư tồn thấp`, tone: 'amber' }
+      ];
+    case 'RECEPTIONIST':
+      return [
+        { label: 'Yêu cầu đặt lịch mới', tag: 'Trực tuyến', value: `${pendingRequests.value.length}`, foot: 'Yêu cầu đang chờ duyệt', tone: 'amber' },
+        { label: 'Lịch hẹn hôm nay', tag: 'Tại quầy', value: `${deskAppointments.value.length}`, foot: `${deskAppointments.value.filter(a => a.status === 'Scheduled').length} lịch chưa check-in`, tone: 'blue' },
+        { label: 'Hàng đợi đang chờ', tag: 'Tiếp đón', value: `${waitingQueueCount.value}`, foot: `${inConsultationCount.value} đang khám · ${pausedQueueCount.value} tạm dừng`, tone: 'teal' },
+        { label: 'Tổng lượt hôm nay', tag: 'Trong ngày', value: `${queueItems.value.length}`, foot: `${completedQueueCount.value} ca đã hoàn tất khám`, tone: 'indigo' }
+      ];
+    case 'DENTIST':
+      return [
+        { label: 'Phòng làm việc', tag: 'Hôm nay', value: myWorkspace.value?.roomName || 'Chưa chọn', foot: myWorkspace.value?.chairNumber ? `Ghế đồng bộ: ${myWorkspace.value.chairNumber}` : 'Cần chọn phòng trước khi khám', tone: myWorkspace.value?.roomName ? 'teal' : 'amber' },
+        { label: 'Bệnh nhân chờ khám', tag: 'Hàng đợi', value: `${waitingQueueCount.value}`, foot: 'Sẵn sàng gọi vào phòng', tone: 'blue' },
+        { label: 'Đang khám / Tạm dừng', tag: 'Lâm sàng', value: `${inConsultationCount.value} / ${pausedQueueCount.value}`, foot: 'Bao gồm ca chờ bàn giao', tone: 'indigo' },
+        { label: 'Hoàn tất hôm nay', tag: 'Kết quả', value: `${completedQueueCount.value} ca`, foot: `Tổng ${queueItems.value.length} lượt trong hàng đợi`, tone: 'emerald' }
+      ];
+    case 'ASSISTANT':
+      return [
+        { label: 'Phòng / Ghế sẵn sàng', tag: 'Phòng khám', value: `${availableChairsCount.value}/${chairItems.value.length || 0}`, foot: `${occupiedChairsCount.value} phòng đang có ca khám`, tone: 'teal' },
+        { label: 'Nha sĩ đồng hành', tag: 'Phối hợp', value: myWorkspace.value?.dentistName || 'Chưa chọn', foot: myWorkspace.value?.roomName || 'Đồng bộ phòng theo nha sĩ', tone: 'blue' },
+        { label: 'Vật tư tồn thấp', tag: 'Cảnh báo kho', value: `${lowStockItems.value.length} mã`, foot: 'Chạm hoặc dưới ngưỡng tối thiểu', tone: lowStockItems.value.length ? 'amber' : 'emerald' },
+        { label: 'Khách đang chờ', tag: 'Hàng đợi', value: `${waitingQueueCount.value}`, foot: `Tổng ${queueItems.value.length} lượt khám hôm nay`, tone: 'indigo' }
+      ];
+    default:
+      return [];
+  }
+});
+
+const roleQuickActions = computed(() => {
+  switch (authStore.role) {
+    case 'ADMIN':
+      return [
+        { label: '+ Quản lý nhân sự', to: '/management/admin/staff', primary: true },
+        { label: 'Dịch vụ & bảng giá', to: '/management/admin/services' },
+        { label: 'Danh mục vật tư', to: '/management/admin/medical-supplies' },
+        { label: 'Danh mục thuốc', to: '/management/admin/medicines' },
+        { label: 'Báo cáo doanh thu', to: '/management/admin/reports/revenue' },
+        { label: 'Nhật ký thao tác', to: '/management/admin/audit-logs' }
+      ];
+    case 'RECEPTIONIST':
+      return [
+        { label: 'Tiếp đón & Check-in (QR)', to: '/management/queue/check-in', primary: true },
+        { label: 'Quản lý lịch hẹn', to: '/management/appointments' },
+        { label: 'Tra cứu & Thu tiền', to: '/management/invoices' },
+        { label: 'Hàng đợi hôm nay', to: '/management/queue/today' },
+        { label: 'Hồ sơ bệnh nhân', to: '/management/patients' }
+      ];
+    case 'DENTIST':
+      return [
+        { label: 'Khám & Chẩn đoán FDI', to: '/management/clinical/diagnosis', primary: true },
+        { label: 'Chọn phòng làm việc', to: '/management/staff/workspace' },
+        { label: 'Hàng đợi hôm nay', to: '/management/queue/today' },
+        { label: 'Hồ sơ bệnh nhân', to: '/management/patients' },
+        { label: 'Xem tồn vật tư', to: '/management/inventory/receipts' }
+      ];
+    case 'ASSISTANT':
+      return [
+        { label: 'Cập nhật phòng điều trị', to: '/management/staff/chair-status', primary: true },
+        { label: 'Xác nhận tiêu hao theo ca', to: '/management/inventory/issues' },
+        { label: 'Nhập kho vật tư', to: '/management/inventory/receipts' },
+        { label: 'Nhóm & phòng làm việc', to: '/management/staff/workspace' },
+        { label: 'Hàng đợi hôm nay', to: '/management/queue/today' }
+      ];
+    default:
+      return [];
   }
 });
 
 const currentDateFormatted = computed(() => {
-  const now = new Date();
-  return now.toLocaleDateString('vi-VN', {
+  return new Date().toLocaleDateString('vi-VN', {
     weekday: 'long',
     day: '2-digit',
     month: '2-digit',
@@ -499,11 +601,9 @@ const currentDateFormatted = computed(() => {
   });
 });
 
-// Chart SVG Points Calculation
-const trendLinePoints = computed(() => {
-  if (!weeklyChartData.value.length) return '';
-  return weeklyChartData.value.map(d => `${d.x},${d.nodeY}`).join(' ');
-});
+const trendLinePoints = computed(() =>
+  weeklyChartData.value.length ? weeklyChartData.value.map(d => `${d.x},${d.nodeY}`).join(' ') : ''
+);
 
 const areaPoints = computed(() => {
   if (!weeklyChartData.value.length) return '';
@@ -513,127 +613,138 @@ const areaPoints = computed(() => {
   return `${first.x},185 ${points} ${last.x},185`;
 });
 
-// Navigation helper
-function goTo(path: string) {
-  router.push(path);
-}
-
-// Formatters
 function formatCurrency(val: number): string {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val || 0);
 }
 
 function formatShortCurrency(val: number): string {
-  if (!val || val === 0) return '0₫';
-  if (val >= 1000000) {
-    return (val / 1000000).toFixed(1).replace('.0', '') + ' tr₫';
-  }
-  if (val >= 1000) {
-    return (val / 1000).toFixed(0) + 'k₫';
-  }
-  return val + '₫';
+  if (!val) return '0₫';
+  if (val >= 1000000) return `${(val / 1000000).toFixed(1).replace('.0', '')} tr`;
+  if (val >= 1000) return `${Math.round(val / 1000)}k`;
+  return `${val}₫`;
+}
+
+function formatDateOnly(val: string): string {
+  if (!val) return '';
+  return new Intl.DateTimeFormat('vi-VN').format(new Date(`${val.slice(0, 10)}T00:00:00`));
 }
 
 function formatLogTime(isoStr: string): string {
   if (!isoStr) return '—';
-  try {
-    const d = new Date(isoStr);
-    const time = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const date = d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
-    return `${time} ${date}`;
-  } catch {
-    return isoStr;
-  }
+  const d = new Date(isoStr);
+  return `${d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ${d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}`;
 }
 
 function getActionLabel(action: string): string {
   const map: Record<string, string> = {
-    'LOGIN': 'Đăng nhập',
-    'LOGIN_FAILED': 'Sai mật khẩu',
-    'LOGOUT': 'Đăng xuất',
-    'CREATE': 'Tạo mới',
-    'UPDATE': 'Cập nhật',
-    'DELETE': 'Xóa',
-    'PAYMENT': 'Thu tiền',
-    'CHECK_IN': 'Tiếp đón',
-    'DISCOUNT': 'Giảm giá',
-    'HANDOVER': 'Giao thuốc',
+    LOGIN: 'Đăng nhập',
+    LOGIN_FAILED: 'Sai mật khẩu',
+    LOGOUT: 'Đăng xuất',
+    CREATE: 'Tạo mới',
+    UPDATE: 'Cập nhật',
+    DELETE: 'Xóa',
+    QUEUE_CHECKED_IN: 'Tiếp đón',
+    PAYMENT_CONFIRMED: 'Thu tiền',
   };
   return map[action] || action;
 }
 
 function getActionBadgeClass(action: string): string {
-  switch (action) {
-    case 'LOGIN': return 'badge-login';
-    case 'CREATE': return 'badge-create';
-    case 'UPDATE': return 'badge-update';
-    case 'DELETE': return 'badge-delete';
-    case 'PAYMENT': return 'badge-payment';
-    default: return 'badge-default';
-  }
+  if (action === 'LOGIN') return 'badge-login';
+  if (action === 'CREATE') return 'badge-create';
+  if (action.includes('PAYMENT')) return 'badge-payment';
+  if (action === 'DELETE') return 'badge-delete';
+  return 'badge-default';
 }
 
-// Data Loaders
-async function refreshAllData() {
-  loadingData.value = true;
-  await Promise.allSettled([
-    loadRevenueReport(),
-    loadRecentAuditLogs(),
-    loadOperationalStats()
-  ]);
-  loadingData.value = false;
+function queueStatusLabel(status: number, fallback: string): string {
+  const map: Record<number, string> = {
+    1: 'Đang chờ',
+    2: 'Đang khám',
+    3: 'Hoàn tất',
+    4: 'Đã hủy',
+    5: 'Chụp X-quang',
+    6: 'Đang gọi số',
+    7: 'Vắng mặt',
+    8: 'Tạm dừng'
+  };
+  return map[status] || fallback || 'Khác';
+}
+
+function queueStatusClass(status: number): string {
+  if (status === 2) return 'chip-blue';
+  if (status === 3) return 'chip-green';
+  if (status === 8 || status === 5) return 'chip-warn';
+  if (status === 4 || status === 7) return 'chip-muted';
+  return 'chip-info';
+}
+
+function apptStatusLabel(status: string): string {
+  const map: Record<string, string> = {
+    Scheduled: 'Đã đặt lịch',
+    CheckedIn: 'Đã tiếp đón',
+    Completed: 'Hoàn tất',
+    Cancelled: 'Đã hủy'
+  };
+  return map[status] || status;
+}
+
+function apptStatusClass(status: string): string {
+  if (status === 'CheckedIn') return 'chip-blue';
+  if (status === 'Completed') return 'chip-green';
+  if (status === 'Cancelled') return 'chip-muted';
+  return 'chip-info';
+}
+
+function chairStatusLabel(status: number, fallback: string): string {
+  const map: Record<number, string> = { 1: 'Sẵn sàng', 2: 'Đang dùng', 3: 'Bảo trì', 4: 'Ngưng hoạt động' };
+  return map[status] || fallback;
+}
+
+function chairStatusChipClass(status: number): string {
+  if (status === 1) return 'chip-green';
+  if (status === 2) return 'chip-blue';
+  if (status === 3) return 'chip-warn';
+  return 'chip-muted';
+}
+
+function chairToneClass(status: number): string {
+  if (status === 1) return 'chair-tile--free';
+  if (status === 2) return 'chair-tile--busy';
+  return 'chair-tile--maint';
 }
 
 async function loadRevenueReport() {
   const today = new Date();
   const past7Days = new Date();
   past7Days.setDate(today.getDate() - 6);
-
-  const formatDateOnly = (d: Date) => d.toISOString().split('T')[0];
-  const fromDate = formatDateOnly(past7Days);
-  const toDate = formatDateOnly(today);
+  const toIsoDate = (d: Date) => d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' });
+  const fromDate = toIsoDate(past7Days);
+  const toDate = toIsoDate(today);
 
   try {
-    const res = await reportsService.revenue({
-      fromDate,
-      toDate,
-      groupBy: 'Auto',
-      top: '10',
-      sortBy: 'Revenue'
-    });
-
-    if (res && res.summary) {
-      revenueSummary.value.weeklyRevenue = res.summary.netRevenue || res.summary.grossRevenue || 585000;
-      revenueSummary.value.totalInvoiced = res.summary.totalInvoiced || 585000;
-      revenueSummary.value.outstanding = res.summary.totalOutstanding || 0;
+    const res = await reportsService.revenue({ fromDate, toDate, groupBy: 'Auto', top: '10', sortBy: 'Revenue' });
+    if (res?.summary) {
+      revenueSummary.value.weeklyRevenue = res.summary.netRevenue || res.summary.grossRevenue || 0;
     }
 
     const days: DayRevenueItem[] = [];
     const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-    const startX = 85;
-    const stepX = 100;
-
     let highest = 0;
 
     for (let i = 0; i < 7; i++) {
       const curDate = new Date(past7Days);
       curDate.setDate(past7Days.getDate() + i);
-      const curDateKey = formatDateOnly(curDate);
+      const curDateKey = toIsoDate(curDate);
       const isToday = curDateKey === toDate;
-
       const found = res?.dailyRevenue?.find(d => d.date === curDateKey);
-      let dayRev = found ? (found.revenue || found.grossRevenue || 0) : 0;
+      const dayRev = found ? (found.revenue || found.grossRevenue || 0) : 0;
       const txCount = found ? found.transactionCount : 0;
-
-      if (dayRev === 0 && i === 5 && revenueSummary.value.weeklyRevenue > 0) {
-        dayRev = revenueSummary.value.weeklyRevenue;
-      }
 
       if (isToday) {
         revenueSummary.value.todayRevenue = dayRev;
-        revenueSummary.value.todayTransactions = txCount || (dayRev > 0 ? 1 : 0);
+        revenueSummary.value.todayTransactions = txCount;
       }
-
       if (dayRev > highest) highest = dayRev;
 
       days.push({
@@ -642,993 +753,319 @@ async function loadRevenueReport() {
         shortDate: `${curDate.getDate()}/${curDate.getMonth() + 1}`,
         fullDateLabel: curDate.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }),
         revenue: dayRev,
-        transactionCount: txCount || (dayRev > 0 ? 1 : 0),
+        transactionCount: txCount,
         isToday,
-        x: startX + i * stepX,
+        x: 85 + i * 100,
         barY: 185,
         barHeight: 0,
         nodeY: 185
       });
     }
 
-    const ceiling = highest > 0 ? Math.ceil(highest * 1.25 / 100000) * 100000 : 1000000;
+    const ceiling = highest > 0 ? Math.ceil((highest * 1.25) / 100000) * 100000 : 1000000;
     maxWeeklyRevenue.value = ceiling;
-
-    const maxHeight = 130;
-    const baseLine = 185;
-
     days.forEach(d => {
       const ratio = d.revenue > 0 ? Math.min(d.revenue / ceiling, 1) : 0.04;
-      const h = Math.max(ratio * maxHeight, 6);
+      const h = Math.max(ratio * 130, 6);
       d.barHeight = h;
-      d.barY = baseLine - h;
-      d.nodeY = Math.max(baseLine - h - 6, 38);
+      d.barY = 185 - h;
+      d.nodeY = Math.max(185 - h - 6, 38);
     });
-
     weeklyChartData.value = days;
   } catch {
-    buildFallbackChart(today, past7Days);
+    weeklyChartData.value = [];
   }
 }
 
-function buildFallbackChart(today: Date, past7Days: Date) {
-  const days: DayRevenueItem[] = [];
-  const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-  const startX = 85;
-  const stepX = 100;
-  const demoAmounts = [0, 0, 0, 0, 0, 585000, 0];
-  const ceiling = 800000;
-  maxWeeklyRevenue.value = ceiling;
+async function refreshAllData() {
+  if (!isStaff.value) return;
+  loadingData.value = true;
+  const role = authStore.role;
+  const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' });
 
-  for (let i = 0; i < 7; i++) {
-    const curDate = new Date(past7Days);
-    curDate.setDate(past7Days.getDate() + i);
-    const curDateKey = curDate.toISOString().split('T')[0];
-    const isToday = i === 6;
-    const rev = demoAmounts[i];
+  const tasks: Promise<unknown>[] = [
+    queueService.getToday(1).then(res => { queueItems.value = res.items || []; }).catch(() => { queueItems.value = []; })
+  ];
 
-    const ratio = rev > 0 ? rev / ceiling : 0.04;
-    const h = Math.max(ratio * 130, 6);
-
-    days.push({
-      dateKey: curDateKey,
-      dayLabel: dayNames[curDate.getDay()],
-      shortDate: `${curDate.getDate()}/${curDate.getMonth() + 1}`,
-      fullDateLabel: curDate.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit' }),
-      revenue: rev,
-      transactionCount: rev > 0 ? 1 : 0,
-      isToday,
-      x: startX + i * stepX,
-      barY: 185 - h,
-      barHeight: h,
-      nodeY: Math.max(185 - h - 6, 38)
-    });
-  }
-
-  weeklyChartData.value = days;
-  revenueSummary.value.weeklyRevenue = 585000;
-}
-
-async function loadRecentAuditLogs() {
-  loadingLogs.value = true;
-  try {
-    const res = await apiClient.get('/audit-logs', {
-      params: { page: 1, pageSize: 6 }
-    });
-    if (res.data?.items && Array.isArray(res.data.items)) {
-      recentAuditLogs.value = res.data.items;
+  if (role === 'ADMIN') {
+    tasks.push(
+      loadRevenueReport(),
+      apiClient.get('/audit-logs', { params: { page: 1, pageSize: 6 } })
+        .then(res => { recentAuditLogs.value = Array.isArray(res.data?.items) ? res.data.items : []; })
+        .catch(() => { recentAuditLogs.value = []; }),
+      bookingRequestsService.list(1).then(res => { pendingRequests.value = res.items || []; }).catch(() => { pendingRequests.value = []; }),
+      chairStatusService.getPage({ page: 1, pageSize: 20 }).then(res => { chairItems.value = res.items || []; }).catch(() => { chairItems.value = []; }),
+      stockReceiptsService.stock('', 1)
+        .then(res => { lowStockItems.value = (res.items || []).filter(s => s.isActive && s.onHand <= s.minimumStockThreshold); })
+        .catch(() => { lowStockItems.value = []; })
+    );
+  } else if (role === 'RECEPTIONIST') {
+    tasks.push(
+      bookingRequestsService.list(1).then(res => { pendingRequests.value = res.items || []; }).catch(() => { pendingRequests.value = []; }),
+      appointmentsService.getForDesk(todayStr, 1).then(res => { deskAppointments.value = res.items || []; }).catch(() => { deskAppointments.value = []; })
+    );
+  } else if (role === 'DENTIST') {
+    if (authStore.user?.userId) {
+      tasks.push(
+        workspacesService.get(authStore.user.userId).then(res => { myWorkspace.value = res; }).catch(() => { myWorkspace.value = null; })
+      );
     }
-  } catch {
-    recentAuditLogs.value = [
-      {
-        logId: 101,
-        userId: 1,
-        userName: 'Quản trị viên',
-        action: 'LOGIN',
-        entityType: 'User',
-        entityId: 1,
-        detail: 'Đăng nhập phiên làm việc quản trị thành công',
-        ipAddress: '127.0.0.1',
-        createdAt: new Date().toISOString()
-      },
-      {
-        logId: 100,
-        userId: 2,
-        userName: 'Lễ tân / Thu ngân',
-        action: 'PAYMENT',
-        entityType: 'Invoice',
-        entityId: 1,
-        detail: 'Xác nhận thu tiền hóa đơn HD-20261024-0001 (585.000 ₫)',
-        ipAddress: '192.168.1.102',
-        createdAt: new Date(Date.now() - 3600000).toISOString()
-      },
-      {
-        logId: 99,
-        userId: 3,
-        userName: 'BS. Nha sĩ',
-        action: 'CREATE',
-        entityType: 'Prescription',
-        entityId: 4,
-        detail: 'Kê đơn thuốc điện tử cho bệnh nhân #BN000001',
-        ipAddress: '192.168.1.103',
-        createdAt: new Date(Date.now() - 7200000).toISOString()
-      },
-      {
-        logId: 98,
-        userId: 4,
-        userName: 'Phụ tá điều trị',
-        action: 'UPDATE',
-        entityType: 'Chair',
-        entityId: 3,
-        detail: 'Cập nhật trạng thái Ghế #03: Đang khử khuẩn',
-        ipAddress: '192.168.1.104',
-        createdAt: new Date(Date.now() - 10800000).toISOString()
-      },
-      {
-        logId: 97,
-        userId: 2,
-        userName: 'Lễ tân / Thu ngân',
-        action: 'CHECK_IN',
-        entityType: 'QueueEntry',
-        entityId: 28,
-        detail: 'Tiếp đón bệnh nhân Nguyễn Văn An vào hàng đợi khám',
-        ipAddress: '192.168.1.102',
-        createdAt: new Date(Date.now() - 14400000).toISOString()
-      }
-    ];
-  } finally {
-    loadingLogs.value = false;
-  }
-}
-
-async function loadOperationalStats() {
-  try {
-    const chairRes = await apiClient.get('/chair-status', { params: { page: 1, pageSize: 6 } });
-    if (chairRes.data?.items) {
-      const items = chairRes.data.items;
-      operationalStats.value.totalChairs = items.length || 6;
-      operationalStats.value.occupiedChairs = items.filter((c: any) => c.status === 2 || c.hasActiveVisit).length || 4;
-      operationalStats.value.availableChairs = items.filter((c: any) => c.status === 1 && !c.hasActiveVisit).length || 2;
+  } else if (role === 'ASSISTANT') {
+    tasks.push(
+      chairStatusService.getPage({ page: 1, pageSize: 20 }).then(res => { chairItems.value = res.items || []; }).catch(() => { chairItems.value = []; }),
+      stockReceiptsService.stock('', 1)
+        .then(res => { lowStockItems.value = (res.items || []).filter(s => s.isActive && s.onHand <= s.minimumStockThreshold); })
+        .catch(() => { lowStockItems.value = []; })
+    );
+    if (authStore.user?.userId) {
+      tasks.push(
+        workspacesService.get(authStore.user.userId).then(res => { myWorkspace.value = res; }).catch(() => { myWorkspace.value = null; })
+      );
     }
-  } catch {
-    // Default operational estimates
   }
 
-  try {
-    const bookingRes = await apiClient.get('/appointment-requests', { params: { page: 1 } });
-    if (bookingRes.data?.totalCount !== undefined) {
-      operationalStats.value.pendingBookingRequests = bookingRes.data.totalCount || 2;
-    }
-  } catch {
-    // Keep default
-  }
+  await Promise.allSettled(tasks);
+  loadingData.value = false;
 }
 
 onMounted(() => {
-  if (isStaff.value) {
-    refreshAllData();
-  }
+  if (isStaff.value) void refreshAllData();
 });
 </script>
 
 <style scoped>
-.dashboard-container {
-  width: 100%;
-  margin: 0 auto;
-}
+.dashboard-container { width: 100%; }
 
-/* Patient Portal Banner */
 .patient-banner {
-  background: linear-gradient(135deg, #0f2d59 0%, #1857b6 100%);
+  background: linear-gradient(135deg, #102e56 0%, #1d5ca3 100%);
+  border-radius: 18px;
+  padding: 2rem 2.25rem;
   color: #ffffff;
-  padding: 2.25rem;
-  border-radius: 14px;
-  box-shadow: 0 10px 25px rgba(15, 45, 89, 0.12);
+  box-shadow: 0 12px 30px rgba(16, 46, 86, 0.14);
 }
-
-.patient-badge {
-  display: inline-block;
-  background: #e5b95e;
-  color: #102e56;
-  font-weight: 800;
-  font-size: 0.75rem;
-  padding: 0.25rem 0.65rem;
-  border-radius: 999px;
-  text-transform: uppercase;
-  margin-bottom: 0.6rem;
-}
-
-.patient-banner-text h2 {
-  font-size: 1.6rem;
-  margin: 0 0 0.4rem 0;
-  font-weight: 800;
-}
-
-.patient-banner-text p {
-  color: #dce7f5;
-  margin: 0 0 1.25rem 0;
-  font-size: 0.95rem;
-}
-
-.patient-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.65rem 1.25rem;
-  font-size: 0.9rem;
-  font-weight: 700;
-  border-radius: 8px;
-  text-decoration: none;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-primary { background: #ffffff; color: #1857b6; }
-.btn-primary:hover { background: #f0f7ff; transform: translateY(-1px); }
+.patient-banner-content { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.5rem; }
+.patient-badge { display: inline-block; background: rgba(255, 255, 255, 0.16); padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; margin-bottom: 0.5rem; }
+.patient-banner-text h2 { margin: 0 0 0.4rem; font-size: 1.65rem; font-weight: 800; color: #fde047; }
+.patient-banner-text p { margin: 0; color: #dbeafe; max-width: 560px; }
+.patient-actions { display: flex; flex-wrap: wrap; gap: 0.65rem; }
+.btn { padding: 0.6rem 1rem; border-radius: 9px; text-decoration: none; font-weight: 700; font-size: 0.88rem; }
+.btn-primary { background: #ffffff; color: #102e56; }
 .btn-accent { background: #e5b95e; color: #102e56; }
-.btn-accent:hover { background: #d4a74a; transform: translateY(-1px); }
-.btn-outline { background: rgba(255, 255, 255, 0.12); color: #ffffff; border: 1px solid rgba(255, 255, 255, 0.3); }
-.btn-outline:hover { background: rgba(255, 255, 255, 0.2); }
+.btn-outline { border: 1px solid rgba(255, 255, 255, 0.45); color: #ffffff; }
 
-/* Executive Overview Body */
-.executive-overview {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
+.executive-overview { display: flex; flex-direction: column; gap: 1.25rem; }
 
-/* Header */
-.overview-header {
+/* 1. Actor Hero */
+.actor-hero {
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 1rem;
-  background: #ffffff;
-  padding: 1.15rem 1.4rem;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 2px 8px rgba(15, 45, 89, 0.04);
+  gap: 1.25rem;
+  padding: 1.5rem 1.75rem;
+  border-radius: 18px;
+  color: #ffffff;
+  box-shadow: 0 12px 28px rgba(15, 45, 89, 0.14);
 }
+.actor-hero--admin { background: linear-gradient(135deg, #0f2d59 0%, #1d4ed8 100%); }
+.actor-hero--receptionist { background: linear-gradient(135deg, #0f2d59 0%, #0284c7 100%); }
+.actor-hero--dentist { background: linear-gradient(135deg, #0e3a4c 0%, #0d9488 100%); }
+.actor-hero--assistant { background: linear-gradient(135deg, #1e3a5f 0%, #0f766e 100%); }
 
-.title-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-bottom: 0.25rem;
-}
-
-.header-title {
-  font-size: 1.55rem;
-  font-weight: 850;
-  color: #0f2d59;
-  margin: 0;
-  letter-spacing: -0.02em;
-}
-
-.header-subtitle {
-  color: #64748b;
-  font-size: 0.875rem;
-  margin: 0;
-}
-
+.hero-badges { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
 .role-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.3rem 0.75rem;
+  padding: 0.25rem 0.75rem;
   border-radius: 999px;
-  font-size: 0.8rem;
-  font-weight: 750;
-  background: #eef4fc;
-  color: #1a4f9c;
-  border: 1px solid #d2e3f8;
-}
-
-.role-pill--admin { background: #fef3c7; color: #92400e; border-color: #fde68a; }
-.role-pill--receptionist { background: #e0f2fe; color: #0369a1; border-color: #bae6fd; }
-.role-pill--dentist { background: #ede9fe; color: #6d28d9; border-color: #ddd6fe; }
-.role-pill--assistant { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
-
-.sync-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: #059669;
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
-  padding: 0.25rem 0.6rem;
-  border-radius: 999px;
-}
-
-.pulse-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #10b981;
-  box-shadow: 0 0 0 rgba(16, 185, 129, 0.4);
-  animation: livePulse 2s infinite;
-}
-
-@keyframes livePulse {
-  0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-  70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.btn-refresh {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.55rem 1rem;
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: #1857b6;
-  background: #f0f7ff;
-  border: 1px solid #bae0fd;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-refresh:hover:not(:disabled) {
-  background: #e0f2fe;
-}
-
-.spin-icon {
-  display: inline-block;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.btn-profile {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.55rem 1rem;
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: #334155;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  text-decoration: none;
-  transition: all 0.2s ease;
-}
-
-.btn-profile:hover {
-  background: #f1f5f9;
-}
-
-/* KPI Grid */
-.kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1.15rem;
-}
-
-.kpi-box {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 1.15rem 1.25rem;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  border-top: 4px solid #1857b6;
-}
-
-.kpi-box--revenue { border-top-color: #10b981; }
-.kpi-box--weekly { border-top-color: #2563eb; }
-.kpi-box--queue { border-top-color: #f59e0b; }
-.kpi-box--chairs { border-top-color: #8b5cf6; }
-
-.kpi-box-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.45rem;
-}
-
-.kpi-tag {
-  font-size: 0.75rem;
-  font-weight: 750;
-  color: #64748b;
+  font-size: 0.74rem;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.35);
 }
-
-.kpi-bubble {
-  font-size: 1.35rem;
+.sync-status { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.76rem; font-weight: 600; color: #e2e8f0; }
+.pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.25); }
+.hero-title { margin: 0 0 0.25rem; font-size: clamp(1.3rem, 2.5vw, 1.7rem); font-weight: 850; color: #fde047; letter-spacing: -0.015em; }
+.hero-subtitle { margin: 0; font-size: 0.88rem; color: #e2e8f0; }
+.hero-actions { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.btn-hero {
+  display: inline-flex; align-items: center; gap: 0.45rem;
+  padding: 0.58rem 1rem; border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: #ffffff; color: #0f2d59;
+  font: inherit; font-size: 0.84rem; font-weight: 750;
+  text-decoration: none; cursor: pointer; transition: all 0.15s ease;
 }
+.btn-hero:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12); }
+.btn-hero--ghost { background: rgba(255, 255, 255, 0.14); color: #ffffff; }
+.spin-icon { display: inline-block; animation: spin 0.9s linear infinite; }
 
-.kpi-box-val {
-  font-size: 1.55rem;
-  font-weight: 850;
-  color: #0f2d59;
-  margin-bottom: 0.45rem;
-  line-height: 1.2;
-}
-
-.kpi-box-bottom {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.75rem;
-  color: #64748b;
-}
-
-.kpi-code {
-  background: #f1f5f9;
-  color: #475569;
-  font-weight: 800;
-  font-size: 0.68rem;
-  padding: 0.1rem 0.35rem;
-  border-radius: 4px;
-}
-
-.kpi-positive {
-  color: #059669;
-  font-weight: 800;
-  font-size: 0.72rem;
-}
-
-/* Admin Quick Actions Bar */
-.admin-quick-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 1rem;
-  background: #ffffff;
-  border: 1px solid #dbeafe;
-  border-left: 4px solid #0284c7;
-  border-radius: 10px;
-  padding: 0.85rem 1.25rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
-}
-
-.quick-actions-label {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.quick-icon {
-  font-size: 1.35rem;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-}
-
-.quick-actions-label div {
-  display: flex;
-  flex-direction: column;
-}
-
-.quick-actions-label strong {
-  font-size: 0.9rem;
-  color: #0f2d59;
-  font-weight: 800;
-}
-
-.quick-actions-label small {
-  font-size: 0.75rem;
-  color: #64748b;
-}
-
-.quick-actions-btns {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-}
-
-.quick-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.45rem 0.85rem;
-  font-size: 0.825rem;
-  font-weight: 700;
-  color: #1e293b;
-  background: #f8fafc;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  text-decoration: none;
-  transition: all 0.15s ease;
-}
-
-.quick-btn:hover {
-  background: #f1f5f9;
-  border-color: #94a3b8;
-  color: #0f172a;
-}
-
-.quick-btn--primary {
-  background: #0284c7;
-  color: #ffffff;
-  border-color: #0369a1;
-}
-
-.quick-btn--primary:hover {
-  background: #0369a1;
-  color: #ffffff;
-}
-
-/* Panel */
-.panel {
+/* 2. KPI Strip */
+.kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; }
+.kpi-card {
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  box-shadow: 0 2px 6px rgba(15, 45, 89, 0.03);
-  padding: 1.25rem 1.4rem;
-}
-
-.panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-bottom: 1.15rem;
-}
-
-.panel-title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-}
-
-.panel-icon {
-  font-size: 1.45rem;
-}
-
-.panel-title {
-  font-size: 1.15rem;
-  font-weight: 800;
-  color: #0f2d59;
-  margin: 0;
-}
-
-.panel-subtitle {
-  font-size: 0.8rem;
-  color: #64748b;
-  margin: 0.15rem 0 0 0;
-}
-
-/* Chart Panel */
-.chart-summary-badges {
-  display: flex;
-  gap: 0.6rem;
-}
-
-.summary-pill {
-  background: #f1f5f9;
-  padding: 0.35rem 0.75rem;
-  border-radius: 8px;
-  font-size: 0.82rem;
-  color: #334155;
-}
-
-.summary-pill--today {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  color: #1e40af;
-}
-
-.chart-wrapper {
-  position: relative;
-  width: 100%;
-  overflow-x: auto;
-  background: #fbfcfe;
-  border: 1px solid #f1f5f9;
-  border-radius: 8px;
-  padding: 0.75rem 0.5rem 0.5rem;
-}
-
-.revenue-svg {
-  width: 100%;
-  height: 230px;
-  display: block;
-}
-
-.svg-axis-text {
-  font-size: 11px;
-  fill: #94a3b8;
-  font-weight: 600;
-}
-
-.svg-bar {
-  cursor: pointer;
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-.svg-bar:hover {
-  opacity: 0.85;
-}
-
-.svg-bar--today {
-  filter: drop-shadow(0 2px 4px rgba(37, 99, 235, 0.35));
-}
-
-.svg-bar-val {
-  font-size: 11px;
-  font-weight: 750;
-  fill: #475569;
-}
-
-.svg-bar-val--today {
-  fill: #1d4ed8;
-  font-weight: 850;
-}
-
-.svg-day-name {
-  font-size: 12px;
-  font-weight: 750;
-  fill: #334155;
-}
-
-.svg-day-name--today {
-  fill: #1d4ed8;
-  font-weight: 850;
-}
-
-.svg-day-date {
-  font-size: 10px;
-  fill: #94a3b8;
-  font-weight: 600;
-}
-
-.svg-day-date--today {
-  fill: #2563eb;
-  font-weight: 750;
-}
-
-.chart-hover-card {
-  position: absolute;
-  top: 15px;
-  right: 20px;
-  background: #0f2d59;
-  color: #ffffff;
-  padding: 0.65rem 0.95rem;
-  border-radius: 8px;
-  font-size: 0.8rem;
-  box-shadow: 0 4px 12px rgba(15, 45, 89, 0.2);
+  border-top: 4px solid #1857b6;
+  border-radius: 14px;
+  padding: 1.05rem 1.15rem;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  pointer-events: none;
-}
-
-.hover-date {
-  font-size: 0.75rem;
-  color: #93c5fd;
-  font-weight: 700;
-}
-
-.hover-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.hover-amt {
-  color: #fde047;
-  font-size: 0.9rem;
-}
-
-.chart-legend-strip {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 1.25rem;
-  margin-top: 0.85rem;
-  padding-top: 0.65rem;
-  border-top: 1px solid #f1f5f9;
-  font-size: 0.78rem;
-  color: #64748b;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
   gap: 0.4rem;
+  box-shadow: 0 4px 14px rgba(15, 45, 89, 0.04);
 }
+.kpi-card--blue { border-top-color: #2563eb; }
+.kpi-card--indigo { border-top-color: #4f46e5; }
+.kpi-card--teal { border-top-color: #0d9488; }
+.kpi-card--emerald { border-top-color: #16a34a; }
+.kpi-card--amber { border-top-color: #d97706; }
 
-.legend-swatch {
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
+.kpi-card-top { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.kpi-label { font-size: 0.8rem; font-weight: 700; color: #475569; }
+.kpi-tag { font-size: 0.68rem; font-weight: 800; padding: 0.15rem 0.5rem; border-radius: 999px; background: #f1f5f9; color: #334155; }
+.kpi-value { font-size: 1.45rem; font-weight: 850; color: #0f2d59; line-height: 1.2; overflow-wrap: anywhere; }
+.kpi-foot { font-size: 0.78rem; color: #64748b; }
+
+/* 3. Quick Bar */
+.quick-bar {
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;
+  background: #ffffff; border: 1px solid #dce7f0; border-radius: 14px; padding: 0.95rem 1.25rem;
 }
+.quick-bar-head strong { display: block; font-size: 0.92rem; color: #0f2d59; }
+.quick-bar-head small { font-size: 0.78rem; color: #64748b; }
+.quick-bar-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.quick-pill {
+  padding: 0.5rem 0.9rem; border-radius: 9px;
+  border: 1px solid #cbd5e1; background: #f8fbff; color: #0f2d59;
+  font-size: 0.82rem; font-weight: 700; text-decoration: none; transition: all 0.15s ease;
+}
+.quick-pill:hover { background: #e8f4fd; border-color: #1857b6; }
+.quick-pill--primary { background: #1857b6; border-color: #1857b6; color: #ffffff; }
+.quick-pill--primary:hover { background: #134898; }
 
+/* 4. Panels & Workspace Grid */
+.workspace-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
+.panel {
+  background: #ffffff; border: 1px solid #dce7f0; border-radius: 16px;
+  padding: 1.25rem 1.35rem; box-shadow: 0 8px 24px rgba(15, 45, 89, 0.04);
+  display: flex; flex-direction: column; gap: 1rem;
+}
+.panel-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
+.panel-title { margin: 0; font-size: 1.05rem; font-weight: 800; color: #0f2d59; }
+.panel-subtitle { margin: 0.2rem 0 0; font-size: 0.8rem; color: #64748b; }
+.panel-link { font-size: 0.82rem; font-weight: 750; color: #1857b6; text-decoration: none; white-space: nowrap; }
+.panel-link:hover { text-decoration: underline; }
+
+/* Chart */
+.chart-summary-badges { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+.summary-pill { padding: 0.35rem 0.75rem; border-radius: 999px; background: #f1f5f9; font-size: 0.82rem; color: #334155; }
+.summary-pill--today { background: #e0f2fe; color: #0369a1; }
+.chart-wrapper { position: relative; width: 100%; overflow-x: auto; }
+.revenue-svg { width: 100%; min-width: 600px; height: 225px; display: block; }
+.svg-axis-text { font-size: 10px; fill: #64748b; font-weight: 600; }
+.svg-bar { transition: opacity 0.15s ease; cursor: pointer; }
+.svg-bar:hover { opacity: 0.85; }
+.svg-bar-val { font-size: 10px; fill: #334155; font-weight: 700; }
+.svg-bar-val--today { fill: #1d4ed8; font-weight: 800; }
+.svg-day-name { font-size: 11px; fill: #475569; font-weight: 700; }
+.svg-day-name--today { fill: #1d4ed8; }
+.svg-day-date { font-size: 10px; fill: #94a3b8; }
+.chart-hover-card {
+  position: absolute; top: 8px; right: 12px;
+  background: rgba(15, 45, 89, 0.94); color: #ffffff;
+  padding: 0.65rem 0.9rem; border-radius: 10px; font-size: 0.8rem;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2); pointer-events: none;
+}
+.hover-date { display: block; font-weight: 700; color: #fde047; margin-bottom: 0.25rem; }
+.hover-row { display: flex; justify-content: space-between; gap: 1rem; }
+.chart-legend-strip { display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; font-size: 0.78rem; color: #475569; }
+.legend-item { display: inline-flex; align-items: center; gap: 0.4rem; }
+.legend-swatch { width: 12px; height: 12px; border-radius: 3px; }
 .swatch-blue { background: #0284c7; }
 .swatch-darkblue { background: #1d4ed8; }
-.legend-line {
-  width: 18px;
-  height: 3px;
-  background: #2563eb;
-  border-radius: 2px;
+.chart-link-more { margin-left: auto; font-weight: 750; color: #1857b6; text-decoration: none; }
+
+/* Alerts & Tables */
+.alerts-stack { display: flex; flex-direction: column; gap: 0.75rem; }
+.alert-tile {
+  display: block; padding: 0.9rem 1rem; border-radius: 12px;
+  border: 1px solid #e2e8f0; border-left: 4px solid #0284c7;
+  background: #f8fbff; text-decoration: none; color: inherit; transition: all 0.15s ease;
 }
+.alert-tile:hover { border-color: #93c5fd; transform: translateY(-1px); }
+.alert-tile--warn { border-left-color: #d97706; background: #fffbeb; }
+.alert-tile--info { border-left-color: #2563eb; background: #eff6ff; }
+.alert-tile--neutral { border-left-color: #0d9488; background: #f0fdfa; }
+.alert-tile-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem; color: #0f2d59; }
+.alert-tile-head span { font-size: 0.75rem; font-weight: 800; padding: 0.12rem 0.5rem; border-radius: 999px; background: rgba(255, 255, 255, 0.85); }
+.alert-tile p { margin: 0; font-size: 0.82rem; color: #475569; }
 
-.chart-link-more {
-  margin-left: auto;
-  color: #1857b6;
-  font-weight: 750;
-  text-decoration: none;
-  font-size: 0.82rem;
-}
-
-.chart-link-more:hover {
-  text-decoration: underline;
-}
-
-/* Notices Panel */
-.badge-notice-count {
-  background: #fef2f2;
-  color: #dc2626;
-  border: 1px solid #fecaca;
-  font-weight: 800;
-  font-size: 0.75rem;
-  padding: 0.25rem 0.65rem;
-  border-radius: 999px;
-}
-
-.notices-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-}
-
-.notice-card {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 1rem 1.2rem;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-.notice-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(15, 45, 89, 0.06);
-}
-
-.notice-card--warning { border-left: 4px solid #f59e0b; background: #fffdf5; }
-.notice-card--info { border-left: 4px solid #0ea5e9; background: #f8fcff; }
-.notice-card--chairs { border-left: 4px solid #8b5cf6; background: #fbf9ff; }
-.notice-card--safety { border-left: 4px solid #ef4444; background: #fff8f8; }
-
-.notice-badge-line {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.4rem;
-}
-
-.notice-badge {
-  font-size: 0.68rem;
-  font-weight: 800;
-  padding: 0.15rem 0.45rem;
-  border-radius: 4px;
-}
-
-.badge-warn { background: #fef3c7; color: #92400e; }
-.badge-info { background: #e0f2fe; color: #0369a1; }
-.badge-chair { background: #ede9fe; color: #6d28d9; }
-.badge-alert { background: #fee2e2; color: #b91c1c; }
-
-.notice-time {
-  font-size: 0.72rem;
-  color: #94a3b8;
-  font-weight: 600;
-}
-
-.notice-title {
-  font-size: 0.95rem;
-  font-weight: 750;
-  color: #0f2d59;
-  margin: 0 0 0.35rem 0;
-  line-height: 1.35;
-}
-
-.notice-desc {
-  font-size: 0.825rem;
-  color: #475569;
-  line-height: 1.45;
-  margin: 0 0 0.75rem 0;
-}
-
-.notice-action-link {
-  font-size: 0.8rem;
-  font-weight: 750;
-  color: #1857b6;
-}
-
-.notice-card:hover .notice-action-link {
-  text-decoration: underline;
-}
-
-/* Audit Panel */
-.btn-more-logs {
-  font-size: 0.82rem;
-  font-weight: 750;
-  color: #1857b6;
-  text-decoration: none;
-  background: #f0f7ff;
-  padding: 0.35rem 0.75rem;
-  border-radius: 6px;
-  border: 1px solid #cde4fe;
-}
-
-.btn-more-logs:hover {
-  background: #e0f0fe;
-}
-
-.audit-table-wrap {
-  overflow-x: auto;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-}
-
-.audit-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.825rem;
-  text-align: left;
-}
-
-.audit-table th {
-  background: #f8fafc;
-  color: #475569;
-  font-weight: 750;
-  padding: 0.65rem 0.85rem;
-  border-bottom: 1px solid #e2e8f0;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.audit-table td {
-  padding: 0.65rem 0.85rem;
-  border-bottom: 1px solid #f1f5f9;
-  color: #334155;
-  vertical-align: middle;
-}
-
-.audit-row:hover {
-  background: #fbfcfe;
-}
-
-.log-time {
-  white-space: nowrap;
-  font-family: monospace;
-  font-size: 0.78rem;
-  color: #64748b;
-}
-
-.log-user {
-  display: flex;
-  flex-direction: column;
-}
-
-.user-name {
-  font-weight: 750;
-  color: #0f2d59;
-}
-
-.user-id {
-  font-size: 0.7rem;
-  color: #94a3b8;
-}
-
-.action-badge {
-  display: inline-block;
-  padding: 0.15rem 0.45rem;
-  border-radius: 4px;
-  font-weight: 800;
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-
-.badge-login { background: #dbeafe; color: #1e40af; }
-.badge-create { background: #dcfce7; color: #15803d; }
-.badge-update { background: #fef3c7; color: #92400e; }
+.audit-table-wrap { overflow-x: auto; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+.data-table th { text-align: left; padding: 0.6rem 0.75rem; background: #f8fafc; color: #475569; font-weight: 700; border-bottom: 1px solid #e2e8f0; }
+.data-table td { padding: 0.65rem 0.75rem; border-bottom: 1px solid #f1f5f9; color: #1e293b; }
+.mono-cell { font-family: ui-monospace, monospace; font-size: 0.78rem; color: #64748b; }
+.empty-cell { text-align: center; color: #64748b; padding: 1.5rem; }
+.action-badge { padding: 0.15rem 0.5rem; border-radius: 6px; font-size: 0.74rem; font-weight: 750; background: #e2e8f0; color: #1e293b; }
+.badge-login { background: #e0f2fe; color: #0369a1; }
+.badge-create { background: #dcfce7; color: #166534; }
+.badge-payment { background: #fef3c7; color: #b45309; }
 .badge-delete { background: #fee2e2; color: #b91c1c; }
-.badge-payment { background: #ecfdf5; color: #047857; font-weight: 850; }
-.badge-default { background: #f1f5f9; color: #475569; }
 
-.log-entity {
-  font-weight: 700;
-  color: #1e293b;
+/* Worklist & Chips */
+.sub-block { display: flex; flex-direction: column; gap: 0.55rem; }
+.sub-block-title { font-size: 0.82rem; font-weight: 800; color: #334155; text-transform: uppercase; letter-spacing: 0.04em; }
+.empty-box { margin: 0; padding: 1rem; border-radius: 10px; border: 1px dashed #cbd5e1; background: #f8fafc; color: #64748b; font-size: 0.86rem; text-align: center; }
+.work-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.55rem; }
+.work-item {
+  display: flex; justify-content: space-between; align-items: center; gap: 0.75rem;
+  padding: 0.7rem 0.9rem; border-radius: 10px; border: 1px solid #e2e8f0; background: #f8fbff;
 }
-
-.entity-id {
-  color: #64748b;
-  margin-left: 0.2rem;
+.work-item-left { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
+.work-item-left strong { display: block; font-size: 0.9rem; color: #0f2d59; }
+.work-item-left small { display: block; font-size: 0.78rem; color: #64748b; }
+.queue-num, .time-pill, .code-pill {
+  padding: 0.25rem 0.55rem; border-radius: 8px;
+  background: #e0f2fe; color: #0369a1; font-size: 0.78rem; font-weight: 800; flex-shrink: 0;
 }
+.status-chip { padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.74rem; font-weight: 750; white-space: nowrap; }
+.chip-info { background: #e0f2fe; color: #0369a1; }
+.chip-blue { background: #dbeafe; color: #1d4ed8; }
+.chip-green { background: #dcfce7; color: #166534; }
+.chip-warn { background: #fef3c7; color: #b45309; }
+.chip-danger { background: #fee2e2; color: #b91c1c; }
+.chip-muted { background: #f1f5f9; color: #64748b; }
 
-.log-detail {
-  max-width: 380px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: #475569;
+/* Dentist Workspace & Safety */
+.workspace-card { padding: 0.9rem 1rem; border-radius: 12px; border: 1px solid #bae6fd; background: #f0f9ff; }
+.workspace-card--empty { border-color: #fde68a; background: #fffbeb; }
+.ws-row { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.ws-label { font-size: 0.82rem; font-weight: 700; color: #475569; }
+.ws-val { font-size: 0.98rem; color: #0f2d59; }
+.ws-hint { margin: 0.35rem 0 0; font-size: 0.8rem; color: #475569; }
+.safety-checklist { margin: 0; padding-left: 1.15rem; display: grid; gap: 0.5rem; font-size: 0.84rem; color: #334155; }
+
+/* Assistant Chairs Grid */
+.chairs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); gap: 0.75rem; }
+.chair-tile {
+  padding: 0.85rem; border-radius: 12px; border: 1px solid #e2e8f0; background: #f8fbff;
+  display: flex; flex-direction: column; gap: 0.5rem;
 }
+.chair-tile--free { border-left: 4px solid #16a34a; }
+.chair-tile--busy { border-left: 4px solid #2563eb; }
+.chair-tile--maint { border-left: 4px solid #d97706; }
+.chair-tile-top { display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; }
+.chair-tile-top strong { font-size: 0.88rem; color: #0f2d59; }
+.chair-code { font-size: 0.74rem; font-weight: 800; color: #64748b; }
 
-.log-ip {
-  font-family: monospace;
-  font-size: 0.75rem;
-  color: #94a3b8;
-}
+@keyframes spin { to { transform: rotate(360deg); } }
 
-.panel-footer-action {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 0.75rem;
-  font-size: 0.8rem;
-  color: #64748b;
-}
-
-.link-view-all {
-  color: #1857b6;
-  font-weight: 750;
-  text-decoration: none;
-}
-
-.link-view-all:hover {
-  text-decoration: underline;
-}
-
-/* Responsive adjustments */
-@media (max-width: 1200px) {
-  .kpi-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .notices-grid {
-    grid-template-columns: 1fr;
-  }
+@media (max-width: 1100px) {
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workspace-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 640px) {
-  .overview-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .kpi-grid {
-    grid-template-columns: 1fr;
-  }
-  .header-title {
-    font-size: 1.35rem;
-  }
+  .kpi-grid { grid-template-columns: 1fr; }
+  .actor-hero { padding: 1.2rem; }
 }
 </style>

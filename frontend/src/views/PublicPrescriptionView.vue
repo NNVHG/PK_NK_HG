@@ -2,9 +2,8 @@
   <main class="public-rx">
     <header class="rx-header">
       <div class="header-brand">
-        <img src="/logo-icon.svg" alt="Nha Khoa Hoàng Gia" class="brand-logo" width="44" height="44" />
+        <img src="/logo-ngang.svg" alt="Nha Khoa Hoàng Gia" class="brand-logo" width="158" height="42" />
         <div>
-          <span class="brand-badge">Nha Khoa Hoàng Gia</span>
           <h1>Tra cứu Đơn thuốc Điện tử</h1>
         </div>
       </div>

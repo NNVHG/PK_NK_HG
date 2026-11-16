@@ -90,7 +90,7 @@
             <li v-for="a in upcoming" :key="a.appointmentId">
               <div>
                 <strong>{{ formatDate(a.appointmentDate) }} · {{ a.slotTime.slice(0, 5) }}</strong>
-                <span>{{ a.patientName }}<template v-if="a.dentistName"> · Nha sĩ {{ a.dentistName }}</template></span>
+                <span>{{ a.patientName }}<template v-if="a.notes && a.notes.trim()"> · {{ a.notes }}</template></span>
               </div>
               <span class="pd-pill pd-pill--info">Đã đặt lịch</span>
             </li>
@@ -227,7 +227,7 @@ onUnmounted(() => { revision++; });
 <style scoped>
 .pd-page { max-width: 1040px; margin: 0 auto; padding: 1.5rem 1rem 3rem; display: flex; flex-direction: column; gap: 1.25rem; color: #1e293b; }
 .pd-hero { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; padding: 1.5rem; border-radius: 14px; color: #fff; background: linear-gradient(135deg, #0f2d59, #0284c7); }
-.pd-hero h1 { margin: 0.5rem 0 0.25rem; font-size: 1.5rem; overflow-wrap: anywhere; }
+.pd-hero h1 { margin: 0.5rem 0 0.25rem; font-size: 1.5rem; overflow-wrap: anywhere; color: #fde047; }
 .pd-hero p { margin: 0; opacity: 0.92; font-size: 0.92rem; }
 .pd-badge { display: inline-block; padding: 0.2rem 0.7rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; background: rgba(255, 255, 255, 0.18); border: 1px solid rgba(255, 255, 255, 0.4); }
 .pd-panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.15rem 1.25rem; box-shadow: 0 2px 6px rgba(15, 45, 89, 0.04); }

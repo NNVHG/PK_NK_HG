@@ -1,8 +1,7 @@
 <template>
   <section class="recovery-card" aria-labelledby="recovery-title">
     <div class="recovery-brand">
-      <img src="/logo-icon.svg" alt="Nha Khoa Hoàng Gia" class="brand-logo" width="44" height="44" />
-      <span class="brand-badge">Nha Khoa Hoàng Gia</span>
+      <img src="/logo-ngang.svg" alt="Nha Khoa Hoàng Gia" class="brand-logo" width="158" height="42" />
     </div>
     <h1 id="recovery-title">Khôi phục mật khẩu</h1>
     <p class="recovery-desc">Bệnh nhân/người giám hộ nhập giấy tờ và số điện thoại đã đăng ký. Nhân viên dùng số điện thoại đăng ký. Mã xác minh sẽ được gửi qua SMS.</p>
@@ -190,6 +189,9 @@ onUnmounted(() => { active = false; ++requestVersion; store.clear(); clearSecret
 
 .brand-logo {
   display: block;
+  width: 158px;
+  height: 42px;
+  object-fit: contain;
 }
 
 h1 {

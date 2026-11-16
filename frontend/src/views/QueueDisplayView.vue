@@ -3,9 +3,8 @@
   <div class="tv-monitor">
     <header class="header">
       <div class="brand">
-        <img src="/logo-icon.svg" alt="Nha Khoa Hoàng Gia" class="tv-logo" width="48" height="48" />
+        <img src="/logo-ngang.svg" alt="Nha Khoa Hoàng Gia" class="tv-logo" width="158" height="42" />
         <div class="brand-text">
-          <h1>NHA KHOA HOÀNG GIA</h1>
           <span class="subtitle">BẢNG GỌI SỐ VÀ TIẾP ĐÓN PHÒNG CHỜ</span>
         </div>
       </div>
@@ -371,6 +370,9 @@ onUnmounted(() => {
 .tv-logo {
   flex-shrink: 0;
   display: block;
+  width: 158px;
+  height: 42px;
+  object-fit: contain;
 }
 
 .brand h1 {
