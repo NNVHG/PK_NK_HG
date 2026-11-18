@@ -8,6 +8,8 @@
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/
+/build.log
+/infrabuild.log
 TestResults/
 *.nupkg
 *.snupkg
