@@ -101,6 +101,21 @@
           <span aria-hidden="true">{{ menuOpen ? '✕' : '☰' }}</span>
         </button>
 
+        <div v-if="authStore.role === 'DENTIST'" class="staff-topbar-room">
+          <button
+            type="button"
+            class="staff-room-pill"
+            :class="{ 'staff-room-pill--missing': !dentistHasValidRoom }"
+            :disabled="dentistRoomSaving || (dentistHasValidRoom && dentistWorkspace?.canChange === false)"
+            :title="dentistHasValidRoom ? (dentistWorkspace?.canChange === false ? 'Đang có ca khám hoặc lời mời, không thể đổi phòng' : 'Nhấn để đổi phòng điều trị') : 'Bắt buộc chọn phòng điều trị để bắt đầu khám'"
+            @click="openDentistRoomModal(true)"
+          >
+            <span aria-hidden="true">{{ dentistHasValidRoom ? '🏥' : '⚠️' }}</span>
+            <span>{{ dentistHasValidRoom ? `Phòng: ${dentistWorkspace?.roomName}` : 'Chưa chọn phòng điều trị' }}</span>
+            <small v-if="dentistHasValidRoom && dentistWorkspace?.canChange !== false" class="staff-room-change">Đổi</small>
+          </button>
+        </div>
+
         <div class="patient-nav-user staff-topbar-user">
           <router-link to="/management/profile" class="patient-user-profile" title="Xem hồ sơ cá nhân & đổi mật khẩu">
             <div class="patient-avatar-circle staff-avatar-circle" aria-hidden="true">
@@ -192,13 +207,9 @@
             </router-link>
 
             <span class="nav-caption caption-admin">Thiết Lập Phòng Khám</span>
-            <router-link to="/management/admin/chairs" title="Danh mục phòng điều trị">
+            <router-link to="/management/admin/chairs" title="Phòng điều trị & Trạng thái">
               <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg>
-              <span class="nav-label">Danh mục phòng điều trị</span>
-            </router-link>
-            <router-link to="/management/staff/chair-status" title="Trạng thái phòng điều trị">
-              <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><line x1="8" y1="20" x2="16" y2="20"/><line x1="12" y1="16" x2="12" y2="20"/></svg>
-              <span class="nav-label">Trạng thái phòng điều trị</span>
+              <span class="nav-label">Phòng điều trị &amp; Trạng thái</span>
             </router-link>
             <router-link to="/management/admin/scheduling-settings" title="Giờ làm việc & hẹn">
               <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -287,10 +298,6 @@
             </router-link>
 
             <span class="nav-caption">Nghiệp vụ Phụ tá</span>
-            <router-link to="/management/staff/chair-status" title="Trạng thái phòng điều trị">
-              <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><line x1="8" y1="20" x2="16" y2="20"/><line x1="12" y1="16" x2="12" y2="20"/></svg>
-              <span class="nav-label">Trạng thái phòng điều trị</span>
-            </router-link>
             <router-link to="/management/inventory/receipts" title="Tồn kho & nhập kho">
               <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               <span class="nav-label">Tồn kho & nhập kho</span>
@@ -377,10 +384,6 @@
           </router-link>
 
           <span class="nav-caption caption-assistant">Phụ Tá Điều Trị</span>
-          <router-link to="/management/staff/chair-status" title="Trạng thái phòng điều trị">
-            <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><line x1="8" y1="20" x2="16" y2="20"/><line x1="12" y1="16" x2="12" y2="20"/></svg>
-            <span class="nav-label">Trạng thái phòng điều trị</span>
-          </router-link>
           <router-link to="/management/inventory/receipts" title="Tồn kho & nhập kho">
             <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             <span class="nav-label">Tồn kho & nhập kho</span>
@@ -407,6 +410,107 @@
       </div>
     </aside>
     </div>
+
+    <!-- Popup bắt buộc chọn phòng điều trị cho Nha sĩ -->
+    <div
+      v-if="showDentistRoomModal && authStore.isAuthenticated && authStore.role === 'DENTIST' && isPortalRoute"
+      class="dentist-room-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="dentist-room-modal-title"
+      @click.self="dentistHasValidRoom ? closeDentistRoomModal() : undefined"
+    >
+      <div class="dentist-room-modal">
+        <div class="dentist-room-head">
+          <div>
+            <span class="dentist-room-kicker">Phân Bổ Phòng Làm Việc</span>
+            <h2 id="dentist-room-modal-title">Chọn phòng điều trị hôm nay</h2>
+          </div>
+          <button
+            v-if="dentistHasValidRoom || (!dentistRoomLoading && !dentistRoomChairs.some(isChairSelectable))"
+            type="button"
+            class="dentist-room-close"
+            :disabled="dentistRoomSaving"
+            aria-label="Đóng"
+            @click="closeDentistRoomModal"
+          >✕</button>
+        </div>
+
+        <p class="dentist-room-desc">
+          <template v-if="!dentistHasValidRoom">
+            Bạn cần <strong>chọn một phòng điều trị đang sẵn sàng</strong> trước khi gọi số và bắt đầu khám bệnh nhân. Khi bạn đăng xuất, hệ thống sẽ tự động cập nhật lại trạng thái phòng.
+          </template>
+          <template v-else>
+            Phòng hiện tại: <strong>{{ dentistWorkspace?.roomName }}</strong>. Chọn phòng sẵn sàng khác nếu bạn muốn chuyển phòng.
+          </template>
+        </p>
+
+        <div v-if="dentistRoomError" class="dentist-room-alert" role="alert">⚠️ {{ dentistRoomError }}</div>
+
+        <div v-if="dentistRoomLoading" class="dentist-room-loading" role="status">
+          Đang tải danh sách phòng điều trị…
+        </div>
+
+        <div v-else class="dentist-room-grid">
+          <label
+            v-for="chair in dentistRoomChairs"
+            :key="chair.id"
+            class="dentist-room-card"
+            :class="{
+              'dentist-room-card--selected': selectedChairId === chair.id,
+              'dentist-room-card--disabled': !isChairSelectable(chair)
+            }"
+          >
+            <input
+              v-model.number="selectedChairId"
+              type="radio"
+              name="dentist-room-choice"
+              :value="chair.id"
+              :disabled="!isChairSelectable(chair) || dentistRoomSaving"
+            />
+            <div class="dentist-room-card-body">
+              <div class="dentist-room-card-top">
+                <strong>{{ chair.roomName }}</strong>
+                <span class="dentist-room-code">{{ chair.chairNumber }}</span>
+              </div>
+              <span class="dentist-room-status" :class="chairStatusBadgeClass(chair)">
+                {{ chairStatusText(chair) }}
+              </span>
+            </div>
+          </label>
+        </div>
+
+        <div class="dentist-room-actions">
+          <button
+            type="button"
+            class="dentist-room-refresh"
+            :disabled="dentistRoomLoading || dentistRoomSaving"
+            @click="loadDentistRoomOptions"
+          >
+            🔄 Tải lại phòng
+          </button>
+          <div class="dentist-room-actions-right">
+            <button
+              v-if="dentistHasValidRoom"
+              type="button"
+              class="dentist-room-cancel"
+              :disabled="dentistRoomSaving"
+              @click="closeDentistRoomModal"
+            >
+              Đóng
+            </button>
+            <button
+              type="button"
+              class="dentist-room-confirm"
+              :disabled="dentistRoomLoading || dentistRoomSaving || !selectedChairId"
+              @click="confirmDentistRoom"
+            >
+              {{ dentistRoomSaving ? 'Đang xác nhận…' : '✓ Xác nhận vào phòng' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -414,6 +518,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useRouter, useRoute } from 'vue-router';
+import { workspacesService, type WorkspaceChair, type WorkspaceSnapshot } from '@/services/workspaces';
 
 const authStore = useAuthStore();
 const router = useRouter();
@@ -432,6 +537,134 @@ const leftNavCollapsed = ref(false);
 const rightNavCollapsed = ref(false);
 const menuButton = ref<HTMLButtonElement | null>(null);
 const mainContent = ref<HTMLElement | null>(null);
+
+const dentistWorkspace = ref<WorkspaceSnapshot | null>(null);
+const dentistRoomChairs = ref<WorkspaceChair[]>([]);
+const showDentistRoomModal = ref(false);
+const dentistRoomLoading = ref(false);
+const dentistRoomSaving = ref(false);
+const dentistRoomError = ref('');
+const selectedChairId = ref<number | null>(null);
+const dentistHasValidRoom = computed(() => Boolean(dentistWorkspace.value?.chairId && dentistWorkspace.value?.isLocationUsable));
+
+function isChairSelectable(chair: WorkspaceChair) {
+  const myId = authStore.user?.userId;
+  return chair.isActive && chair.status === 1 && (!chair.claimedByUserId || chair.claimedByUserId === myId);
+}
+
+function chairStatusText(chair: WorkspaceChair) {
+  const myId = authStore.user?.userId;
+  if (!chair.isActive || chair.status === 4) return 'Ngừng sử dụng';
+  if (chair.status === 3) return 'Đang bảo trì';
+  if (chair.status === 2) return 'Đang có ca khám';
+  if (chair.claimedByUserId && chair.claimedByUserId !== myId) return 'Đã có nha sĩ khác chọn';
+  if (chair.claimedByUserId === myId) return 'Phòng bạn đang chọn';
+  return 'Sẵn sàng';
+}
+
+function chairStatusBadgeClass(chair: WorkspaceChair) {
+  const myId = authStore.user?.userId;
+  if (!chair.isActive || chair.status === 4) return 'status--off';
+  if (chair.status === 3) return 'status--maint';
+  if (chair.status === 2) return 'status--busy';
+  if (chair.claimedByUserId && chair.claimedByUserId !== myId) return 'status--claimed';
+  return 'status--ready';
+}
+
+async function loadDentistRoomOptions() {
+  const userId = authStore.user?.userId;
+  dentistRoomLoading.value = true;
+  dentistRoomError.value = '';
+  try {
+    const [opts, latestSnap] = await Promise.all([
+      workspacesService.options(),
+      userId ? workspacesService.get(userId).catch(() => dentistWorkspace.value) : Promise.resolve(null)
+    ]);
+    if (latestSnap) dentistWorkspace.value = latestSnap;
+    dentistRoomChairs.value = opts.chairs || [];
+    const currentId = dentistWorkspace.value?.chairId ?? null;
+    if (currentId && dentistRoomChairs.value.some(c => c.id === currentId && isChairSelectable(c))) {
+      selectedChairId.value = currentId;
+    } else {
+      const firstAvail = dentistRoomChairs.value.find(isChairSelectable);
+      selectedChairId.value = firstAvail ? firstAvail.id : null;
+    }
+  } catch {
+    dentistRoomError.value = 'Không thể tải danh sách phòng điều trị. Vui lòng thử lại.';
+  } finally {
+    dentistRoomLoading.value = false;
+  }
+}
+
+async function openDentistRoomModal(manual = false) {
+  if (authStore.role !== 'DENTIST' || !authStore.isAuthenticated) return;
+  if (manual && dentistHasValidRoom.value && dentistWorkspace.value?.canChange === false) return;
+  showDentistRoomModal.value = true;
+  await loadDentistRoomOptions();
+}
+
+function closeDentistRoomModal() {
+  const noSelectableRoom = !dentistRoomLoading.value && !dentistRoomChairs.value.some(isChairSelectable);
+  if ((!dentistHasValidRoom.value && !noSelectableRoom) || dentistRoomSaving.value) return;
+  showDentistRoomModal.value = false;
+  dentistRoomError.value = '';
+}
+
+async function syncDentistWorkspace(openIfMissing = true) {
+  const userId = authStore.user?.userId;
+  if (!authStore.isAuthenticated || authStore.role !== 'DENTIST' || !isPortalRoute.value || !userId) {
+    dentistWorkspace.value = null;
+    showDentistRoomModal.value = false;
+    return;
+  }
+  try {
+    const snap = await workspacesService.get(userId);
+    dentistWorkspace.value = snap;
+    if (!snap.chairId || !snap.isLocationUsable) {
+      if (openIfMissing) await openDentistRoomModal(false);
+    } else {
+      showDentistRoomModal.value = false;
+    }
+  } catch {
+    // Keep silent on background check; user can click pill if needed
+  }
+}
+
+async function confirmDentistRoom() {
+  const userId = authStore.user?.userId;
+  if (!userId || !selectedChairId.value || dentistRoomSaving.value) return;
+  dentistRoomSaving.value = true;
+  dentistRoomError.value = '';
+  try {
+    const latest = await workspacesService.get(userId);
+    dentistWorkspace.value = latest;
+    const updated = await workspacesService.change(userId, {
+      chairId: selectedChairId.value,
+      dentistId: null,
+      expectedVersion: latest.version ?? 0,
+      confirmed: true
+    });
+    dentistWorkspace.value = updated;
+    showDentistRoomModal.value = false;
+    window.dispatchEvent(new CustomEvent('dentist-workspace-updated', { detail: updated }));
+  } catch (err: unknown) {
+    const res = err as { response?: { data?: { message?: string } } };
+    dentistRoomError.value = res?.response?.data?.message || 'Không thể chọn phòng này. Vui lòng tải lại và chọn phòng khác.';
+    await loadDentistRoomOptions();
+  } finally {
+    dentistRoomSaving.value = false;
+  }
+}
+
+function onWorkspaceUpdatedEvent(ev: Event) {
+  const detail = (ev as CustomEvent<WorkspaceSnapshot>).detail;
+  if (detail && authStore.role === 'DENTIST' && detail.userId === authStore.user?.userId) {
+    dentistWorkspace.value = detail;
+    if (detail.chairId && detail.isLocationUsable) {
+      showDentistRoomModal.value = false;
+    }
+  }
+}
 
 function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape' && menuOpen.value) {
@@ -453,23 +686,34 @@ watch(() => route.fullPath, () => {
   }
 });
 
-watch(() => authStore.isAuthenticated, (authenticated) => {
-  if (!authenticated) menuOpen.value = false;
-});
+watch(() => [authStore.isAuthenticated, authStore.role, authStore.user?.userId, isPortalRoute.value], ([authenticated]) => {
+  if (!authenticated) {
+    menuOpen.value = false;
+    dentistWorkspace.value = null;
+    showDentistRoomModal.value = false;
+  } else {
+    void syncDentistWorkspace(true);
+  }
+}, { immediate: true });
 
 onMounted(() => {
   document.addEventListener('keydown', onKeydown);
   window.addEventListener('resize', onResize);
+  window.addEventListener('dentist-workspace-updated', onWorkspaceUpdatedEvent);
   if (window.innerWidth < 1200) rightNavCollapsed.value = true;
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeydown);
   window.removeEventListener('resize', onResize);
+  window.removeEventListener('dentist-workspace-updated', onWorkspaceUpdatedEvent);
 });
 
 async function handleLogout() {
   await authStore.logout();
+  dentistWorkspace.value = null;
+  dentistRoomChairs.value = [];
+  showDentistRoomModal.value = false;
   router.push('/login');
 }
 </script>
@@ -1198,7 +1442,276 @@ async function handleLogout() {
 
 @media print {
   .layout--portal, .layout--patient { display: block; background: #fff; }
-  .patient-topbar, .navbar-left, .navbar-right-actors { display: none; }
+  .patient-topbar, .navbar-left, .navbar-right-actors, .dentist-room-backdrop { display: none; }
   .main-content { max-width: none; padding: 0; }
+}
+
+.staff-topbar-room {
+  display: flex;
+  align-items: center;
+}
+
+.staff-room-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.42rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid #bae6fd;
+  background: #f0f9ff;
+  color: #0369a1;
+  font: inherit;
+  font-size: 0.83rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.staff-room-pill:hover:not(:disabled) {
+  background: #e0f2fe;
+  border-color: #7dd3fc;
+}
+
+.staff-room-pill:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
+.staff-room-pill--missing {
+  background: #fef3c7;
+  border-color: #fcd34d;
+  color: #b45309;
+}
+
+.staff-room-pill--missing:hover:not(:disabled) {
+  background: #fde68a;
+}
+
+.staff-room-change {
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #0284c7;
+  border: 1px solid #bae6fd;
+}
+
+.dentist-room-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.58);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.dentist-room-modal {
+  width: 100%;
+  max-width: 620px;
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 24px 48px rgba(15, 45, 89, 0.22);
+  padding: 1.5rem;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.dentist-room-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.dentist-room-kicker {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #0284c7;
+  margin-bottom: 0.2rem;
+}
+
+.dentist-room-head h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #0f2d59;
+  font-weight: 800;
+}
+
+.dentist-room-close {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.dentist-room-desc {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: #475569;
+}
+
+.dentist-room-alert {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.dentist-room-loading {
+  padding: 2rem;
+  text-align: center;
+  color: #64748b;
+  font-size: 0.925rem;
+}
+
+.dentist-room-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.dentist-room-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.85rem;
+  border-radius: 12px;
+  border: 1.5px solid #e2e8f0;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dentist-room-card:hover:not(.dentist-room-card--disabled) {
+  border-color: #38bdf8;
+  background: #f8fbff;
+}
+
+.dentist-room-card--selected {
+  border-color: #0284c7;
+  background: #f0f9ff;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.14);
+}
+
+.dentist-room-card--disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+  background: #f8fafc;
+}
+
+.dentist-room-card input {
+  margin-top: 0.25rem;
+  accent-color: #0284c7;
+}
+
+.dentist-room-card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.dentist-room-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: #0f2d59;
+  font-size: 0.92rem;
+}
+
+.dentist-room-code {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 0.1rem 0.4rem;
+  border-radius: 6px;
+}
+
+.dentist-room-status {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+}
+
+.dentist-room-status.status--ready { background: #dcfce7; color: #166534; }
+.dentist-room-status.status--busy { background: #dbeafe; color: #1e40af; }
+.dentist-room-status.status--maint { background: #fef3c7; color: #92400e; }
+.dentist-room-status.status--claimed { background: #ede9fe; color: #5b21b6; }
+.dentist-room-status.status--off { background: #e2e8f0; color: #475569; }
+
+.dentist-room-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 1rem;
+}
+
+.dentist-room-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.dentist-room-refresh,
+.dentist-room-cancel,
+.dentist-room-confirm {
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  border-radius: 9px;
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+}
+
+.dentist-room-refresh,
+.dentist-room-cancel {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+}
+
+.dentist-room-confirm {
+  border: 0;
+  background: #0284c7;
+  color: #ffffff;
+}
+
+.dentist-room-confirm:hover:not(:disabled) {
+  background: #0369a1;
+}
+
+.dentist-room-confirm:disabled,
+.dentist-room-refresh:disabled,
+.dentist-room-cancel:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 </style>

@@ -8,7 +8,7 @@ namespace Dental.Infrastructure.Repositories;
 public sealed class AppointmentReminderRepository(DentalDbContext db) : IAppointmentReminderRepository
 {
     public async Task<IReadOnlyList<Appointment>> GetCandidatesAsync(DateOnly start, DateOnly end, CancellationToken ct = default)
-        => await db.Appointments.AsNoTracking().Include(a => a.Patient).Include(a => a.Dentist)
+        => await db.Appointments.AsNoTracking().Include(a => a.Patient)
             .Where(a => a.Status == AppointmentStatuses.Scheduled && a.AppointmentDate >= start && a.AppointmentDate <= end)
             .OrderBy(a => a.AppointmentDate).ThenBy(a => a.SlotTime).ThenBy(a => a.AppointmentId).ToListAsync(ct);
     public Task<bool> HasOccurrenceAsync(int id, DateOnly date, TimeOnly time, CancellationToken ct = default)

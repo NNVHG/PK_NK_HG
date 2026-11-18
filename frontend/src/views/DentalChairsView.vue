@@ -2,11 +2,17 @@
   <main class="page-container">
     <div class="page-header">
       <div>
-        <p class="eyebrow">CƠ SỞ VẬT CHẤT</p>
-        <h1>Danh mục phòng điều trị</h1>
-        <p class="subtitle">Khai báo danh mục phòng điều trị, quản lý tính sẵn sàng và trạng thái vận hành của phòng khám.</p>
+        <p class="eyebrow">CƠ SỞ VẬT CHẤT &amp; VẬN HÀNH</p>
+        <h1>Phòng điều trị &amp; Trạng thái</h1>
+        <p class="subtitle">Quản lý danh mục phòng điều trị và theo dõi trạng thái vận hành tự động theo thời gian thực. Admin có thể thêm phòng, sửa cấu hình hoặc điều chỉnh trạng thái khi cần.</p>
       </div>
       <div class="header-actions">
+        <router-link to="/management/staff/workspace" class="button button-secondary">
+          Phân bổ phòng làm việc →
+        </router-link>
+        <button type="button" class="button button-secondary" :disabled="saving || loading" @click="load(store.result?.page ?? 1)">
+          🔄 Làm mới
+        </button>
         <button class="button button-primary" :disabled="saving || loading || needsReview" @click="openCreate">
           <span class="btn-icon">+</span> Khai báo phòng mới
         </button>
@@ -16,7 +22,26 @@
     <div class="info-banner">
       <div class="banner-icon">🏥</div>
       <div class="banner-content">
-        <strong>Lưu ý vận hành phòng khám:</strong> Phòng điều trị ở trạng thái "Bảo trì" hoặc "Ngừng sử dụng" sẽ bị khóa khỏi luồng điều phối ca khám. Phòng "Đang phục vụ" do ca khám thực tế quản lý; chỉ chỉnh sửa cấu hình sau khi ca khám kết thúc.
+        <strong>Cơ chế tự động cập nhật:</strong> Trạng thái phòng tự động chuyển <em>Đang phục vụ</em> khi nha sĩ bắt đầu khám và giải phóng về <em>Sẵn sàng</em> khi kết thúc ca hoặc nha sĩ đăng xuất. Phòng đang phục vụ hoặc đã có nha sĩ nhận phòng trong ngày không thể đổi trạng thái thủ công.
+      </div>
+    </div>
+
+    <div class="summary-strip" aria-label="Tổng quan trạng thái phòng">
+      <div class="summary-card">
+        <span class="summary-label">Tổng phòng hiển thị</span>
+        <strong class="summary-val">{{ summaryCounts.total }}</strong>
+      </div>
+      <div class="summary-card summary-card--ready">
+        <span class="summary-label">Sẵn sàng</span>
+        <strong class="summary-val">{{ summaryCounts.ready }}</strong>
+      </div>
+      <div class="summary-card summary-card--busy">
+        <span class="summary-label">Đang phục vụ / Đã nhận</span>
+        <strong class="summary-val">{{ summaryCounts.busy }}</strong>
+      </div>
+      <div class="summary-card summary-card--maint">
+        <span class="summary-label">Bảo trì / Ngừng dùng</span>
+        <strong class="summary-val">{{ summaryCounts.inactive }}</strong>
       </div>
     </div>
 
@@ -105,21 +130,34 @@
               <p class="chair-desc">{{ chair.description || 'Chưa có ghi chú trang thiết bị.' }}</p>
               <div class="chair-meta">
                 <span>Danh mục: <b>{{ chair.isActive ? 'Kích hoạt' : 'Ngừng dùng' }}</b></span>
+                <span v-if="liveStatus(chair.id)?.hasActiveVisit || chair.status === 2" class="live-tag live-tag--busy">🔒 Đang phục vụ ca khám</span>
+                <span v-else-if="liveStatus(chair.id)?.isAssigned" class="live-tag live-tag--assigned">👤 Đã có nha sĩ nhận phòng</span>
               </div>
             </div>
 
             <div class="chair-card-actions">
-              <span v-if="chair.status === 2" class="busy-hint">
-                🔒 Đang khám bệnh
+              <span v-if="chair.status === 2 || liveStatus(chair.id)?.hasActiveVisit" class="busy-hint">
+                🔒 Tự động giải phóng khi kết thúc ca
               </span>
-              <button
-                v-else
-                class="button button-quiet w-full"
-                :disabled="saving || loading || needsReview"
-                @click="openEdit(chair)"
-              >
-                Cập nhật cấu hình
-              </button>
+              <template v-else>
+                <button
+                  type="button"
+                  class="button button-secondary btn-sm"
+                  :disabled="saving || loading || needsReview || Boolean(liveStatus(chair.id)?.isAssigned)"
+                  :title="liveStatus(chair.id)?.isAssigned ? 'Đã có nha sĩ nhận phòng hôm nay; không thể đổi trạng thái nhanh' : 'Đổi nhanh trạng thái phòng'"
+                  @click="openQuickStatus(chair)"
+                >
+                  ⚙️ Đổi trạng thái
+                </button>
+                <button
+                  type="button"
+                  class="button button-quiet btn-sm"
+                  :disabled="saving || loading || needsReview"
+                  @click="openEdit(chair)"
+                >
+                  ✏️ Cấu hình
+                </button>
+              </template>
             </div>
           </div>
         </div>
@@ -195,37 +233,129 @@
         </form>
       </div>
     </div>
+
+    <!-- Modal đổi nhanh trạng thái phòng -->
+    <div v-if="quickStatusOpen && quickChair" class="modal-overlay" @click.self="closeQuickStatus">
+      <div class="modal-card modal-card--sm">
+        <div class="modal-header">
+          <h2>Đổi trạng thái: {{ quickChair.roomName }}</h2>
+          <button class="close-btn" type="button" :disabled="saving" @click="closeQuickStatus">✕</button>
+        </div>
+        <form class="modal-form" @submit.prevent="saveQuickStatus">
+          <div class="form-grid">
+            <div class="form-field form-field--wide">
+              <label for="quick-chair-status">Trạng thái mới <b>*</b></label>
+              <select id="quick-chair-status" v-model.number="quickTargetStatus" :disabled="saving">
+                <option :value="1">🟢 Sẵn sàng phục vụ</option>
+                <option :value="3">🟠 Bảo trì kỹ thuật</option>
+                <option :value="4">⚫ Ngừng sử dụng</option>
+              </select>
+            </div>
+            <div class="form-field form-field--wide confirm-box">
+              <label class="checkbox-label">
+                <input v-model="quickConfirmed" type="checkbox" :disabled="saving" />
+                <span>Xác nhận cập nhật trạng thái phòng {{ quickChair.roomName }} ({{ quickChair.chairNumber }}).</span>
+              </label>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="button button-secondary" type="button" :disabled="saving" @click="closeQuickStatus">Hủy</button>
+            <button class="button button-primary" type="submit" :disabled="saving || !quickConfirmed || quickTargetStatus === quickChair.status">
+              {{ saving ? 'Đang cập nhật...' : 'Xác nhận đổi trạng thái' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   </main>
 </template>
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useDentalChairsStore } from '@/stores/dentalChairs';
 import { dentalChairsService, type DentalChair } from '@/services/dentalChairs';
+import { chairStatusService, type ChairStatusRow } from '@/services/chairStatus';
+
 const auth = useAuthStore(), store = useDentalChairsStore();
 const keyword = ref(''), status = ref(0), active = ref('all'), loading = ref(false), saving = ref(false), error = ref(''), message = ref(''), needsReview = ref(false);
 const formOpen = ref(false), selected = ref<DentalChair | null>(null), chairNumber = ref(''), roomName = ref(''), formStatus = ref(1), description = ref(''), confirmed = ref(false);
+const liveStatusMap = ref<Record<number, ChairStatusRow>>({});
+const quickStatusOpen = ref(false), quickChair = ref<DentalChair | null>(null), quickTargetStatus = ref(1), quickConfirmed = ref(false);
 let version = 0, life = 0;
+
+function liveStatus(id: number): ChairStatusRow | undefined {
+  return liveStatusMap.value[id];
+}
+
+const summaryCounts = computed(() => {
+  const items = store.result?.items ?? [];
+  let ready = 0, busy = 0, inactive = 0;
+  for (const c of items) {
+    const live = liveStatusMap.value[c.id];
+    if (c.status === 2 || live?.hasActiveVisit || live?.isAssigned) busy++;
+    else if (c.status === 1 && c.isActive) ready++;
+    else inactive++;
+  }
+  return { total: store.result?.totalCount ?? items.length, ready, busy, inactive };
+});
+
 function clearForm() { formOpen.value = false; selected.value = null; chairNumber.value = ''; roomName.value = ''; formStatus.value = 1; description.value = ''; confirmed.value = false; }
 function closeForm() { if (!saving.value) clearForm(); }
+function closeQuickStatus() { if (!saving.value) { quickStatusOpen.value = false; quickChair.value = null; quickConfirmed.value = false; } }
+
 async function load(page = 1) {
   if (auth.role !== 'ADMIN' || saving.value || !Number.isInteger(page) || page < 1 || page > 1_000_000 || keyword.value.length > 100 || ![0, 1, 2, 3, 4].includes(status.value) || !['all', 'true', 'false'].includes(active.value)) return;
-  const ticket = ++version; loading.value = true; error.value = ''; store.reset(); clearForm();
+  const ticket = ++version; loading.value = true; error.value = ''; store.reset(); clearForm(); closeQuickStatus();
   try {
-    const result = await dentalChairsService.getPage({ page, pageSize: 20, keyword: keyword.value.trim() || undefined,
-      status: status.value || undefined, isActive: active.value === 'all' ? undefined : active.value === 'true' });
+    const [chairsRes, statusRes] = await Promise.allSettled([
+      dentalChairsService.getPage({ page, pageSize: 20, keyword: keyword.value.trim() || undefined,
+        status: status.value || undefined, isActive: active.value === 'all' ? undefined : active.value === 'true' }),
+      chairStatusService.getPage({ page, pageSize: 20, keyword: keyword.value.trim() || undefined, status: status.value || undefined })
+    ]);
     if (ticket !== version || auth.role !== 'ADMIN') return;
-    store.replace(result); needsReview.value = false;
-  } catch { if (ticket === version) error.value = 'Không thể tải danh mục ghế. Vui lòng thử lại.'; }
+    if (chairsRes.status === 'rejected') throw chairsRes.reason;
+    store.replace(chairsRes.value);
+    const map: Record<number, ChairStatusRow> = {};
+    if (statusRes.status === 'fulfilled') {
+      for (const row of statusRes.value.items) map[row.id] = row;
+    }
+    liveStatusMap.value = map;
+    needsReview.value = false;
+  } catch { if (ticket === version) error.value = 'Không thể tải danh sách phòng điều trị. Vui lòng thử lại.'; }
   finally { if (ticket === version) loading.value = false; }
 }
 function openCreate() {
   if (auth.role !== 'ADMIN' || loading.value || saving.value || needsReview.value) return;
-  clearForm(); formOpen.value = true; error.value = ''; message.value = '';
+  clearForm(); closeQuickStatus(); formOpen.value = true; error.value = ''; message.value = '';
 }
 function openEdit(chair: DentalChair) {
   if (auth.role !== 'ADMIN' || loading.value || saving.value || needsReview.value || !Number.isInteger(chair.id) || chair.id <= 0 || chair.status === 2 || !store.result?.items.some(c => c.id === chair.id && c.version === chair.version)) return;
-  clearForm(); selected.value = { ...chair }; chairNumber.value = chair.chairNumber; roomName.value = chair.roomName; formStatus.value = chair.status; description.value = chair.description ?? ''; formOpen.value = true; error.value = ''; message.value = '';
+  clearForm(); closeQuickStatus(); selected.value = { ...chair }; chairNumber.value = chair.chairNumber; roomName.value = chair.roomName; formStatus.value = chair.status; description.value = chair.description ?? ''; formOpen.value = true; error.value = ''; message.value = '';
+}
+function openQuickStatus(chair: DentalChair) {
+  const live = liveStatusMap.value[chair.id];
+  if (auth.role !== 'ADMIN' || loading.value || saving.value || needsReview.value || chair.status === 2 || live?.hasActiveVisit || live?.isAssigned) return;
+  clearForm(); quickChair.value = { ...chair }; quickTargetStatus.value = chair.status; quickConfirmed.value = false; quickStatusOpen.value = true; error.value = ''; message.value = '';
+}
+async function saveQuickStatus() {
+  const old = quickChair.value;
+  if (auth.role !== 'ADMIN' || !quickStatusOpen.value || !old || saving.value || !quickConfirmed.value) return;
+  if (![1, 3, 4].includes(quickTargetStatus.value) || quickTargetStatus.value === old.status) return;
+  const ticket = life; saving.value = true; error.value = ''; message.value = '';
+  try {
+    const live = liveStatusMap.value[old.id];
+    const expectedVersion = live?.version ?? old.version;
+    await chairStatusService.change(old.id, { status: quickTargetStatus.value, expectedVersion, confirmed: true });
+    if (ticket !== life || auth.role !== 'ADMIN') return;
+    message.value = `Đã cập nhật trạng thái phòng ${old.roomName}.`;
+    closeQuickStatus(); needsReview.value = true; saving.value = false;
+    await load(store.result?.page ?? 1);
+  } catch (err: unknown) {
+    if (ticket !== life || auth.role !== 'ADMIN') return;
+    const response = err as { response?: { data?: { message?: string } } };
+    error.value = response?.response?.data?.message || 'Không thể đổi trạng thái phòng. Vui lòng tải lại để đối chiếu.';
+    quickConfirmed.value = false; needsReview.value = true;
+  } finally { if (ticket === life) saving.value = false; }
 }
 async function save() {
   if (auth.role !== 'ADMIN' || !formOpen.value || saving.value || loading.value || needsReview.value || !confirmed.value) return;
@@ -239,7 +369,7 @@ async function save() {
       : await dentalChairsService.create({ ...input, chairNumber: chairNumber.value.trim() });
     if (ticket !== life || auth.role !== 'ADMIN') return;
     if (!result.id || result.status !== input.status || (old && result.id !== old.id)) throw new Error('Invalid chair response');
-    message.value = 'Đã lưu danh mục ghế.'; clearForm(); needsReview.value = true; saving.value = false; await load(1);
+    message.value = 'Đã lưu thông tin phòng điều trị.'; clearForm(); needsReview.value = true; saving.value = false; await load(1);
   } catch (err: unknown) {
     if (ticket !== life || auth.role !== 'ADMIN') return;
     const response = err as { response?: { data?: { message?: string } } };
@@ -247,7 +377,7 @@ async function save() {
   } finally { if (ticket === life) saving.value = false; }
 }
 onMounted(() => load());
-onUnmounted(() => { life++; version++; clearForm(); store.reset(); error.value = ''; message.value = ''; });
+onUnmounted(() => { life++; version++; clearForm(); closeQuickStatus(); store.reset(); error.value = ''; message.value = ''; });
 </script>
 <style scoped>
 .page-container {
@@ -619,5 +749,68 @@ input:focus, select:focus, textarea:focus {
 @media (max-width: 768px) {
   .filters-grid { grid-template-columns: 1fr; }
   .form-grid { grid-template-columns: 1fr; }
+}
+
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.85rem;
+}
+
+.summary-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 0.9rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.summary-card--ready { border-left: 4px solid #16a34a; }
+.summary-card--busy { border-left: 4px solid #0284c7; }
+.summary-card--maint { border-left: 4px solid #d97706; }
+
+.summary-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.summary-val {
+  font-size: 1.5rem;
+  font-weight: 850;
+  color: #0f2d59;
+  line-height: 1.1;
+}
+
+.live-tag {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  margin-top: 0.35rem;
+}
+
+.live-tag--busy { background: #dbeafe; color: #1e40af; }
+.live-tag--assigned { background: #ede9fe; color: #5b21b6; }
+
+.chair-card-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.btn-sm {
+  flex: 1;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.82rem;
+}
+
+.modal-card--sm {
+  max-width: 480px;
 }
 </style>

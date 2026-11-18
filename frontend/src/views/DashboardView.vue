@@ -353,21 +353,24 @@
           <section class="panel">
             <div class="panel-header">
               <div>
-                <h3 class="panel-title">Trạng Thái Phòng &amp; Ghế Điều Trị</h3>
-                <p class="panel-subtitle">Theo dõi tình trạng sẵn sàng phục vụ và khử khuẩn theo ca</p>
+                <h3 class="panel-title">Hàng Đợi Hỗ Trợ Hôm Nay</h3>
+                <p class="panel-subtitle">Theo dõi bệnh nhân đang chờ gọi số và phối hợp chụp X-quang / sinh hiệu</p>
               </div>
-              <RouterLink class="panel-link" to="/management/staff/chair-status">Cập nhật trạng thái →</RouterLink>
+              <RouterLink class="panel-link" to="/management/queue/today">Mở hàng đợi →</RouterLink>
             </div>
-            <p v-if="!chairItems.length" class="empty-box">Không có dữ liệu phòng/ghế.</p>
-            <div v-else class="chairs-grid">
-              <div v-for="c in chairItems" :key="c.id" class="chair-tile" :class="chairToneClass(c.status)">
-                <div class="chair-tile-top">
-                  <strong>{{ c.roomName }}</strong>
-                  <span class="chair-code">{{ c.chairNumber }}</span>
+            <p v-if="!queueItems.length" class="empty-box">Chưa có lượt chờ trong hôm nay.</p>
+            <ul v-else class="work-list">
+              <li v-for="q in queueItems.slice(0, 6)" :key="q.queueEntryId" class="work-item">
+                <div class="work-item-left">
+                  <span class="queue-num">#{{ q.queueNumber }}</span>
+                  <div>
+                    <strong>{{ q.patientName }}</strong>
+                    <small>{{ q.patientCode }} · {{ q.roomName || 'Chưa phân phòng' }}{{ q.dentistName ? ` · ${q.dentistName}` : '' }}</small>
+                  </div>
                 </div>
-                <span class="status-chip" :class="chairStatusChipClass(c.status)">{{ chairStatusLabel(c.status, c.statusText) }}</span>
-              </div>
-            </div>
+                <span class="status-chip" :class="queueStatusClass(q.status)">{{ queueStatusLabel(q.status, q.statusText) }}</span>
+              </li>
+            </ul>
           </section>
 
           <section class="panel">
@@ -415,7 +418,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { apiClient } from '@/services/api';
 import { reportsService } from '@/services/reports';
@@ -542,10 +545,10 @@ const roleKpis = computed(() => {
       ];
     case 'ASSISTANT':
       return [
-        { label: 'Phòng / Ghế sẵn sàng', tag: 'Phòng khám', value: `${availableChairsCount.value}/${chairItems.value.length || 0}`, foot: `${occupiedChairsCount.value} phòng đang có ca khám`, tone: 'teal' },
         { label: 'Nha sĩ đồng hành', tag: 'Phối hợp', value: myWorkspace.value?.dentistName || 'Chưa chọn', foot: myWorkspace.value?.roomName || 'Đồng bộ phòng theo nha sĩ', tone: 'blue' },
-        { label: 'Vật tư tồn thấp', tag: 'Cảnh báo kho', value: `${lowStockItems.value.length} mã`, foot: 'Chạm hoặc dưới ngưỡng tối thiểu', tone: lowStockItems.value.length ? 'amber' : 'emerald' },
-        { label: 'Khách đang chờ', tag: 'Hàng đợi', value: `${waitingQueueCount.value}`, foot: `Tổng ${queueItems.value.length} lượt khám hôm nay`, tone: 'indigo' }
+        { label: 'Khách đang chờ', tag: 'Hàng đợi', value: `${waitingQueueCount.value}`, foot: `Tổng ${queueItems.value.length} lượt khám hôm nay`, tone: 'indigo' },
+        { label: 'Đang gọi / Khám', tag: 'Phối hợp', value: `${inConsultationCount.value}`, foot: 'Ca đang xử lý tại phòng', tone: 'teal' },
+        { label: 'Vật tư tồn thấp', tag: 'Cảnh báo kho', value: `${lowStockItems.value.length} mã`, foot: 'Chạm hoặc dưới ngưỡng tối thiểu', tone: lowStockItems.value.length ? 'amber' : 'emerald' }
       ];
     default:
       return [];
@@ -581,8 +584,7 @@ const roleQuickActions = computed(() => {
       ];
     case 'ASSISTANT':
       return [
-        { label: 'Cập nhật phòng điều trị', to: '/management/staff/chair-status', primary: true },
-        { label: 'Xác nhận tiêu hao theo ca', to: '/management/inventory/issues' },
+        { label: 'Xác nhận tiêu hao theo ca', to: '/management/inventory/issues', primary: true },
         { label: 'Nhập kho vật tư', to: '/management/inventory/receipts' },
         { label: 'Nhóm & phòng làm việc', to: '/management/staff/workspace' },
         { label: 'Hàng đợi hôm nay', to: '/management/queue/today' }
@@ -812,7 +814,6 @@ async function refreshAllData() {
     }
   } else if (role === 'ASSISTANT') {
     tasks.push(
-      chairStatusService.getPage({ page: 1, pageSize: 20 }).then(res => { chairItems.value = res.items || []; }).catch(() => { chairItems.value = []; }),
       stockReceiptsService.stock('', 1)
         .then(res => { lowStockItems.value = (res.items || []).filter(s => s.isActive && s.onHand <= s.minimumStockThreshold); })
         .catch(() => { lowStockItems.value = []; })
@@ -828,8 +829,20 @@ async function refreshAllData() {
   loadingData.value = false;
 }
 
+function onWorkspaceUpdated(ev: Event) {
+  const detail = (ev as CustomEvent<WorkspaceSnapshot>).detail;
+  if (detail && detail.userId === authStore.user?.userId) {
+    myWorkspace.value = detail;
+  }
+}
+
 onMounted(() => {
+  window.addEventListener('dentist-workspace-updated', onWorkspaceUpdated);
   if (isStaff.value) void refreshAllData();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('dentist-workspace-updated', onWorkspaceUpdated);
 });
 </script>
 

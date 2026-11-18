@@ -186,13 +186,16 @@ public sealed class AuthController : ControllerBase
     [HttpPost("logout")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> Logout(CancellationToken ct)
+    public async Task<IActionResult> Logout(
+        [FromServices] Dental.Application.Features.MOD_MST.Services.StaffWorkspaceService workspaceService,
+        CancellationToken ct)
     {
         var userId = _currentUser.UserId;
         if (userId is null)
             return Unauthorized(new { code = "AUTH_003", message = "Bạn chưa đăng nhập." });
 
         var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        await workspaceService.ReleaseOnLogoutAsync(userId.Value, ct);
         await _authService.LogoutAsync(userId.Value, ipAddress, ct);
 
         return Ok(new { message = "Đăng xuất thành công." });

@@ -6,7 +6,7 @@
     <p role="status" aria-live="polite">{{ message }}</p>
     <template v-if="context && !context.result">
       <p>{{ context.fullName }} · {{ context.dateOfBirth }} · {{ context.phone }}</p>
-      <p>{{ context.appointmentDate }} {{ context.slotTime.slice(0, 5) }} · {{ context.slotDurationMinutes }} phút · {{ context.dentistName || 'Chưa phân công nha sĩ' }}</p>
+      <p>{{ context.appointmentDate }} {{ context.slotTime.slice(0, 5) }} · {{ context.slotDurationMinutes }} phút</p>
       <p>Tài khoản bệnh nhân được tạo hoặc chuyển tại quầy sau khi lễ tân đối chiếu CCCD và số điện thoại lúc check-in.</p>
       <p v-if="context.blockReason" role="alert">{{ context.blockReason }}</p>
       <form v-else @submit.prevent="approve">

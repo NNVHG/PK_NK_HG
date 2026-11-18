@@ -9,8 +9,6 @@ export interface AppointmentResponse {
   slotTime: string;
   status: string;
   notes: string | null;
-  dentistId: number | null;
-  dentistName: string | null;
   rescheduleCount: number;
   rescheduleReason: string | null;
   isEmergency?: boolean;

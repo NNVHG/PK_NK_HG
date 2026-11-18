@@ -9,8 +9,8 @@ public sealed class CreateAppointmentRequestValidator : AbstractValidator<Create
 {
     public CreateAppointmentRequestValidator()
     {
-        RuleFor(x => x.DentistId).GreaterThan(0).When(x => x.DentistId.HasValue)
-            .WithMessage("Mã nha sĩ phải là số nguyên dương.");
+        RuleFor(x => x.DentistId).Null()
+            .WithMessage("Không chọn hoặc chỉ định nha sĩ khi đặt lịch; nha sĩ trong phòng sẽ gọi số bệnh nhân.");
         RuleFor(x => x.PatientId)
             .GreaterThan(0)
             .WithMessage("Mã bệnh nhân không hợp lệ.");

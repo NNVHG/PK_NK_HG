@@ -4,7 +4,7 @@
       <div class="header-icon">🏥</div>
       <div>
         <h1 id="chair-status-title">Trạng thái phòng điều trị</h1>
-        <p class="subtitle">Quản lý khả năng sẵn sàng, bảo trì hoặc ngừng sử dụng của từng phòng điều trị theo thời gian thực.</p>
+        <p class="subtitle">Trạng thái phòng tự động cập nhật theo ca khám; Admin có thể xem và điều chỉnh thủ công (bảo trì / ngừng sử dụng) khi cần.</p>
       </div>
     </div>
 
@@ -181,7 +181,7 @@ const selected = ref<ChairStatusRow | null>(null), targetStatus = ref(1), confir
 const editorHeading = ref<HTMLElement | null>(null);
 let readVersion = 0, life = 0, returnFocus: HTMLElement | null = null;
 const identity = () => `${auth.user?.userId ?? ''}/${auth.role}`;
-const allowed = () => ['ADMIN', 'ASSISTANT'].includes(auth.role);
+const allowed = () => auth.role === 'ADMIN';
 function validRow(row: ChairStatusRow) {
   return row && Number.isInteger(row.id) && row.id > 0 && Number.isInteger(row.version) && row.version > 0 &&
     [1, 2, 3, 4].includes(row.status) && typeof row.chairNumber === 'string' && typeof row.roomName === 'string' &&

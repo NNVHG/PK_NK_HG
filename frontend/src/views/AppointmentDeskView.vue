@@ -167,9 +167,7 @@ const reasonLimit = computed(() => Math.max(0, 500 - (selected.value?.notes?.len
 const displayGroups = computed(() => {
   const grouped = new Map<string, AppointmentResponse[]>();
   for (const row of rows.value) {
-    const key = row.dentistId
-      ? `${row.appointmentDate}:${row.slotTime}:${row.dentistId}`
-      : `appointment:${row.appointmentId}`;
+    const key = `appointment:${row.appointmentId}`;
     const items = grouped.get(key) ?? [];
     items.push(row);
     grouped.set(key, items);

@@ -16,7 +16,6 @@ public sealed class BookingRequest : BaseEntity
     public DateOnly AppointmentDate { get; set; }
     public TimeOnly SlotTime { get; set; }
     public int SlotDurationMinutes { get; set; }
-    public int? DentistId { get; set; }
     public int? VerifiedPatientId { get; set; }
     public int? SubmittedByUserId { get; set; }
     public bool IsReturning { get; set; }

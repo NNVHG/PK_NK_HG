@@ -38,8 +38,7 @@ public sealed class AppointmentReminderService(IAppointmentReminderRepository re
                         (scheduledAt - clock.ToVietnamTime(a.CreatedAt)).TotalHours < 24) continue;
                     eligible++;
                     if (await repository.HasOccurrenceAsync(a.AppointmentId, a.AppointmentDate, a.SlotTime, transactionCt)) continue;
-                    var dentist = string.IsNullOrWhiteSpace(a.Dentist?.FullName) ? "nha sĩ được phân công" : $"BS {a.Dentist.FullName}";
-                    var message = $"Nha Khoa HG xin nhắc: Quý khách {a.Patient.FullName} có lịch hẹn khám vào lúc {scheduledAt.ToString("HH:mm dd/MM/yyyy", CultureInfo.InvariantCulture)} với {dentist} tại Phòng khám. Vui lòng đến trước 10 phút. Hotline hỗ trợ: 0901234567.";
+                    var message = $"Nha Khoa HG xin nhắc: Quý khách {a.Patient.FullName} có lịch hẹn khám vào lúc {scheduledAt.ToString("HH:mm dd/MM/yyyy", CultureInfo.InvariantCulture)} tại Phòng khám. Vui lòng đến trước 10 phút. Hotline hỗ trợ: 0901234567.";
                     var log = new NotificationLog { AppointmentId = a.AppointmentId, PatientId = a.PatientId, AppointmentDate = a.AppointmentDate,
                         SlotTime = a.SlotTime, RecipientPhone = a.Patient.Phone, MessageContent = message, SentAtUtc = utcNow };
                     await repository.AddAsync(log, transactionCt); logs.Add(log);

@@ -50,7 +50,7 @@ public sealed class BookingRequestRepository(DentalDbContext db,VietnamClock clo
             if(!i.PatientId.HasValue&&await db.BookingRequests.AnyAsync(x=>x.Status=="Pending"&&x.Phone==i.Phone&&x.FullName==i.FullName.Trim()&&x.DateOfBirth==i.DateOfBirth&&x.AppointmentDate==i.AppointmentDate,ct))return Result<BookingReceipt>.Failure(new Error("APP_REQUEST_DUPLICATE","Đã có yêu cầu cùng thông tin trong ngày này. Liên hệ phòng khám để đối chiếu."));
             // Do not infer ownership or return visits by matching guest names or a shared phone number.
             var returning=i.PatientId.HasValue&&await db.Visits.AnyAsync(v=>v.PatientId==i.PatientId&&v.Status==VisitStatuses.Completed,ct);
-            var row=new BookingRequest{ClientRequestId=request.ClientRequestId,IntentDigest=Digest(i,actor),FullName=i.FullName.Trim(),Phone=i.Phone,DateOfBirth=i.DateOfBirth,Gender=i.Gender,Email=string.IsNullOrWhiteSpace(i.Email)?null:i.Email.Trim(),Notes=string.IsNullOrWhiteSpace(i.Notes)?null:i.Notes.Trim(),AppointmentDate=i.AppointmentDate,SlotTime=i.SlotTime,SlotDurationMinutes=duration,DentistId=null,VerifiedPatientId=i.PatientId,SubmittedByUserId=actor,IsReturning=returning,CreatedAt=clock.UtcNow};
+            var row=new BookingRequest{ClientRequestId=request.ClientRequestId,IntentDigest=Digest(i,actor),FullName=i.FullName.Trim(),Phone=i.Phone,DateOfBirth=i.DateOfBirth,Gender=i.Gender,Email=string.IsNullOrWhiteSpace(i.Email)?null:i.Email.Trim(),Notes=string.IsNullOrWhiteSpace(i.Notes)?null:i.Notes.Trim(),AppointmentDate=i.AppointmentDate,SlotTime=i.SlotTime,SlotDurationMinutes=duration,VerifiedPatientId=i.PatientId,SubmittedByUserId=actor,IsReturning=returning,CreatedAt=clock.UtcNow};
             db.BookingRequests.Add(row);await db.SaveChangesAsync(ct);
             db.AuditLogs.Add(new AuditLog{UserId=actor,EntityType="BookingRequest",EntityId=row.Id,Action="MOD_APP_REQUEST_SUBMITTED",IpAddress=ip,CreatedAt=clock.UtcNow,Detail=JsonSerializer.Serialize(new{version=2,phoneVerified=false,verifiedProfile=i.PatientId.HasValue})});
             await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);committed=true;
@@ -64,7 +64,7 @@ public sealed class BookingRequestRepository(DentalDbContext db,VietnamClock clo
         if(!await Staff(actor,role,ct))return Result<PagedResult<BookingRequestRow>>.Failure(Error.Forbidden);
         var q=db.BookingRequests.AsNoTracking().Where(x=>x.Status=="Pending");var count=await q.CountAsync(ct);
         var items=await q.OrderByDescending(x=>x.IsReturning).ThenBy(x=>x.CreatedAt).ThenBy(x=>x.Id).Skip((page-1)*20).Take(20)
-            .Select(x=>new BookingRequestRow(x.Id,x.FullName,x.Phone,x.DateOfBirth,x.AppointmentDate,x.SlotTime,x.SlotDurationMinutes,x.DentistId,db.Users.Where(u=>u.UserId==x.DentistId).Select(u=>u.FullName).FirstOrDefault(),x.Notes,x.IsReturning,x.CreatedAt,x.Version)).ToListAsync(ct);
+            .Select(x=>new BookingRequestRow(x.Id,x.FullName,x.Phone,x.DateOfBirth,x.AppointmentDate,x.SlotTime,x.SlotDurationMinutes,x.Notes,x.IsReturning,x.CreatedAt,x.Version)).ToListAsync(ct);
         return Result<PagedResult<BookingRequestRow>>.Success(PagedResult<BookingRequestRow>.Create(items,count,page,20));
     }
     public async Task<Result<bool>> RejectAsync(int id,int actor,string role,RejectBookingRequest request,string? ip,CancellationToken ct)

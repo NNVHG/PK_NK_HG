@@ -47,10 +47,6 @@
             <dt>Ngày sinh</dt>
             <dd>🎂 <time :datetime="row.dateOfBirth">{{ row.dateOfBirth }}</time></dd>
           </div>
-          <div class="detail-item">
-            <dt>Nha sĩ yêu cầu</dt>
-            <dd>👨‍⚕️ {{ row.dentistName || 'Chờ phòng khám phân công' }}</dd>
-          </div>
         </dl>
 
         <div v-if="row.notes" class="request-notes">

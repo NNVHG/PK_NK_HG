@@ -25,7 +25,7 @@ public sealed class StaffWorkspaceRepository(DentalDbContext db) : IStaffWorkspa
         CancellationToken ct = default)
     {
         var stale = await db.StaffWorkspaces
-            .Where(x => x.ChairId == chairId && x.UserId != exceptUserId && x.WorkDate != workDate)
+            .Where(x => x.ChairId == chairId && x.UserId != exceptUserId && (x.WorkDate == null || x.WorkDate != workDate))
             .ToListAsync(ct);
         if (stale.Count == 0)
             return false;

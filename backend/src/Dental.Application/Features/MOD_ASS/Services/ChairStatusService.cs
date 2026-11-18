@@ -13,7 +13,7 @@ public sealed class ChairStatusService(IChairStatusRepository chairs, IUnitOfWor
     public static readonly Error Changed = new("ASS_061", "Trạng thái ghế đã thay đổi hoặc có thao tác đồng thời. Tải lại rồi xác nhận lại.");
     public static readonly Error Occupied = new("ASS_062", "Ghế đang phục vụ ca khám. Chỉ luồng khám được giải phóng ghế.");
     public static readonly Error Assigned = new("ASS_063", "Nha sĩ/Admin cần bỏ hoặc đổi vị trí khỏi ghế này trước khi đổi trạng thái.");
-    private static bool RoleAllowed(string? role) => role is RoleCodes.Admin or RoleCodes.Assistant;
+    private static bool RoleAllowed(string? role) => role == RoleCodes.Admin;
 
     public async Task<Result<PagedResult<ChairStatusResponse>>> GetPageAsync(int actorId, string? role, ChairStatusQuery query, CancellationToken ct = default)
     {

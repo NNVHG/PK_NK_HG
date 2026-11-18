@@ -49,37 +49,37 @@ public static partial class ClinicalDemoDataSeeder
 
         var appt1 = new Appointment
         {
-            PatientId = p1.PatientId, DentistId = null, AppointmentDate = today,
+            PatientId = p1.PatientId, AppointmentDate = today,
             SlotTime = new TimeOnly(8, 30), SlotDurationMinutes = 30, Status = AppointmentStatuses.Completed,
             Notes = "Khám răng định kỳ và cạo vôi răng", CreatedByUserId = receptionist1.UserId, CreatedAt = now.AddDays(-3),
         };
         var appt2 = new Appointment
         {
-            PatientId = p2.PatientId, DentistId = null, AppointmentDate = today,
+            PatientId = p2.PatientId, AppointmentDate = today,
             SlotTime = new TimeOnly(9, 30), SlotDurationMinutes = 30, Status = AppointmentStatuses.CheckedIn,
             Notes = "Khám mẻ góc cắn răng cửa sau va chạm", CreatedByUserId = receptionist1.UserId, CreatedAt = now.AddDays(-1),
         };
         var appt3 = new Appointment
         {
-            PatientId = p3.PatientId, DentistId = null, AppointmentDate = today,
+            PatientId = p3.PatientId, AppointmentDate = today,
             SlotTime = new TimeOnly(14, 0), SlotDurationMinutes = 30, Status = AppointmentStatuses.Scheduled,
             Notes = "Khám răng trẻ em (răng sữa lung lay)", CreatedByUserId = receptionist1.UserId, CreatedAt = now.AddDays(-1),
         };
         var appt4 = new Appointment
         {
-            PatientId = p4.PatientId, DentistId = null, AppointmentDate = today.AddDays(1),
+            PatientId = p4.PatientId, AppointmentDate = today.AddDays(1),
             SlotTime = new TimeOnly(9, 0), SlotDurationMinutes = 30, Status = AppointmentStatuses.Scheduled,
             Notes = "Tư vấn cấy ghép Implant và thu tiếp đợt thanh toán còn lại", CreatedByUserId = receptionist1.UserId, CreatedAt = now,
         };
         var appt5 = new Appointment
         {
-            PatientId = p4.PatientId, DentistId = null, AppointmentDate = today.AddDays(-2),
+            PatientId = p4.PatientId, AppointmentDate = today.AddDays(-2),
             SlotTime = new TimeOnly(10, 0), SlotDurationMinutes = 30, Status = AppointmentStatuses.Completed,
             Notes = "Điều trị tủy răng 46 (đợt 1)", CreatedByUserId = receptionist1.UserId, CreatedAt = now.AddDays(-5),
         };
         var appt6 = new Appointment
         {
-            PatientId = p1.PatientId, DentistId = null, AppointmentDate = today.AddDays(-5),
+            PatientId = p1.PatientId, AppointmentDate = today.AddDays(-5),
             SlotTime = new TimeOnly(15, 0), SlotDurationMinutes = 30, Status = AppointmentStatuses.Cancelled,
             Notes = "Khách xin hủy do bận công tác", CreatedByUserId = receptionist1.UserId, CreatedAt = now.AddDays(-7),
         };

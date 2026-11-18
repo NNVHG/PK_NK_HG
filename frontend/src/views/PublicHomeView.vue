@@ -47,9 +47,13 @@
             Chọn ngày và khung giờ phù hợp để gửi yêu cầu đặt lịch khám chỉ trong vài bước. Bạn không cần đăng nhập hay nhập mã OTP khi đặt lịch — mọi ca khám đều được theo dõi trên <strong>Sơ đồ răng giải phẫu FDI điện tử</strong>, kiểm soát an toàn sinh hiệu &amp; tiền sử dị ứng và minh bạch chi phí theo từng giai đoạn điều trị.
           </p>
           <div class="hero-actions">
-            <RouterLink class="button button-gold" to="/book-appointment">Đặt lịch khám ngay <span aria-hidden="true">→</span></RouterLink>
-            <RouterLink class="button button-outline" to="/login">Đăng nhập Cổng bệnh nhân</RouterLink>
-            <a class="button button-ghost" href="#so-do-fdi" @click.prevent="scrollToSection('so-do-fdi')">Xem Sơ đồ răng FDI mẫu</a>
+            <RouterLink class="button button-gold hero-btn-main" to="/book-appointment">
+              Đặt lịch khám ngay <span aria-hidden="true">→</span>
+            </RouterLink>
+            <a class="button button-outline" href="#so-do-fdi" @click.prevent="scrollToSection('so-do-fdi')">
+              <svg class="btn-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <span>Khám phá Sơ đồ răng FDI</span>
+            </a>
           </div>
           <div class="hero-metrics-strip" aria-label="Chỉ số tiêu chuẩn y khoa">
             <div class="hero-metric-item">
@@ -69,7 +73,10 @@
               <span>Chia đợt trả góp</span>
             </div>
           </div>
-          <p class="hero-note">Giờ làm việc: Thứ 2 – Thứ 7 (07:30 – 20:00) · Chủ Nhật (07:30 – 12:00). Lễ tân sẽ liên hệ xác nhận lịch hẹn của bạn.</p>
+          <p class="hero-note">
+            <span class="note-clock-ic" aria-hidden="true">🕒</span>
+            <span>Giờ làm việc: <strong>Thứ 2 – Thứ 7</strong> (07:30 – 20:00) · <strong>Chủ Nhật</strong> (07:30 – 12:00)</span>
+          </p>
         </div>
 
         <div class="hero-stage">
@@ -98,6 +105,13 @@
               <strong>Hồ sơ Sơ đồ Răng FDI</strong>
               <span>Lưu lịch sử điều trị trọn đời</span>
             </div>
+          </div>
+
+          <div class="hero-trust-badge">
+            <span class="trust-stars" aria-hidden="true">★★★★★</span>
+            <strong>10.000+</strong> <span>Lượt khám an toàn</span>
+            <span class="trust-divider" aria-hidden="true">·</span>
+            <span>Chuẩn kiểm soát vô trùng</span>
           </div>
         </div>
       </div>
@@ -509,7 +523,7 @@
       <div class="container">
         <div class="bento-grid">
           <!-- Cột Trái (5 cột): Ba Nguyên tắc Minh bạch & Trả góp -->
-          <div class="bento-card bento-5 bento-sky-solid">
+          <div class="bento-card bento-5 bento-sky-solid billing-sticky-card">
             <p class="eyebrow">Minh bạch chi phí &amp; Thanh toán linh hoạt</p>
             <h2 id="billing-heading" class="split-h2">Chính sách Chi phí Rõ ràng &amp; Hỗ trợ Thanh toán Nhiều Đợt</h2>
             <p class="bento-desc">Cam kết không phát sinh chi phí ẩn — khách hàng luôn nắm rõ tổng chi phí, số đã thu và dư nợ còn lại sau mỗi buổi hẹn.</p>
@@ -1113,19 +1127,60 @@ const faqs = [
 h1 { margin: 12px 0 14px; color: #102e56; max-width: 14ch; font-size: clamp(2.4rem, 4.3vw, 3.75rem); line-height: 1.08; letter-spacing: -.035em; }
 h1 span { color: #397bcc; }
 .intro { max-width: 580px; color: #4a6479; font-size: .98rem; line-height: 1.7; margin: 0; }
-.hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+.hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 22px; }
+.hero-btn-main {
+  box-shadow: 0 4px 14px rgba(229, 185, 94, 0.4);
+  font-weight: 800;
+  padding: 0 22px;
+}
+.hero-actions .button-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #ffffff;
+  border: 1.5px solid #bfd8f2;
+  color: #1857b6;
+}
+.hero-actions .button-outline:hover {
+  background: #edf6fd;
+  border-color: #1857b6;
+}
+.btn-ic {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
 .hero-metrics-strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
-  margin-top: 20px;
-  padding-top: 16px;
+  margin-top: 24px;
+  padding-top: 18px;
   border-top: 1px solid rgba(24, 87, 182, 0.14);
 }
 .hero-metric-item { display: flex; flex-direction: column; gap: 2px; }
 .hero-metric-item strong { font-size: 1.2rem; font-weight: 800; color: #102e56; letter-spacing: -.02em; }
 .hero-metric-item span { font-size: .75rem; color: #526c80; font-weight: 600; }
-.hero-note { margin: 14px 0 0; color: #526c80; font-size: .82rem; line-height: 1.5; }
+.hero-note {
+  margin: 18px 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #2b4f6e;
+  font-size: .82rem;
+  line-height: 1.5;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(205, 226, 245, 0.85);
+  padding: 6px 14px;
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+}
+.note-clock-ic { font-size: .95rem; }
 
 .hero-stage { position: relative; min-height: 340px; display: grid; place-items: center; }
 .hero-art { position: relative; width: 100%; min-height: 280px; display: grid; place-items: center; isolation: isolate; }
@@ -1141,24 +1196,49 @@ h1 span { color: #397bcc; }
 
 .hero-float-badge {
   position: absolute;
-  background: rgba(255, 255, 255, 0.96);
+  background: rgba(255, 255, 255, 0.90);
   backdrop-filter: blur(12px);
-  border: 1px solid #d8ecfa;
-  border-radius: 15px;
-  padding: 10px 14px;
-  box-shadow: 0 14px 32px rgba(16, 46, 86, 0.10);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(216, 236, 250, 0.95);
+  border-radius: 16px;
+  padding: 10px 15px;
+  box-shadow: 0 16px 36px rgba(16, 46, 86, 0.09), 0 2px 6px rgba(24, 87, 182, 0.04);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
   z-index: 2;
+  transition: transform .22s ease, box-shadow .22s ease;
+}
+.hero-float-badge:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 42px rgba(16, 46, 86, 0.13);
 }
 .hero-float-badge strong { display: block; font-size: .8rem; color: #102e56; }
 .hero-float-badge span { display: block; font-size: .71rem; color: #526c80; }
-.badge-top-left { top: 6px; left: 0; }
-.badge-bottom-right { bottom: 6px; right: 0; }
+.badge-top-left { top: 4px; left: -10px; }
+.badge-bottom-right { bottom: 8px; right: -8px; }
 .float-ic { width: 34px; height: 34px; border-radius: 9px; background: #eff8ff; border: 1px solid #d8ecfa; color: #1857b6; display: grid; place-items: center; flex-shrink: 0; }
 .float-ic svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; }
 .float-ic-green { background: #dcfce7; border-color: #bbf7d0; color: #15803d; }
+
+.hero-trust-badge {
+  position: absolute;
+  bottom: -6px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+  border: 1px solid #d0e4f7;
+  border-radius: 999px;
+  padding: 6px 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: .78rem;
+  color: #244b70;
+  box-shadow: 0 8px 24px rgba(16, 46, 86, 0.07);
+  z-index: 3;
+}
+.trust-stars { color: #f59e0b; font-size: .85rem; letter-spacing: 1px; }
+.trust-divider { color: #cbd5e1; }
 
 /* 3. Floating Glass Booking Dock */
 .booking-dock-wrap { margin-top: -34px; position: relative; z-index: 12; }
@@ -1175,11 +1255,52 @@ h1 span { color: #397bcc; }
 .dock-icon svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.9; }
 .dock-title-group h2 { margin: 0 0 2px; font-size: 1.02rem; color: #102e56; }
 .dock-title-group p { margin: 0; font-size: .82rem; color: #526c80; }
-.status-dot { background: #dcfce7; color: #15803d; padding: 4px 11px; border-radius: 999px; font-weight: 700; font-size: .75rem; }
-.dock-pillars { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 12px; align-items: center; }
-.dock-pillar { background: #f8fbff; border: 1px solid #e4eef6; border-radius: 12px; padding: 10px 13px; display: flex; flex-direction: column; gap: 2px; }
-.dock-pillar strong { font-size: .82rem; color: #102e56; }
-.dock-pillar span { font-size: .75rem; color: #526c80; }
+.status-dot {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.12);
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-weight: 750;
+  font-size: .75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.status-dot::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  display: inline-block;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+}
+.dock-pillars { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 12px; align-items: stretch; }
+.dock-pillar {
+  background: #f8fbff;
+  border: 1px solid #e4eef6;
+  border-radius: 12px;
+  padding: 11px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  transition: border-color .2s, box-shadow .2s;
+}
+.dock-pillar:hover {
+  border-color: #b9d8f3;
+  box-shadow: 0 4px 12px rgba(24, 87, 182, 0.05);
+}
+.dock-pillar strong { font-size: .83rem; color: #102e56; }
+.dock-pillar span { font-size: .75rem; color: #526c80; line-height: 1.45; }
+.dock-cta {
+  align-self: center;
+  min-height: 46px;
+  padding: 0 20px;
+  font-weight: 800;
+  box-shadow: 0 4px 14px rgba(24, 87, 182, 0.2);
+}
 
 /* Common Section Blocks */
 .section-block { padding: 64px 0; scroll-margin-top: 74px; }
@@ -1370,12 +1491,31 @@ h1 span { color: #397bcc; }
 .fdi-legend-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  font-size: .76rem;
-  color: #4a6479;
-  padding: 4px 2px;
+  gap: 8px;
+  font-size: .78rem;
+  color: #334d65;
+  padding: 10px 4px 4px;
+  border-top: 1px dashed #e2edf7;
+  margin-top: 12px;
 }
-.leg-item { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.leg-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 650;
+  background: #ffffff;
+  border: 1px solid #dce8f4;
+  border-radius: 999px;
+  padding: 5px 12px;
+  box-shadow: 0 2px 5px rgba(16, 46, 86, 0.03);
+  transition: all .2s ease;
+}
+.leg-item:hover {
+  border-color: #1857b6;
+  color: #1857b6;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(24, 87, 182, 0.08);
+}
 .leg-dot { width: 11px; height: 11px; border-radius: 3px; display: inline-block; border: 1px solid rgba(0,0,0,.12); }
 .dot-normal { background: #ffffff; }
 .dot-caries { background: #ef4444; }
@@ -1383,6 +1523,13 @@ h1 span { color: #397bcc; }
 .dot-rct { background: #8b5cf6; }
 .dot-crown { background: #e5b95e; }
 .dot-implant { background: #0ea5e9; }
+
+.sample-tooth-btn {
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s, border-color 0.18s;
+}
+.sample-tooth-btn:hover {
+  transform: translateY(-2px);
+}
 
 .selected-tooth-inspector {
   background: #eff8ff;
@@ -1433,15 +1580,34 @@ h1 span { color: #397bcc; }
 .billing-tl-item strong { color: #102e56; font-size: .9rem; }
 .billing-tl-item span { color: #4a6479; font-size: .82rem; line-height: 1.55; }
 
+.billing-sticky-card {
+  position: sticky;
+  top: 92px;
+  align-self: flex-start;
+  z-index: 2;
+}
+
 .price-menu-card { justify-content: space-between; }
 .price-menu-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid #e4eef6; }
 .price-menu-head h3 { margin: 0 0 4px; font-size: 1.12rem; color: #102e56; }
 .price-menu-head p { margin: 0; font-size: .8rem; color: #526c80; }
 .price-list { display: flex; flex-direction: column; }
-.price-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 11px 0; border-bottom: 1px dashed #d8e6f3; }
+.price-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 10px;
+  border-bottom: 1px dashed #d8e6f3;
+  border-radius: 8px;
+  transition: background-color 0.15s ease, padding 0.15s ease;
+}
+.price-row:hover {
+  background-color: rgba(24, 87, 182, 0.035);
+}
 .price-row:last-child { border-bottom: 0; }
-.price-name { font-weight: 700; color: #102e56; font-size: .9rem; }
-.price-meta { font-size: .76rem; color: #5b6b80; margin-top: 2px; }
+.price-name { font-weight: 750; color: #102e56; font-size: .92rem; }
+.price-meta { font-size: .79rem; color: #475569; margin-top: 3px; font-weight: 500; }
 .price-dots { flex: 1; border-bottom: 1px dotted #cbd5e1; margin: 0 6px; min-width: 16px; }
 .price-right { text-align: right; flex-shrink: 0; }
 .price-val { font-weight: 800; color: #1857b6; font-size: .92rem; font-variant-numeric: tabular-nums; }
@@ -1496,6 +1662,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid #c3881d; outline-offs
 
 @media (max-width: 1080px) {
   .bento-7, .bento-5, .bento-4, .bento-8 { grid-column: span 12; }
+  .billing-sticky-card { position: static; }
   .dock-pillars { grid-template-columns: 1fr 1fr; }
   .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .fdi-showcase-grid, .footer-grid { grid-template-columns: 1fr; }
@@ -1520,6 +1687,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid #c3881d; outline-offs
   .hero-inner { grid-template-columns: 1fr; gap: 18px; padding: 28px 16px 52px; }
   .hero-metrics-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hero-float-badge { position: static; margin-top: 8px; }
+  .hero-trust-badge { position: static; margin-top: 12px; }
   .flagship-subgrid, .dock-pillars, .steps, .faq-grid, .footer-grid { grid-template-columns: 1fr; }
   .selected-tooth-inspector { flex-direction: column; align-items: flex-start; }
   .cta-box { padding: 24px 20px; }

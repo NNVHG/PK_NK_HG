@@ -10,7 +10,8 @@ public sealed class RescheduleAppointmentRequestValidator : AbstractValidator<Re
     {
         RuleFor(x => x.Reason).NotEmpty().MaximumLength(500)
             .WithMessage("Cần nhập lý do đổi lịch, tối đa 500 ký tự.");
-        RuleFor(x => x.DentistId).GreaterThan(0).When(x => x.DentistId.HasValue);
+        RuleFor(x => x.DentistId).Null()
+            .WithMessage("Không chọn hoặc chỉ định nha sĩ khi đổi lịch.");
         RuleFor(x => x.AppointmentDate)
             .NotEmpty()
             .WithMessage("Ngày hẹn không được để trống.");
