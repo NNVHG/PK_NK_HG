@@ -1,66 +1,84 @@
 <template>
   <main class="page">
-    <div class="header-row">
-      <h1>Hàng đợi hôm nay</h1>
-      <router-link to="/queue/display" target="_blank" class="tv-link">Màn hình TV phòng chờ ↗</router-link>
-    </div>
-    <p>Khách hẹn đúng giờ được xếp theo giờ hẹn; khách thường hoặc trễ hẹn theo thời điểm check-in.</p>
-    <div class="toolbar">
-      <label for="status">Trạng thái</label>
-      <select id="status" v-model.number="status" :disabled="writing" @change="load(1)">
-        <option :value="0">Tất cả</option><option :value="1">Đang chờ</option><option :value="2">Đang khám</option>
-        <option :value="8">Tạm dừng</option><option :value="7">Vắng mặt</option><option :value="6">Đang mời vào phòng</option><option :value="5">Đang chụp ảnh</option><option :value="3">Khám xong</option><option :value="4">Đã hủy</option>
-      </select>
-      <button :disabled="loading || writing" @click="load(page)">Tải lại</button>
-      <template v-if="needsCallingDentist">
-        <label for="call-dentist">Nha sĩ gọi khám</label>
-        <select id="call-dentist" v-model.number="callDentistId" :disabled="writing || dentistsLoading">
-          <option :value="0">Chọn nha sĩ</option><option v-for="dentist in dentists" :key="dentist.dentistId" :value="dentist.dentistId">{{ dentist.dentistName }} · {{ locationLabel(dentist) }} · #{{ dentist.dentistId }}</option>
+    <header class="page-header">
+      <div class="heading-copy">
+        <p class="eyebrow">ĐIỀU PHỐI KHÁM</p>
+        <h1>Hàng đợi hôm nay</h1>
+        <p class="intro">Theo dõi lượt tiếp đón và phối hợp bệnh nhân vào phòng khám.</p>
+      </div>
+      <router-link to="/queue/display" target="_blank" class="tv-link">Mở màn hình phòng chờ <span aria-hidden="true">↗</span></router-link>
+    </header>
+
+    <section class="toolbar" aria-label="Điều khiển hàng đợi">
+      <div class="field-group">
+        <label for="status">Lọc theo trạng thái</label>
+        <select id="status" v-model.number="status" :disabled="writing" @change="load(1)">
+          <option :value="0">Tất cả trạng thái</option><option :value="1">Đang chờ</option><option :value="2">Đang khám</option>
+          <option :value="8">Tạm dừng</option><option :value="7">Vắng mặt</option><option :value="6">Đang mời vào phòng</option><option :value="5">Đang chụp ảnh</option><option :value="3">Khám xong</option><option :value="4">Đã hủy</option>
         </select>
-        <button :disabled="writing || dentistsLoading" @click="loadDentists">Tải nha sĩ</button>
+      </div>
+      <button class="button-secondary" :disabled="loading || writing" @click="load(page)">{{ loading ? 'Đang tải…' : 'Tải lại' }}</button>
+      <template v-if="needsCallingDentist">
+        <div class="field-group field-dentist">
+          <label for="call-dentist">Nha sĩ gọi khám</label>
+          <select id="call-dentist" v-model.number="callDentistId" :disabled="writing || dentistsLoading">
+            <option :value="0">Chọn nha sĩ</option><option v-for="dentist in dentists" :key="dentist.dentistId" :value="dentist.dentistId">{{ dentist.dentistName }} · {{ locationLabel(dentist) }}</option>
+          </select>
+        </div>
+        <button class="button-secondary" :disabled="writing || dentistsLoading" @click="loadDentists">Tải nha sĩ</button>
       </template>
       <button v-if="canCallNext" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || absenceRow !== null || cleanupOpen || transferRow !== null || needsReview || (needsCallingDentist && (dentistsLoading || !callDentistId))" class="btn-call-next" @click="handleCallNext">
         {{ callingNext ? 'Đang gọi…' : 'Gọi số tiếp theo' }}
       </button>
-      <button v-if="canCancelWaiting" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || absenceRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openCleanup">Dọn lượt chưa khám quá hạn</button>
+      <button v-if="canCancelWaiting" class="button-warning" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || absenceRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openCleanup">Dọn lượt quá hạn</button>
+    </section>
+
+    <p v-if="canCallNext" class="workflow-hint"><strong>Lưu ý:</strong> Gọi số chỉ mời bệnh nhân vào phòng. Nha sĩ/Admin bắt đầu khám riêng tại hồ sơ lâm sàng.</p>
+    <p v-if="authStore.role === 'ASSISTANT'" class="workflow-hint">Phụ tá chỉ gọi lượt đã được phân nha sĩ; lượt chưa phân cần Lễ tân/Admin đối chiếu.</p>
+    <p v-if="loading" class="notice notice-loading" role="status">Đang tải hàng đợi…</p>
+    <p v-if="actionMsg" class="notice notice-success" role="status">{{ actionMsg }}</p>
+    <p v-if="error" class="notice notice-error" role="alert">{{ error }}</p>
+    <p v-if="dentistError" class="notice notice-error" role="alert">{{ dentistError }}</p>
+    <p v-if="needsReview" class="notice notice-warning" role="alert">Tải lại hàng đợi thành công và đối chiếu trạng thái trước khi thao tác tiếp.</p>
+    <div v-if="!loading && !error && !rows.length" class="empty-state" role="status">
+      <span class="empty-icon" aria-hidden="true">✓</span>
+      <strong>Chưa có lượt tiếp đón phù hợp</strong>
+      <span>Danh sách sẽ cập nhật khi có bệnh nhân được tiếp nhận hôm nay.</span>
     </div>
-    <p v-if="canCallNext">Gọi số chỉ mời bệnh nhân vào phòng. Nha sĩ/Admin cần bấm “Bắt đầu khám” tại hồ sơ lâm sàng.</p>
-    <p v-if="authStore.role === 'ASSISTANT'">Phụ tá chỉ gọi các lượt đã có nha sĩ được chọn; lượt chưa phân nha sĩ cần Lễ tân/Admin đối chiếu trước.</p>
-    <p v-if="loading" role="status">Đang tải hàng đợi…</p>
-    <p v-if="actionMsg" class="action-msg" role="status">{{ actionMsg }}</p>
-    <p v-if="error" role="alert">{{ error }}</p>
-    <p v-if="dentistError" role="alert">{{ dentistError }}</p>
-    <p v-if="needsReview" role="alert">Tải lại hàng đợi thành công và đối chiếu trạng thái trước khi thao tác tiếp.</p>
-    <p v-if="!loading && !error && !rows.length">Không có lượt tiếp đón phù hợp hôm nay.</p>
-    <p v-if="!loading && !error">{{ total }} lượt · Trang {{ page }} · Cập nhật {{ updatedAt }}</p>
-    <ol class="entries"><li v-for="row in rows" :key="row.queueEntryId" :class="{ priority: row.isPriority }">
-      <strong>{{ numberLabel(row.queueNumber) }} · {{ row.patientName }}</strong>
-      <p>{{ row.patientCode }} · {{ row.statusText }} · {{ row.queueDate }}</p>
-      <p v-if="row.notes" class="care-note">Ghi chú cần lưu ý: {{ row.notes }}</p>
-      <p>{{ row.isPriority ? 'Ưu tiên lịch hẹn đúng giờ' : 'Chờ thông thường' }} · {{ row.dentistName || 'Chưa phân nha sĩ' }} · {{ locationLabel(row) }}</p>
-      <button v-if="row.status === 6" type="button" class="btn-recall-tv" @click="emitTvCall(row)">
-        📢 Đọc lại trên TV
-      </button>
-      <RouterLink v-if="row.status === 6 && ['ADMIN', 'DENTIST'].includes(authStore.role)" to="/management/clinical/diagnosis">Mở hồ sơ để bắt đầu khám</RouterLink>
-      <button v-if="canCancelWaiting && row.status === 1 && row.canCancelConsultation !== true" :disabled="loading || writing || imagingRow !== null || absenceRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openCancellation(row)">Hủy lượt chưa khám</button>
-      <button v-if="canCancelClinical(row)" :disabled="loading || writing || imagingRow !== null || absenceRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openCancellation(row, true)">Hủy ca đã bắt đầu khám</button>
-      <button v-if="canRouteImaging(row)" :disabled="loading || writing || cancelRow !== null || absenceRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openImaging(row)">
-        {{ row.status === 2 ? 'Chỉ định chụp ảnh' : 'Hoàn tất chụp → chờ nha sĩ' }}
-      </button>
-      <button v-if="canChangeAbsence(row)" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || absenceRow !== null || pauseRow !== null || resumeRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openAbsence(row)">
-        {{ row.status === 7 ? 'Gọi lại → hàng chờ' : 'Vắng mặt' }}
-      </button>
-      <button v-if="canPause(row)" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || absenceRow !== null || pauseRow !== null || resumeRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openPause(row)">
-        Tạm dừng ca
-      </button>
-      <button v-if="canResume(row)" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || absenceRow !== null || pauseRow !== null || resumeRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openResume(row)">
-        Tiếp tục ca
-      </button>
-      <button v-if="canTransfer(row)" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || absenceRow !== null || pauseRow !== null || resumeRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openTransfer(row)">
-        Chuyển nha sĩ
-      </button>
-    </li></ol>
-    <section v-if="cancelRow" aria-labelledby="cancel-title" class="cancel-panel">
+    <div v-if="!loading && !error" class="queue-summary" role="status">
+      <strong>{{ total }} lượt</strong><span>·</span><span>Trang {{ page }}</span><span>·</span><span>Cập nhật {{ updatedAt || 'chưa có dữ liệu' }}</span>
+    </div>
+
+    <ol class="entries" aria-label="Danh sách hàng đợi hôm nay">
+      <li v-for="row in rows" :key="row.queueEntryId" class="queue-entry" :class="{ priority: row.isPriority }">
+        <div class="queue-entry-header">
+          <span class="queue-ticket">{{ numberLabel(row.queueNumber) }}</span>
+          <div class="queue-patient">
+            <strong>{{ row.patientName }}</strong>
+            <span>{{ row.patientCode }} · {{ row.queueDate }}</span>
+          </div>
+          <span class="status-pill" :class="`status-${row.status}`">{{ row.statusText }}</span>
+        </div>
+        <div class="queue-entry-meta">
+          <span v-if="row.isPriority" class="priority-pill">Lịch hẹn đúng giờ</span>
+          <span v-else class="queue-type">Lượt thường</span>
+          <span><b>Nha sĩ</b>{{ row.dentistName || 'Chưa phân công' }}</span>
+          <span><b>Phòng</b>{{ locationLabel(row) }}</span>
+        </div>
+        <p v-if="row.notes" class="care-note"><strong>Ghi chú cần lưu ý</strong>{{ row.notes }}</p>
+        <div class="queue-card-actions">
+          <button v-if="row.status === 6" type="button" class="btn-recall-tv" @click="emitTvCall(row)">Đọc lại trên TV</button>
+          <RouterLink v-if="row.status === 6 && ['ADMIN', 'DENTIST'].includes(authStore.role)" to="/management/clinical/diagnosis">Mở hồ sơ lâm sàng</RouterLink>
+          <button v-if="canCancelWaiting && row.status === 1 && row.canCancelConsultation !== true" :disabled="loading || writing || imagingRow !== null || absenceRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openCancellation(row)">Hủy lượt chờ</button>
+          <button v-if="canCancelClinical(row)" class="action-danger" :disabled="loading || writing || imagingRow !== null || absenceRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openCancellation(row, true)">Hủy ca đang khám</button>
+          <button v-if="canRouteImaging(row)" :disabled="loading || writing || cancelRow !== null || absenceRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openImaging(row)">{{ row.status === 2 ? 'Chỉ định chụp ảnh' : 'Hoàn tất chụp → chờ nha sĩ' }}</button>
+          <button v-if="canChangeAbsence(row)" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || absenceRow !== null || pauseRow !== null || resumeRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openAbsence(row)">{{ row.status === 7 ? 'Gọi lại → hàng chờ' : 'Vắng mặt' }}</button>
+          <button v-if="canPause(row)" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || absenceRow !== null || pauseRow !== null || resumeRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openPause(row)">Tạm dừng ca</button>
+          <button v-if="canResume(row)" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || absenceRow !== null || pauseRow !== null || resumeRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openResume(row)">Tiếp tục ca</button>
+          <button v-if="canTransfer(row)" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || absenceRow !== null || pauseRow !== null || resumeRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openTransfer(row)">Chuyển nha sĩ</button>
+        </div>
+      </li>
+    </ol>    <section v-if="cancelRow" aria-labelledby="cancel-title" class="cancel-panel">
       <h2 id="cancel-title">{{ cancelClinical ? 'Hủy ca đã bắt đầu khám' : 'Hủy lượt chờ chưa khám' }}</h2>
       <p>{{ numberLabel(cancelRow.queueNumber) }} · {{ cancelRow.patientName }} · {{ cancelRow.patientCode }} · {{ cancelRow.queueDate }}</p>
       <p v-if="cancelClinical">Hủy ca sẽ nhả phòng điều trị và tự hủy hóa đơn Draft chưa thu trong cùng thao tác. Giữ lịch sử, lý do và các dòng hóa đơn. Ca đã phát sinh thanh toán không thể hủy qua thao tác này.</p>
@@ -177,7 +195,7 @@ import { useAuthStore } from '@/stores/auth';
 import { queueService, maskPublicQueueName, type QueueEntryResponse, type CallingDentist } from '@/services/queue';
 const rows = ref<QueueEntryResponse[]>([]), status = ref(1), page = ref(1), total = ref(0), hasNext = ref(false);
 function locationLabel(item: { roomName?: string | null; chairNumber?: string | null }): string {
-  return item.roomName ? `Phòng ${item.roomName}` : 'Chưa nhận phòng';
+  return item.roomName || 'Chưa nhận phòng';
 }
 const loading = ref(false), callingNext = ref(false), error = ref(''), actionMsg = ref(''), updatedAt = ref('');
 const authStore = useAuthStore(), canCallNext = computed(() => ['ADMIN', 'DENTIST', 'ASSISTANT'].includes(authStore.role));
@@ -477,41 +495,108 @@ onMounted(() => Promise.all([load(), loadDentists()]));
 onUnmounted(() => { life++; version++; dentistVersion++; clearCancellation(); clearImaging(); clearAbsence(); clearTransfer(); cleanupOpen.value = false; cleanupConfirmed.value = false; rows.value = []; dentists.value = []; callDentistId.value = 0; dentistError.value = ''; actionMsg.value = ''; error.value = ''; needsReview.value = false; updatedAt.value = ''; total.value = 0; });
 </script>
 <style scoped>
-.page { max-width: 1040px; margin: auto; padding: 1.5rem; box-sizing: border-box; color: #1e293b; font-family: inherit; }
-.header-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.25rem; }
-.tv-link { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; color: #0284c7; background: #f0f9ff; text-decoration: none; font-weight: 600; padding: 0.5rem 1rem; border: 1px solid #bae6fd; border-radius: 8px; transition: all 0.2s; }
-.tv-link:hover { background: #0284c7; color: #fff; }
-.toolbar { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin: 1.25rem 0; padding: 1rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; }
-button, select, textarea, input[type="text"] { font: inherit; padding: 0.6rem 0.85rem; min-height: 44px; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; background: #fff; }
-button { cursor: pointer; font-weight: 500; transition: background 0.15s, border-color 0.15s; }
-button:disabled { opacity: 0.55; cursor: not-allowed; }
-.btn-call-next { background: #0284c7; color: #fff; border: 1px solid #0284c7; font-weight: 600; }
-.btn-call-next:hover:not(:disabled) { background: #0369a1; }
-.action-msg { color: #15803d; font-weight: 600; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 0.75rem 1rem; border-radius: 8px; }
-.cancel-panel { border: 1px solid #fecaca; background: #fff5f5; border-radius: 12px; padding: 1.25rem; margin: 1rem 0; box-sizing: border-box; }
-.cancel-panel form { display: grid; gap: 0.75rem; } textarea { font: inherit; min-height: 5.5rem; resize: vertical; }
-.imaging-panel { border: 1px solid #bae6fd; background: #f0f9ff; border-radius: 12px; padding: 1.25rem; margin: 1rem 0; box-sizing: border-box; }
-.imaging-panel form, .absence-panel form { display: grid; gap: 0.75rem; }
-.absence-panel { border: 1px solid #fef08a; background: #fffbeb; border-radius: 12px; padding: 1.25rem; margin: 1rem 0; box-sizing: border-box; }
-.transfer-panel { border: 1px solid #bae6fd; background: #f0f9ff; border-radius: 12px; padding: 1.25rem; margin: 1rem 0; box-sizing: border-box; }
-.transfer-panel form { display: grid; gap: 0.75rem; }
-
-.entries { list-style: none; padding: 0; margin: 1rem 0; display: grid; gap: 0.85rem; }
-li { padding: 1.15rem; border: 1px solid #e2e8f0; background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); box-sizing: border-box; overflow-wrap: break-word; display: grid; gap: 0.45rem; }
-li.priority { border-left: 6px solid #13795b; }
-li button, li a { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 0.5rem 0.9rem; text-decoration: none; border-radius: 8px; margin-right: 0.5rem; margin-top: 0.35rem; }
-.btn-recall-tv { background: #fef08a; border: 1px solid #facc15; color: #854d0e; font-weight: 700; width: fit-content; }
-.btn-recall-tv:hover { background: #fde047; }
-li a { background: #0284c7; color: #fff; font-weight: 600; width: fit-content; }
-li a:hover { background: #0369a1; }
-[role=alert] { color: #b91c1c; font-weight: 500; overflow-wrap: break-word; }
-.care-note { white-space: pre-wrap; overflow-wrap: anywhere; background: #fef3c7; border: 1px solid #fde68a; padding: 0.5rem 0.75rem; border-radius: 6px; }
-
-@media (max-width: 480px) {
-  .page { padding: 0.75rem; }
-  .toolbar { gap: 0.5rem; padding: 0.75rem; }
-  .toolbar > * { width: 100%; }
-  .entries li { padding: 0.85rem; }
-  li button, li a { width: 100%; margin-right: 0; }
+.page {
+  --ink: #172b42;
+  --muted: #66788a;
+  --line: #dce5ed;
+  --teal: #0f746f;
+  --teal-dark: #0a5c59;
+  max-width: 1380px;
+  margin: 0 auto 2rem;
+  padding: 1.75rem clamp(1rem, 2vw, 2rem) 2.5rem;
+  box-sizing: border-box;
+  color: var(--ink);
+}
+.page-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 1.25rem; margin: 0 0 1.5rem; }
+.heading-copy { min-width: 0; }
+.eyebrow { margin: 0 0 .35rem; color: var(--teal); font-size: .72rem; letter-spacing: .13em; font-weight: 800; }
+h1 { margin: 0; font-size: clamp(1.7rem, 2.5vw, 2.2rem); line-height: 1.15; letter-spacing: -.035em; color: #12283d; }
+.intro { margin: .55rem 0 0; color: var(--muted); font-size: .96rem; }
+.tv-link { display: inline-flex; align-items: center; justify-content: center; gap: .55rem; min-height: 46px; flex: 0 0 auto; padding: .65rem 1rem; border: 1px solid #c7d7e4; border-radius: 10px; color: #24445e; background: #fff; text-decoration: none; font-weight: 700; transition: background .15s ease, border-color .15s ease, transform .15s ease; }
+.tv-link:hover { background: #f4fafb; border-color: #87bdb9; transform: translateY(-1px); }
+.toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .75rem; padding: 1rem; border: 1px solid var(--line); border-radius: 14px; background: #fff; box-shadow: 0 5px 18px rgb(27 55 79 / 5%); }
+.field-group { display: grid; gap: .35rem; min-width: 185px; }
+.field-group label { font-size: .78rem; font-weight: 750; color: #496175; }
+.field-dentist { flex: 1 1 270px; }
+button, select, textarea, input[type="text"] { max-width: 100%; min-height: 44px; box-sizing: border-box; font: inherit; border: 1px solid #c9d6e1; border-radius: 9px; background: #fff; color: #20384e; }
+select { width: 100%; padding: .6rem .75rem; }
+button { padding: .62rem .9rem; cursor: pointer; font-weight: 700; transition: background .15s ease, border-color .15s ease, color .15s ease; }
+button:hover:not(:disabled) { background: #f1f7f8; border-color: #93b7b5; }
+button:disabled { opacity: .56; cursor: not-allowed; }
+button:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid #64b5ad; outline-offset: 2px; }
+.btn-call-next { border-color: var(--teal); background: var(--teal); color: #fff; }
+.btn-call-next:hover:not(:disabled) { border-color: var(--teal-dark); background: var(--teal-dark); color: #fff; }
+.button-secondary { background: #f8fafc; }
+.button-warning { color: #8a4a08; background: #fffaf0; border-color: #f0d39d; }
+.button-warning:hover:not(:disabled) { background: #fff3db; border-color: #e8bb67; }
+.workflow-hint { margin: .8rem 0 0; color: #5e7183; font-size: .88rem; line-height: 1.5; }
+.notice { margin: 1rem 0 0; padding: .85rem 1rem; border: 1px solid; border-radius: 10px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
+.notice-loading { color: #355b72; background: #f2f8fb; border-color: #cfe1eb; }
+.notice-success { color: #155e50; background: #eef9f4; border-color: #b8dfd1; }
+.notice-warning { color: #7b5214; background: #fff8e8; border-color: #ecd59c; }
+.notice-error { color: #9b3434; background: #fff4f3; border-color: #efc4c0; }
+.queue-summary { display: flex; align-items: center; gap: .55rem; margin: 1.45rem 0 .7rem; color: var(--muted); font-size: .86rem; }
+.queue-summary strong { color: #243c52; font-size: .95rem; }
+.entries { list-style: none; padding: 0; margin: 0; display: grid; gap: .85rem; }
+.queue-entry { min-width: 0; padding: 1.05rem 1.1rem; border: 1px solid var(--line); background: #fff; border-radius: 14px; box-shadow: 0 3px 12px rgb(29 56 80 / 4%); box-sizing: border-box; overflow-wrap: anywhere; }
+.queue-entry.priority { border-left: 4px solid #c89435; }
+.queue-entry-header { display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; align-items: center; gap: .85rem; }
+.queue-ticket { display: grid; place-items: center; min-height: 46px; border-radius: 10px; color: #075f5e; background: #e8f5f3; font-size: .95rem; font-weight: 850; letter-spacing: .015em; }
+.queue-patient { display: grid; min-width: 0; gap: .2rem; }
+.queue-patient strong { color: #183149; font-size: 1.02rem; line-height: 1.3; }
+.queue-patient span { color: var(--muted); font-size: .82rem; }
+.status-pill, .priority-pill, .queue-type { display: inline-flex; align-items: center; justify-content: center; width: fit-content; min-height: 28px; padding: .3rem .65rem; border-radius: 999px; font-size: .78rem; font-weight: 750; line-height: 1.2; }
+.status-pill { background: #f1f5f8; color: #53687b; }
+.status-1 { background: #fff4da; color: #87590d; }
+.status-2, .status-6 { background: #eaf3ff; color: #285d91; }
+.status-5 { background: #f3edff; color: #684c9b; }
+.status-7, .status-8 { background: #fff0e8; color: #99502a; }
+.status-3 { background: #e9f6ee; color: #276846; }
+.status-4 { background: #f1f2f4; color: #697583; }
+.queue-entry-meta { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem 1.1rem; margin: .8rem 0 0 4.85rem; color: #587084; font-size: .84rem; }
+.queue-entry-meta > span:not(.priority-pill):not(.queue-type) { display: inline-flex; flex-wrap: wrap; gap: .3rem; }
+.queue-entry-meta b { color: #304b62; }
+.priority-pill { color: #785313; background: #fff5df; border: 1px solid #efdfba; }
+.queue-type { color: #5d7081; background: #f3f6f8; }
+.care-note { display: grid; gap: .22rem; margin: .8rem 0 0 4.85rem; padding: .65rem .8rem; border: 1px solid #efe1bc; border-radius: 9px; color: #675629; background: #fffaf0; font-size: .84rem; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.care-note strong { color: #745419; font-size: .77rem; }
+.queue-card-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin: .9rem 0 0 4.85rem; }
+.queue-card-actions button, .queue-card-actions a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: .5rem .75rem; border: 1px solid #d4dfe7; border-radius: 8px; color: #35526a; background: #fff; text-decoration: none; font-size: .82rem; font-weight: 700; line-height: 1.25; text-align: center; }
+.queue-card-actions a { color: #fff; border-color: #255c81; background: #255c81; }
+.queue-card-actions a:hover { background: #194766; }
+.queue-card-actions .btn-recall-tv { color: #72520f; border-color: #ead69a; background: #fff7dc; }
+.queue-card-actions .action-danger { color: #a13e3b; border-color: #e7c2bf; background: #fff8f7; }
+.empty-state { display: grid; justify-items: center; gap: .45rem; padding: 2rem 1rem; border: 1px dashed #c7d6df; border-radius: 14px; color: #5f7384; background: #fff; text-align: center; }
+.empty-state strong { color: #24445b; }
+.empty-icon { display: grid; place-items: center; width: 38px; height: 38px; margin-bottom: .25rem; border-radius: 50%; color: #27674f; background: #e9f6ee; font-weight: 850; }
+.cancel-panel, .imaging-panel, .absence-panel, .transfer-panel { margin: 1rem 0; padding: 1.2rem; border: 1px solid var(--line); border-radius: 14px; background: #fff; box-shadow: 0 4px 15px rgb(29 56 80 / 4%); box-sizing: border-box; }
+.cancel-panel { border-color: #efc8c4; background: #fffafa; }
+.imaging-panel, .transfer-panel { border-color: #c9dfe6; background: #f8fcfd; }
+.absence-panel { border-color: #ecd9a6; background: #fffdf7; }
+.cancel-panel h2, .imaging-panel h2, .absence-panel h2, .transfer-panel h2 { margin: 0 0 .6rem; font-size: 1.12rem; color: #1b354b; }
+.cancel-panel form, .imaging-panel form, .absence-panel form, .transfer-panel form { display: grid; gap: .75rem; }
+textarea { width: 100%; min-height: 5.5rem; padding: .7rem .8rem; resize: vertical; }
+form label { color: #3d566b; font-size: .88rem; line-height: 1.45; }
+form label input[type="checkbox"] { width: 17px; height: 17px; min-height: 0; margin: 0 .45rem 0 0; vertical-align: middle; accent-color: var(--teal); }
+nav[aria-label="Phân trang hàng đợi"] { display: flex; justify-content: flex-end; gap: .65rem; margin-top: 1.1rem; }
+[role="alert"] { overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .page { padding: 1.1rem .8rem 2rem; }
+  .page-header { align-items: flex-start; flex-direction: column; }
+  .tv-link { align-self: stretch; }
+  .toolbar { align-items: stretch; padding: .8rem; }
+  .field-group, .toolbar > button { min-width: 0; width: 100%; }
+  .queue-entry-header { grid-template-columns: 54px minmax(0, 1fr); gap: .65rem; }
+  .status-pill { grid-column: 2; }
+  .queue-entry-meta, .care-note, .queue-card-actions { margin-left: 0; }
+  .queue-card-actions > * { flex: 1 1 160px; }
+}
+@media (max-width: 420px) {
+  .queue-summary { flex-wrap: wrap; }
+  .queue-entry { padding: .85rem; }
+  .queue-entry-meta { display: grid; gap: .5rem; }
+  .queue-card-actions { display: grid; grid-template-columns: 1fr; }
+  .queue-card-actions > * { width: 100%; min-width: 0; }
+  nav[aria-label="Phân trang hàng đợi"] { display: grid; grid-template-columns: 1fr 1fr; }
 }
 </style>
