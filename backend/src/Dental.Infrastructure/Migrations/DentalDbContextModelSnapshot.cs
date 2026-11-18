@@ -42,9 +42,6 @@ namespace Dental.Infrastructure.Migrations
                     b.Property<int>("CreatedByUserId")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("DentistId")
-                        .HasColumnType("integer");
-
                     b.Property<string>("EmergencyReason")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
@@ -90,9 +87,6 @@ namespace Dental.Infrastructure.Migrations
 
                     b.HasIndex("CreatedByUserId")
                         .HasDatabaseName("IX_Appointments_CreatedByUserId");
-
-                    b.HasIndex("DentistId")
-                        .HasDatabaseName("IX_Appointments_DentistId");
 
                     b.HasIndex("AppointmentDate", "SlotTime")
                         .HasDatabaseName("IX_Appointments_AppointmentDate_SlotTime");
@@ -177,9 +171,6 @@ namespace Dental.Infrastructure.Migrations
                     b.Property<DateOnly>("DateOfBirth")
                         .HasColumnType("date");
 
-                    b.Property<int?>("DentistId")
-                        .HasColumnType("integer");
-
                     b.Property<string>("Email")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -249,8 +240,6 @@ namespace Dental.Infrastructure.Migrations
 
                     b.HasIndex("ClientRequestId")
                         .IsUnique();
-
-                    b.HasIndex("DentistId");
 
                     b.HasIndex("ReviewedByUserId");
 
@@ -2954,11 +2943,6 @@ namespace Dental.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Dental.Domain.Entities.User", "Dentist")
-                        .WithMany()
-                        .HasForeignKey("DentistId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("Dental.Domain.Entities.Patient", "Patient")
                         .WithMany()
                         .HasForeignKey("PatientId")
@@ -2966,8 +2950,6 @@ namespace Dental.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("CreatedByUser");
-
-                    b.Navigation("Dentist");
 
                     b.Navigation("Patient");
                 });
@@ -2987,11 +2969,6 @@ namespace Dental.Infrastructure.Migrations
                     b.HasOne("Dental.Domain.Entities.Appointment", null)
                         .WithMany()
                         .HasForeignKey("ApprovedAppointmentId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Dental.Domain.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("DentistId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Dental.Domain.Entities.User", null)

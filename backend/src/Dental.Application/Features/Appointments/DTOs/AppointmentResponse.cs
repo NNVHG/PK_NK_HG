@@ -8,8 +8,6 @@ public sealed record AppointmentResponse(
     string PatientPhone,
     DateOnly AppointmentDate,
     TimeOnly SlotTime,
-    int? DentistId,
-    string? DentistName,
     string Status,
     string? Notes,
     int CreatedByUserId,

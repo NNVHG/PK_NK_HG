@@ -10,5 +10,5 @@ public static class BookingRequestReservations
         var last=DateOnly.FromDayNumber(Math.Min(DateOnly.MaxValue.DayNumber,date.DayNumber+1));
         return db.BookingRequests.AsNoTracking().Where(x=>x.Status=="Pending"&&x.AppointmentDate>=first&&x.AppointmentDate<=last);
     }
-    public static Appointment Period(BookingRequest x)=>new(){AppointmentDate=x.AppointmentDate,SlotTime=x.SlotTime,SlotDurationMinutes=x.SlotDurationMinutes,DentistId=x.DentistId};
+    public static Appointment Period(BookingRequest x)=>new(){AppointmentDate=x.AppointmentDate,SlotTime=x.SlotTime,SlotDurationMinutes=x.SlotDurationMinutes};
 }

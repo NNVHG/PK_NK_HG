@@ -79,7 +79,7 @@ public static class Phase1DemoSeeder
             var slot = TimeOnly.Parse(time);
             if (await db.Appointments.AnyAsync(a => a.PatientId == patient.PatientId && a.AppointmentDate == today && a.SlotTime == slot)) continue;
             db.Appointments.Add(new Appointment { PatientId = patient.PatientId, AppointmentDate = today, SlotTime = slot,
-                SlotDurationMinutes = 30, DentistId = dentist?.UserId, Status = status,
+                SlotDurationMinutes = 30, Status = status,
                 Notes = "Dữ liệu minh họa Phase 1.", CreatedByUserId = admin.UserId, CreatedAt = now });
         }
         await db.SaveChangesAsync();

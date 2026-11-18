@@ -17,7 +17,6 @@ public sealed class BookingRequestConfiguration : IEntityTypeConfiguration<Booki
         b.Property(x=>x.Status).HasMaxLength(20).IsRequired();b.Property(x=>x.RejectionReason).HasMaxLength(500);
         b.Property(x=>x.Version).IsConcurrencyToken();
         b.HasIndex(x=>new{x.Status,x.AppointmentDate,x.SlotTime});
-        b.HasOne<User>().WithMany().HasForeignKey(x=>x.DentistId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Patient>().WithMany().HasForeignKey(x=>x.VerifiedPatientId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<User>().WithMany().HasForeignKey(x=>x.SubmittedByUserId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<User>().WithMany().HasForeignKey(x=>x.ReviewedByUserId).OnDelete(DeleteBehavior.Restrict);

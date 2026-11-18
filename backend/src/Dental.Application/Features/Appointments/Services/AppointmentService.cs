@@ -99,9 +99,9 @@ public sealed class AppointmentService
             request.ConfirmedDentistConflictAppointmentId.HasValue || request.ConfirmedDentistConflictRequestId.HasValue)
             return Result<AppointmentResponse>.Failure(Error.Validation.Code,
                 "Phòng khám không tiếp nhận cấp cứu hoặc chen lịch. Chọn khung giờ khám và ghi điều cần lưu ý vào ghi chú.");
-        if (actorRoleCode == RoleCodes.Patient && request.DentistId.HasValue)
+        if (request.DentistId.HasValue)
             return Result<AppointmentResponse>.Failure(Error.Validation.Code,
-                "Bệnh nhân không chọn nha sĩ khi đặt lịch; phòng khám sẽ điều phối khi tiếp đón.");
+                "Không chọn hoặc chỉ định nha sĩ khi đặt lịch; nha sĩ trong phòng sẽ gọi số bệnh nhân.");
         try
         {
             return await _unitOfWork.ExecuteSerializableTransactionAsync(
@@ -116,7 +116,7 @@ public sealed class AppointmentService
         var snapshot = await _appointmentRepository.GetScheduleAsync(ct) ?? new ScheduleSnapshot(ClinicSchedule.Default, "", true);
         if (request.ExpectedScheduleRevision is not null && request.ExpectedScheduleRevision != snapshot.Revision)
             return Result<AppointmentResponse>.Failure(new Error("APP_SCHEDULE", "Cấu hình giờ khám đã đổi. Tải lại và chọn lại khung giờ trước khi gửi."));
-        if (!snapshot.Schedule.IsValidSlot(request.SlotTime) || request.Notes?.Length > 500 || request.DentistId <= 0)
+        if (!snapshot.Schedule.IsValidSlot(request.SlotTime) || request.Notes?.Length > 500)
             return Result<AppointmentResponse>.Failure(Error.Validation);
         var patient = await _patientRepository.GetByIdAsync(request.PatientId, ct);
         if (patient is null)
@@ -159,25 +159,6 @@ public sealed class AppointmentService
         var currentSlotCount = await _appointmentRepository.GetSlotBookingCountAsync(request.AppointmentDate, request.SlotTime, ct, durationMinutes: snapshot.Schedule.DurationMinutes);
         if (currentSlotCount >= AppointmentSlots.MaxBookingsPerSlot)
             return Result<AppointmentResponse>.Failure(Error.AppointmentSlotFull);
-
-        if (request.DentistId.HasValue)
-        {
-            var dentist = await _userRepository.FindByIdAsync(request.DentistId.Value, ct);
-            if (dentist is null || !dentist.IsActive || dentist.Role?.RoleCode != RoleCodes.Dentist)
-                return Result<AppointmentResponse>.Failure(Error.Validation.Code, "Nha sĩ được chọn không hợp lệ hoặc không hoạt động.");
-
-            var pending = await _appointmentRepository.GetPendingDentistConflictAsync(request.DentistId.Value,request.AppointmentDate,request.SlotTime,snapshot.Schedule.DurationMinutes,ct);
-            if(pending is not null)
-            {
-                return Result<AppointmentResponse>.Failure(Error.Validation.Code,"Bác sĩ đã có yêu cầu Pending giữ chỗ trong khung giờ này.");
-            }
-            var conflict = await _appointmentRepository.GetDentistBookingConflictAsync(
-                request.DentistId.Value, request.AppointmentDate, request.SlotTime, 0, ct, snapshot.Schedule.DurationMinutes);
-            if (conflict is not null)
-            {
-                return Result<AppointmentResponse>.Failure(Error.Validation.Code, "Bác sĩ đã có lịch hẹn trong khung giờ này.");
-            }
-        }
 
         var patientAccountCreated = false;
         if (isCounterActor)
@@ -328,7 +309,6 @@ public sealed class AppointmentService
             AppointmentDate = request.AppointmentDate,
             SlotTime = request.SlotTime,
             SlotDurationMinutes = snapshot.Schedule.DurationMinutes,
-            DentistId = request.DentistId,
             Status = isCounterWalkIn ? AppointmentStatuses.CheckedIn : AppointmentStatuses.Scheduled,
             Notes = request.Notes?.Trim(),
             CreatedByUserId = actorUserId,
@@ -411,7 +391,6 @@ public sealed class AppointmentService
                         nameof(Appointment.AppointmentDate),
                         nameof(Appointment.SlotTime),
                         nameof(Appointment.SlotDurationMinutes),
-                        nameof(Appointment.DentistId),
                         nameof(Appointment.Status)
                     },
                 slotDurationMinutes = appointment.SlotDurationMinutes
@@ -602,13 +581,17 @@ public sealed class AppointmentService
         if (appointment is null)
             return Result<AppointmentResponse>.Failure(Error.AppointmentNotFound);
 
+        if (request.DentistId.HasValue)
+            return Result<AppointmentResponse>.Failure(Error.Validation.Code,
+                "Không chọn hoặc chỉ định nha sĩ khi đổi lịch.");
+
         if (actorRoleCode == RoleCodes.Patient)
         {
             var patient = await _patientRepository.GetByIdAsync(appointment.PatientId, ct);
             if (patient?.UserId != actorUserId)
                 return Result<AppointmentResponse>.Failure(Error.AppointmentNotFound);
-            // Portal only moves the time; it cannot reassign a dentist or edit staff notes.
-            if ((request.DentistId.HasValue && request.DentistId != appointment.DentistId) || request.Notes is not null)
+            // Portal only moves the time; it cannot edit staff notes.
+            if (request.Notes is not null)
                 return Result<AppointmentResponse>.Failure(Error.Forbidden);
         }
 
@@ -617,8 +600,7 @@ public sealed class AppointmentService
 
         if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Length > 500 || request.Notes?.Length > 500)
             return Result<AppointmentResponse>.Failure(Error.Validation.Code, "Cần lý do đổi lịch tối đa 500 ký tự; ghi chú tối đa 500 ký tự.");
-        var dentistId = request.DentistId ?? appointment.DentistId;
-        if (appointment.AppointmentDate == request.AppointmentDate && appointment.SlotTime == request.SlotTime && appointment.DentistId == dentistId)
+        if (appointment.AppointmentDate == request.AppointmentDate && appointment.SlotTime == request.SlotTime)
             return Result<AppointmentResponse>.Success(ToResponse(appointment));
         var snapshot = await _appointmentRepository.GetScheduleAsync(ct) ?? new ScheduleSnapshot(ClinicSchedule.Default, "", true);
         if (request.ExpectedScheduleRevision is not null && request.ExpectedScheduleRevision != snapshot.Revision)
@@ -645,25 +627,14 @@ public sealed class AppointmentService
         if (currentSlotCount >= AppointmentSlots.MaxBookingsPerSlot)
             return Result<AppointmentResponse>.Failure(Error.AppointmentSlotFull);
 
-        if (dentistId.HasValue)
-        {
-            var dentist = await _userRepository.FindByIdAsync(dentistId.Value, ct);
-            if (dentist is null || !dentist.IsActive || dentist.Role?.RoleCode != RoleCodes.Dentist)
-                return Result<AppointmentResponse>.Failure(Error.Validation.Code, "Nha sĩ được chọn không hợp lệ hoặc không hoạt động.");
-            if (await _appointmentRepository.HasDentistBookingAsync(dentistId.Value, request.AppointmentDate, request.SlotTime, appointmentId, ct, snapshot.Schedule.DurationMinutes))
-                return Result<AppointmentResponse>.Failure(Error.Validation.Code, "Bác sĩ đã có lịch hẹn trong khung giờ này.");
-        }
-
         if (appointment.RescheduleCount == int.MaxValue) return Result<AppointmentResponse>.Failure(Error.Validation);
         var oldDate = appointment.AppointmentDate;
         var oldTime = appointment.SlotTime;
         var oldDurationMinutes = appointment.SlotDurationMinutes;
-        var oldDentistId = appointment.DentistId;
 
         appointment.AppointmentDate = request.AppointmentDate;
         appointment.SlotTime = request.SlotTime;
         appointment.SlotDurationMinutes = snapshot.Schedule.DurationMinutes;
-        appointment.DentistId = dentistId;
         appointment.RescheduleCount++;
         appointment.RescheduleReason = request.Reason.Trim();
         if (!string.IsNullOrWhiteSpace(request.Notes))
@@ -679,8 +650,8 @@ public sealed class AppointmentService
             userId: actorUserId,
             detail: JsonSerializer.Serialize(new
             {
-                oldDate, oldTime, oldDentistId, oldDurationMinutes,
-                newDate = appointment.AppointmentDate, newTime = appointment.SlotTime, newDentistId = dentistId,
+                oldDate, oldTime, oldDurationMinutes,
+                newDate = appointment.AppointmentDate, newTime = appointment.SlotTime,
                 newDurationMinutes = appointment.SlotDurationMinutes,
                 rescheduleCount = appointment.RescheduleCount,
                 changedFields = new[]
@@ -688,7 +659,6 @@ public sealed class AppointmentService
                     nameof(Appointment.AppointmentDate),
                     nameof(Appointment.SlotTime),
                     nameof(Appointment.SlotDurationMinutes),
-                    nameof(Appointment.DentistId),
                     nameof(Appointment.Notes),
                     nameof(Appointment.RescheduleCount),
                     nameof(Appointment.RescheduleReason),
@@ -730,8 +700,6 @@ public sealed class AppointmentService
             a.Patient?.Phone ?? string.Empty,
             a.AppointmentDate,
             a.SlotTime,
-            a.DentistId,
-            a.Dentist?.FullName,
             a.Status,
             a.Notes,
             a.CreatedByUserId,

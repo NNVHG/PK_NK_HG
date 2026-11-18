@@ -100,10 +100,6 @@
                 <span class="detail-label">Ngày sinh:</span>
                 <span class="detail-val">🎂 {{ formatDate(req.dateOfBirth) }}</span>
               </div>
-              <div class="detail-item">
-                <span class="detail-label">Nha sĩ yêu cầu:</span>
-                <span class="detail-val">👨‍⚕️ {{ req.dentistName || 'Chờ phòng khám phân công' }}</span>
-              </div>
             </div>
 
             <div v-if="req.notes" class="request-notes">
@@ -266,7 +262,6 @@
               <th>Giờ hẹn</th>
               <th>Mã lịch</th>
               <th>Bệnh nhân</th>
-              <th>Nha sĩ phụ trách</th>
               <th>Trạng thái</th>
               <th>Ghi chú</th>
               <th class="col-actions">Thao tác</th>
@@ -283,7 +278,6 @@
                 <div class="patient-cell-name">{{ item.patientName }}</div>
                 <div class="patient-cell-code">#{{ item.patientCode }}</div>
               </td>
-              <td>{{ item.dentistName || 'Chưa phân công' }}</td>
               <td>
                 <span class="status-pill" :class="'status--' + item.status.toLowerCase()">
                   {{ formatStatus(item.status) }}
@@ -1156,7 +1150,6 @@ async function submitBookingModal() {
       patientId,
       appointmentDate: form.value.appointmentDate,
       slotTime: `${form.value.slot}:00`,
-      dentistId: null,
       notes: notesText || null,
       expectedScheduleRevision: scheduleRevision.value,
       citizenId: !isChild.value ? form.value.cccd.trim() : null,

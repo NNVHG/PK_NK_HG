@@ -96,7 +96,7 @@ public sealed class StaffWorkspaceService(IStaffWorkspaceRepository workspaces, 
                 if (sameConfirmedSelection)
                     return Result<WorkspaceSnapshot>.Success(await SnapshotAsync(target, transactionCt));
 
-                if (targetRole == RoleCodes.Dentist && await IsBusy(targetId, transactionCt))
+                if (targetRole == RoleCodes.Dentist && IsConfirmedToday(workspace) && await IsBusy(targetId, transactionCt))
                     return Result<WorkspaceSnapshot>.Failure(Busy);
 
                 DentalChair? selectedChair = null;
@@ -140,6 +140,48 @@ public sealed class StaffWorkspaceService(IStaffWorkspaceRepository workspaces, 
         catch (ConcurrentOperationException) { return Result<WorkspaceSnapshot>.Failure(Changed); }
     }
 
+    /// <summary>Tự động giải phóng phòng và cập nhật trạng thái phòng về Sẵn sàng khi nha sĩ đăng xuất.</summary>
+    public async Task ReleaseOnLogoutAsync(int userId, CancellationToken ct = default)
+    {
+        if (userId <= 0) return;
+        await uow.ExecuteSerializableTransactionAsync(async transactionCt =>
+        {
+            var target = await users.FindByIdAsync(userId, transactionCt);
+            if (target?.Role?.RoleCode != RoleCodes.Dentist) return false;
+            var workspace = await workspaces.FindAsync(userId, transactionCt);
+            if (workspace is not { ChairId: int chairId }) return false;
+            if (await IsBusy(userId, transactionCt)) return false;
+
+            var oldChairId = workspace.ChairId;
+            var oldRoomId = workspace.RoomId;
+            var oldWorkDate = workspace.WorkDate;
+            workspace.ChairId = null;
+            workspace.RoomId = null;
+            workspace.WorkDate = null;
+            workspace.Version++;
+            workspace.UpdatedAt = clock.UtcNow;
+            workspace.UpdatedByUserId = userId;
+
+            int? updatedChairStatus = null;
+            var chair = await chairs.FindAsync(chairId, transactionCt);
+            if (chair is { IsActive: true, Status: DentalChairStatus.Occupied } &&
+                !await visits.HasActiveVisitForChairAsync(chairId, 0, transactionCt))
+            {
+                chair.Status = DentalChairStatus.Available;
+                chair.Version++;
+                chair.UpdatedAt = clock.UtcNow;
+                chair.UpdatedByUserId = userId;
+                updatedChairStatus = (int)chair.Status;
+            }
+
+            await uow.SaveChangesAsync(transactionCt);
+            await audit.LogRequiredAsync("MOD_MST_WORKSPACE_LOGOUT_RELEASED", "StaffWorkspace", userId, userId,
+                JsonSerializer.Serialize(new { oldChairId, oldRoomId, oldWorkDate, updatedChairStatus, version = workspace.Version }),
+                ct: transactionCt);
+            return true;
+        }, ct);
+    }
+
     private async Task<WorkspaceSnapshot> SnapshotAsync(User target, CancellationToken ct)
     {
         var workspace = await workspaces.FindAsync(target.UserId, ct);
@@ -155,6 +197,6 @@ public sealed class StaffWorkspaceService(IStaffWorkspaceRepository workspaces, 
             dentistId, dentist?.FullName, chair?.Id, chair?.ChairNumber, chair?.RoomName,
             target.IsActive && target.Role?.RoleCode is (RoleCodes.Dentist or RoleCodes.Assistant) &&
             dentist is { IsActive: true } && dentist.Role?.RoleCode == RoleCodes.Dentist &&
-            confirmedToday && chair is { IsActive: true, Status: DentalChairStatus.Available }, !isDentist || !busy);
+            confirmedToday && chair is { IsActive: true, Status: DentalChairStatus.Available }, !isDentist || !confirmedToday || !busy);
     }
 }

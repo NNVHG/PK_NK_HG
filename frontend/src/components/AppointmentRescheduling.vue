@@ -25,10 +25,6 @@
             <span class="info-val">{{ formatDate(current.appointmentDate) }} lúc {{ current.slotTime.slice(0, 5) }}</span>
           </div>
           <div class="info-row">
-            <span class="info-label">Nha sĩ:</span>
-            <span class="info-val">{{ current.dentistName || 'Chưa phân nha sĩ' }}</span>
-          </div>
-          <div class="info-row">
             <span class="info-label">Số lần đã đổi:</span>
             <span class="info-val">{{ current.rescheduleCount }} lần</span>
           </div>

@@ -43,11 +43,6 @@ public sealed class AppointmentConfiguration : IEntityTypeConfiguration<Appointm
             .HasForeignKey(a => a.PatientId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasOne(a => a.Dentist)
-            .WithMany()
-            .HasForeignKey(a => a.DentistId)
-            .OnDelete(DeleteBehavior.Restrict);
-
         builder.HasOne(a => a.CreatedByUser)
             .WithMany()
             .HasForeignKey(a => a.CreatedByUserId)
@@ -58,9 +53,6 @@ public sealed class AppointmentConfiguration : IEntityTypeConfiguration<Appointm
 
         builder.HasIndex(a => new { a.PatientId, a.AppointmentDate })
             .HasDatabaseName("IX_Appointments_PatientId_AppointmentDate");
-
-        builder.HasIndex(a => a.DentistId)
-            .HasDatabaseName("IX_Appointments_DentistId");
 
         builder.HasIndex(a => a.CreatedByUserId)
             .HasDatabaseName("IX_Appointments_CreatedByUserId");

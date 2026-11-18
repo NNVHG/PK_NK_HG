@@ -35,18 +35,14 @@ public sealed class BookingApprovalRepository(DentalDbContext db, VietnamClock c
         else if (row.SubmittedByUserId.HasValue && (account is null || !account.IsActive))
             blocked = "Tài khoản gửi yêu cầu đã thay đổi. Cần đối chiếu lại.";
         else if (patients.Length > 20) blocked = "Có quá nhiều hồ sơ tương đồng. Đối soát hồ sơ tại quầy trước khi xử lý.";
-        var dentist = row.DentistId.HasValue ? await db.Users.AsNoTracking().Include(u => u.Role).SingleOrDefaultAsync(u => u.UserId == row.DentistId, ct) : null;
-        if (row.DentistId.HasValue && (dentist is null || !dentist.IsActive || dentist.Role.RoleCode != RoleCodes.Dentist))
-            blocked = "Nha sĩ giữ chỗ không còn hoạt động. Đối chiếu lại yêu cầu với khách.";
         if (row.VerifiedPatientId.HasValue && !patients.Any(p => p.PatientId == row.VerifiedPatientId && p.IsActive && p.UserId == row.SubmittedByUserId))
             blocked = "Hồ sơ đã xác minh không còn thuộc tài khoản gửi yêu cầu hoặc đã ngừng hoạt động.";
         // The fingerprint detects a changed review, not a permission token. Authorization is repeated in the transaction.
         var stamp = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new {
             row.Id, row.Version, row.Status, row.FullName, row.Phone, row.DateOfBirth, row.Gender, row.Email, row.Notes,
-            row.AppointmentDate, row.SlotTime, row.SlotDurationMinutes, row.DentistId, row.VerifiedPatientId, row.SubmittedByUserId,
+            row.AppointmentDate, row.SlotTime, row.SlotDurationMinutes, row.VerifiedPatientId, row.SubmittedByUserId,
             account = account is null ? null : new { account.UserId, account.FullName, account.Phone, account.RoleId, account.IsActive, account.UpdatedAt, account.TokenVersion, account.RequiresPhoneActivation },
-            patients = patients.Select(p => new { p.PatientId, p.FullName, p.DateOfBirth, p.Phone, p.UserId, p.IsActive, p.UpdatedAt, p.CitizenIdVersion }),
-            dentist = dentist is null ? null : new { dentist.UserId, dentist.IsActive, dentist.RoleId, dentist.UpdatedAt }
+            patients = patients.Select(p => new { p.PatientId, p.FullName, p.DateOfBirth, p.Phone, p.UserId, p.IsActive, p.UpdatedAt, p.CitizenIdVersion })
         })));
         BookingApprovalResult? result = null;
         if (row.ApprovedAppointmentId.HasValue)
@@ -55,7 +51,7 @@ public sealed class BookingApprovalRepository(DentalDbContext db, VietnamClock c
             result = new(a.AppointmentId, a.PatientId, false, false);
         }
         return new(row.Id, row.Version, row.Status, row.FullName, row.Phone, row.DateOfBirth, row.Gender,
-            row.AppointmentDate, row.SlotTime, row.SlotDurationMinutes, dentist?.FullName, row.VerifiedPatientId,
+            row.AppointmentDate, row.SlotTime, row.SlotDurationMinutes, row.VerifiedPatientId,
             account is null ? null : new(account.UserId, account.FullName),
             patients.Take(20).Select(p => new BookingApprovalPatient(p.PatientId, p.FullName, p.DateOfBirth,
                 p.IsActive && (!row.VerifiedPatientId.HasValue || p.UserId == account?.UserId) &&
@@ -104,19 +100,8 @@ public sealed class BookingApprovalRepository(DentalDbContext db, VietnamClock c
             var appointments = new AppointmentRepository(db);
             if (await appointments.GetSlotBookingCountAsync(row.AppointmentDate, row.SlotTime, ct, durationMinutes: row.SlotDurationMinutes) > AppointmentSlots.MaxBookingsPerSlot)
                 return Result<BookingApprovalResult>.Failure(Error.AppointmentSlotFull);
-            if (row.DentistId.HasValue)
-            {
-                var otherHolds = await BookingRequestReservations.Nearby(db, row.AppointmentDate).Where(x => x.Id != row.Id && x.DentistId == row.DentistId).ToArrayAsync(ct);
-                // DL337: legacy emergency flags no longer exempt a booking from collision checks.
-                var first = DateOnly.FromDayNumber(Math.Max(DateOnly.MinValue.DayNumber, row.AppointmentDate.DayNumber - 1));
-                var last = DateOnly.FromDayNumber(Math.Min(DateOnly.MaxValue.DayNumber, row.AppointmentDate.DayNumber + 1));
-                var otherBookings = await db.Appointments.AsNoTracking().Where(a => a.DentistId == row.DentistId && a.Status == AppointmentStatuses.Scheduled
-                    && a.AppointmentDate >= first && a.AppointmentDate <= last).ToArrayAsync(ct);
-                if (otherHolds.Any(x => BookingOccupancy.Overlaps(BookingRequestReservations.Period(x), row.AppointmentDate, row.SlotTime, row.SlotDurationMinutes))
-                    || otherBookings.Any(a => BookingOccupancy.Overlaps(a, row.AppointmentDate, row.SlotTime, row.SlotDurationMinutes))) return Conflict();
-            }
             var appointment = new Appointment { Patient = patient, AppointmentDate = row.AppointmentDate, SlotTime = row.SlotTime,
-                SlotDurationMinutes = row.SlotDurationMinutes, DentistId = row.DentistId, Notes = row.Notes,
+                SlotDurationMinutes = row.SlotDurationMinutes, Notes = row.Notes,
                 CreatedByUserId = actor, CreatedAt = clock.UtcNow };
             db.Appointments.Add(appointment);
             row.Status = "Approved"; row.Version++; row.ReviewedByUserId = actor; row.UpdatedAt = clock.UtcNow; row.CreatedAccount = false;

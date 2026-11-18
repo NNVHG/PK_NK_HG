@@ -20,9 +20,8 @@ public sealed record SubmitBookingRequest(BookingIntent Intent,Guid ClientReques
 public sealed record BookingReceipt(Guid RequestId,string Status);
 public sealed record PublicBookingCatalog(string Today,string[] Slots,int DurationMinutes,string Revision);
 public sealed record BookingRequestRow(int Id,string FullName,string Phone,DateOnly DateOfBirth,DateOnly AppointmentDate,
-    TimeOnly SlotTime,int SlotDurationMinutes,int? DentistId,string? DentistName,string? Notes,bool IsReturning,DateTime CreatedAt,int Version);
+    TimeOnly SlotTime,int SlotDurationMinutes,string? Notes,bool IsReturning,DateTime CreatedAt,int Version);
 public sealed record RejectBookingRequest(int ExpectedVersion,string Reason,bool Confirmed);
-public sealed record PendingDentistConflict(int RequestId,string DentistName,DateOnly AppointmentDate,TimeOnly SlotTime);
 public interface IBookingRequestRepository
 {
     Task<PublicBookingCatalog> CatalogAsync(CancellationToken ct);

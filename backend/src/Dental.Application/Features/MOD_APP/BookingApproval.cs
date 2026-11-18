@@ -9,7 +9,7 @@ public sealed record BookingApprovalAccount(int UserId, string FullName);
 public sealed record BookingApprovalResult(int AppointmentId, int PatientId, bool CreatedAccount, bool RequiresPhoneActivation);
 public sealed record BookingApprovalContext(int Id, int Version, string Status, string FullName, string Phone,
     DateOnly DateOfBirth, string Gender, DateOnly AppointmentDate, TimeOnly SlotTime, int SlotDurationMinutes,
-    string? DentistName, int? VerifiedPatientId, BookingApprovalAccount? Account, BookingApprovalPatient[] Patients,
+    int? VerifiedPatientId, BookingApprovalAccount? Account, BookingApprovalPatient[] Patients,
     bool RequiresCounterConfirmation, string? BlockReason, string ReviewStamp, BookingApprovalResult? Result);
 public sealed record ApproveBookingRequest(int ExpectedVersion, string ReviewStamp, int? PatientId,
     bool ConfirmedNewPatient, bool ConfirmedAtCounter, bool Confirmed);

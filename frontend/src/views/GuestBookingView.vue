@@ -61,7 +61,51 @@
                 <div class="section-heading"><div><p class="card-kicker">Thời gian phù hợp</p><h3>Chọn lịch khám</h3></div></div>
                 <div class="field-grid">
                   <label class="field"><span>Ngày khám <span class="required" aria-hidden="true">*</span></span><input v-model="form.appointmentDate" type="date" :min="catalog.today" required /></label>
-                  <label class="field"><span>Giờ khám <span class="required" aria-hidden="true">*</span></span><select v-model="form.slot" required><option value="">Chọn khung giờ</option><option v-for="s in catalog.slots" :key="s">{{s}}</option></select></label>
+                  
+                  <div class="field field-wide slot-field-wrap">
+                    <div class="slot-header-row">
+                      <span class="field-label">Khung giờ khám <span class="required" aria-hidden="true">*</span></span>
+                      <span v-if="form.slot" class="slot-chosen-badge">✓ Đã chọn: <strong>{{form.slot}}</strong></span>
+                      <span v-else class="slot-hint-badge">Vui lòng chọn 1 khung giờ</span>
+                    </div>
+                    <select v-model="form.slot" class="sr-only" required aria-label="Khung giờ khám">
+                      <option value="">Chọn khung giờ</option>
+                      <option v-for="s in catalog.slots" :key="s" :value="s">{{s}}</option>
+                    </select>
+                    <div class="slot-picker-box">
+                      <div v-if="morningSlots.length" class="slot-subgroup">
+                        <span class="slot-subgroup-title">🌅 Buổi Sáng (08:00 – 11:30)</span>
+                        <div class="slot-chips-row">
+                          <button
+                            v-for="s in morningSlots"
+                            :key="s"
+                            type="button"
+                            class="slot-chip"
+                            :class="{ selected: form.slot === s }"
+                            @click="form.slot = s"
+                          >
+                            {{ s }}
+                          </button>
+                        </div>
+                      </div>
+                      <div v-if="afternoonSlots.length" class="slot-subgroup">
+                        <span class="slot-subgroup-title">🌇 Buổi Chiều &amp; Tối (13:30 – 19:30)</span>
+                        <div class="slot-chips-row">
+                          <button
+                            v-for="s in afternoonSlots"
+                            :key="s"
+                            type="button"
+                            class="slot-chip"
+                            :class="{ selected: form.slot === s }"
+                            @click="form.slot = s"
+                          >
+                            {{ s }}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <label class="field field-wide"><span>Nội dung đặt lịch <span class="optional">(không bắt buộc)</span></span><textarea v-model="form.notes" maxlength="500" rows="3" placeholder="Bạn có thể ghi chú thêm cho phòng khám" /></label>
                 </div>
               </fieldset>
@@ -109,6 +153,8 @@ const auth=useAuthStore(),catalog=ref<BookingCatalog|null>(null),patient=ref<Pat
 const form=reactive({fullName:'',phone:'',dateOfBirth:'',gender:'',email:'',appointmentDate:'',slot:'',notes:''});
 const guardianForm=reactive({fullName:'',relationship:'Bố/Mẹ'});
 const isChild=computed(()=>!!form.dateOfBirth&&isUnderFourteen(form.dateOfBirth,catalog.value?.today));
+const morningSlots=computed(()=>(catalog.value?.slots||[]).filter(s=>s<'12:00'));
+const afternoonSlots=computed(()=>(catalog.value?.slots||[]).filter(s=>s>='12:00'));
 const busy=ref(false),confirmed=ref(false),error=ref(''),receipt=ref<BookingReceipt|null>(null),retryBody=ref<BookingSubmission|null>(null);let snapshot:BookingIntent|null=null,generation=0,disposed=false;
 const identity=()=>`${auth.user?.userId}/${auth.role}`;
 function alive(ticket:number,owner:string){return !disposed&&ticket===generation&&owner===identity();}
@@ -159,7 +205,19 @@ watch(identity,()=>{generation++;busy.value=false;clear();if(!disposed)void load
 .brand-link{display:inline-flex;align-items:center;gap:10px;text-decoration:none;color:var(--hg-navy,#102e56);font-size:1.05rem;line-height:1.2}.brand-logo{flex-shrink:0;display:block;width:158px;height:42px;object-fit:contain}
 .header-actions{display:flex;align-items:center;gap:18px}.header-link,.back-link{font-size:.9rem;font-weight:600;text-decoration:none;color:#35556f}.login-link,.secondary-link{color:var(--hg-primary,#1857b6);font-weight:700;text-decoration:none}.login-link{border:1px solid #c8deeb;border-radius:9px;padding:9px 14px;white-space:nowrap}
 .booking-content{max-width:1160px;margin:0 auto;padding:30px 24px 80px;box-sizing:border-box}.intro{margin-bottom:26px}.back-link{display:inline-block;margin-bottom:23px;color:var(--hg-primary,#1857b6)}.eyebrow,.card-kicker{margin:0 0 6px;font-size:.75rem;font-weight:750;letter-spacing:.07em;text-transform:uppercase;color:var(--hg-primary,#1857b6)}h1,h2,h3,p{margin-top:0}h1,h2,h3{color:var(--hg-navy,#102e56)}h1{font-size:clamp(1.75rem,3vw,2.35rem);line-height:1.2;margin-bottom:9px}.intro-copy{color:#4a6176;line-height:1.6;max-width:660px;margin-bottom:0}
-.booking-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(250px,320px);align-items:start;gap:24px}.form-card,.summary-card{background:#fff;border:1px solid #e0ebf4;border-radius:16px;box-shadow:0 4px 18px rgba(16,46,86,.05);min-width:0}.card-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:22px 26px;border-bottom:1px solid #edf2f7}.card-heading h2,.summary-card h2,.info-card h2{font-size:1.08rem;line-height:1.35;margin:0}.step-label{flex-shrink:0;border-radius:999px;background:#edf6fc;color:#1857b6;font-size:.75rem;font-weight:700;padding:6px 10px}.card-body{padding:24px 26px 28px}fieldset{min-width:0;margin:0;padding:0;border:0}fieldset:disabled{opacity:.72}.field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 20px}.field{display:flex;flex-direction:column;gap:8px;min-width:0;font-size:.9rem;font-weight:650;color:#18354c}.field-wide{grid-column:1/-1}.required{color:#b42318}.optional,.field-hint{font-weight:400;color:#536a7e}.field-hint{font-size:.78rem;line-height:1.4}
+.booking-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(250px,320px);align-items:start;gap:24px}.form-card,.summary-card{background:#fff;border:1px solid #e0ebf4;border-radius:16px;box-shadow:0 4px 18px rgba(16,46,86,.05);min-width:0}.card-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:22px 26px;border-bottom:1px solid #edf2f7}.card-heading h2,.summary-card h2,.info-card h2{font-size:1.08rem;line-height:1.35;margin:0}.step-label{flex-shrink:0;border-radius:999px;background:#edf6fc;color:#1857b6;font-size:.75rem;font-weight:700;padding:6px 10px}.card-body{padding:24px 26px 28px}fieldset{min-width:0;margin:0;padding:0;border:0}fieldset:disabled{opacity:.72}.field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 20px}.field{display:flex;flex-direction:column;gap:8px;min-width:0;font-size:.9rem;font-weight:650;color:#18354c}.field-wide{grid-column:1/-1}.required{color:#b42318}.optional,.field-hint{font-weight:400;color:#536a7e}.field-hint{font-size:.78rem;line-height:1.4;margin-top:5px;color:#4a6378}
+.slot-field-wrap{display:flex;flex-direction:column;gap:8px}
+.slot-header-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.field-label{font-size:.9rem;font-weight:650;color:#18354c}
+.slot-chosen-badge{background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;padding:3px 10px;border-radius:999px;font-size:.78rem;font-weight:600}
+.slot-hint-badge{color:#854d0e;background:#fef9c3;border:1px solid #fef08a;padding:3px 10px;border-radius:999px;font-size:.75rem;font-weight:600}
+.slot-picker-box{background:#f8fbff;border:1px solid #d4e4f2;border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:14px}
+.slot-subgroup{display:flex;flex-direction:column;gap:8px}
+.slot-subgroup-title{font-size:.78rem;font-weight:750;color:#244b70;text-transform:uppercase;letter-spacing:.04em}
+.slot-chips-row{display:flex;flex-wrap:wrap;gap:8px}
+.slot-chip{padding:8px 14px;font-size:.88rem;font-weight:700;font-family:inherit;color:#18354c;background:#ffffff;border:1.5px solid #c8d9e7;border-radius:8px;cursor:pointer;transition:all .15s ease}
+.slot-chip:hover{border-color:#1857b6;background:#eff6ff;color:#1857b6}
+.slot-chip.selected{background:#1857b6;border-color:#1857b6;color:#ffffff;box-shadow:0 4px 10px rgba(24,87,182,.25);transform:translateY(-1px)}
 .field input,.field select,.field textarea{box-sizing:border-box;display:block;width:100%;min-width:0;min-height:46px;border:1px solid #c8d9e7;border-radius:9px;padding:10px 12px;background:#fff;color:#18354c;font:inherit;font-size:1rem}.field textarea{resize:vertical;line-height:1.5}.field input[readonly]{background:#f4f7fa;color:#445d72}.field input::placeholder,.field textarea::placeholder{color:#687e90}.section-divider{height:1px;background:#e9eff5;margin:26px 0}.section-heading{margin-bottom:18px}.section-heading h3{font-size:1rem;margin:0}.patient-notice,.loading-message{padding:12px 14px;background:#eef7fd;border-radius:9px;line-height:1.5;color:#214e72}.patient-notice{margin:0 0 20px;overflow-wrap:anywhere}
 .form-footer{border-top:1px solid #e9eff5;margin-top:26px;padding-top:22px}.consent{display:flex;align-items:flex-start;gap:10px;font-size:.9rem;line-height:1.5;color:#29465d}.consent input{width:18px;height:18px;margin:2px 0 0;flex:none;accent-color:#1857b6}.primary-button,.secondary-button{min-height:48px;border:0;border-radius:9px;padding:11px 20px;font:inherit;font-weight:750;cursor:pointer}.primary-button{margin-top:18px;background:var(--hg-primary,#1857b6);color:#fff}.secondary-button{background:#eaf3fb;color:#1857b6}.primary-button:hover:not(:disabled){background:#144c9e}.primary-button:disabled,.secondary-button:disabled{opacity:.55;cursor:not-allowed}.alert-message{color:#9b1c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:9px;padding:12px 14px;line-height:1.5}.status-message:empty{display:none}.status-visible{color:#145c38;background:#e9f8ef;border:1px solid #b8e7c9;border-radius:9px;padding:12px 14px;line-height:1.5}.receipt-card{padding-top:4px}.receipt-label{font-size:.85rem;color:#536a7e;margin-bottom:4px}.receipt-code{font-weight:700;overflow-wrap:anywhere;color:#102e56}
 .booking-aside{display:grid;gap:18px}.summary-card{padding:22px}.summary-card>p{color:#536a7e;font-size:.88rem;line-height:1.5;margin:8px 0 18px}.summary-card dl{margin:0}.summary-card dl div{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid #edf2f7}.summary-card dt{color:#536a7e}.summary-card dd{margin:0;text-align:right;font-weight:700;color:#102e56}.info-card{display:flex;gap:12px;background:#eaf5fc;border:1px solid #cfe6f5;border-radius:14px;padding:20px;color:#31546f}.info-icon{display:grid;place-items:center;flex:none;width:24px;height:24px;border-radius:50%;background:#1857b6;color:white;font-weight:750}.info-card h2{margin-bottom:9px}.info-card p{font-size:.88rem;line-height:1.55;margin:0 0 10px}.info-card p:last-child{margin:0}
