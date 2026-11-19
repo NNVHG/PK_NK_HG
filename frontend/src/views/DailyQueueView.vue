@@ -106,7 +106,7 @@
         <button type="button" :disabled="routingImaging" @click="closeImaging">Quay lại</button>
       </form>
     </section>
-    <section v-if="transferRow" class="transfer-panel" aria-labelledby="transfer-title">
+    <dialog v-if="transferRow" :ref="mountTransferDialog" class="transfer-panel" aria-labelledby="transfer-title" @cancel.prevent="closeTransfer">
       <h2 id="transfer-title">Chuyển nha sĩ phụ trách</h2>
       <p>{{ numberLabel(transferRow.queueNumber) }} · {{ transferRow.patientName }} · {{ transferRow.patientCode }}</p>
       <p v-if="transferRow.canCancelConsultation">Ca đang diễn ra sẽ chuyển sang phòng nha sĩ mới đang chọn. Phòng đích phải sẵn sàng.</p>
@@ -123,12 +123,16 @@
         <label for="transfer-reason">Lý do hoặc ghi chú (không bắt buộc, tối đa 500 ký tự)</label>
         <textarea id="transfer-reason" v-model="transferReason" maxlength="500" :disabled="transferring || needsReview" @input="transferConfirmed = false" />
         <label><input v-model="transferConfirmed" type="checkbox" :disabled="transferring || loading || needsReview" /> Tôi đã đối chiếu đúng lượt và xác nhận nha sĩ tiếp nhận.</label>
-        <button type="submit" :disabled="transferring || loading || cleanupOpen || needsReview || !transferConfirmed || !transferDentistId">
-          {{ transferring ? 'Đang chuyển…' : 'Xác nhận chuyển nha sĩ' }}
-        </button>
-        <button type="button" :disabled="transferring" @click="closeTransfer">Quay lại</button>
+        <p v-if="error || dentistError" class="notice notice-error transfer-notice" role="alert">{{ error || dentistError }}</p>
+        <p v-if="needsReview" class="notice notice-warning transfer-notice" role="status">Quay lại và tải lại hàng đợi trước khi thử lại.</p>
+        <div class="transfer-actions">
+          <button type="button" :disabled="transferring" @click="closeTransfer">Quay lại</button>
+          <button type="submit" class="btn-call-next" :disabled="transferring || loading || cleanupOpen || needsReview || !transferConfirmed || !transferDentistId">
+            {{ transferring ? 'Đang chuyển…' : 'Xác nhận chuyển nha sĩ' }}
+          </button>
+        </div>
       </form>
-    </section>
+    </dialog>
     <section v-if="absenceRow" class="absence-panel" aria-labelledby="absence-title">
       <h2 id="absence-title">{{ absenceRow.status === 7 ? 'Phục hồi lượt vắng mặt' : 'Xác nhận bệnh nhân vắng mặt' }}</h2>
       <p>{{ numberLabel(absenceRow.queueNumber) }} · {{ absenceRow.patientName }} · {{ absenceRow.patientCode }}</p>
@@ -190,7 +194,7 @@
   </main>
 </template>
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, type ComponentPublicInstance } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { queueService, maskPublicQueueName, type QueueEntryResponse, type CallingDentist } from '@/services/queue';
 const rows = ref<QueueEntryResponse[]>([]), status = ref(1), page = ref(1), total = ref(0), hasNext = ref(false);
@@ -414,7 +418,15 @@ function canTransfer(row: QueueEntryResponse) {
   if (row.status === 1) return true;
   return row.canCancelConsultation === true && [2, 5, 6].includes(row.status);
 }
-function clearTransfer() { transferRow.value = null; transferDentistId.value = 0; transferReason.value = ''; transferConfirmed.value = false; }
+let transferDialog: HTMLDialogElement | null = null;
+function mountTransferDialog(element: Element | ComponentPublicInstance | null) {
+  transferDialog = element instanceof HTMLDialogElement ? element : null;
+  if (transferDialog && !transferDialog.open) transferDialog.showModal();
+}
+function clearTransfer() {
+  transferDialog?.close();
+  transferRow.value = null; transferDentistId.value = 0; transferReason.value = ''; transferConfirmed.value = false;
+}
 function closeTransfer() { if (!transferring.value) clearTransfer(); }
 function openTransfer(row: QueueEntryResponse) {
   if (!canTransfer(row) || writing.value || loading.value || cancelRow.value || imagingRow.value || absenceRow.value || cleanupOpen.value || needsReview.value ||
@@ -569,10 +581,31 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visi
 .empty-state { display: grid; justify-items: center; gap: .45rem; padding: 2rem 1rem; border: 1px dashed #c7d6df; border-radius: 14px; color: #5f7384; background: #fff; text-align: center; }
 .empty-state strong { color: #24445b; }
 .empty-icon { display: grid; place-items: center; width: 38px; height: 38px; margin-bottom: .25rem; border-radius: 50%; color: #27674f; background: #e9f6ee; font-weight: 850; }
-.cancel-panel, .imaging-panel, .absence-panel, .transfer-panel { margin: 1rem 0; padding: 1.2rem; border: 1px solid var(--line); border-radius: 14px; background: #fff; box-shadow: 0 4px 15px rgb(29 56 80 / 4%); box-sizing: border-box; }
+.cancel-panel, .imaging-panel, .absence-panel { margin: 1rem 0; padding: 1.2rem; border: 1px solid var(--line); border-radius: 14px; background: #fff; box-shadow: 0 4px 15px rgb(29 56 80 / 4%); box-sizing: border-box; }
 .cancel-panel { border-color: #efc8c4; background: #fffafa; }
-.imaging-panel, .transfer-panel { border-color: #c9dfe6; background: #f8fcfd; }
+.imaging-panel { border-color: #c9dfe6; background: #f8fcfd; }
 .absence-panel { border-color: #ecd9a6; background: #fffdf7; }
+.transfer-panel {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(34rem, calc(100% - 2rem));
+  max-width: none;
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+  box-sizing: border-box;
+  overflow: auto;
+  padding: clamp(1rem, 3vw, 1.5rem);
+  border: 1px solid #c9dfe6;
+  border-radius: 14px;
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 18px 52px rgb(29 56 80 / 22%);
+}
+.transfer-panel::backdrop { background: rgb(17 36 56 / 45%); }
+.transfer-panel p { overflow-wrap: anywhere; }
+.transfer-panel .transfer-notice { margin: 0; }
+.transfer-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; }
 .cancel-panel h2, .imaging-panel h2, .absence-panel h2, .transfer-panel h2 { margin: 0 0 .6rem; font-size: 1.12rem; color: #1b354b; }
 .cancel-panel form, .imaging-panel form, .absence-panel form, .transfer-panel form { display: grid; gap: .75rem; }
 textarea { width: 100%; min-height: 5.5rem; padding: .7rem .8rem; resize: vertical; }
