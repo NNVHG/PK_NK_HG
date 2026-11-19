@@ -31,7 +31,8 @@ public sealed class PasswordRecoveryRepository(DentalDbContext db, IAuditLogger 
         }
 
         var staff = await db.Users.AsNoTracking()
-            .Where(u => u.Phone == phone && u.IsActive && RoleCodes.StaffRoles.Contains(u.Role.RoleCode))
+            .Where(u => u.Phone == phone && u.IsActive && RoleCodes.StaffRoles.Contains(u.Role.RoleCode) &&
+                (!u.RequiresPhoneActivation || u.PhoneActivationReason != PhoneActivationReason.PhoneChange))
             .Select(u => new RecoveryAccount(u.UserId, u.PasswordHash, u.Phone, null, u.TokenVersion, null, null))
             .Take(2).ToListAsync(ct);
         return staff.Count == 1 ? staff[0] : null;
@@ -43,7 +44,8 @@ public sealed class PasswordRecoveryRepository(DentalDbContext db, IAuditLogger 
         // Atomic compare-and-set also invalidates a code after a normal password change, role lock or competing reset.
         var changed = await db.Users.Where(x => x.UserId == account.UserId && x.IsActive && x.Phone == account.Phone && x.PasswordHash == account.PasswordHash && x.TokenVersion == account.TokenVersion &&
                 (account.CitizenIdHash == null
-                    ? RoleCodes.StaffRoles.Contains(x.Role.RoleCode)
+                    ? RoleCodes.StaffRoles.Contains(x.Role.RoleCode) &&
+                        (!x.RequiresPhoneActivation || x.PhoneActivationReason != PhoneActivationReason.PhoneChange)
                     : x.Role.RoleCode == RoleCodes.Patient && db.Patients.Any(p => p.UserId == x.UserId && p.CitizenIdHash == account.CitizenIdHash &&
                         p.DocumentType == account.DocumentType && p.IssuingCountryCode == account.IssuingCountryCode)))
             .ExecuteUpdateAsync(update => update.SetProperty(x => x.PasswordHash, passwordHash)

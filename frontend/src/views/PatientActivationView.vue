@@ -4,7 +4,7 @@
       <img src="/logo-ngang.svg" alt="Nha Khoa Hoàng Gia" class="brand-logo" width="158" height="42" />
     </div>
     <h1>Xác minh số điện thoại</h1>
-    <p>Dành cho bệnh nhân mới sau khi Lễ tân đối soát tại quầy, nhân viên mới do Admin tạo và bệnh nhân cần xác minh lại sau khi đổi SĐT. Tài khoản cũ tiếp tục đăng nhập theo trạng thái xác minh hiện tại.</p>
+    <p>Dành cho bệnh nhân và nhân viên cần xác minh số điện thoại lần đầu hoặc xác minh lại sau khi đổi số.</p>
 
     <!-- Step Indicator -->
     <nav class="step-progress" aria-label="Tiến trình kích hoạt">
@@ -40,7 +40,7 @@
         <input v-model="phone" type="text" :inputmode="loginMode === 'passport' ? 'text' : 'numeric'" autocomplete="username" :maxlength="loginMode === 'passport' ? 12 : 12" :disabled="busy" placeholder="Nhập số CCCD 12 số hoặc SĐT" />
       </label>
       <label>Mật khẩu hiện tại<input v-model="password" type="password" autocomplete="current-password" maxlength="72" :disabled="busy" placeholder="Nhập mật khẩu hiện tại" /></label>
-      <p class="hint-text">Nếu chưa đổi mật khẩu, dùng SĐT làm mật khẩu mặc định.</p>
+      <p class="hint-text">Tài khoản mới dùng số điện thoại làm mật khẩu mặc định. Nếu đang xác minh lại số mới, dùng mật khẩu hiện tại.</p>
       <button type="submit" :disabled="busy">Nhận mã kích hoạt</button>
     </form>
     <form v-if="challenge && !grant && !uncertain" @submit.prevent="verifyCode" novalidate>

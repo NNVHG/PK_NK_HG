@@ -1,9 +1,8 @@
 <template>
-  <main class="page-container">
-    <div class="page-header">
+  <section class="rooms-page" aria-labelledby="rooms-title">
+    <header class="page-header">
       <div>
-        <p class="eyebrow">CƠ SỞ VẬT CHẤT &amp; VẬN HÀNH</p>
-        <h1>Phòng điều trị &amp; Trạng thái</h1>
+        <h1 id="rooms-title">Phòng điều trị &amp; Trạng thái</h1>
         <p class="subtitle">Theo dõi nha sĩ, phụ tá và tình trạng phục vụ của từng phòng điều trị.</p>
       </div>
       <div class="header-actions">
@@ -11,25 +10,17 @@
           Phân bổ phòng làm việc →
         </router-link>
         <button type="button" class="button button-secondary" :disabled="saving || loading" @click="load(store.result?.page ?? 1)">
-          🔄 Làm mới
+          Làm mới
         </button>
-        <button class="button button-primary" :disabled="saving || loading || needsReview" @click="openCreate">
-          <span class="btn-icon">+</span> Khai báo phòng mới
+        <button type="button" class="button button-primary" :disabled="saving || loading || needsReview" @click="openCreate">
+          <span aria-hidden="true">+</span> Thêm phòng
         </button>
       </div>
-    </div>
-
-    <div class="info-banner">
-      <div class="banner-icon">🏥</div>
-      <div class="banner-content">
-        Danh sách tự cập nhật khi nhân viên nhận phòng, chọn nha sĩ hỗ trợ hoặc đăng xuất.
-        Phòng có ca đang khám tiếp tục hiển thị <em>Đang phục vụ</em> cho đến khi ca được xử lý.
-      </div>
-    </div>
+    </header>
 
     <div class="summary-strip" aria-label="Tổng quan trạng thái phòng">
       <div class="summary-card">
-        <span class="summary-label">Tổng phòng hiển thị</span>
+        <span class="summary-label">Phòng trên trang</span>
         <strong class="summary-val">{{ summaryCounts.total }}</strong>
       </div>
       <div class="summary-card summary-card--ready">
@@ -46,62 +37,61 @@
       </div>
     </div>
 
-    <div v-if="error" class="alert alert-error" role="alert">{{ error }}</div>
+    <div v-if="error && !formOpen && !quickStatusOpen" class="alert alert-error" role="alert">{{ error }}</div>
     <p v-if="liveStatusUnavailable" class="alert alert-warning" role="status">Chưa đồng bộ được trạng thái phòng. Hệ thống sẽ tự thử lại.</p>
     <div v-if="message" class="alert alert-success" role="status">{{ message }}</div>
     <div v-if="needsReview" class="alert alert-warning" role="alert">
       Dữ liệu phòng vừa được cập nhật. Bấm <button class="link-btn" @click="load(1)">Tải lại danh sách</button> để đối chiếu trước khi thao tác tiếp.
     </div>
 
-    <div class="panel filters-panel">
-      <form class="filters-grid" @submit.prevent="load(1)">
-        <div class="filter-field">
-          <label for="chair-search">Tìm kiếm phòng điều trị</label>
-          <div class="input-icon-wrapper">
-            <span class="field-icon">🔍</span>
-            <input id="chair-search" v-model="keyword" placeholder="Tên phòng hoặc mã cấu hình..." maxlength="100" :disabled="saving" />
-          </div>
-        </div>
-
-        <div class="filter-field">
-          <label for="chair-status">Trạng thái vận hành</label>
-          <select id="chair-status" v-model.number="status" :disabled="saving">
-            <option :value="0">Tất cả trạng thái</option>
-            <option :value="1">Sẵn sàng phục vụ</option>
-            <option :value="2">Đang có ca khám</option>
-            <option :value="3">Bảo trì kỹ thuật</option>
-            <option :value="4">Ngừng sử dụng</option>
-          </select>
-        </div>
-
-        <div class="filter-field">
-          <label for="chair-active">Hiệu lực danh mục</label>
-          <select id="chair-active" v-model="active" :disabled="saving">
-            <option value="all">Tất cả hiệu lực</option>
-            <option value="true">Đang sử dụng</option>
-            <option value="false">Ngừng sử dụng</option>
-          </select>
-        </div>
-
-        <div class="filter-actions">
-          <button class="button button-secondary" type="submit" :disabled="saving || loading">
-            {{ loading ? 'Đang tải...' : 'Lọc danh sách' }}
-          </button>
-        </div>
-      </form>
-    </div>
-
-    <div class="panel list-panel">
+    <section class="panel" aria-labelledby="room-list-title">
       <div class="panel-header">
-        <h2 class="panel-title">Danh sách phòng điều trị</h2>
-        <span class="count-badge">{{ store.result?.totalCount ?? 0 }} phòng</span>
+        <div>
+          <h2 id="room-list-title" class="panel-title">Danh sách phòng điều trị</h2>
+          <p class="panel-note">Trạng thái và nhân sự tự cập nhật.</p>
+        </div>
+        <span class="count-badge">{{ store.result?.totalCount ?? 0 }} phòng phù hợp</span>
+      </div>
+      <div class="filters-panel">
+        <form class="filters-grid" @submit.prevent="load(1)">
+          <div class="filter-field">
+            <label for="chair-search">Tìm kiếm phòng điều trị</label>
+            <input id="chair-search" v-model="keyword" type="search" placeholder="Tên hoặc mã phòng" maxlength="100" :disabled="saving" />
+          </div>
+
+          <div class="filter-field">
+            <label for="chair-status">Trạng thái vận hành</label>
+            <select id="chair-status" v-model.number="status" :disabled="saving">
+              <option :value="0">Tất cả trạng thái</option>
+              <option :value="1">Sẵn sàng phục vụ</option>
+              <option :value="2">Đang có ca khám</option>
+              <option :value="3">Bảo trì kỹ thuật</option>
+              <option :value="4">Ngừng sử dụng</option>
+            </select>
+          </div>
+
+          <div class="filter-field">
+            <label for="chair-active">Hiệu lực danh mục</label>
+            <select id="chair-active" v-model="active" :disabled="saving">
+              <option value="all">Tất cả hiệu lực</option>
+              <option value="true">Đang sử dụng</option>
+              <option value="false">Ngừng sử dụng</option>
+            </select>
+          </div>
+
+          <div class="filter-actions">
+            <button class="button button-secondary" type="submit" :disabled="saving || loading">
+              {{ loading ? 'Đang tải...' : 'Lọc danh sách' }}
+            </button>
+          </div>
+        </form>
       </div>
 
       <div class="panel-body">
         <div v-if="loading" class="loading-state">Đang tải danh mục phòng...</div>
 
         <div v-else-if="store.result?.items && store.result.items.length > 0" class="chairs-grid">
-          <div
+          <article
             v-for="chair in store.result.items"
             :key="chair.id"
             class="chair-card"
@@ -113,7 +103,7 @@
           >
             <div class="chair-card-header">
               <div class="chair-badge-group">
-                <span class="room-pill">{{ chair.roomName }}</span>
+                <h3 class="room-name">{{ chair.roomName }}</h3>
                 <span class="chair-number">Mã: {{ chair.chairNumber }}</span>
               </div>
               <span
@@ -132,8 +122,8 @@
               <p class="chair-desc">{{ chair.description || 'Chưa có ghi chú trang thiết bị.' }}</p>
               <div class="chair-meta">
                 <span>Danh mục: <b>{{ chair.isActive ? 'Kích hoạt' : 'Ngừng dùng' }}</b></span>
-                <span v-if="liveStatus(chair.id)?.hasActiveVisit || chair.status === 2" class="live-tag live-tag--busy">🔒 Đang phục vụ ca khám</span>
-                <span v-else-if="liveStatus(chair.id)?.isAssigned" class="live-tag live-tag--assigned">👤 Đã có nha sĩ nhận phòng</span>
+                <span v-if="liveStatus(chair.id)?.hasActiveVisit || chair.status === 2" class="live-tag live-tag--busy">Đang phục vụ ca khám</span>
+                <span v-else-if="liveStatus(chair.id)?.isAssigned" class="live-tag live-tag--assigned">Đã có nha sĩ nhận phòng</span>
               </div>
               <dl class="room-staff">
                 <div>
@@ -156,7 +146,7 @@
 
             <div class="chair-card-actions">
               <span v-if="chair.status === 2 || liveStatus(chair.id)?.hasActiveVisit" class="busy-hint">
-                🔒 Tự động giải phóng khi kết thúc ca
+                Tự động giải phóng khi kết thúc ca
               </span>
               <template v-else>
                 <button
@@ -166,19 +156,19 @@
                   :title="liveStatus(chair.id)?.isAssigned ? 'Đã có nha sĩ nhận phòng hôm nay; không thể đổi trạng thái nhanh' : 'Đổi nhanh trạng thái phòng'"
                   @click="openQuickStatus(chair)"
                 >
-                  ⚙️ Đổi trạng thái
+                  Đổi trạng thái
                 </button>
                 <button
                   type="button"
-                  class="button button-quiet btn-sm"
+                  class="button button-secondary btn-sm"
                   :disabled="saving || loading || needsReview"
                   @click="openEdit(chair)"
                 >
-                  ✏️ Cấu hình
+                  Cấu hình
                 </button>
               </template>
             </div>
-          </div>
+          </article>
         </div>
 
         <div v-else class="empty-state">Không tìm thấy phòng điều trị phù hợp.</div>
@@ -195,98 +185,96 @@
           </div>
         </div>
       </div>
-    </div>
-    <div v-if="formOpen" class="modal-overlay" @click.self="closeForm">
-      <div class="modal-card">
-        <div class="modal-header">
-          <h2>{{ selected ? 'Cập nhật cấu hình phòng: ' + selected.roomName : 'Khai báo phòng điều trị mới' }}</h2>
-          <button class="close-btn" type="button" :disabled="saving" @click="closeForm">✕</button>
-        </div>
-
-        <form class="modal-form" @submit.prevent="save">
-          <div class="form-grid">
-            <div class="form-field">
-              <label>Tên phòng điều trị <b>*</b></label>
-              <input v-model="roomName" maxlength="100" required placeholder="VD: Phòng điều trị 1..." :disabled="saving" />
-            </div>
-
-            <div class="form-field">
-              <label>Mã thiết lập / nhận diện <b>*</b></label>
-              <input v-model="chairNumber" maxlength="50" required placeholder="VD: P-01 hoặc GHE-01" :disabled="saving || selected !== null" />
-              <span v-if="selected" class="form-hint">Mã thiết lập không thể sửa sau khi khai báo.</span>
-            </div>
-
-            <div class="form-field form-field--wide">
-              <label>Trạng thái vận hành phòng <b>*</b></label>
-              <select v-model.number="formStatus" :disabled="saving">
-                <option :value="1">🟢 Sẵn sàng phục vụ bệnh nhân</option>
-                <option :value="3">🟡 Đang bảo trì / Kiểm tra kỹ thuật</option>
-                <option :value="4">🔴 Ngừng sử dụng (Khóa chọn)</option>
-              </select>
-              <p v-if="formStatus === 4" class="form-hint text-warning">
-                Phòng ngừng sử dụng sẽ bị ẩn khỏi danh sách chỉ định ca khám nhưng vẫn bảo tồn lịch sử.
-              </p>
-            </div>
-
-            <div class="form-field form-field--wide">
-              <label>Ghi chú trang thiết bị / Mô tả</label>
-              <textarea v-model="description" rows="2" maxlength="500" placeholder="VD: Ghế trang bị máy cạo vôi siêu âm..." :disabled="saving"></textarea>
-            </div>
-
-            <div class="form-field form-field--wide">
-              <div class="confirm-box">
-                <label class="checkbox-label text-warning">
-                  <input v-model="confirmed" type="checkbox" :disabled="saving || needsReview" />
-                  <span>Tôi đã kiểm tra đối chiếu đúng thông tin phòng và xác nhận trạng thái ghế.</span>
-                </label>
-              </div>
-            </div>
-          </div>
-
-          <div class="modal-actions">
-            <button class="button button-secondary" type="button" :disabled="saving" @click="closeForm">Hủy</button>
-            <button class="button button-primary" type="submit" :disabled="saving || loading || needsReview || !confirmed">
-              {{ saving ? 'Đang lưu...' : 'Xác nhận lưu' }}
-            </button>
-          </div>
-        </form>
+    </section>
+    <dialog v-if="formOpen" :ref="openDialog" class="modal-card" aria-labelledby="room-form-title" @cancel.prevent="closeForm">
+      <div class="modal-header">
+        <h2 id="room-form-title">{{ selected ? 'Cấu hình phòng: ' + selected.roomName : 'Thêm phòng điều trị' }}</h2>
+        <button class="close-btn" type="button" aria-label="Đóng hộp thoại" :disabled="saving" @click="closeForm">✕</button>
       </div>
-    </div>
 
-    <!-- Modal đổi nhanh trạng thái phòng -->
-    <div v-if="quickStatusOpen && quickChair" class="modal-overlay" @click.self="closeQuickStatus">
-      <div class="modal-card modal-card--sm">
-        <div class="modal-header">
-          <h2>Đổi trạng thái: {{ quickChair.roomName }}</h2>
-          <button class="close-btn" type="button" :disabled="saving" @click="closeQuickStatus">✕</button>
-        </div>
-        <form class="modal-form" @submit.prevent="saveQuickStatus">
-          <div class="form-grid">
-            <div class="form-field form-field--wide">
-              <label for="quick-chair-status">Trạng thái mới <b>*</b></label>
-              <select id="quick-chair-status" v-model.number="quickTargetStatus" :disabled="saving">
-                <option :value="1">🟢 Sẵn sàng phục vụ</option>
-                <option :value="3">🟠 Bảo trì kỹ thuật</option>
-                <option :value="4">⚫ Ngừng sử dụng</option>
-              </select>
-            </div>
-            <div class="form-field form-field--wide confirm-box">
-              <label class="checkbox-label">
-                <input v-model="quickConfirmed" type="checkbox" :disabled="saving" />
-                <span>Xác nhận cập nhật trạng thái phòng {{ quickChair.roomName }} ({{ quickChair.chairNumber }}).</span>
+      <form class="modal-form" @submit.prevent="save">
+        <p v-if="error" class="alert alert-error" role="alert">{{ error }}</p>
+        <div class="form-grid">
+          <div class="form-field">
+            <label for="room-name">Tên phòng điều trị <b>*</b></label>
+            <input id="room-name" v-model="roomName" maxlength="100" required placeholder="VD: Phòng điều trị 1" :disabled="saving" autofocus />
+          </div>
+
+          <div class="form-field">
+            <label for="room-code">Mã phòng <b>*</b></label>
+            <input id="room-code" v-model="chairNumber" maxlength="50" required placeholder="VD: P-01" :disabled="saving || selected !== null" />
+            <span v-if="selected" class="form-hint">Mã thiết lập không thể sửa sau khi khai báo.</span>
+          </div>
+
+          <div class="form-field form-field--wide">
+            <label for="room-form-status">Trạng thái vận hành <b>*</b></label>
+            <select id="room-form-status" v-model.number="formStatus" :disabled="saving">
+              <option :value="1">Sẵn sàng phục vụ</option>
+              <option :value="3">Bảo trì kỹ thuật</option>
+              <option :value="4">Ngừng sử dụng</option>
+            </select>
+            <p v-if="formStatus === 4" class="form-hint text-warning">
+              Phòng ngừng sử dụng sẽ bị ẩn khỏi danh sách chỉ định ca khám nhưng vẫn bảo tồn lịch sử.
+            </p>
+          </div>
+
+          <div class="form-field form-field--wide">
+            <label for="room-description">Ghi chú trang thiết bị</label>
+            <textarea id="room-description" v-model="description" rows="2" maxlength="500" :disabled="saving"></textarea>
+          </div>
+
+          <div class="form-field form-field--wide">
+            <div class="confirm-box">
+              <label class="checkbox-label text-warning">
+                <input v-model="confirmed" type="checkbox" :disabled="saving || needsReview" />
+                <span>Tôi đã kiểm tra thông tin và xác nhận trạng thái phòng.</span>
               </label>
             </div>
           </div>
-          <div class="modal-actions">
-            <button class="button button-secondary" type="button" :disabled="saving" @click="closeQuickStatus">Hủy</button>
-            <button class="button button-primary" type="submit" :disabled="saving || !quickConfirmed || quickTargetStatus === quickChair.status">
-              {{ saving ? 'Đang cập nhật...' : 'Xác nhận đổi trạng thái' }}
-            </button>
-          </div>
-        </form>
+        </div>
+
+        <div class="modal-actions">
+          <button class="button button-secondary" type="button" :disabled="saving" @click="closeForm">Hủy</button>
+          <button class="button button-primary" type="submit" :disabled="saving || loading || needsReview || !confirmed">
+            {{ saving ? 'Đang lưu...' : 'Xác nhận lưu' }}
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Modal đổi nhanh trạng thái phòng -->
+    <dialog v-if="quickStatusOpen && quickChair" :ref="openDialog" class="modal-card modal-card--sm" aria-labelledby="quick-room-title" @cancel.prevent="closeQuickStatus">
+      <div class="modal-header">
+        <h2 id="quick-room-title">Đổi trạng thái: {{ quickChair.roomName }}</h2>
+        <button class="close-btn" type="button" aria-label="Đóng hộp thoại" :disabled="saving" @click="closeQuickStatus">✕</button>
       </div>
-    </div>
-  </main>
+      <form class="modal-form" @submit.prevent="saveQuickStatus">
+        <p v-if="error" class="alert alert-error" role="alert">{{ error }}</p>
+        <div class="form-grid">
+          <div class="form-field form-field--wide">
+            <label for="quick-chair-status">Trạng thái mới <b>*</b></label>
+            <select id="quick-chair-status" v-model.number="quickTargetStatus" :disabled="saving" autofocus>
+              <option :value="1">Sẵn sàng phục vụ</option>
+              <option :value="3">Bảo trì kỹ thuật</option>
+              <option :value="4">Ngừng sử dụng</option>
+            </select>
+          </div>
+          <div class="form-field form-field--wide confirm-box">
+            <label class="checkbox-label">
+              <input v-model="quickConfirmed" type="checkbox" :disabled="saving || needsReview" />
+              <span>Xác nhận cập nhật trạng thái phòng {{ quickChair.roomName }} ({{ quickChair.chairNumber }}).</span>
+            </label>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="button button-secondary" type="button" :disabled="saving" @click="closeQuickStatus">Hủy</button>
+          <button class="button button-primary" type="submit" :disabled="saving || needsReview || !quickConfirmed || quickTargetStatus === quickChair.status">
+            {{ saving ? 'Đang cập nhật...' : 'Xác nhận đổi trạng thái' }}
+          </button>
+        </div>
+      </form>
+    </dialog>
+  </section>
 </template>
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from 'vue';
@@ -305,10 +293,22 @@ let version = 0, life = 0;
 let appliedQuery: ChairQuery | undefined;
 let refreshing = false;
 let refreshTimer: ReturnType<typeof setInterval> | undefined;
+let activeDialog: HTMLDialogElement | null = null;
 const loadError = 'Không thể tải danh sách phòng điều trị. Vui lòng thử lại.';
 
 function liveStatus(id: number): ChairStatusRow | undefined {
   return liveStatusMap.value[id];
+}
+
+function openDialog(element: unknown) {
+  if (!(element instanceof HTMLDialogElement)) return;
+  activeDialog = element;
+  if (!element.open) element.showModal();
+}
+
+function dismissDialog() {
+  activeDialog?.close();
+  activeDialog = null;
 }
 
 const summaryCounts = computed(() => {
@@ -320,12 +320,12 @@ const summaryCounts = computed(() => {
     else if (c.status === 1 && c.isActive) ready++;
     else inactive++;
   }
-  return { total: store.result?.totalCount ?? items.length, ready, busy, inactive };
+  return { total: items.length, ready, busy, inactive };
 });
 
-function clearForm() { formOpen.value = false; selected.value = null; chairNumber.value = ''; roomName.value = ''; formStatus.value = 1; description.value = ''; confirmed.value = false; }
+function clearForm() { if (formOpen.value) dismissDialog(); formOpen.value = false; selected.value = null; chairNumber.value = ''; roomName.value = ''; formStatus.value = 1; description.value = ''; confirmed.value = false; }
 function closeForm() { if (!saving.value) clearForm(); }
-function closeQuickStatus() { if (!saving.value) { quickStatusOpen.value = false; quickChair.value = null; quickConfirmed.value = false; } }
+function closeQuickStatus() { if (!saving.value) { if (quickStatusOpen.value) dismissDialog(); quickStatusOpen.value = false; quickChair.value = null; quickConfirmed.value = false; } }
 
 async function load(page = 1) {
   if (auth.role !== 'ADMIN' || saving.value || !Number.isInteger(page) || page < 1 || page > 1_000_000 || keyword.value.length > 100 || ![0, 1, 2, 3, 4].includes(status.value) || !['all', 'true', 'false'].includes(active.value)) return;
@@ -395,7 +395,9 @@ async function saveQuickStatus() {
     await chairStatusService.change(old.id, { status: quickTargetStatus.value, expectedVersion: old.version, confirmed: true });
     if (ticket !== life || auth.role !== 'ADMIN') return;
     message.value = `Đã cập nhật trạng thái phòng ${old.roomName}.`;
-    closeQuickStatus(); needsReview.value = true; saving.value = false;
+    saving.value = false;
+    closeQuickStatus();
+    needsReview.value = true;
     await load(store.result?.page ?? 1);
   } catch (err: unknown) {
     if (ticket !== life || auth.role !== 'ADMIN') return;
@@ -437,455 +439,258 @@ onUnmounted(() => {
 });
 </script>
 <style scoped>
-.page-container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 1.5rem 1rem 3rem;
-  color: #1e293b;
-  display: flex;
-  flex-direction: column;
+.rooms-page {
+  --ink: #122747;
+  --muted: #475569;
+  --line: #dce5ef;
+  --accent: #075b85;
+  box-sizing: border-box;
+  container: rooms / inline-size;
+  display: grid;
   gap: 1.25rem;
+  width: 100%;
+  max-width: 1240px;
+  min-width: 0;
+  margin: 0 auto;
+  padding: clamp(0.75rem, 2vw, 1.5rem);
+  color: var(--ink);
 }
 
 .page-header {
+  display: grid;
+  gap: 1rem 1.5rem;
+  padding: clamp(1rem, 4cqi, 1.75rem);
+  border: 1px solid #cfe3f0;
+  border-radius: 16px;
+  background: linear-gradient(140deg, #fff 30%, #eef7fc);
+}
+
+h1 { margin: 0; font-size: clamp(1.45rem, 4.5cqi, 2rem); line-height: 1.2; }
+.subtitle { margin: 0.5rem 0 0; color: var(--muted); line-height: 1.5; }
+.header-actions, .chair-card-actions, .pagination, .page-btns, .modal-actions {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
   flex-wrap: wrap;
-  gap: 1rem;
-}
-
-.eyebrow {
-  margin: 0 0 0.25rem;
-  color: #0284c7;
-  font-size: 0.75rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-h1 {
-  font-size: 1.65rem;
-  font-weight: 850;
-  color: #0f2d59;
-  margin: 0;
-  line-height: 1.25;
-}
-
-.subtitle {
-  margin: 0.35rem 0 0;
-  color: #64748b;
-  font-size: 0.885rem;
-  line-height: 1.45;
-}
-
-.info-banner {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.85rem;
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
-  border-radius: 10px;
-  padding: 0.85rem 1.15rem;
-  font-size: 0.85rem;
-  color: #0369a1;
-  line-height: 1.45;
-}
-
-.banner-icon {
-  font-size: 1.2rem;
-  flex-shrink: 0;
-}
-
-.panel {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  box-shadow: 0 2px 6px rgba(15, 45, 89, 0.03);
-}
-
-.panel-header {
-  display: flex;
-  justify-content: space-between;
+  gap: 0.65rem;
   align-items: center;
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid #f1f5f9;
-  background: #f8fafc;
-  border-radius: 12px 12px 0 0;
-}
-
-.panel-title {
-  font-size: 1.05rem;
-  font-weight: 800;
-  color: #0f2d59;
-  margin: 0;
-}
-
-.count-badge {
-  background: #e2e8f0;
-  color: #475569;
-  font-size: 0.78rem;
-  font-weight: 750;
-  padding: 0.2rem 0.55rem;
-  border-radius: 999px;
-}
-
-.panel-body {
-  padding: 1.25rem;
-}
-
-/* Filters */
-.filters-panel {
-  padding: 1rem 1.25rem;
-}
-
-.filters-grid {
-  display: grid;
-  grid-template-columns: minmax(240px, 1.5fr) 1fr 1fr auto;
-  align-items: end;
-  gap: 1rem;
-}
-
-.filter-field {
-  display: grid;
-  gap: 0.35rem;
-  font-size: 0.825rem;
-  font-weight: 600;
-  color: #334155;
-}
-
-.input-icon-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.field-icon {
-  position: absolute;
-  left: 0.75rem;
-  color: #94a3b8;
-  font-size: 0.85rem;
-  pointer-events: none;
-}
-
-.input-icon-wrapper input {
-  padding-left: 2.25rem !important;
-}
-
-input, select, textarea {
-  box-sizing: border-box;
-  width: 100%;
-  height: 40px;
-  padding: 0 0.85rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  background: #f8fafc;
-  color: #1e293b;
-  font: inherit;
-  font-size: 0.875rem;
-  outline: none;
-  transition: all 0.15s ease;
-}
-
-textarea {
-  height: auto;
-  padding: 0.65rem 0.85rem;
-}
-
-input:focus, select:focus, textarea:focus {
-  border-color: #0284c7;
-  background: #ffffff;
-  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
-}
-
-/* Chairs Grid */
-.chairs-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
-  gap: 1rem;
-}
-
-.chair-card {
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  padding: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  transition: all 0.15s ease;
-}
-
-.chair-card--ready {
-  border-left: 4px solid #059669;
-}
-
-.chair-card--busy {
-  border-left: 4px solid #0284c7;
-  background: #f0f9ff;
-}
-
-.chair-card--maintenance {
-  border-left: 4px solid #d97706;
-  background: #fffbeb;
-}
-
-.chair-card--disabled {
-  border-left: 4px solid #94a3b8;
-  background: #f8fafc;
-  opacity: 0.8;
-}
-
-.chair-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-}
-
-.chair-badge-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.chair-number {
-  font-size: 1.15rem;
-  font-weight: 850;
-  color: #0f2d59;
-}
-
-.room-pill {
-  font-size: 0.78rem;
-  color: #475569;
-  font-weight: 600;
-}
-
-.chair-desc {
-  font-size: 0.825rem;
-  color: #64748b;
-  margin: 0;
-  line-height: 1.4;
-  min-height: 2.4rem;
-}
-
-.chair-meta {
-  font-size: 0.75rem;
-  color: #64748b;
-  margin-top: 0.4rem;
-}
-
-.room-staff {
-  display: grid;
-  gap: 0.5rem;
-  margin: 0.85rem 0 0;
-  padding: 0.75rem;
-  border-radius: 8px;
-  background: #f8fafc;
-  font-size: 0.84rem;
-}
-
-.room-staff > div { display: grid; grid-template-columns: 3.5rem minmax(0, 1fr); gap: 0.45rem; }
-.room-staff dt { color: #475569; }
-.room-staff dd { margin: 0; color: #0f2d59; font-weight: 650; overflow-wrap: anywhere; }
-.room-staff ul { list-style: none; margin: 0; padding: 0; }
-.room-staff li + li { margin-top: 0.25rem; }
-
-.chair-card-actions {
-  margin-top: auto;
-  padding-top: 0.65rem;
-  border-top: 1px solid #f1f5f9;
-}
-
-.busy-hint {
-  display: block;
-  text-align: center;
-  font-size: 0.78rem;
-  font-weight: 750;
-  color: #0369a1;
-  padding: 0.35rem 0;
-}
-
-/* Status Pills */
-.status-pill {
-  font-size: 0.72rem;
-  font-weight: 750;
-  padding: 0.2rem 0.55rem;
-  border-radius: 999px;
-}
-
-.status-pill--ready { background: #ecfdf5; color: #059669; }
-.status-pill--busy { background: #e0f2fe; color: #0284c7; }
-.status-pill--maint { background: #fef3c7; color: #d97706; }
-.status-pill--disabled { background: #f1f5f9; color: #64748b; }
-
-/* Pagination */
-.pagination {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 1.25rem;
-  padding-top: 1rem;
-  border-top: 1px solid #e2e8f0;
-}
-
-.page-info {
-  font-size: 0.825rem;
-  color: #64748b;
-  font-weight: 600;
-}
-
-.page-btns {
-  display: flex;
-  gap: 0.5rem;
-}
-
-/* Buttons */
-.button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  height: 40px;
-  padding: 0 1.15rem;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  font: inherit;
-  font-size: 0.875rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.button-primary { background: #0284c7; color: #ffffff; }
-.button-primary:hover:not(:disabled) { background: #0369a1; }
-.button-secondary { background: #ffffff; color: #334155; border-color: #cbd5e1; }
-.button-secondary:hover:not(:disabled) { background: #f1f5f9; border-color: #94a3b8; }
-.button-quiet { background: #ffffff; border-color: #cbd5e1; color: #475569; height: 32px; padding: 0 0.85rem; font-size: 0.8rem; }
-.button-quiet:hover:not(:disabled) { background: #f1f5f9; color: #0f2d59; }
-.button:disabled { cursor: not-allowed; opacity: 0.55; }
-.btn-icon { font-size: 1.1rem; line-height: 1; }
-.w-full { width: 100%; }
-.link-btn { background: none; border: none; color: #0284c7; text-decoration: underline; cursor: pointer; padding: 0; font: inherit; font-weight: 700; }
-
-/* Alerts */
-.alert { padding: 0.85rem 1.15rem; border-radius: 8px; font-size: 0.875rem; font-weight: 600; }
-.alert-error { background: #fef2f2; color: #991b1b; border: 1px solid #fee2e2; }
-.alert-success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
-.alert-warning { background: #fffbeb; color: #92400e; border: 1px solid #fef3c7; }
-.empty-state, .loading-state { text-align: center; padding: 3rem 1rem; color: #64748b; font-size: 0.925rem; }
-
-/* Modal */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.45);
-  backdrop-filter: blur(2px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 1rem;
-}
-
-.modal-card {
-  background: #ffffff;
-  border-radius: 12px;
-  max-width: 600px;
-  width: 100%;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  overflow: hidden;
-  border: 1px solid #e2e8f0;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.15rem 1.25rem;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.modal-header h2 { font-size: 1.15rem; font-weight: 800; color: #0f2d59; margin: 0; }
-.close-btn { background: none; border: none; font-size: 1.2rem; color: #64748b; cursor: pointer; padding: 0.25rem; }
-.modal-form { padding: 1.25rem; }
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-.form-field { display: grid; gap: 0.35rem; font-size: 0.825rem; font-weight: 600; color: #334155; }
-.form-field b { color: #dc2626; }
-.form-field--wide { grid-column: 1 / -1; }
-.form-hint { font-size: 0.775rem; color: #64748b; }
-.confirm-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.85rem 1rem; }
-.checkbox-label { display: inline-flex; align-items: center; gap: 0.55rem; font-size: 0.825rem; font-weight: 600; cursor: pointer; }
-.text-warning { color: #92400e; }
-.modal-actions { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.25rem; padding-top: 1.15rem; border-top: 1px solid #f1f5f9; }
-
-@media (max-width: 768px) {
-  .filters-grid { grid-template-columns: 1fr; }
-  .form-grid { grid-template-columns: 1fr; }
 }
 
 .summary-strip {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 0.85rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(0.55rem, 2cqi, 1rem);
 }
 
 .summary-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  display: grid;
+  align-content: space-between;
+  gap: 0.55rem;
+  min-width: 0;
+  padding: clamp(0.65rem, 2cqi, 1rem);
+  border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 0.9rem 1.1rem;
+  border-top: 3px solid #64748b;
+  background: #fff;
+}
+
+.summary-card--ready { border-top-color: #12805c; }
+.summary-card--busy { border-top-color: #1674a6; }
+.summary-card--maint { border-top-color: #a85a05; }
+.summary-label { font-size: 0.85rem; color: var(--muted); line-height: 1.4; }
+.summary-val { font-size: 1.5rem; line-height: 1; font-variant-numeric: tabular-nums; }
+
+.panel { background: #fff; border: 1px solid var(--line); border-radius: 16px; min-width: 0; }
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  padding: clamp(0.85rem, 2.5cqi, 1.35rem);
+}
+.panel-title { margin: 0; font-size: 1.1rem; line-height: 1.35; }
+.panel-note { margin: 0.2rem 0 0; color: var(--muted); font-size: 0.85rem; }
+.count-badge, .status-pill, .live-tag {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  font-weight: 700;
+}
+
+.count-badge { background: #edf3fa; color: #334155; }
+.filters-panel, .panel-body { padding: clamp(0.85rem, 2.5cqi, 1.35rem); }
+.filters-panel { border-block: 1px solid var(--line); background: #f7fafd; }
+.filters-grid { display: grid; grid-template-columns: minmax(0, 1fr); align-items: end; gap: 0.85rem; margin: 0; }
+.filter-field, .form-field {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  gap: 0.4rem;
+  color: #334155;
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+.filter-actions .button { width: 100%; }
+input:not([type='checkbox']), select, textarea {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #b9c9db;
+  border-radius: 8px;
+  background: #fff;
+  color: #1e293b;
+  font: inherit;
+  font-size: 1rem;
+}
+
+textarea { resize: vertical; }
+:where(button, a, input, select, textarea):focus-visible { outline: 2px solid #0673af; outline-offset: 2px; }
+
+.chairs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 1rem; }
+.chair-card {
+  --room-accent: #64748b;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.85rem;
+  min-width: 0;
+  padding: clamp(0.75rem, 2cqi, 1rem);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--room-accent);
+  border-radius: 12px;
+  overflow-wrap: anywhere;
 }
-
-.summary-card--ready { border-left: 4px solid #16a34a; }
-.summary-card--busy { border-left: 4px solid #0284c7; }
-.summary-card--maint { border-left: 4px solid #d97706; }
-
-.summary-label {
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+.chair-card--ready { --room-accent: #12805c; }
+.chair-card--busy { --room-accent: #1674a6; }
+.chair-card--maintenance { --room-accent: #a85a05; }
+.chair-card--disabled { background: #f8fafc; }
+.chair-card-header { display: grid; justify-items: start; gap: 0.55rem; }
+.chair-badge-group { min-width: 0; }
+.room-name { margin: 0; font-size: 1.05rem; line-height: 1.35; }
+.chair-number { display: block; margin-top: 0.2rem; font-size: 0.8rem; color: var(--muted); }
+.chair-desc { margin: 0; font-size: 0.875rem; color: var(--muted); line-height: 1.5; white-space: pre-wrap; }
+.chair-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-top: 0.6rem; font-size: 0.8rem; color: var(--muted); }
+.room-staff {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0;
+  padding: 0.65rem;
+  border-radius: 8px;
+  background: #f1f6fb;
+  font-size: 0.85rem;
+  line-height: 1.4;
 }
-
-.summary-val {
-  font-size: 1.5rem;
-  font-weight: 850;
-  color: #0f2d59;
-  line-height: 1.1;
-}
-
-.live-tag {
-  display: inline-block;
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 0.2rem 0.55rem;
-  border-radius: 999px;
-  margin-top: 0.35rem;
-}
-
-.live-tag--busy { background: #dbeafe; color: #1e40af; }
+.room-staff > div { display: grid; grid-template-columns: minmax(0, 3.45rem) minmax(0, 1fr); gap: 0.5rem; }
+.room-staff dt { color: var(--muted); }
+.room-staff dd { margin: 0; font-weight: 650; }
+.room-staff ul { list-style: none; margin: 0; padding: 0; }
+.room-staff li + li { margin-top: 0.25rem; }
+.chair-card-actions { margin-top: auto; padding-top: 0.75rem; border-top: 1px solid var(--line); }
+.chair-card-actions .button { flex: 1 1 6.75rem; }
+.busy-hint { font-size: 0.8rem; line-height: 1.4; color: var(--accent); font-weight: 650; }
+.status-pill--ready { background: #e6f7ef; color: #136341; }
+.status-pill--busy, .live-tag--busy { background: #e2f2fc; color: #07577e; }
+.status-pill--maint { background: #fff0d4; color: #874600; }
+.status-pill--disabled { background: #eaf0f6; color: #475569; }
 .live-tag--assigned { background: #ede9fe; color: #5b21b6; }
 
-.chair-card-actions {
+.pagination { justify-content: space-between; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.page-info { font-size: 0.85rem; color: var(--muted); }
+.page-btns { flex: 0 1 auto; }
+.page-btns .button { flex: 1 1 auto; }
+.button {
+  box-sizing: border-box;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.875rem;
+  line-height: 1.35;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+  white-space: normal;
+  cursor: pointer;
+}
+.header-actions .button { flex: 1 1 auto; }
+.button-primary { background: var(--accent); color: white; }
+.button-primary:hover:not(:disabled) { background: #064867; }
+.button-secondary { background: #fff; border-color: #b9c9db; color: #233752; }
+.button-secondary:hover:not(:disabled) { background: #edf4fa; }
+.button:disabled { cursor: not-allowed; opacity: 0.6; }
+.link-btn { background: none; border: 0; color: var(--accent); text-decoration: underline; cursor: pointer; padding: 0; font: inherit; }
+
+.alert { margin: 0; padding: 0.75rem 0.85rem; border-radius: 8px; font-size: 0.875rem; line-height: 1.45; overflow-wrap: anywhere; }
+.alert-error { background: #fef2f2; color: #991b1b; border: 1px solid #fee2e2; }
+.alert-success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+.alert-warning { background: #fffbeb; color: #85400b; border: 1px solid #fef3c7; }
+.empty-state, .loading-state { padding: 2.5rem 0.5rem; text-align: center; color: var(--muted); }
+
+.modal-card {
+  box-sizing: border-box;
+  width: min(600px, calc(100% - 1.5rem));
+  max-height: calc(100dvh - 1.5rem);
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 20px 70px #10213d35;
+}
+.modal-card--sm { width: min(480px, calc(100% - 1.5rem)); }
+.modal-card::backdrop { background: #0b1b34a6; overflow: hidden; overscroll-behavior: contain; }
+.modal-header {
   display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem clamp(0.85rem, 4vw, 1.25rem);
+  border-bottom: 1px solid var(--line);
+  background: #f7fafd;
 }
-
-.btn-sm {
-  flex: 1;
-  padding: 0.45rem 0.75rem;
-  font-size: 0.82rem;
+.modal-header h2 { margin: 0; font-size: 1.12rem; line-height: 1.35; overflow-wrap: anywhere; }
+.close-btn {
+  flex: 0 0 44px;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
 }
+.modal-form { display: grid; gap: 1rem; padding: clamp(0.85rem, 4vw, 1.25rem); }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 0.85rem; }
+.form-field b { color: #b91c1c; }
+.form-field--wide { grid-column: 1 / -1; }
+.form-hint { margin: 0; font-size: 0.8rem; color: var(--muted); }
+.confirm-box { background: #f1f6fb; border: 1px solid var(--line); border-radius: 8px; padding: 0.7rem; }
+.checkbox-label { display: flex; align-items: flex-start; gap: 0.65rem; cursor: pointer; line-height: 1.45; overflow-wrap: anywhere; }
+.checkbox-label input { flex: 0 0 auto; inline-size: 1.15rem; block-size: 1.15rem; margin: 0.1rem 0 0; accent-color: var(--accent); }
+.text-warning { color: #85400b; }
+.modal-actions { justify-content: flex-end; border-top: 1px solid var(--line); padding-top: 0.85rem; }
+.modal-actions .button { flex: 0 1 auto; }
 
-.modal-card--sm {
-  max-width: 480px;
+@container rooms (min-width: 34rem) {
+  .summary-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .filters-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .header-actions .button { flex: 0 1 auto; }
+}
+@container rooms (min-width: 54rem) {
+  .page-header { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .header-actions { justify-content: flex-end; }
+  .filters-grid { grid-template-columns: minmax(0, 1.45fr) repeat(2, minmax(0, 1fr)) auto; }
 }
 </style>

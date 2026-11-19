@@ -16,7 +16,7 @@ public sealed class UpdateStaffRequestValidator : AbstractValidator<UpdateStaffR
             .MaximumLength(100).WithMessage("Họ tên không được vượt quá 100 ký tự.");
         RuleFor(x => x.Phone)
             .NotEmpty().WithMessage("Số điện thoại không được để trống.")
-            .Matches(@"^0\d{9}$").WithMessage("Số điện thoại không hợp lệ (định dạng: 0xxxxxxxxx).");
+            .Matches(@"\A0[0-9]{9}\z").WithMessage("Số điện thoại không hợp lệ (định dạng: 0xxxxxxxxx).");
         RuleFor(x => x.RoleCode)
             .Must(IsStaffRole)
             .WithMessage("Vai trò nhân viên không hợp lệ.");

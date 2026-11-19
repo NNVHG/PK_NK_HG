@@ -70,7 +70,7 @@ public sealed class PatientActivationRepository(DentalDbContext db, VietnamClock
             var staff = RoleCodes.StaffRoles.Contains(user.Role.RoleCode);
             var decision = reason switch
             {
-                PhoneActivationReason.PhoneChange => "DL-355/DL-367",
+                PhoneActivationReason.PhoneChange => staff ? "DL-371" : "DL-355/DL-367",
                 PhoneActivationReason.LegacyVerification => "DL-366/DL-367",
                 _ => staff ? "DL-331" : "DL-330"
             };

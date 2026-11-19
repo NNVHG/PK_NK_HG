@@ -172,10 +172,6 @@
               <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               <span class="nav-label">Tài khoản nhân viên</span>
             </router-link>
-            <router-link to="/management/admin/role-permissions" title="Ma trận quyền RBAC">
-              <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-              <span class="nav-label">Ma trận quyền RBAC</span>
-            </router-link>
             <router-link to="/management/admin/reports/revenue" title="Báo cáo doanh thu">
               <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
               <span class="nav-label">Báo cáo doanh thu</span>

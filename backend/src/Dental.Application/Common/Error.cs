@@ -39,6 +39,8 @@ public record Error(string Code, string Message, object? Details = null)
     public static readonly Error InvalidStaffRole = new("MST_002", "Vai trò nhân viên không hợp lệ.");
     public static readonly Error LastActiveAdmin = new("MST_003", "Không thể hạ vai trò hoặc khóa Admin cuối cùng đang hoạt động.");
     public static readonly Error CannotLockSelf = new("MST_004", "Bạn không thể tự khóa tài khoản.");
+    public static readonly Error LastActiveAdminPhoneChange = new("MST_005",
+        "Để giữ quyền truy cập, Admin cuối cùng cần chọn “Đổi số của tôi qua OTP” và xác minh số mới trước khi lưu.");
     public static readonly Error ServiceCodeExists = new("MST_010", "Mã dịch vụ đã tồn tại.");
     public static readonly Error ServicePriceEffectiveDateInvalid = new("MST_011", "Ngày áp dụng giá mới không được trước ngày áp dụng giá gần nhất.");
     public static readonly Error ServiceInactive = new("MST_012", "Dịch vụ đã ngừng bán.");

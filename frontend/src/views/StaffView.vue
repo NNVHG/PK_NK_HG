@@ -1,14 +1,5 @@
 <template>
   <section class="staff-page">
-    <nav class="sub-nav" aria-label="Quản lý tài khoản và quyền">
-      <RouterLink to="/management/admin/staff" class="nav-link nav-link--active" aria-current="page">
-        <span class="nav-icon">👥</span> Tài khoản nhân viên
-      </RouterLink>
-      <span class="nav-sep" aria-hidden="true">/</span>
-      <RouterLink to="/management/admin/role-permissions" class="nav-link">
-        <span class="nav-icon">🛡️</span> Ma trận quyền RBAC
-      </RouterLink>
-    </nav>
     <header class="page-heading">
       <div>
         <p class="eyebrow">QUẢN TRỊ TỔ CHỨC & NHÂN SỰ</p>
@@ -108,12 +99,12 @@
                 <span class="status-badge" :class="staff.isActive ? 'status-active' : 'status-locked'">
                   {{ staff.isActive ? 'Đang hoạt động' : 'Đã khóa' }}
                 </span>
-                <small v-if="staff.requiresPhoneActivation">Chờ xác minh OTP lần đầu</small>
+                <small v-if="staff.requiresPhoneActivation">Chờ xác minh OTP</small>
               </td>
               <td class="row-actions">
                 <RouterLink v-if="staff.roleCode === 'DENTIST' && staff.isActive" :to="'/management/staff/signatures/' + staff.userId">Ảnh chữ ký</RouterLink>
                 <button class="text-button" type="button" @click="openEditForm(staff)">Sửa</button>
-                <button v-if="staff.isActive && !staff.requiresPhoneActivation" type="button" @click="phoneChangeStaff = staff">Đổi SĐT qua OTP</button>
+                <button v-if="staff.userId === authStore.user?.userId && staff.isActive && !staff.requiresPhoneActivation" class="text-button" type="button" @click="phoneChangeStaff = staff">Đổi số của tôi qua OTP</button>
                 <button
                   v-if="staff.isActive"
                   class="text-button text-danger"
@@ -179,8 +170,8 @@
             <label v-if="form.roleCode === 'DENTIST'" class="field field-wide"><span>Học hàm/học vị trên đơn thuốc</span><input v-model="form.academicTitle" maxlength="100" /><small>Nhập đúng hồ sơ bác sĩ; không tự mặc định học vị.</small></label>
             <label class="field">
               <span>Số điện thoại <b>*</b></span>
-              <input v-model="form.phone" :readonly="editingPhoneRequiresOtp" type="tel" inputmode="numeric" maxlength="10" autocomplete="tel" />
-              <small v-if="editingPhoneRequiresOtp">Để đổi số, đóng biểu mẫu và chọn “Đổi SĐT qua OTP” trên dòng nhân viên.</small>
+              <input v-model="form.phone" type="tel" inputmode="numeric" maxlength="10" autocomplete="tel" :disabled="saving" />
+              <small v-if="editingStaffId !== null">Nếu đổi số, nhân viên phải đăng nhập bằng số mới và xác minh OTP trước khi vào hệ thống.</small>
             </label>
             <label class="field">
               <span>Email</span>
@@ -206,7 +197,7 @@
                 <option value="Other">Khác</option>
               </select>
             </label>
-            <p v-if="editingStaffId === null" class="field field-wide">Mật khẩu mặc định là SĐT. Nhân viên mới cần xác minh OTP tại trang Kích hoạt tài khoản trước khi đăng nhập; sau đó có thể đổi hoặc giữ mật khẩu.</p>
+            <p v-if="editingStaffId === null" class="field field-wide">Mật khẩu mặc định là SĐT. Khi đăng nhập lần đầu, nhân viên cần xác minh OTP trước khi vào hệ thống.</p>
           </div>
 
           <p v-if="formError" class="alert alert-error" role="alert">{{ formError }}</p>
@@ -250,6 +241,7 @@
 <script setup lang="ts">
 import StaffPhoneChangeRequest from '@/components/StaffPhoneChangeRequest.vue';
 import { computed, onMounted, reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { apiClient } from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
 
@@ -265,7 +257,6 @@ interface StaffAccount {
   roleName: string;
   isActive: boolean;
   requiresPhoneActivation?: boolean;
-  hasVerifiedPhone?: boolean;
 }
 
 interface StaffForm {
@@ -288,8 +279,9 @@ const roleOptions = [
 ];
 
 const authStore = useAuthStore();
+const router = useRouter();
 const phoneChangeStaff = ref<StaffAccount | null>(null);
-const editingPhoneRequiresOtp = ref(false);
+const originalPhone = ref('');
 const staffItems = ref<StaffAccount[]>([]);
 const searchText = ref('');
 const roleFilter = ref('');
@@ -385,7 +377,7 @@ function changePage(nextPage: number) {
 }
 
 function openCreateForm() {
-  editingPhoneRequiresOtp.value = false;
+  originalPhone.value = '';
   editingStaffId.value = null;
   Object.assign(form, emptyForm());
   formError.value = '';
@@ -393,7 +385,7 @@ function openCreateForm() {
 }
 
 function openEditForm(staff: StaffAccount) {
-  editingPhoneRequiresOtp.value = !staff.requiresPhoneActivation || staff.hasVerifiedPhone === true;
+  originalPhone.value = staff.phone;
   editingStaffId.value = staff.userId;
   Object.assign(form, {
     academicTitle: staff.academicTitle ?? '',
@@ -449,10 +441,21 @@ async function saveStaff() {
 
     if (editingStaffId.value === null) {
       await apiClient.post('/staff', commonPayload);
-      successMessage.value = 'Đã tạo tài khoản. Nhân viên dùng SĐT làm mật khẩu mặc định và xác minh OTP tại trang Kích hoạt tài khoản trước khi đăng nhập.';
+      successMessage.value = 'Đã tạo tài khoản. Nhân viên dùng SĐT làm mật khẩu mặc định và xác minh OTP ở lần đăng nhập đầu.';
     } else {
-      await apiClient.put(`/staff/${editingStaffId.value}`, commonPayload);
-      successMessage.value = 'Cập nhật tài khoản nhân viên thành công.';
+      const staffId = editingStaffId.value;
+      const phoneChanged = commonPayload.phone !== originalPhone.value;
+      await apiClient.put(`/staff/${staffId}`, commonPayload);
+      if (phoneChanged && staffId === authStore.user?.userId) {
+        authStore.clearSession();
+        formVisible.value = false;
+        Object.assign(form, emptyForm());
+        await router.replace({ name: 'login' });
+        return;
+      }
+      successMessage.value = phoneChanged
+        ? 'Đã lưu số mới. Nhân viên cần đăng nhập bằng số này và xác minh OTP.'
+        : 'Cập nhật tài khoản nhân viên thành công.';
     }
 
     formVisible.value = false;
@@ -503,39 +506,6 @@ async function confirmStatusChange() {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
-}
-
-.sub-nav {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  font-size: 0.875rem;
-}
-
-.nav-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  color: #64748b;
-  text-decoration: none;
-  font-weight: 600;
-  padding: 0.35rem 0.65rem;
-  border-radius: 6px;
-  transition: all 0.15s ease;
-}
-
-.nav-link:hover {
-  color: #0284c7;
-  background: #f0f9ff;
-}
-
-.nav-link--active {
-  color: #0284c7;
-  background: #e0f2fe;
-}
-
-.nav-sep {
-  color: #cbd5e1;
 }
 
 .page-heading {

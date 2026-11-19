@@ -15,7 +15,6 @@ const legacyDestinations: Record<string, string> = {
   'revenue-report': 'management-revenue-report',
   'medical-supply-catalog': 'management-medical-supplies',
   'diagnosis-catalog': 'management-diagnoses',
-  'role-permissions': 'management-role-permissions',
   'staff-workspace': 'management-staff-workspace',
   'dental-chairs': 'management-dental-chairs',
   'service-catalog': 'management-service-catalog',
@@ -92,7 +91,6 @@ const router = createRouter({
     { path: '/management/admin/diagnoses', name: 'management-diagnoses', component: () => import('@/views/DiagnosisCatalogView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
     { path: '/management/admin/scheduling-settings', name: 'management-scheduling-settings', component: () => import('@/views/SchedulingSettingsView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
     { path: '/management/admin/clinic-print-settings', name: 'management-clinic-print-settings', component: () => import('@/views/ClinicPrintSettingsView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
-    { path: '/management/admin/role-permissions', name: 'management-role-permissions', component: () => import('@/views/RolePermissionsView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
     { path: '/management/admin/reports/revenue', name: 'management-revenue-report', component: () => import('@/views/RevenueReportView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
     { path: '/management/admin/audit-logs', name: 'management-audit-logs', component: () => import('@/views/AuditLogView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
 
@@ -116,12 +114,7 @@ const router = createRouter({
     { path: '/admin/reports/revenue', name: 'revenue-report', component: () => import('@/views/RevenueReportView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
     { path: '/admin/medical-supplies', name: 'medical-supply-catalog', component: () => import('@/views/MedicalSupplyCatalogView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
     { path: '/admin/diagnoses', name: 'diagnosis-catalog', component: () => import('@/views/DiagnosisCatalogView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
-    {
-      path: '/admin/role-permissions',
-      name: 'role-permissions',
-      component: () => import('@/views/RolePermissionsView.vue'),
-      meta: { requiresAuth: true, roles: ['ADMIN'] }
-    },
+    { path: '/management/admin/role-permissions', alias: '/admin/role-permissions', redirect: { name: 'management-admin-staff' } },
     { path: '/staff/workspace', name: 'staff-workspace', component: () => import('@/views/StaffWorkspacesView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'DENTIST', 'ASSISTANT'] } },
     { path: '/admin/chairs', name: 'dental-chairs', component: () => import('@/views/DentalChairsView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
     {

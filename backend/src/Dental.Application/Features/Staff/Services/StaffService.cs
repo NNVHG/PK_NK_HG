@@ -1,9 +1,11 @@
 using System.Text.Json;
 using Dental.Application.Common;
 using Dental.Application.Features.Staff.DTOs;
+using Dental.Application.Features.Staff.Validators;
 using Dental.Application.Interfaces;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
+using Dental.Domain.Enums;
 
 namespace Dental.Application.Features.Staff.Services;
 
@@ -124,6 +126,27 @@ public sealed class StaffService
         string? ipAddress,
         CancellationToken ct = default)
     {
+        if (!new UpdateStaffRequestValidator().Validate(request).IsValid)
+            return Result<StaffAccountResponse>.Failure(Error.Validation);
+
+        try
+        {
+            return await _unitOfWork.ExecuteSerializableTransactionAsync(
+                transactionCt => UpdateStaffCoreAsync(actorUserId, staffUserId, request, ipAddress, transactionCt), ct);
+        }
+        catch (ConcurrentOperationException)
+        {
+            return Result<StaffAccountResponse>.Failure(Error.Conflict);
+        }
+    }
+
+    private async Task<Result<StaffAccountResponse>> UpdateStaffCoreAsync(
+        int actorUserId, int staffUserId, UpdateStaffRequest request, string? ipAddress, CancellationToken ct)
+    {
+        var actor = await _userRepository.FindByIdAsync(actorUserId, ct);
+        if (actor is not { IsActive: true, RequiresPhoneActivation: false } || actor.Role.RoleCode != RoleCodes.Admin)
+            return Result<StaffAccountResponse>.Failure(Error.Forbidden);
+
         var user = await _userRepository.FindByIdAsync(staffUserId, ct);
         if (user is null || !IsStaffRole(user.Role.RoleCode))
             return Result<StaffAccountResponse>.Failure(Error.NotFound);
@@ -133,9 +156,9 @@ public sealed class StaffService
             return Result<StaffAccountResponse>.Failure(Error.InvalidStaffRole);
 
         var phone = request.Phone.Trim();
-        if ((!user.RequiresPhoneActivation || user.PhoneVerifiedAtUtc.HasValue) && user.Phone != phone)
-            return Result<StaffAccountResponse>.Failure(Dental.Application.Features.Staff.StaffPhoneChangeService.Required);
-
+        var phoneChanged = user.Phone != phone;
+        if (phoneChanged && user.TokenVersion >= int.MaxValue - 1)
+            return Result<StaffAccountResponse>.Failure(Error.Conflict);
         if (await _userRepository.PhoneExistsAsync(phone, staffUserId, ct))
             return Result<StaffAccountResponse>.Failure(Error.StaffPhoneExists);
 
@@ -145,16 +168,35 @@ public sealed class StaffService
 
         var roleBefore = user.Role.RoleCode;
         var isActive = user.IsActive;
-        if (user.IsActive && !user.RequiresPhoneActivation && roleBefore == RoleCodes.Admin && roleCode != RoleCodes.Admin &&
+        if (user.IsActive && !user.RequiresPhoneActivation && roleBefore == RoleCodes.Admin &&
+            (roleCode != RoleCodes.Admin || phoneChanged) &&
             await _userRepository.CountActiveAdminsAsync(ct) <= 1)
         {
-            return Result<StaffAccountResponse>.Failure(Error.LastActiveAdmin);
+            return Result<StaffAccountResponse>.Failure(roleCode != RoleCodes.Admin
+                ? Error.LastActiveAdmin
+                : Error.LastActiveAdminPhoneChange);
         }
 
         var changedFields = new List<string>();
         SetIfChanged(user.AcademicTitle, NormalizeOptional(request.AcademicTitle), value => user.AcademicTitle = value, nameof(User.AcademicTitle), changedFields);
         SetIfChanged(user.FullName, request.FullName.Trim(), value => user.FullName = value, nameof(User.FullName), changedFields);
-        SetIfChanged(user.Phone, phone, value => user.Phone = value, nameof(User.Phone), changedFields);
+        if (phoneChanged)
+        {
+            var initialActivation = user.RequiresPhoneActivation && !user.PhoneVerifiedAtUtc.HasValue &&
+                user.PhoneActivationReason is null or PhoneActivationReason.InitialActivation;
+            if (initialActivation && _passwordHasher.Verify(user.Phone, user.PasswordHash))
+            {
+                user.PasswordHash = _passwordHasher.Hash(phone);
+            }
+
+            user.Phone = phone;
+            user.PhoneVerifiedAtUtc = null;
+            user.RequiresPhoneActivation = true;
+            user.PhoneActivationReason = initialActivation ? PhoneActivationReason.InitialActivation : PhoneActivationReason.PhoneChange;
+            user.TokenVersion++;
+            changedFields.AddRange([nameof(User.Phone), nameof(User.PhoneVerifiedAtUtc),
+                nameof(User.RequiresPhoneActivation), nameof(User.PhoneActivationReason), nameof(User.TokenVersion)]);
+        }
         SetIfChanged(user.Email, NormalizeOptional(request.Email), value => user.Email = value, nameof(User.Email), changedFields);
         SetIfChanged(user.DateOfBirth, request.DateOfBirth, value => user.DateOfBirth = value, nameof(User.DateOfBirth), changedFields);
         SetIfChanged(user.Gender, NormalizeOptional(request.Gender), value => user.Gender = value, nameof(User.Gender), changedFields);
@@ -181,7 +223,7 @@ public sealed class StaffService
                 user.IsActive,
                 changedFields,
                 ipAddress,
-                ct);
+                ct, required: phoneChanged);
         }
 
         return Result<StaffAccountResponse>.Success(ToResponse(user));
@@ -208,6 +250,24 @@ public sealed class StaffService
         string? ipAddress,
         CancellationToken ct)
     {
+        try
+        {
+            return await _unitOfWork.ExecuteSerializableTransactionAsync(
+                transactionCt => SetStaffActiveCoreAsync(actorUserId, staffUserId, isActive, ipAddress, transactionCt), ct);
+        }
+        catch (ConcurrentOperationException)
+        {
+            return Result<StaffAccountResponse>.Failure(Error.Conflict);
+        }
+    }
+
+    private async Task<Result<StaffAccountResponse>> SetStaffActiveCoreAsync(
+        int actorUserId, int staffUserId, bool isActive, string? ipAddress, CancellationToken ct)
+    {
+        var actor = await _userRepository.FindByIdAsync(actorUserId, ct);
+        if (actor is not { IsActive: true, RequiresPhoneActivation: false } || actor.Role.RoleCode != RoleCodes.Admin)
+            return Result<StaffAccountResponse>.Failure(Error.Forbidden);
+
         var user = await _userRepository.FindByIdAsync(staffUserId, ct);
         if (user is null || !IsStaffRole(user.Role.RoleCode))
             return Result<StaffAccountResponse>.Failure(Error.NotFound);

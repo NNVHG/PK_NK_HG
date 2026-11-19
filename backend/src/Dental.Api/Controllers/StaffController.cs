@@ -77,6 +77,7 @@ public sealed class StaffController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     [ProducesResponseType(typeof(StaffAccountResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -153,6 +154,7 @@ public sealed class StaffController : ControllerBase
             var code when code == Error.Forbidden.Code => StatusCodes.Status403Forbidden,
             var code when code == Error.Conflict.Code ||
                           code == Error.StaffPhoneExists.Code ||
+                          code == Error.LastActiveAdminPhoneChange.Code ||
                           code == Error.LastActiveAdmin.Code => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status400BadRequest,
         };
