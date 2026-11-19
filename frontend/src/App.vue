@@ -1621,12 +1621,16 @@ async function handleLogout() {
 }
 
 .dentist-room-modal {
+  position: fixed;
+  inset: 0;
+  margin: auto;
   width: min(620px, calc(100% - 2rem));
   background: #ffffff;
   border-radius: 16px;
   border: 1px solid #e2e8f0;
   box-shadow: 0 24px 48px rgba(15, 45, 89, 0.22);
   padding: 1.5rem;
+  max-height: calc(100vh - 2rem);
   max-height: calc(100dvh - 2rem);
   overflow-y: auto;
   box-sizing: border-box;
