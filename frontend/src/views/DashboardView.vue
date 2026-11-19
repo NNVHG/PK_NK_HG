@@ -84,82 +84,16 @@
 
       <!-- ==================== 4A. GIAO DIỆN RIÊNG CHO ADMIN ==================== -->
       <template v-if="authStore.role === 'ADMIN'">
-        <!-- Biểu đồ doanh thu 7 ngày -->
-        <section class="panel chart-panel">
+        <section class="panel chart-panel" aria-labelledby="weekly-revenue-title">
           <div class="panel-header">
             <div>
-              <h3 class="panel-title">Biểu Đồ Doanh Thu 7 Ngày Gần Nhất</h3>
-              <p class="panel-subtitle">Dòng tiền thực thu (Tiền mặt &amp; Chuyển khoản xác nhận)</p>
+              <h3 id="weekly-revenue-title" class="panel-title">Doanh thu thuần 7 ngày</h3>
+              <p class="panel-subtitle">Thực thu sau hoàn tiền · Giờ Việt Nam · Đơn vị đồng</p>
             </div>
-            <div class="chart-summary-badges">
-              <span class="summary-pill"><small>Tổng tuần:</small> <strong>{{ formatCurrency(revenueSummary.weeklyRevenue) }}</strong></span>
-              <span class="summary-pill summary-pill--today"><small>Hôm nay:</small> <strong>{{ formatCurrency(revenueSummary.todayRevenue) }}</strong></span>
-            </div>
+            <RouterLink class="panel-link chart-report-link" to="/management/admin/reports/revenue">Xem báo cáo →</RouterLink>
           </div>
 
-          <div class="chart-wrapper">
-            <svg class="revenue-svg" viewBox="0 0 780 230" preserveAspectRatio="none" aria-label="Biểu đồ doanh thu tuần">
-              <defs>
-                <linearGradient id="barGradNormal" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="#38bdf8" />
-                  <stop offset="100%" stop-color="#0284c7" />
-                </linearGradient>
-                <linearGradient id="barGradToday" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="#3b82f6" />
-                  <stop offset="100%" stop-color="#1d4ed8" />
-                </linearGradient>
-                <linearGradient id="lineGlow" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="rgba(37, 99, 235, 0.22)" />
-                  <stop offset="100%" stop-color="rgba(37, 99, 235, 0.0)" />
-                </linearGradient>
-              </defs>
-
-              <line x1="55" y1="35" x2="755" y2="35" stroke="#e2e8f0" stroke-dasharray="4,4" />
-              <line x1="55" y1="85" x2="755" y2="85" stroke="#e2e8f0" stroke-dasharray="4,4" />
-              <line x1="55" y1="135" x2="755" y2="135" stroke="#e2e8f0" stroke-dasharray="4,4" />
-              <line x1="55" y1="185" x2="755" y2="185" stroke="#cbd5e1" stroke-width="1.5" />
-
-              <text x="50" y="38" text-anchor="end" class="svg-axis-text">{{ formatShortCurrency(maxWeeklyRevenue) }}</text>
-              <text x="50" y="88" text-anchor="end" class="svg-axis-text">{{ formatShortCurrency(maxWeeklyRevenue * 0.66) }}</text>
-              <text x="50" y="138" text-anchor="end" class="svg-axis-text">{{ formatShortCurrency(maxWeeklyRevenue * 0.33) }}</text>
-              <text x="50" y="188" text-anchor="end" class="svg-axis-text">0₫</text>
-
-              <polygon :points="areaPoints" fill="url(#lineGlow)" />
-              <polyline :points="trendLinePoints" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
-
-              <g v-for="(day, idx) in weeklyChartData" :key="day.dateKey">
-                <rect
-                  :x="day.x - 26"
-                  :y="day.barY"
-                  width="52"
-                  :height="day.barHeight"
-                  rx="6"
-                  :fill="day.isToday ? 'url(#barGradToday)' : 'url(#barGradNormal)'"
-                  class="svg-bar"
-                  @mouseenter="hoveredDayIndex = idx"
-                  @mouseleave="hoveredDayIndex = null"
-                />
-                <circle :cx="day.x" :cy="day.nodeY" r="5" fill="#ffffff" stroke="#2563eb" stroke-width="2.5" class="svg-node" />
-                <text :x="day.x" :y="day.barY - 8" text-anchor="middle" class="svg-bar-val" :class="{ 'svg-bar-val--today': day.isToday }">
-                  {{ formatShortCurrency(day.revenue) }}
-                </text>
-                <text :x="day.x" :y="204" text-anchor="middle" class="svg-day-name" :class="{ 'svg-day-name--today': day.isToday }">{{ day.dayLabel }}</text>
-                <text :x="day.x" :y="220" text-anchor="middle" class="svg-day-date" :class="{ 'svg-day-date--today': day.isToday }">{{ day.shortDate }}</text>
-              </g>
-            </svg>
-
-            <div v-if="hoveredDayIndex !== null" class="chart-hover-card">
-              <span class="hover-date">{{ weeklyChartData[hoveredDayIndex].fullDateLabel }}</span>
-              <div class="hover-row"><span>Doanh thu:</span><strong class="hover-amt">{{ formatCurrency(weeklyChartData[hoveredDayIndex].revenue) }}</strong></div>
-              <div class="hover-row"><span>Giao dịch:</span><span>{{ weeklyChartData[hoveredDayIndex].transactionCount }} ca</span></div>
-            </div>
-          </div>
-
-          <div class="chart-legend-strip">
-            <div class="legend-item"><span class="legend-swatch swatch-blue"></span> Ngày trong tuần</div>
-            <div class="legend-item"><span class="legend-swatch swatch-darkblue"></span> Hôm nay ({{ currentDateFormatted }})</div>
-            <RouterLink class="chart-link-more" to="/management/admin/reports/revenue">Xem báo cáo doanh thu chi tiết →</RouterLink>
-          </div>
+          <WeeklyRevenueChart :days="weeklyChartData" :loading="revenueLoading" :error="revenueError" @retry="loadRevenueReport" />
         </section>
 
         <!-- Lưới 2 cột: Cảnh báo vận hành thực tế + Audit Log -->
@@ -422,6 +356,8 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { apiClient } from '@/services/api';
 import { reportsService } from '@/services/reports';
+import WeeklyRevenueChart from '@/components/WeeklyRevenueChart.vue';
+import { formatRevenue, recentRevenueDates, type RevenueChartDay } from '@/utils/revenueChart';
 import { queueService, type QueueEntryResponse } from '@/services/queue';
 import { bookingRequestsService, type BookingRequestRow } from '@/services/bookingRequests';
 import { appointmentsService, type AppointmentResponse } from '@/services/appointments';
@@ -432,30 +368,11 @@ import { WORKSPACE_UPDATED_EVENT, workspacesService, type WorkspaceSnapshot } fr
 const authStore = useAuthStore();
 
 const loadingData = ref(false);
-const hoveredDayIndex = ref<number | null>(null);
-
-const revenueSummary = ref({
-  todayRevenue: 0,
-  todayTransactions: 0,
-  weeklyRevenue: 0,
-});
-
-interface DayRevenueItem {
-  dateKey: string;
-  dayLabel: string;
-  shortDate: string;
-  fullDateLabel: string;
-  revenue: number;
-  transactionCount: number;
-  isToday: boolean;
-  x: number;
-  barY: number;
-  barHeight: number;
-  nodeY: number;
-}
-
-const weeklyChartData = ref<DayRevenueItem[]>([]);
-const maxWeeklyRevenue = ref(1000000);
+const revenueLoading = ref(false);
+const revenueError = ref(false);
+const weeklyChartData = ref<RevenueChartDay[]>([]);
+const weeklyRevenue = ref<number | null>(null);
+const todayRevenue = computed(() => weeklyChartData.value.at(-1));
 
 interface SimpleAuditLog {
   logId: number;
@@ -526,8 +443,8 @@ const roleKpis = computed(() => {
   switch (authStore.role) {
     case 'ADMIN':
       return [
-        { label: 'Doanh thu hôm nay', tag: 'Tài chính', value: formatCurrency(revenueSummary.value.todayRevenue), foot: `${revenueSummary.value.todayTransactions} giao dịch thực thu`, tone: 'blue' },
-        { label: 'Doanh thu 7 ngày', tag: 'Tuần này', value: formatCurrency(revenueSummary.value.weeklyRevenue), foot: 'Tiền mặt & chuyển khoản xác nhận', tone: 'indigo' },
+        { label: 'Doanh thu hôm nay', tag: 'Tài chính', value: todayRevenue.value?.revenue == null ? '—' : formatRevenue(todayRevenue.value.revenue), foot: `${todayRevenue.value?.transactionCount ?? '—'} giao dịch thu`, tone: 'blue' },
+        { label: 'Doanh thu thuần 7 ngày', tag: 'Tài chính', value: weeklyRevenue.value === null ? '—' : formatRevenue(weeklyRevenue.value), foot: 'Tiền mặt & chuyển khoản xác nhận', tone: 'indigo' },
         { label: 'Hàng đợi hôm nay', tag: 'Tiếp đón', value: `${queueItems.value.length} lượt`, foot: `${waitingQueueCount.value} chờ · ${inConsultationCount.value} đang khám`, tone: 'teal' },
         { label: 'Phòng / Ghế điều trị', tag: 'Vận hành', value: `${occupiedChairsCount.value}/${chairItems.value.length || 0}`, foot: `${availableChairsCount.value} phòng sẵn sàng · ${lowStockItems.value.length} vật tư tồn thấp`, tone: 'amber' }
       ];
@@ -604,29 +521,6 @@ const currentDateFormatted = computed(() => {
     year: 'numeric'
   });
 });
-
-const trendLinePoints = computed(() =>
-  weeklyChartData.value.length ? weeklyChartData.value.map(d => `${d.x},${d.nodeY}`).join(' ') : ''
-);
-
-const areaPoints = computed(() => {
-  if (!weeklyChartData.value.length) return '';
-  const first = weeklyChartData.value[0];
-  const last = weeklyChartData.value[weeklyChartData.value.length - 1];
-  const points = weeklyChartData.value.map(d => `${d.x},${d.nodeY}`).join(' ');
-  return `${first.x},185 ${points} ${last.x},185`;
-});
-
-function formatCurrency(val: number): string {
-  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val || 0);
-}
-
-function formatShortCurrency(val: number): string {
-  if (!val) return '0₫';
-  if (val >= 1000000) return `${(val / 1000000).toFixed(1).replace('.0', '')} tr`;
-  if (val >= 1000) return `${Math.round(val / 1000)}k`;
-  return `${val}₫`;
-}
 
 function formatDateOnly(val: string): string {
   if (!val) return '';
@@ -719,65 +613,33 @@ function chairToneClass(status: number): string {
 }
 
 async function loadRevenueReport() {
-  const today = new Date();
-  const past7Days = new Date();
-  past7Days.setDate(today.getDate() - 6);
-  const toIsoDate = (d: Date) => d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' });
-  const fromDate = toIsoDate(past7Days);
-  const toDate = toIsoDate(today);
-
+  if (authStore.role !== 'ADMIN' || revenueLoading.value) return;
+  revenueLoading.value = true;
+  revenueError.value = false;
+  const dates = recentRevenueDates();
   try {
-    const res = await reportsService.revenue({ fromDate, toDate, groupBy: 'Auto', top: '10', sortBy: 'Revenue' });
-    if (res?.summary) {
-      revenueSummary.value.weeklyRevenue = res.summary.netRevenue || res.summary.grossRevenue || 0;
-    }
-
-    const days: DayRevenueItem[] = [];
-    const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-    let highest = 0;
-
-    for (let i = 0; i < 7; i++) {
-      const curDate = new Date(past7Days);
-      curDate.setDate(past7Days.getDate() + i);
-      const curDateKey = toIsoDate(curDate);
-      const isToday = curDateKey === toDate;
-      const found = res?.dailyRevenue?.find(d => d.date === curDateKey);
-      const dayRev = found ? (found.revenue || found.grossRevenue || 0) : 0;
-      const txCount = found ? found.transactionCount : 0;
-
-      if (isToday) {
-        revenueSummary.value.todayRevenue = dayRev;
-        revenueSummary.value.todayTransactions = txCount;
-      }
-      if (dayRev > highest) highest = dayRev;
-
-      days.push({
-        dateKey: curDateKey,
-        dayLabel: dayNames[curDate.getDay()],
-        shortDate: `${curDate.getDate()}/${curDate.getMonth() + 1}`,
-        fullDateLabel: curDate.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }),
-        revenue: dayRev,
-        transactionCount: txCount,
-        isToday,
-        x: 85 + i * 100,
-        barY: 185,
-        barHeight: 0,
-        nodeY: 185
-      });
-    }
-
-    const ceiling = highest > 0 ? Math.ceil((highest * 1.25) / 100000) * 100000 : 1000000;
-    maxWeeklyRevenue.value = ceiling;
-    days.forEach(d => {
-      const ratio = d.revenue > 0 ? Math.min(d.revenue / ceiling, 1) : 0.04;
-      const h = Math.max(ratio * 130, 6);
-      d.barHeight = h;
-      d.barY = 185 - h;
-      d.nodeY = Math.max(185 - h - 6, 38);
+    const res = await reportsService.revenue({
+      fromDate: dates[0], toDate: dates[dates.length - 1], groupBy: 'Day', top: '5', sortBy: 'Revenue',
     });
-    weeklyChartData.value = days;
+    if (authStore.role !== 'ADMIN') return;
+    if (!Number.isFinite(res?.summary?.netRevenue) || !Array.isArray(res?.dailyRevenue)) {
+      throw new Error('Invalid revenue report');
+    }
+
+    const byDate = new Map(res.dailyRevenue.map(day => [day.date, day]));
+    weeklyChartData.value = dates.map(date => {
+      const day = byDate.get(date);
+      return {
+        date,
+        revenue: day && Number.isFinite(day.revenue) ? day.revenue : null,
+        transactionCount: day && Number.isFinite(day.transactionCount) ? day.transactionCount : null,
+      };
+    });
+    weeklyRevenue.value = res.summary.netRevenue;
   } catch {
-    weeklyChartData.value = [];
+    revenueError.value = true;
+  } finally {
+    revenueLoading.value = false;
   }
 }
 
@@ -970,34 +832,8 @@ onBeforeUnmount(() => {
 .panel-link { font-size: 0.82rem; font-weight: 750; color: #1857b6; text-decoration: none; white-space: nowrap; }
 .panel-link:hover { text-decoration: underline; }
 
-/* Chart */
-.chart-summary-badges { display: flex; gap: 0.6rem; flex-wrap: wrap; }
-.summary-pill { padding: 0.35rem 0.75rem; border-radius: 999px; background: #f1f5f9; font-size: 0.82rem; color: #334155; }
-.summary-pill--today { background: #e0f2fe; color: #0369a1; }
-.chart-wrapper { position: relative; width: 100%; overflow-x: auto; }
-.revenue-svg { width: 100%; min-width: 600px; height: 225px; display: block; }
-.svg-axis-text { font-size: 10px; fill: #64748b; font-weight: 600; }
-.svg-bar { transition: opacity 0.15s ease; cursor: pointer; }
-.svg-bar:hover { opacity: 0.85; }
-.svg-bar-val { font-size: 10px; fill: #334155; font-weight: 700; }
-.svg-bar-val--today { fill: #1d4ed8; font-weight: 800; }
-.svg-day-name { font-size: 11px; fill: #475569; font-weight: 700; }
-.svg-day-name--today { fill: #1d4ed8; }
-.svg-day-date { font-size: 10px; fill: #94a3b8; }
-.chart-hover-card {
-  position: absolute; top: 8px; right: 12px;
-  background: rgba(15, 45, 89, 0.94); color: #ffffff;
-  padding: 0.65rem 0.9rem; border-radius: 10px; font-size: 0.8rem;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2); pointer-events: none;
-}
-.hover-date { display: block; font-weight: 700; color: #fde047; margin-bottom: 0.25rem; }
-.hover-row { display: flex; justify-content: space-between; gap: 1rem; }
-.chart-legend-strip { display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; font-size: 0.78rem; color: #475569; }
-.legend-item { display: inline-flex; align-items: center; gap: 0.4rem; }
-.legend-swatch { width: 12px; height: 12px; border-radius: 3px; }
-.swatch-blue { background: #0284c7; }
-.swatch-darkblue { background: #1d4ed8; }
-.chart-link-more { margin-left: auto; font-weight: 750; color: #1857b6; text-decoration: none; }
+.chart-panel { min-width: 0; }
+.chart-report-link { align-self: center; }
 
 /* Alerts & Tables */
 .alerts-stack { display: flex; flex-direction: column; gap: 0.75rem; }

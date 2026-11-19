@@ -141,22 +141,9 @@
         </div>
       </section>
 
-      <section class="panel section-panel">
-        <h2 class="section-title">Diễn biến doanh thu thuần ({{ groupLabel(report.filter.groupBy) }})</h2>
-        <div class="timeline" aria-label="Doanh thu theo thời gian">
-          <div v-for="p in report.revenueTimeline" :key="p.label" class="period-row">
-            <div class="period-label">{{ p.label }}</div>
-            <div class="bar-track">
-              <div
-                class="bar-fill"
-                :class="{ 'bar-fill--negative': p.revenue < 0 }"
-                :style="{ width: barWidth(p.revenue) + '%' }"
-              ></div>
-            </div>
-            <div class="period-val">{{ money(p.revenue) }}</div>
-            <div class="period-count">{{ p.transactionCount }} GD</div>
-          </div>
-        </div>
+      <section class="panel section-panel chart-panel" aria-labelledby="revenue-timeline-title">
+        <h2 id="revenue-timeline-title" class="section-title">Diễn biến doanh thu thuần ({{ groupLabel(report.filter.groupBy) }})</h2>
+        <RevenueTimelineChart :periods="report.revenueTimeline" :group-by="report.filter.groupBy" />
       </section>
 
       <div class="tables-row">
@@ -286,6 +273,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
+import RevenueTimelineChart from '@/components/RevenueTimelineChart.vue';
 import { reportsService, type RevenueQuery, type RevenueReport } from '@/services/reports';
 
 const auth = useAuthStore();
@@ -357,7 +345,6 @@ function money(value: number) { return new Intl.NumberFormat('vi-VN', { style: '
 function dateTime(value: string) { return new Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', dateStyle: 'short', timeStyle: 'medium' }).format(new Date(value)); }
 function groupLabel(value: string) { return ({ Day: 'Ngày', Week: 'Tuần ISO', Month: 'Tháng' } as Record<string, string>)[value] ?? value; }
 function methodLabel(value: string) { return ({ Cash: 'Tiền mặt', BankTransfer: 'Chuyển khoản', Card: 'Thẻ POS' } as Record<string, string>)[value] ?? value; }
-function barWidth(value: number) { const max = Math.max(1, ...(report.value?.revenueTimeline.map(p => Math.abs(p.revenue)) ?? [])); return Math.abs(value) / max * 100; }
 watch(actorKey, () => { generation++; report.value = null; loadedKey.value = ''; error.value = ''; loading.value = false; exporting.value = false; });
 onMounted(load);
 onUnmounted(() => { disposed = true; generation++; report.value = null; loadedKey.value = ''; });
@@ -698,59 +685,10 @@ h1 {
   margin: 0;
 }
 
-.timeline {
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-}
-
-.period-row {
-  display: grid;
-  grid-template-columns: 8rem 1fr 11rem 6rem;
-  gap: 0.85rem;
-  align-items: center;
-  font-size: 0.885rem;
-}
-
-.period-label {
-  font-weight: 700;
-  color: #334155;
-}
-
-.bar-track {
-  background: #e2e8f0;
-  height: 1.15rem;
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.bar-fill {
-  background: #0284c7;
-  height: 100%;
-  border-radius: 6px;
-  transition: width 0.3s ease;
-}
-
-.bar-fill--negative {
-  background: #ef4444;
-}
-
-.period-val {
-  font-weight: 800;
-  color: #0f2d59;
-  text-align: right;
-}
-
-.period-count {
-  color: #64748b;
-  font-size: 0.8rem;
-  text-align: right;
-}
-
 /* Tables row */
 .tables-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1.25rem;
 }
 
@@ -860,10 +798,8 @@ h1 {
 }
 
 @media (max-width: 900px) {
-  .tables-row { grid-template-columns: 1fr; }
+  .tables-row { grid-template-columns: minmax(0, 1fr); }
   .kpi-cards { grid-template-columns: 1fr; }
-  .period-row { grid-template-columns: 7rem 1fr 9rem; }
-  .period-count { display: none; }
 }
 
 @media print {
@@ -871,12 +807,12 @@ h1 {
   .panel { border: 1px solid #cbd5e1; box-shadow: none; break-inside: avoid; }
   .kpi-cards, .debt-panel { break-inside: avoid; }
   thead { display: table-header-group; }
-  tr, .period-row { break-inside: avoid; }
+  tr { break-inside: avoid; }
+  .chart-panel { break-inside: auto; }
   .signatures { display: flex; justify-content: space-around; margin: 3rem 0; text-align: center; }
   .daily-accordion { display: none; }
   .table-wrap { overflow: visible; }
   .data-table th, .data-table td { padding: 0.4rem; }
-  .bar-fill { print-color-adjust: exact; }
 }
 </style>
 <style>
