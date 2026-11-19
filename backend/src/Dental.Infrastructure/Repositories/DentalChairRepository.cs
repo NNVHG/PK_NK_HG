@@ -1,6 +1,7 @@
 using Dental.Application.Common;
 using Dental.Application.Features.MOD_MST.DTOs;
 using Dental.Application.Interfaces;
+using Dental.Domain.Constants;
 using Dental.Domain.Entities;
 using Dental.Domain.Enums;
 using Dental.Infrastructure.Data;
@@ -18,11 +19,18 @@ public sealed class DentalChairRepository(DentalDbContext db, VietnamClock? cloc
     public Task<bool> IsAssignedAsync(int chairId, CancellationToken ct = default)
     {
         var today = Today;
-        return db.StaffWorkspaces.AnyAsync(x => x.ChairId == chairId && x.WorkDate == today, ct);
+        return db.StaffWorkspaces.AnyAsync(workspace => workspace.WorkDate == today && workspace.User.IsActive &&
+            workspace.User.Role.RoleCode == RoleCodes.Dentist &&
+            (workspace.ChairId == chairId || (workspace.RoomId.HasValue &&
+                db.DentalChairs.Any(chair => chair.Id == chairId && chair.RoomId == workspace.RoomId))), ct);
     }
 
     public Task<DentalChair?> FindAsync(int id, CancellationToken ct = default)
         => db.DentalChairs.FirstOrDefaultAsync(x => x.Id == id, ct);
+
+    public Task<bool> HasActiveVisitAsync(int chairId, int? roomId, CancellationToken ct = default)
+        => db.Visits.AnyAsync(visit => visit.Status == VisitStatuses.InProgress &&
+            (visit.ChairId == chairId || (roomId.HasValue && visit.RoomId == roomId)), ct);
 
     public Task<bool> NumberExistsAsync(string normalizedNumber, CancellationToken ct = default)
         => db.DentalChairs.AnyAsync(x => x.ChairNumber == normalizedNumber, ct);

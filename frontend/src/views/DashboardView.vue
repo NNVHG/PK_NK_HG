@@ -404,10 +404,10 @@
               <div class="workspace-card" :class="{ 'workspace-card--empty': !myWorkspace?.dentistName }">
                 <div class="ws-row">
                   <span class="ws-label">Nha sĩ đang hỗ trợ</span>
-                  <strong class="ws-val">{{ myWorkspace?.dentistName || 'Chưa chọn nha sĩ hỗ trợ' }}</strong>
+                  <strong class="ws-val">{{ assistantWorkspaceLabel }}</strong>
                 </div>
                 <p class="ws-hint" v-if="myWorkspace?.roomName">Phòng đồng bộ: <strong>{{ myWorkspace.roomName }}</strong></p>
-                <p class="ws-hint" v-else>Chọn nha sĩ tại mục Nhóm &amp; phòng làm việc để đồng bộ phòng điều trị.</p>
+                <p class="ws-hint" v-else-if="!myWorkspace?.hasConfirmedToday">Chọn nha sĩ tại mục Nhóm &amp; phòng làm việc để đồng bộ phòng điều trị.</p>
               </div>
             </div>
           </section>
@@ -427,7 +427,7 @@ import { bookingRequestsService, type BookingRequestRow } from '@/services/booki
 import { appointmentsService, type AppointmentResponse } from '@/services/appointments';
 import { chairStatusService, type ChairStatusRow } from '@/services/chairStatus';
 import { stockReceiptsService, type StockItem } from '@/services/stockReceipts';
-import { workspacesService, type WorkspaceSnapshot } from '@/services/workspaces';
+import { WORKSPACE_UPDATED_EVENT, workspacesService, type WorkspaceSnapshot } from '@/services/workspaces';
 
 const authStore = useAuthStore();
 
@@ -474,6 +474,8 @@ const deskAppointments = ref<AppointmentResponse[]>([]);
 const chairItems = ref<ChairStatusRow[]>([]);
 const lowStockItems = ref<StockItem[]>([]);
 const myWorkspace = ref<WorkspaceSnapshot | null>(null);
+const assistantWorkspaceLabel = computed(() => myWorkspace.value?.dentistName
+  || (myWorkspace.value?.hasConfirmedToday ? 'Không hỗ trợ nha sĩ' : 'Chưa chọn nha sĩ hỗ trợ'));
 
 const isStaff = computed(() => ['ADMIN', 'RECEPTIONIST', 'DENTIST', 'ASSISTANT'].includes(authStore.role));
 const roleSlug = computed(() => (authStore.role || 'staff').toLowerCase());
@@ -545,7 +547,7 @@ const roleKpis = computed(() => {
       ];
     case 'ASSISTANT':
       return [
-        { label: 'Nha sĩ đồng hành', tag: 'Phối hợp', value: myWorkspace.value?.dentistName || 'Chưa chọn', foot: myWorkspace.value?.roomName || 'Đồng bộ phòng theo nha sĩ', tone: 'blue' },
+        { label: 'Nha sĩ đồng hành', tag: 'Phối hợp', value: assistantWorkspaceLabel.value, foot: myWorkspace.value?.roomName || 'Nhóm & phòng làm việc', tone: 'blue' },
         { label: 'Khách đang chờ', tag: 'Hàng đợi', value: `${waitingQueueCount.value}`, foot: `Tổng ${queueItems.value.length} lượt khám hôm nay`, tone: 'indigo' },
         { label: 'Đang gọi / Khám', tag: 'Phối hợp', value: `${inConsultationCount.value}`, foot: 'Ca đang xử lý tại phòng', tone: 'teal' },
         { label: 'Vật tư tồn thấp', tag: 'Cảnh báo kho', value: `${lowStockItems.value.length} mã`, foot: 'Chạm hoặc dưới ngưỡng tối thiểu', tone: lowStockItems.value.length ? 'amber' : 'emerald' }
@@ -837,12 +839,12 @@ function onWorkspaceUpdated(ev: Event) {
 }
 
 onMounted(() => {
-  window.addEventListener('dentist-workspace-updated', onWorkspaceUpdated);
+  window.addEventListener(WORKSPACE_UPDATED_EVENT, onWorkspaceUpdated);
   if (isStaff.value) void refreshAllData();
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener('dentist-workspace-updated', onWorkspaceUpdated);
+  window.removeEventListener(WORKSPACE_UPDATED_EVENT, onWorkspaceUpdated);
 });
 </script>
 

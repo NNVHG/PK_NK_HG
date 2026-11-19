@@ -45,5 +45,5 @@ public sealed class StaffWorkspacesController(StaffWorkspaceService service, ICu
         return result.IsSuccess ? Ok(result.Value) : Failure(result.Error);
     }
     private IActionResult Failure(Error error) => StatusCode(error.Code switch
-    { "GEN_001" => 404, "GEN_002" => 403, "MST_061" or "MST_062" or "MST_063" or "MST_064" => 409, _ => 400 }, new { code = error.Code, message = error.Message });
+    { "GEN_001" => 404, "GEN_002" => 403, "MST_061" or "MST_062" or "MST_063" or "MST_064" or "MST_067" => 409, _ => 400 }, new { code = error.Code, message = error.Message });
 }

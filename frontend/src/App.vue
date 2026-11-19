@@ -66,7 +66,7 @@
             </div>
           </router-link>
 
-          <button class="patient-btn-logout" type="button" title="Đăng xuất" @click="handleLogout">
+          <button class="patient-btn-logout" type="button" title="Đăng xuất" :disabled="logoutInProgress" @click="handleLogout">
             <svg class="p-btn-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             <span>Đăng xuất</span>
           </button>
@@ -101,18 +101,17 @@
           <span aria-hidden="true">{{ menuOpen ? '✕' : '☰' }}</span>
         </button>
 
-        <div v-if="authStore.role === 'DENTIST'" class="staff-topbar-room">
+        <div v-if="isWorkspaceRole" class="staff-topbar-room">
           <button
             type="button"
             class="staff-room-pill"
-            :class="{ 'staff-room-pill--missing': !dentistHasValidRoom }"
-            :disabled="dentistRoomSaving || (dentistHasValidRoom && dentistWorkspace?.canChange === false)"
-            :title="dentistHasValidRoom ? (dentistWorkspace?.canChange === false ? 'Đang có ca khám hoặc lời mời, không thể đổi phòng' : 'Nhấn để đổi phòng điều trị') : 'Bắt buộc chọn phòng điều trị để bắt đầu khám'"
-            @click="openDentistRoomModal(true)"
+            :class="{ 'staff-room-pill--missing': !workspaceConfirmed }"
+            :disabled="workspaceSaving || logoutInProgress || (isDentist && staffWorkspace?.canChange === false)"
+            :title="workspaceLabel"
+            @click="openWorkspaceModal"
           >
-            <span aria-hidden="true">{{ dentistHasValidRoom ? '🏥' : '⚠️' }}</span>
-            <span>{{ dentistHasValidRoom ? `Phòng: ${dentistWorkspace?.roomName}` : 'Chưa chọn phòng điều trị' }}</span>
-            <small v-if="dentistHasValidRoom && dentistWorkspace?.canChange !== false" class="staff-room-change">Đổi</small>
+            <span class="staff-room-label">{{ workspaceLabel }}</span>
+            <small v-if="workspaceConfirmed && staffWorkspace?.canChange !== false" class="staff-room-change">Đổi</small>
           </button>
         </div>
 
@@ -127,13 +126,15 @@
             </div>
           </router-link>
 
-          <button class="patient-btn-logout" type="button" title="Đăng xuất" @click="handleLogout">
+          <button class="patient-btn-logout" type="button" title="Đăng xuất" :disabled="workspaceSaving || logoutInProgress" @click="handleLogout">
             <svg class="p-btn-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             <span>Đăng xuất</span>
           </button>
         </div>
       </div>
     </header>
+
+    <p v-if="logoutError && !showWorkspaceModal" class="staff-logout-error" role="alert">{{ logoutError }}</p>
 
     <div :class="authStore.isAuthenticated && isPortalRoute && !isPatient ? 'portal-workspace' : 'portal-workspace-plain'">
     <!-- ==================== 1. THANH BÊN TRÁI: DÀNH CHO NHÂN VIÊN & ADMIN ==================== -->
@@ -411,106 +412,115 @@
     </aside>
     </div>
 
-    <!-- Popup bắt buộc chọn phòng điều trị cho Nha sĩ -->
-    <div
-      v-if="showDentistRoomModal && authStore.isAuthenticated && authStore.role === 'DENTIST' && isPortalRoute"
-      class="dentist-room-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="dentist-room-modal-title"
-      @click.self="dentistHasValidRoom ? closeDentistRoomModal() : undefined"
+    <dialog
+      v-if="authStore.isAuthenticated && isWorkspaceRole && isPortalRoute"
+      ref="workspaceDialog"
+      class="dentist-room-modal"
+      aria-labelledby="workspace-modal-title"
+      @cancel.prevent="closeWorkspaceModal"
     >
-      <div class="dentist-room-modal">
+      <form @submit.prevent="confirmWorkspace">
         <div class="dentist-room-head">
-          <div>
-            <span class="dentist-room-kicker">Phân Bổ Phòng Làm Việc</span>
-            <h2 id="dentist-room-modal-title">Chọn phòng điều trị hôm nay</h2>
-          </div>
+          <h2 id="workspace-modal-title">
+            {{ isDentist ? 'Chọn phòng điều trị hôm nay' : 'Chọn nha sĩ hỗ trợ hôm nay' }}
+          </h2>
           <button
-            v-if="dentistHasValidRoom || (!dentistRoomLoading && !dentistRoomChairs.some(isChairSelectable))"
+            v-if="canCloseWorkspaceModal"
             type="button"
             class="dentist-room-close"
-            :disabled="dentistRoomSaving"
+            :disabled="workspaceSaving || logoutInProgress"
             aria-label="Đóng"
-            @click="closeDentistRoomModal"
+            @click="closeWorkspaceModal"
           >✕</button>
         </div>
 
         <p class="dentist-room-desc">
-          <template v-if="!dentistHasValidRoom">
-            Bạn cần <strong>chọn một phòng điều trị đang sẵn sàng</strong> trước khi gọi số và bắt đầu khám bệnh nhân. Khi bạn đăng xuất, hệ thống sẽ tự động cập nhật lại trạng thái phòng.
+          <template v-if="isDentist">
+            Chọn phòng trước khi gọi số và bắt đầu khám bệnh nhân.
           </template>
           <template v-else>
-            Phòng hiện tại: <strong>{{ dentistWorkspace?.roomName }}</strong>. Chọn phòng sẵn sàng khác nếu bạn muốn chuyển phòng.
+            Chọn nha sĩ đã nhận phòng hoặc tiếp tục mà không hỗ trợ nha sĩ nào.
           </template>
         </p>
 
-        <div v-if="dentistRoomError" class="dentist-room-alert" role="alert">⚠️ {{ dentistRoomError }}</div>
+        <div v-if="workspaceError" class="dentist-room-alert" role="alert">{{ workspaceError }}</div>
+        <div v-if="logoutError" class="dentist-room-alert" role="alert">{{ logoutError }}</div>
 
-        <div v-if="dentistRoomLoading" class="dentist-room-loading" role="status">
-          Đang tải danh sách phòng điều trị…
+        <div v-if="workspaceLoading" class="dentist-room-loading" role="status">
+          {{ isDentist ? 'Đang tải danh sách phòng…' : 'Đang tải danh sách nha sĩ…' }}
         </div>
 
-        <div v-else class="dentist-room-grid">
-          <label
-            v-for="chair in dentistRoomChairs"
-            :key="chair.id"
-            class="dentist-room-card"
-            :class="{
-              'dentist-room-card--selected': selectedChairId === chair.id,
-              'dentist-room-card--disabled': !isChairSelectable(chair)
-            }"
-          >
-            <input
-              v-model.number="selectedChairId"
-              type="radio"
-              name="dentist-room-choice"
-              :value="chair.id"
-              :disabled="!isChairSelectable(chair) || dentistRoomSaving"
-            />
-            <div class="dentist-room-card-body">
-              <div class="dentist-room-card-top">
-                <strong>{{ chair.roomName }}</strong>
-                <span class="dentist-room-code">{{ chair.chairNumber }}</span>
-              </div>
-              <span class="dentist-room-status" :class="chairStatusBadgeClass(chair)">
-                {{ chairStatusText(chair) }}
+        <fieldset v-else-if="workspaceOptions" class="dentist-room-grid" :disabled="workspaceSaving || logoutInProgress" aria-labelledby="workspace-modal-title">
+          <template v-if="isDentist">
+            <p v-if="!workspaceOptions.chairs.some(isChairSelectable)" class="workspace-empty">
+              Chưa có phòng sẵn sàng. Hãy tải lại danh sách hoặc liên hệ quản trị viên.
+            </p>
+            <label
+              v-for="chair in workspaceOptions.chairs"
+              :key="chair.id"
+              class="dentist-room-card"
+              :class="{
+                'dentist-room-card--selected': selectedWorkspaceId === chair.id,
+                'dentist-room-card--disabled': !isChairSelectable(chair)
+              }"
+            >
+              <input v-model.number="selectedWorkspaceId" type="radio" name="workspace-choice" :value="chair.id" :disabled="!isChairSelectable(chair)" />
+              <span class="dentist-room-card-body">
+                <span class="dentist-room-card-top">{{ chair.roomName }}</span>
+                <span class="dentist-room-status" :class="chairStatusBadgeClass(chair)">{{ chairStatusText(chair) }}</span>
               </span>
-            </div>
-          </label>
-        </div>
+            </label>
+          </template>
+          <template v-else>
+            <p v-if="!workingDentists.length" class="workspace-empty">Chưa có nha sĩ nào nhận phòng.</p>
+            <label
+              v-for="dentist in workingDentists"
+              :key="dentist.dentistId"
+              class="dentist-room-card"
+              :class="{ 'dentist-room-card--selected': selectedWorkspaceId === dentist.dentistId }"
+            >
+              <input v-model.number="selectedWorkspaceId" type="radio" name="workspace-choice" :value="dentist.dentistId" />
+              <span class="dentist-room-card-body">
+                <span class="dentist-room-card-top">{{ dentist.dentistName }}</span>
+                <span class="dentist-room-status status--ready">{{ dentist.roomName }}</span>
+              </span>
+            </label>
+            <label class="dentist-room-card" :class="{ 'dentist-room-card--selected': selectedWorkspaceId === 0 }">
+              <input v-model.number="selectedWorkspaceId" type="radio" name="workspace-choice" :value="0" />
+              <span class="dentist-room-card-top">Không hỗ trợ nha sĩ nào</span>
+            </label>
+          </template>
+        </fieldset>
 
         <div class="dentist-room-actions">
           <button
             type="button"
             class="dentist-room-refresh"
-            :disabled="dentistRoomLoading || dentistRoomSaving"
-            @click="loadDentistRoomOptions"
+            :disabled="workspaceLoading || workspaceSaving || logoutInProgress"
+            @click="loadWorkspace(true)"
           >
-            🔄 Tải lại phòng
+            Tải lại danh sách
           </button>
           <div class="dentist-room-actions-right">
             <button
-              v-if="dentistHasValidRoom"
               type="button"
               class="dentist-room-cancel"
-              :disabled="dentistRoomSaving"
-              @click="closeDentistRoomModal"
+              :disabled="workspaceSaving || logoutInProgress"
+              @click="canCloseWorkspaceModal ? closeWorkspaceModal() : handleLogout()"
             >
-              Đóng
+              {{ canCloseWorkspaceModal ? 'Đóng' : 'Đăng xuất' }}
             </button>
             <button
-              type="button"
+              type="submit"
               class="dentist-room-confirm"
-              :disabled="dentistRoomLoading || dentistRoomSaving || !selectedChairId"
-              @click="confirmDentistRoom"
+              :disabled="workspaceLoading || workspaceSaving || logoutInProgress || !validWorkspaceChoice"
             >
-              {{ dentistRoomSaving ? 'Đang xác nhận…' : '✓ Xác nhận vào phòng' }}
+              {{ workspaceSaving ? 'Đang xác nhận…' : 'Xác nhận' }}
             </button>
           </div>
         </div>
-      </div>
-    </div>
+      </form>
+    </dialog>
   </div>
 </template>
 
@@ -518,7 +528,15 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useRouter, useRoute } from 'vue-router';
-import { workspacesService, type WorkspaceChair, type WorkspaceSnapshot } from '@/services/workspaces';
+import {
+  isSelectableWorkspaceChair,
+  isWorkingDentist,
+  WORKSPACE_UPDATED_EVENT,
+  workspacesService,
+  type WorkspaceChair,
+  type WorkspaceOptions,
+  type WorkspaceSnapshot
+} from '@/services/workspaces';
 
 const authStore = useAuthStore();
 const router = useRouter();
@@ -538,27 +556,67 @@ const rightNavCollapsed = ref(false);
 const menuButton = ref<HTMLButtonElement | null>(null);
 const mainContent = ref<HTMLElement | null>(null);
 
-const dentistWorkspace = ref<WorkspaceSnapshot | null>(null);
-const dentistRoomChairs = ref<WorkspaceChair[]>([]);
-const showDentistRoomModal = ref(false);
-const dentistRoomLoading = ref(false);
-const dentistRoomSaving = ref(false);
-const dentistRoomError = ref('');
-const selectedChairId = ref<number | null>(null);
-const dentistHasValidRoom = computed(() => Boolean(dentistWorkspace.value?.chairId && dentistWorkspace.value?.isLocationUsable));
+const isDentist = computed(() => authStore.role === 'DENTIST');
+const isWorkspaceRole = computed(() => isDentist.value || authStore.role === 'ASSISTANT');
+const staffWorkspace = ref<WorkspaceSnapshot | null>(null);
+const workspaceOptions = ref<WorkspaceOptions | null>(null);
+const workspaceDialog = ref<HTMLDialogElement | null>(null);
+const showWorkspaceModal = ref(false);
+const workspaceLoading = ref(false);
+const workspaceSaving = ref(false);
+const workspaceError = ref('');
+const selectedWorkspaceId = ref<number | null>(null);
+const logoutInProgress = ref(false);
+const logoutError = ref('');
+let workspaceRequest = 0;
+let promptedWorkspaceToken: string | null = null;
+let assistantWorkspaceTimer: ReturnType<typeof setInterval> | undefined;
+let refreshingAssistantWorkspace = false;
+
+const workingDentists = computed(() => workspaceOptions.value?.dentists.filter(isWorkingDentist) ?? []);
+const workspaceConfirmed = computed(() => {
+  const snapshot = staffWorkspace.value;
+  if (!snapshot) return false;
+  if (isDentist.value) return Boolean(snapshot.chairId && snapshot.isLocationUsable);
+  if (snapshot.workingDentistId) return snapshot.isLocationUsable;
+  return snapshot.hasConfirmedToday === true;
+});
+const workspaceLabel = computed(() => {
+  if (isDentist.value) return workspaceConfirmed.value
+    ? staffWorkspace.value?.roomName ?? 'Phòng điều trị'
+    : 'Chọn phòng điều trị';
+  if (!workspaceConfirmed.value) return 'Chọn nha sĩ hỗ trợ';
+  return staffWorkspace.value?.dentistName
+    ? `Hỗ trợ ${staffWorkspace.value.dentistName}`
+    : 'Không hỗ trợ nha sĩ';
+});
+const canCloseWorkspaceModal = computed(() => workspaceConfirmed.value
+  || (isDentist.value && workspaceOptions.value !== null && !workspaceOptions.value.chairs.some(isChairSelectable)));
+const validWorkspaceChoice = computed(() => {
+  const selectedId = selectedWorkspaceId.value;
+  if (!workspaceOptions.value || !staffWorkspace.value?.canChange || selectedId === null) return false;
+  if (isDentist.value) {
+    return workspaceOptions.value.chairs.some(chair => chair.id === selectedId && isChairSelectable(chair));
+  }
+  return selectedId === 0 || workingDentists.value.some(dentist => dentist.dentistId === selectedId);
+});
 
 function isChairSelectable(chair: WorkspaceChair) {
-  const myId = authStore.user?.userId;
-  return chair.isActive && chair.status === 1 && (!chair.claimedByUserId || chair.claimedByUserId === myId);
+  const userId = authStore.user?.userId;
+  if (userId === undefined) return false;
+  const hasCurrentVisitRoom = workspaceOptions.value?.chairs.some(option => option.isCurrentVisitRoom);
+  return (!hasCurrentVisitRoom || chair.isCurrentVisitRoom === true) && isSelectableWorkspaceChair(chair, userId);
 }
 
 function chairStatusText(chair: WorkspaceChair) {
   const myId = authStore.user?.userId;
   if (!chair.isActive || chair.status === 4) return 'Ngừng sử dụng';
   if (chair.status === 3) return 'Đang bảo trì';
+  if (chair.isCurrentVisitRoom) return 'Phòng ca khám của bạn';
   if (chair.status === 2) return 'Đang có ca khám';
   if (chair.claimedByUserId && chair.claimedByUserId !== myId) return 'Đã có nha sĩ khác chọn';
   if (chair.claimedByUserId === myId) return 'Phòng bạn đang chọn';
+  if (!isChairSelectable(chair)) return 'Bạn đang có ca khám';
   return 'Sẵn sàng';
 }
 
@@ -571,98 +629,122 @@ function chairStatusBadgeClass(chair: WorkspaceChair) {
   return 'status--ready';
 }
 
-async function loadDentistRoomOptions() {
+async function loadWorkspace(openForEdit = false, promptAtLogin = false) {
   const userId = authStore.user?.userId;
-  dentistRoomLoading.value = true;
-  dentistRoomError.value = '';
+  if (!authStore.isAuthenticated || !isWorkspaceRole.value || !isPortalRoute.value || !userId
+    || workspaceSaving.value || logoutInProgress.value) return;
+  const request = ++workspaceRequest;
+  workspaceLoading.value = true;
+  workspaceError.value = '';
+  workspaceOptions.value = null;
+  selectedWorkspaceId.value = null;
+  if (openForEdit) showWorkspaceModal.value = true;
+
   try {
-    const [opts, latestSnap] = await Promise.all([
-      workspacesService.options(),
-      userId ? workspacesService.get(userId).catch(() => dentistWorkspace.value) : Promise.resolve(null)
-    ]);
-    if (latestSnap) dentistWorkspace.value = latestSnap;
-    dentistRoomChairs.value = opts.chairs || [];
-    const currentId = dentistWorkspace.value?.chairId ?? null;
-    if (currentId && dentistRoomChairs.value.some(c => c.id === currentId && isChairSelectable(c))) {
-      selectedChairId.value = currentId;
-    } else {
-      const firstAvail = dentistRoomChairs.value.find(isChairSelectable);
-      selectedChairId.value = firstAvail ? firstAvail.id : null;
+    const snapshot = await workspacesService.get(userId);
+    if (request !== workspaceRequest) return;
+    if (snapshot.userId !== userId || snapshot.roleCode !== authStore.role) throw new Error('Invalid workspace');
+    staffWorkspace.value = snapshot;
+    if (!openForEdit && workspaceConfirmed.value && (!promptAtLogin || !snapshot.canChange)) return;
+
+    showWorkspaceModal.value = true;
+    const options = await workspacesService.options();
+    if (request !== workspaceRequest) return;
+    workspaceOptions.value = options;
+    if (isDentist.value && options.chairs.some(chair => chair.id === snapshot.chairId && isChairSelectable(chair))) {
+      selectedWorkspaceId.value = snapshot.chairId;
+    } else if (!isDentist.value && workingDentists.value.some(dentist => dentist.dentistId === snapshot.workingDentistId)) {
+      selectedWorkspaceId.value = snapshot.workingDentistId;
+    } else if (!isDentist.value && workspaceConfirmed.value) {
+      selectedWorkspaceId.value = 0;
     }
   } catch {
-    dentistRoomError.value = 'Không thể tải danh sách phòng điều trị. Vui lòng thử lại.';
+    if (request !== workspaceRequest) return;
+    showWorkspaceModal.value = true;
+    workspaceError.value = 'Không thể tải lựa chọn làm việc. Vui lòng thử lại.';
   } finally {
-    dentistRoomLoading.value = false;
+    if (request === workspaceRequest) workspaceLoading.value = false;
   }
 }
 
-async function openDentistRoomModal(manual = false) {
-  if (authStore.role !== 'DENTIST' || !authStore.isAuthenticated) return;
-  if (manual && dentistHasValidRoom.value && dentistWorkspace.value?.canChange === false) return;
-  showDentistRoomModal.value = true;
-  await loadDentistRoomOptions();
+function openWorkspaceModal() {
+  if (isDentist.value && staffWorkspace.value?.canChange === false) return;
+  void loadWorkspace(true);
 }
 
-function closeDentistRoomModal() {
-  const noSelectableRoom = !dentistRoomLoading.value && !dentistRoomChairs.value.some(isChairSelectable);
-  if ((!dentistHasValidRoom.value && !noSelectableRoom) || dentistRoomSaving.value) return;
-  showDentistRoomModal.value = false;
-  dentistRoomError.value = '';
+function closeWorkspaceModal() {
+  if (!canCloseWorkspaceModal.value || workspaceSaving.value || logoutInProgress.value) return;
+  showWorkspaceModal.value = false;
 }
 
-async function syncDentistWorkspace(openIfMissing = true) {
+async function confirmWorkspace() {
   const userId = authStore.user?.userId;
-  if (!authStore.isAuthenticated || authStore.role !== 'DENTIST' || !isPortalRoute.value || !userId) {
-    dentistWorkspace.value = null;
-    showDentistRoomModal.value = false;
-    return;
-  }
+  const snapshot = staffWorkspace.value;
+  const selectedId = selectedWorkspaceId.value;
+  if (!userId || snapshot?.userId !== userId || !validWorkspaceChoice.value ||
+    workspaceLoading.value || workspaceSaving.value || logoutInProgress.value) return;
+  const request = workspaceRequest;
+  workspaceSaving.value = true;
+  workspaceError.value = '';
   try {
-    const snap = await workspacesService.get(userId);
-    dentistWorkspace.value = snap;
-    if (!snap.chairId || !snap.isLocationUsable) {
-      if (openIfMissing) await openDentistRoomModal(false);
-    } else {
-      showDentistRoomModal.value = false;
-    }
-  } catch {
-    // Keep silent on background check; user can click pill if needed
-  }
-}
-
-async function confirmDentistRoom() {
-  const userId = authStore.user?.userId;
-  if (!userId || !selectedChairId.value || dentistRoomSaving.value) return;
-  dentistRoomSaving.value = true;
-  dentistRoomError.value = '';
-  try {
-    const latest = await workspacesService.get(userId);
-    dentistWorkspace.value = latest;
     const updated = await workspacesService.change(userId, {
-      chairId: selectedChairId.value,
-      dentistId: null,
-      expectedVersion: latest.version ?? 0,
+      chairId: isDentist.value ? selectedId : null,
+      dentistId: !isDentist.value && selectedId ? selectedId : null,
+      expectedVersion: snapshot.version,
       confirmed: true
     });
-    dentistWorkspace.value = updated;
-    showDentistRoomModal.value = false;
-    window.dispatchEvent(new CustomEvent('dentist-workspace-updated', { detail: updated }));
+    if (request !== workspaceRequest) return;
+    if (updated.userId !== userId || updated.roleCode !== authStore.role) throw new Error('Invalid workspace');
+    staffWorkspace.value = updated;
+    showWorkspaceModal.value = false;
+    window.dispatchEvent(new CustomEvent(WORKSPACE_UPDATED_EVENT, { detail: updated }));
   } catch (err: unknown) {
+    if (request !== workspaceRequest) return;
     const res = err as { response?: { data?: { message?: string } } };
-    dentistRoomError.value = res?.response?.data?.message || 'Không thể chọn phòng này. Vui lòng tải lại và chọn phòng khác.';
-    await loadDentistRoomOptions();
+    workspaceError.value = res?.response?.data?.message || 'Không thể xác nhận lựa chọn. Hãy tải lại danh sách và thử lại.';
+    workspaceOptions.value = null;
   } finally {
-    dentistRoomSaving.value = false;
+    if (request === workspaceRequest) workspaceSaving.value = false;
   }
 }
 
 function onWorkspaceUpdatedEvent(ev: Event) {
   const detail = (ev as CustomEvent<WorkspaceSnapshot>).detail;
-  if (detail && authStore.role === 'DENTIST' && detail.userId === authStore.user?.userId) {
-    dentistWorkspace.value = detail;
-    if (detail.chairId && detail.isLocationUsable) {
-      showDentistRoomModal.value = false;
+  if (detail && isWorkspaceRole.value && detail.userId === authStore.user?.userId) {
+    staffWorkspace.value = detail;
+  }
+}
+
+async function refreshAssistantWorkspace() {
+  const userId = authStore.user?.userId;
+  if (!userId || authStore.role !== 'ASSISTANT' || !isPortalRoute.value || document.hidden
+    || workspaceLoading.value || workspaceSaving.value || logoutInProgress.value || refreshingAssistantWorkspace) return;
+  const showingOptions = showWorkspaceModal.value;
+  if (showingOptions && !workspaceOptions.value) return;
+  const request = workspaceRequest;
+  const canApply = () => request === workspaceRequest && showingOptions === showWorkspaceModal.value
+    && !workspaceLoading.value && !workspaceSaving.value && !logoutInProgress.value;
+  refreshingAssistantWorkspace = true;
+  try {
+    if (showingOptions) {
+      const options = await workspacesService.options();
+      if (!canApply()) return;
+      workspaceOptions.value = options;
+      if (selectedWorkspaceId.value && !validWorkspaceChoice.value) selectedWorkspaceId.value = null;
+    } else {
+      const previous = staffWorkspace.value;
+      const updated = await workspacesService.get(userId);
+      if (!canApply() || staffWorkspace.value !== previous || updated.userId !== userId || updated.roleCode !== 'ASSISTANT') return;
+      if (previous?.version !== updated.version || previous?.roomName !== updated.roomName
+        || previous?.dentistName !== updated.dentistName || previous?.isLocationUsable !== updated.isLocationUsable
+        || previous?.workingDentistId !== updated.workingDentistId || previous?.hasConfirmedToday !== updated.hasConfirmedToday) {
+        window.dispatchEvent(new CustomEvent(WORKSPACE_UPDATED_EVENT, { detail: updated }));
+      }
     }
+  } catch {
+    // Keep the last successful data available when the background refresh fails.
+  } finally {
+    refreshingAssistantWorkspace = false;
   }
 }
 
@@ -686,35 +768,60 @@ watch(() => route.fullPath, () => {
   }
 });
 
-watch(() => [authStore.isAuthenticated, authStore.role, authStore.user?.userId, isPortalRoute.value], ([authenticated]) => {
-  if (!authenticated) {
+watch([workspaceDialog, showWorkspaceModal], ([dialog, open]) => {
+  if (!dialog) return;
+  if (open && !dialog.open) dialog.showModal();
+  if (!open && dialog.open) dialog.close();
+}, { flush: 'post' });
+
+watch(() => [authStore.token, authStore.role, authStore.user?.userId, isPortalRoute.value], () => {
+  workspaceRequest++;
+  staffWorkspace.value = null;
+  workspaceOptions.value = null;
+  selectedWorkspaceId.value = null;
+  workspaceError.value = '';
+  workspaceLoading.value = false;
+  workspaceSaving.value = false;
+  showWorkspaceModal.value = false;
+  if (!authStore.isAuthenticated) {
     menuOpen.value = false;
-    dentistWorkspace.value = null;
-    showDentistRoomModal.value = false;
-  } else {
-    void syncDentistWorkspace(true);
+    promptedWorkspaceToken = null;
+  } else if (isWorkspaceRole.value && isPortalRoute.value) {
+    const promptAtLogin = promptedWorkspaceToken !== authStore.token;
+    promptedWorkspaceToken = authStore.token;
+    void loadWorkspace(false, promptAtLogin);
   }
 }, { immediate: true });
 
 onMounted(() => {
   document.addEventListener('keydown', onKeydown);
   window.addEventListener('resize', onResize);
-  window.addEventListener('dentist-workspace-updated', onWorkspaceUpdatedEvent);
+  window.addEventListener(WORKSPACE_UPDATED_EVENT, onWorkspaceUpdatedEvent);
+  assistantWorkspaceTimer = setInterval(refreshAssistantWorkspace, 15000);
   if (window.innerWidth < 1200) rightNavCollapsed.value = true;
 });
 
 onBeforeUnmount(() => {
+  workspaceRequest++;
+  clearInterval(assistantWorkspaceTimer);
   document.removeEventListener('keydown', onKeydown);
   window.removeEventListener('resize', onResize);
-  window.removeEventListener('dentist-workspace-updated', onWorkspaceUpdatedEvent);
+  window.removeEventListener(WORKSPACE_UPDATED_EVENT, onWorkspaceUpdatedEvent);
 });
 
 async function handleLogout() {
-  await authStore.logout();
-  dentistWorkspace.value = null;
-  dentistRoomChairs.value = [];
-  showDentistRoomModal.value = false;
-  router.push('/login');
+  if (logoutInProgress.value || workspaceSaving.value) return;
+  logoutError.value = '';
+  logoutInProgress.value = true;
+  try {
+    await authStore.logout();
+    await router.push('/login');
+  } catch (err: unknown) {
+    const response = err as { response?: { data?: { message?: string } } };
+    logoutError.value = response?.response?.data?.message || 'Chưa thể đăng xuất. Vui lòng thử lại.';
+  } finally {
+    logoutInProgress.value = false;
+  }
 }
 </script>
 
@@ -1442,18 +1549,22 @@ async function handleLogout() {
 
 @media print {
   .layout--portal, .layout--patient { display: block; background: #fff; }
-  .patient-topbar, .navbar-left, .navbar-right-actors, .dentist-room-backdrop { display: none; }
+  .patient-topbar, .navbar-left, .navbar-right-actors, .dentist-room-modal { display: none; }
   .main-content { max-width: none; padding: 0; }
 }
 
 .staff-topbar-room {
   display: flex;
   align-items: center;
+  min-width: 0;
+  max-width: 21rem;
 }
 
 .staff-room-pill {
   display: inline-flex;
   align-items: center;
+  max-width: 100%;
+  min-width: 0;
   gap: 0.45rem;
   padding: 0.42rem 0.85rem;
   border-radius: 999px;
@@ -1465,6 +1576,13 @@ async function handleLogout() {
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s ease;
+}
+
+.staff-room-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .staff-room-pill:hover:not(:disabled) {
@@ -1497,27 +1615,19 @@ async function handleLogout() {
   border: 1px solid #bae6fd;
 }
 
-.dentist-room-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
+.dentist-room-modal::backdrop {
   background: rgba(15, 23, 42, 0.58);
   backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
 }
 
 .dentist-room-modal {
-  width: 100%;
-  max-width: 620px;
+  width: min(620px, calc(100% - 2rem));
   background: #ffffff;
   border-radius: 16px;
   border: 1px solid #e2e8f0;
   box-shadow: 0 24px 48px rgba(15, 45, 89, 0.22);
   padding: 1.5rem;
-  max-height: 90vh;
+  max-height: calc(100dvh - 2rem);
   overflow-y: auto;
   box-sizing: border-box;
 }
@@ -1528,16 +1638,6 @@ async function handleLogout() {
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 0.5rem;
-}
-
-.dentist-room-kicker {
-  display: inline-block;
-  font-size: 0.72rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #0284c7;
-  margin-bottom: 0.2rem;
 }
 
 .dentist-room-head h2 {
@@ -1584,9 +1684,26 @@ async function handleLogout() {
 
 .dentist-room-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
   gap: 0.75rem;
-  margin-bottom: 1.25rem;
+  min-width: 0;
+  margin: 0 0 1.25rem;
+  padding: 0;
+  border: 0;
+}
+
+.workspace-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.staff-logout-error {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  color: #991b1b;
+  background: #fef2f2;
 }
 
 .dentist-room-card {
@@ -1632,21 +1749,10 @@ async function handleLogout() {
 }
 
 .dentist-room-card-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
   color: #0f2d59;
   font-size: 0.92rem;
-}
-
-.dentist-room-code {
-  font-size: 0.72rem;
   font-weight: 700;
-  color: #64748b;
-  background: #f1f5f9;
-  padding: 0.1rem 0.4rem;
-  border-radius: 6px;
+  overflow-wrap: anywhere;
 }
 
 .dentist-room-status {
@@ -1713,5 +1819,31 @@ async function handleLogout() {
 .dentist-room-cancel:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .patient-topbar-inner.staff-topbar-inner {
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding-block: 0.4rem;
+  }
+
+  .staff-topbar-inner .patient-brand-logo {
+    width: clamp(100px, 35vw, 158px);
+  }
+
+  .staff-topbar-inner .staff-role-pill {
+    display: none;
+  }
+
+  .staff-topbar-room {
+    flex: 1 0 100%;
+    max-width: 100%;
+    order: 1;
+  }
+
+  .dentist-room-modal {
+    padding: 1rem;
+  }
 }
 </style>

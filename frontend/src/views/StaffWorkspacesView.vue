@@ -4,7 +4,7 @@
       <div class="header-icon">🏥</div>
       <div>
         <h1>Phòng làm việc nha sĩ & phụ tá</h1>
-        <p class="subtitle">Nha sĩ chọn phòng điều trị làm việc trong ngày; phụ tá kết nối theo nha sĩ để đồng bộ phòng. Vị trí lưu giữ xuyên suốt ca làm việc.</p>
+        <p class="subtitle">Nha sĩ chọn phòng điều trị. Phụ tá có thể chọn nha sĩ đã nhận phòng hoặc tiếp tục làm việc độc lập.</p>
       </div>
     </div>
 
@@ -80,11 +80,11 @@
             </div>
           </div>
           <div v-else class="unconfirmed-warning" role="alert">
-            ⚠️ Nha sĩ ({{ store.snapshot.dentistName }}) chưa xác nhận phòng làm việc hôm nay. Phòng sẽ tự cập nhật ngay khi nha sĩ xác nhận.
+            Nha sĩ ({{ store.snapshot.dentistName }}) chưa xác nhận phòng làm việc hôm nay.
           </div>
         </template>
         <div v-else class="empty-dentist-prompt">
-          Chưa liên kết với nha sĩ nào. Vui lòng chọn nha sĩ làm cùng trong ngày bên dưới.
+          {{ store.snapshot.hasConfirmedToday ? 'Đã chọn không hỗ trợ nha sĩ nào.' : 'Chọn nha sĩ đã nhận phòng hoặc chọn không hỗ trợ nha sĩ nào.' }}
         </div>
       </div>
 
@@ -104,8 +104,8 @@
           <label for="chair-choice-select">Chọn phòng điều trị làm việc hôm nay</label>
           <select id="chair-choice-select" v-model.number="chairChoice" :disabled="saving || loading || needsReview || !store.snapshot.canChange" @change="markDirty">
             <option :value="0">❌ Bỏ chọn phòng làm việc hiện tại</option>
-            <option v-for="chair in options?.chairs ?? []" :key="chair.id" :value="chair.id" :disabled="!chair.isActive || chair.status !== 1 || (chair.claimedByUserId !== null && chair.claimedByUserId !== store.snapshot.userId)">
-              {{ chair.roomName }}{{ chair.status !== 1 ? ' · [Không sẵn sàng]' : '' }}{{ chair.claimedByUserId !== null && chair.claimedByUserId !== store.snapshot.userId ? ' · [Đã có nha sĩ chọn]' : '' }}
+            <option v-for="chair in options?.chairs ?? []" :key="chair.id" :value="chair.id" :disabled="!canSelectChair(chair, store.snapshot.userId)">
+              {{ chair.roomName }}{{ chair.isCurrentVisitRoom ? ' · Phòng ca khám của bạn' : '' }}
             </option>
           </select>
         </div>
@@ -113,9 +113,9 @@
         <div v-else-if="store.snapshot.isActive && store.snapshot.roleCode === 'ASSISTANT'" class="form-group">
           <label for="dentist-choice-select">Chọn nha sĩ hỗ trợ hôm nay</label>
           <select id="dentist-choice-select" v-model.number="dentistChoice" :disabled="saving || loading || needsReview || !store.snapshot.canChange" @change="markDirty">
-            <option :value="0">❌ Bỏ liên kết nha sĩ</option>
-            <option v-for="dentist in options?.dentists ?? []" :key="dentist.dentistId" :value="dentist.dentistId" :disabled="!dentist.isReady">
-              {{ dentist.dentistName }} · {{ dentist.roomName || 'Chưa nhận phòng' }} (Đã có {{ dentist.assistantCount }} phụ tá){{ !dentist.isReady ? ' · [Chưa sẵn sàng]' : '' }}
+            <option :value="0">Không hỗ trợ nha sĩ nào</option>
+            <option v-for="dentist in options?.dentists.filter(isWorkingDentist) ?? []" :key="dentist.dentistId" :value="dentist.dentistId">
+              {{ dentist.dentistName }} · {{ dentist.roomName }}
             </option>
           </select>
           <p v-if="dentistChoice" class="sync-preview">
@@ -143,7 +143,15 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useWorkspacesStore } from '@/stores/workspaces';
-import { workspacesService, type WorkspaceOptions, type WorkspaceTarget } from '@/services/workspaces';
+import {
+  isSelectableWorkspaceChair,
+  isWorkingDentist,
+  WORKSPACE_UPDATED_EVENT,
+  workspacesService,
+  type WorkspaceChair,
+  type WorkspaceOptions,
+  type WorkspaceTarget
+} from '@/services/workspaces';
 import type { PagedResult } from '@/services/patients';
 const auth = useAuthStore(), store = useWorkspacesStore();
 const targetId = ref(0), options = ref<WorkspaceOptions | null>(null), targets = ref<PagedResult<WorkspaceTarget> | null>(null), keyword = ref('');
@@ -152,6 +160,10 @@ const chairChoice = ref(0), dentistChoice = ref(0), confirmed = ref(false), dirt
 const selectedDentist = computed(() => options.value?.dentists.find(d => d.dentistId === dentistChoice.value));
 let life = 0, version = 0, targetVersion = 0, timer: ReturnType<typeof setInterval> | undefined;
 const permitted = () => ['ADMIN', 'DENTIST', 'ASSISTANT'].includes(auth.role);
+function canSelectChair(chair: WorkspaceChair, userId: number) {
+  const hasCurrentVisitRoom = options.value?.chairs.some(option => option.isCurrentVisitRoom);
+  return (!hasCurrentVisitRoom || chair.isCurrentVisitRoom === true) && isSelectableWorkspaceChair(chair, userId);
+}
 function markDirty() { dirty.value = true; confirmed.value = false; }
 async function loadTargets(page = 1) {
   if (auth.role !== 'ADMIN' || saving.value || !Number.isInteger(page) || page < 1 || page > 1_000_000 || keyword.value.length > 100) return;
@@ -182,17 +194,32 @@ async function save() {
   let chairId: number | null = null, dentistId: number | null = null;
   if (snapshot.isActive && snapshot.roleCode === 'DENTIST') {
     if (!Number.isInteger(chairChoice.value) || chairChoice.value < 0) return;
-    if (chairChoice.value) { const chair = options.value?.chairs.find(c => c.id === chairChoice.value); if (!chair || !chair.isActive || chair.status !== 1 || (chair.claimedByUserId !== null && chair.claimedByUserId !== snapshot.userId)) { error.value = 'Chọn phòng sẵn sàng chưa có nha sĩ khác sử dụng.'; return; } chairId = chairChoice.value; }
+    if (chairChoice.value) {
+      const chair = options.value?.chairs.find(candidate => candidate.id === chairChoice.value);
+      if (!chair || !canSelectChair(chair, snapshot.userId)) {
+        error.value = 'Chọn phòng có thể sử dụng.';
+        return;
+      }
+      chairId = chairChoice.value;
+    }
   } else if (snapshot.isActive && snapshot.roleCode === 'ASSISTANT') {
     if (!Number.isInteger(dentistChoice.value) || dentistChoice.value < 0) return;
-    if (dentistChoice.value) { const dentist = selectedDentist.value; if (!dentist || !dentist.isReady) { error.value = 'Chọn nha sĩ đang hoạt động.'; return; } dentistId = dentistChoice.value; }
+    if (dentistChoice.value) {
+      const dentist = selectedDentist.value;
+      if (!dentist || !isWorkingDentist(dentist)) {
+        error.value = 'Chọn nha sĩ đã nhận phòng điều trị.';
+        return;
+      }
+      dentistId = dentistChoice.value;
+    }
   } else if (auth.role !== 'ADMIN') return;
   const ticket = life, principal = auth.user?.userId; saving.value = true; error.value = ''; message.value = '';
   try {
     const result = await workspacesService.change(snapshot.userId, { chairId, dentistId, expectedVersion: snapshot.version, confirmed: true });
     if (ticket !== life || !permitted() || principal !== auth.user?.userId) return;
     if (result.userId !== snapshot.userId || result.version < snapshot.version) throw new Error('Invalid workspace result');
-    message.value = 'Đã lưu phòng/nhóm làm việc thành công. Phụ tá lấy phòng trực tiếp từ nha sĩ.';
+    message.value = 'Đã cập nhật phòng hoặc nhóm làm việc.';
+    window.dispatchEvent(new CustomEvent(WORKSPACE_UPDATED_EVENT, { detail: result }));
     confirmed.value = false; dirty.value = false; needsReview.value = true; saving.value = false; await load(snapshot.userId);
   } catch (err: unknown) {
     if (ticket !== life || principal !== auth.user?.userId) return;

@@ -59,7 +59,7 @@ export const useAuthStore = defineStore('auth', () => {
       const res = await apiClient.get('/auth/me');
       user.value = res.data;
     } catch {
-      logout();
+      await logout().catch(() => undefined);
     }
   }
 
@@ -76,15 +76,19 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function logout() {
+    const sessionToken = token.value;
+    const releasesWorkspace = role.value === 'DENTIST' || role.value === 'ASSISTANT';
     try {
-      if (token.value) {
+      if (sessionToken) {
         await apiClient.post('/auth/logout');
       }
-    } catch {
-      // Ignored
-    } finally {
-      clearSession();
+    } catch (error) {
+      if (releasesWorkspace && token.value === sessionToken) {
+        const response = error as { response?: { status?: number } };
+        if (response?.response?.status !== 401) throw error;
+      }
     }
+    if (token.value === sessionToken) clearSession();
   }
 
   return {

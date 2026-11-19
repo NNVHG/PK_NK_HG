@@ -3,7 +3,13 @@ public sealed record ChangeWorkspaceRequest(int? ChairId, int? DentistId, int Ex
 public sealed record WorkspaceTargetQuery(int Page = 1, string? Keyword = null);
 public sealed record WorkspaceTarget(int UserId, string FullName, string RoleCode, bool IsActive);
 public sealed record WorkspaceSnapshot(int UserId, string FullName, string RoleCode, bool IsActive, int Version,
-    int? WorkingDentistId, string? DentistName, int? ChairId, string? ChairNumber, string? RoomName, bool IsLocationUsable, bool CanChange);
-public sealed record WorkspaceChairOption(int Id, string ChairNumber, string RoomName, int Status, bool IsActive, int? ClaimedByUserId);
+    int? WorkingDentistId, string? DentistName, int? ChairId, string? ChairNumber, string? RoomName, bool IsLocationUsable, bool CanChange)
+{
+    public bool HasConfirmedToday { get; init; }
+}
+public sealed record WorkspaceChairOption(int Id, string ChairNumber, string RoomName, int Status, bool IsActive, int? ClaimedByUserId)
+{
+    public bool IsCurrentVisitRoom { get; init; }
+}
 public sealed record WorkspaceDentistOption(int DentistId, string DentistName, int? ChairId, string? ChairNumber, string? RoomName, int? AssistantId, bool IsReady, int AssistantCount);
 public sealed record WorkspaceOptions(IReadOnlyList<WorkspaceChairOption> Chairs, IReadOnlyList<WorkspaceDentistOption> Dentists);

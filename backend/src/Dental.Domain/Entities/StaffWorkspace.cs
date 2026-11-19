@@ -2,7 +2,7 @@ using Dental.Domain.Common;
 
 namespace Dental.Domain.Entities;
 
-/// <summary>MOD_MST / DL-261, DL-362, DL-367: assistant stores only a dentist link; dentist stores daily confirmed room/chair.</summary>
+/// <summary>Daily staff assignment. An assistant confirms optional dentist support and follows the dentist's room.</summary>
 public sealed class StaffWorkspace : BaseEntity
 {
     public int UserId { get; set; }

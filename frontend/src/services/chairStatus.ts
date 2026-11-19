@@ -4,8 +4,11 @@ import type { PagedResult } from '@/services/patients';
 export interface ChairStatusRow {
   id: number; chairNumber: string; roomName: string; status: number; statusText: string;
   isActive: boolean; version: number; isAssigned: boolean; hasActiveVisit: boolean;
+  dentistId?: number | null;
+  dentistName?: string | null;
+  assistants?: { userId: number; fullName: string }[];
 }
-export interface ChairStatusQuery { keyword?: string; status?: number; page: number; pageSize: number; }
+export interface ChairStatusQuery { keyword?: string; status?: number; isActive?: boolean; page: number; pageSize: number; }
 export interface ChangeChairStatus { status: number; expectedVersion: number; confirmed: boolean; }
 export const chairStatusService = {
   async getPage(query: ChairStatusQuery): Promise<PagedResult<ChairStatusRow>> {

@@ -4,7 +4,7 @@
       <div>
         <p class="eyebrow">CƠ SỞ VẬT CHẤT &amp; VẬN HÀNH</p>
         <h1>Phòng điều trị &amp; Trạng thái</h1>
-        <p class="subtitle">Quản lý danh mục phòng điều trị và theo dõi trạng thái vận hành tự động theo thời gian thực. Admin có thể thêm phòng, sửa cấu hình hoặc điều chỉnh trạng thái khi cần.</p>
+        <p class="subtitle">Theo dõi nha sĩ, phụ tá và tình trạng phục vụ của từng phòng điều trị.</p>
       </div>
       <div class="header-actions">
         <router-link to="/management/staff/workspace" class="button button-secondary">
@@ -22,7 +22,8 @@
     <div class="info-banner">
       <div class="banner-icon">🏥</div>
       <div class="banner-content">
-        <strong>Cơ chế tự động cập nhật:</strong> Trạng thái phòng tự động chuyển <em>Đang phục vụ</em> khi nha sĩ bắt đầu khám và giải phóng về <em>Sẵn sàng</em> khi kết thúc ca hoặc nha sĩ đăng xuất. Phòng đang phục vụ hoặc đã có nha sĩ nhận phòng trong ngày không thể đổi trạng thái thủ công.
+        Danh sách tự cập nhật khi nhân viên nhận phòng, chọn nha sĩ hỗ trợ hoặc đăng xuất.
+        Phòng có ca đang khám tiếp tục hiển thị <em>Đang phục vụ</em> cho đến khi ca được xử lý.
       </div>
     </div>
 
@@ -46,6 +47,7 @@
     </div>
 
     <div v-if="error" class="alert alert-error" role="alert">{{ error }}</div>
+    <p v-if="liveStatusUnavailable" class="alert alert-warning" role="status">Chưa đồng bộ được trạng thái phòng. Hệ thống sẽ tự thử lại.</p>
     <div v-if="message" class="alert alert-success" role="status">{{ message }}</div>
     <div v-if="needsReview" class="alert alert-warning" role="alert">
       Dữ liệu phòng vừa được cập nhật. Bấm <button class="link-btn" @click="load(1)">Tải lại danh sách</button> để đối chiếu trước khi thao tác tiếp.
@@ -133,6 +135,23 @@
                 <span v-if="liveStatus(chair.id)?.hasActiveVisit || chair.status === 2" class="live-tag live-tag--busy">🔒 Đang phục vụ ca khám</span>
                 <span v-else-if="liveStatus(chair.id)?.isAssigned" class="live-tag live-tag--assigned">👤 Đã có nha sĩ nhận phòng</span>
               </div>
+              <dl class="room-staff">
+                <div>
+                  <dt>Nha sĩ</dt>
+                  <dd v-if="liveStatus(chair.id)?.dentistName">{{ liveStatus(chair.id)?.dentistName }}</dd>
+                  <dd v-else-if="liveStatus(chair.id)?.isAssigned">Đã có người nhận phòng</dd>
+                  <dd v-else>{{ liveStatus(chair.id) ? 'Chưa có nha sĩ' : 'Chưa đồng bộ' }}</dd>
+                </div>
+                <div>
+                  <dt>Phụ tá</dt>
+                  <dd v-if="liveStatus(chair.id)?.assistants?.length">
+                    <ul>
+                      <li v-for="assistant in liveStatus(chair.id)?.assistants" :key="assistant.userId">{{ assistant.fullName }}</li>
+                    </ul>
+                  </dd>
+                  <dd v-else>{{ liveStatus(chair.id) ? 'Chưa có phụ tá' : 'Chưa đồng bộ' }}</dd>
+                </div>
+              </dl>
             </div>
 
             <div class="chair-card-actions">
@@ -273,15 +292,20 @@
 import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useDentalChairsStore } from '@/stores/dentalChairs';
-import { dentalChairsService, type DentalChair } from '@/services/dentalChairs';
+import { dentalChairsService, type ChairQuery, type DentalChair } from '@/services/dentalChairs';
 import { chairStatusService, type ChairStatusRow } from '@/services/chairStatus';
 
 const auth = useAuthStore(), store = useDentalChairsStore();
 const keyword = ref(''), status = ref(0), active = ref('all'), loading = ref(false), saving = ref(false), error = ref(''), message = ref(''), needsReview = ref(false);
 const formOpen = ref(false), selected = ref<DentalChair | null>(null), chairNumber = ref(''), roomName = ref(''), formStatus = ref(1), description = ref(''), confirmed = ref(false);
 const liveStatusMap = ref<Record<number, ChairStatusRow>>({});
+const liveStatusUnavailable = ref(false);
 const quickStatusOpen = ref(false), quickChair = ref<DentalChair | null>(null), quickTargetStatus = ref(1), quickConfirmed = ref(false);
 let version = 0, life = 0;
+let appliedQuery: ChairQuery | undefined;
+let refreshing = false;
+let refreshTimer: ReturnType<typeof setInterval> | undefined;
+const loadError = 'Không thể tải danh sách phòng điều trị. Vui lòng thử lại.';
 
 function liveStatus(id: number): ChairStatusRow | undefined {
   return liveStatusMap.value[id];
@@ -305,24 +329,44 @@ function closeQuickStatus() { if (!saving.value) { quickStatusOpen.value = false
 
 async function load(page = 1) {
   if (auth.role !== 'ADMIN' || saving.value || !Number.isInteger(page) || page < 1 || page > 1_000_000 || keyword.value.length > 100 || ![0, 1, 2, 3, 4].includes(status.value) || !['all', 'true', 'false'].includes(active.value)) return;
-  const ticket = ++version; loading.value = true; error.value = ''; store.reset(); clearForm(); closeQuickStatus();
+  appliedQuery = {
+    page, pageSize: 20, keyword: keyword.value.trim() || undefined,
+    status: status.value || undefined, isActive: active.value === 'all' ? undefined : active.value === 'true'
+  };
+  loading.value = true; error.value = ''; store.reset(); liveStatusMap.value = {}; clearForm(); closeQuickStatus();
+  await readPage(appliedQuery, false);
+}
+
+async function readPage(query: ChairQuery, background: boolean) {
+  const ticket = ++version;
   try {
     const [chairsRes, statusRes] = await Promise.allSettled([
-      dentalChairsService.getPage({ page, pageSize: 20, keyword: keyword.value.trim() || undefined,
-        status: status.value || undefined, isActive: active.value === 'all' ? undefined : active.value === 'true' }),
-      chairStatusService.getPage({ page, pageSize: 20, keyword: keyword.value.trim() || undefined, status: status.value || undefined })
+      dentalChairsService.getPage(query),
+      chairStatusService.getPage(query)
     ]);
-    if (ticket !== version || auth.role !== 'ADMIN') return;
+    if (ticket !== version || auth.role !== 'ADMIN' || saving.value) return;
     if (chairsRes.status === 'rejected') throw chairsRes.reason;
     store.replace(chairsRes.value);
-    const map: Record<number, ChairStatusRow> = {};
     if (statusRes.status === 'fulfilled') {
-      for (const row of statusRes.value.items) map[row.id] = row;
+      liveStatusMap.value = Object.fromEntries(statusRes.value.items.map(row => [row.id, row]));
     }
-    liveStatusMap.value = map;
-    needsReview.value = false;
-  } catch { if (ticket === version) error.value = 'Không thể tải danh sách phòng điều trị. Vui lòng thử lại.'; }
-  finally { if (ticket === version) loading.value = false; }
+    liveStatusUnavailable.value = statusRes.status === 'rejected';
+    if (error.value === loadError) error.value = '';
+    if (!background) needsReview.value = false;
+  } catch {
+    if (ticket !== version) return;
+    if (background) liveStatusUnavailable.value = true;
+    else error.value = loadError;
+  } finally {
+    if (!background && ticket === version) loading.value = false;
+  }
+}
+
+async function refreshPage() {
+  if (!appliedQuery || auth.role !== 'ADMIN' || document.hidden || loading.value || saving.value || refreshing || needsReview.value) return;
+  refreshing = true;
+  try { await readPage(appliedQuery, true); }
+  finally { refreshing = false; }
 }
 function openCreate() {
   if (auth.role !== 'ADMIN' || loading.value || saving.value || needsReview.value) return;
@@ -339,13 +383,16 @@ function openQuickStatus(chair: DentalChair) {
 }
 async function saveQuickStatus() {
   const old = quickChair.value;
-  if (auth.role !== 'ADMIN' || !quickStatusOpen.value || !old || saving.value || !quickConfirmed.value) return;
+  if (auth.role !== 'ADMIN' || !quickStatusOpen.value || !old || loading.value || saving.value || needsReview.value || !quickConfirmed.value) return;
+  if (liveStatus(old.id)?.isAssigned || liveStatus(old.id)?.hasActiveVisit) {
+    closeQuickStatus();
+    error.value = 'Phòng vừa có nhân viên nhận hoặc có ca khám.';
+    return;
+  }
   if (![1, 3, 4].includes(quickTargetStatus.value) || quickTargetStatus.value === old.status) return;
   const ticket = life; saving.value = true; error.value = ''; message.value = '';
   try {
-    const live = liveStatusMap.value[old.id];
-    const expectedVersion = live?.version ?? old.version;
-    await chairStatusService.change(old.id, { status: quickTargetStatus.value, expectedVersion, confirmed: true });
+    await chairStatusService.change(old.id, { status: quickTargetStatus.value, expectedVersion: old.version, confirmed: true });
     if (ticket !== life || auth.role !== 'ADMIN') return;
     message.value = `Đã cập nhật trạng thái phòng ${old.roomName}.`;
     closeQuickStatus(); needsReview.value = true; saving.value = false;
@@ -376,8 +423,18 @@ async function save() {
     error.value = response?.response?.data?.message || 'Chưa xác minh được kết quả lưu. Tải lại để đối chiếu.'; confirmed.value = false; needsReview.value = true;
   } finally { if (ticket === life) saving.value = false; }
 }
-onMounted(() => load());
-onUnmounted(() => { life++; version++; clearForm(); closeQuickStatus(); store.reset(); error.value = ''; message.value = ''; });
+onMounted(() => {
+  if (typeof document !== 'undefined') {
+    refreshTimer = setInterval(refreshPage, 5000);
+    document.addEventListener('visibilitychange', refreshPage);
+  }
+  return load();
+});
+onUnmounted(() => {
+  clearInterval(refreshTimer);
+  if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', refreshPage);
+  life++; version++; clearForm(); closeQuickStatus(); store.reset(); error.value = ''; message.value = '';
+});
 </script>
 <style scoped>
 .page-container {
@@ -544,7 +601,7 @@ input:focus, select:focus, textarea:focus {
 /* Chairs Grid */
 .chairs-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
   gap: 1rem;
 }
 
@@ -583,6 +640,8 @@ input:focus, select:focus, textarea:focus {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.45rem;
 }
 
 .chair-badge-group {
@@ -616,6 +675,22 @@ input:focus, select:focus, textarea:focus {
   color: #64748b;
   margin-top: 0.4rem;
 }
+
+.room-staff {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.85rem 0 0;
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: #f8fafc;
+  font-size: 0.84rem;
+}
+
+.room-staff > div { display: grid; grid-template-columns: 3.5rem minmax(0, 1fr); gap: 0.45rem; }
+.room-staff dt { color: #475569; }
+.room-staff dd { margin: 0; color: #0f2d59; font-weight: 650; overflow-wrap: anywhere; }
+.room-staff ul { list-style: none; margin: 0; padding: 0; }
+.room-staff li + li { margin-top: 0.25rem; }
 
 .chair-card-actions {
   margin-top: auto;

@@ -1,11 +1,24 @@
 import { apiClient } from '@/services/api';
 import type { PagedResult } from '@/services/patients';
-export interface WorkspaceSnapshot { userId: number; fullName: string; roleCode: string; isActive: boolean; version: number; workingDentistId: number | null; dentistName: string | null; chairId: number | null; chairNumber: string | null; roomName: string | null; isLocationUsable: boolean; canChange: boolean; }
-export interface WorkspaceChair { id: number; chairNumber: string; roomName: string; status: number; isActive: boolean; claimedByUserId: number | null; }
+export interface WorkspaceSnapshot { userId: number; fullName: string; roleCode: string; isActive: boolean; version: number; workingDentistId: number | null; dentistName: string | null; chairId: number | null; chairNumber: string | null; roomName: string | null; isLocationUsable: boolean; canChange: boolean; hasConfirmedToday?: boolean; }
+export interface WorkspaceChair { id: number; chairNumber: string; roomName: string; status: number; isActive: boolean; claimedByUserId: number | null; isCurrentVisitRoom?: boolean; }
 export interface WorkspaceDentist { dentistId: number; dentistName: string; chairId: number | null; chairNumber: string | null; roomName: string | null; assistantId: number | null; assistantCount: number; isReady: boolean; }
 export interface WorkspaceOptions { chairs: WorkspaceChair[]; dentists: WorkspaceDentist[]; }
 export interface WorkspaceTarget { userId: number; fullName: string; roleCode: string; isActive: boolean; }
 export interface ChangeWorkspace { chairId: number | null; dentistId: number | null; expectedVersion: number; confirmed: boolean; }
+
+export const WORKSPACE_UPDATED_EVENT = 'staff-workspace-updated';
+
+export function isWorkingDentist(dentist: WorkspaceDentist): boolean {
+  return dentist.isReady && dentist.chairId !== null && Boolean(dentist.roomName);
+}
+
+export function isSelectableWorkspaceChair(chair: WorkspaceChair, userId: number): boolean {
+  return chair.isActive
+    && (chair.status === 1 || chair.isCurrentVisitRoom === true)
+    && (chair.claimedByUserId === null || chair.claimedByUserId === userId);
+}
+
 export const workspacesService = {
   async get(id: number): Promise<WorkspaceSnapshot> { return (await apiClient.get<WorkspaceSnapshot>(`/workspaces/${id}`)).data; },
   async options(): Promise<WorkspaceOptions> { return (await apiClient.get<WorkspaceOptions>('/workspaces/options')).data; },

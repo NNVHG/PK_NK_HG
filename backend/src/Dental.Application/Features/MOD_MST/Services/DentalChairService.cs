@@ -53,7 +53,9 @@ public sealed class DentalChairService(IDentalChairRepository chairs, IUnitOfWor
                 var chair = await chairs.FindAsync(id, transactionCt);
                 if (chair is null) return Result<DentalChairResponse>.Failure(Error.NotFound);
                 if (chair.Version != request.ExpectedVersion) return Result<DentalChairResponse>.Failure(Changed);
-                if (chair.Status == DentalChairStatus.Occupied) return Result<DentalChairResponse>.Failure(Occupied);
+                if (chair.Status == DentalChairStatus.Occupied ||
+                    await chairs.HasActiveVisitAsync(chair.Id, chair.RoomId, transactionCt))
+                    return Result<DentalChairResponse>.Failure(Occupied);
                 if (await chairs.IsAssignedAsync(id, transactionCt)) return Result<DentalChairResponse>.Failure(Assigned);
                 var previous = (int)chair.Status;
                 chair.RoomName = request.RoomName.Trim(); chair.Description = Normalize(request.Description);

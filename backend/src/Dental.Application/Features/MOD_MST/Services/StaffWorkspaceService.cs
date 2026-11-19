@@ -16,9 +16,16 @@ public sealed class StaffWorkspaceService(IStaffWorkspaceRepository workspaces, 
     public static readonly Error Busy = new("MST_062", "Nha sĩ đang có ca khám hoặc lời mời chưa xử lý; chưa thể đổi vị trí.");
     public static readonly Error Unavailable = new("MST_063", "Ghế/phòng chưa sẵn sàng hoặc đã có nha sĩ khác chọn.");
     public static readonly Error InvalidTarget = new("MST_064", "Nhân sự không hoạt động hoặc không đúng vai trò để chọn vị trí này.");
+    public static readonly Error DentistNotWorking = new("MST_067", "Nha sĩ chưa xác nhận phòng làm việc hôm nay. Vui lòng chọn nha sĩ khác hoặc chọn không hỗ trợ.");
 
     private bool IsConfirmedToday(StaffWorkspace? workspace)
         => workspace is { ChairId: not null } && workspace.WorkDate == clock.Today;
+
+    private bool HasDentistConfirmedRoom(StaffWorkspace? workspace)
+        => workspace is not null && workspace.UpdatedByUserId == workspace.UserId && IsConfirmedToday(workspace);
+
+    private static bool IsRoomOperational(DentalChair? chair)
+        => chair is { IsActive: true, Status: DentalChairStatus.Available or DentalChairStatus.Occupied };
 
     private async Task<bool> ActorAllowed(int actorId, string? role, CancellationToken ct)
     {
@@ -49,20 +56,35 @@ public sealed class StaffWorkspaceService(IStaffWorkspaceRepository workspaces, 
     {
         if (!await ActorAllowed(actorId, role, ct)) return Result<WorkspaceOptions>.Failure(Error.Forbidden);
         var today = clock.Today;
-        var allChairs = await chairs.GetAllAsync(ct); var claims = await workspaces.GetAllAsync(ct);
+        var allChairs = await chairs.GetAllAsync(ct);
+        var dailyAssignments = (await workspaces.GetAllAsync(ct)).Where(x => x.WorkDate == today).ToArray();
+        var roomByChair = allChairs.ToDictionary(x => x.Id);
+        var dentistAssignments = dailyAssignments.Where(x => x.ChairId.HasValue).ToDictionary(x => x.UserId);
+        var assistantsByDentist = dailyAssignments.ToLookup(x => x.DentistId);
         var dentists = await users.GetActiveDentistsAsync(ct);
         var options = new List<WorkspaceDentistOption>();
         foreach (var dentist in dentists)
         {
-            var workspace = claims.FirstOrDefault(x => x.UserId == dentist.UserId);
-            var confirmedToday = workspace is { ChairId: not null } && workspace.WorkDate == today;
-            var chair = confirmedToday ? allChairs.FirstOrDefault(x => x.Id == workspace!.ChairId) : null;
-            var assistantId = claims.FirstOrDefault(x => x.DentistId == dentist.UserId)?.UserId;
-            var assistantCount = claims.Count(x => x.DentistId == dentist.UserId);
-            options.Add(new(dentist.UserId, dentist.FullName, chair?.Id, chair?.ChairNumber, chair?.RoomName, assistantId, true, assistantCount));
+            var workspace = dentistAssignments.GetValueOrDefault(dentist.UserId);
+            if (!HasDentistConfirmedRoom(workspace) || workspace?.ChairId is not int chairId ||
+                !roomByChair.TryGetValue(chairId, out var chair) || !IsRoomOperational(chair))
+                continue;
+
+            var assistants = assistantsByDentist[dentist.UserId];
+            options.Add(new(dentist.UserId, dentist.FullName, chair.Id, chair.ChairNumber, chair.RoomName,
+                assistants.FirstOrDefault()?.UserId, true, assistants.Count()));
         }
-        return Result<WorkspaceOptions>.Success(new(allChairs.Select(c => new WorkspaceChairOption(c.Id, c.ChairNumber, c.RoomName,
-            (int)c.Status, c.IsActive, claims.FirstOrDefault(w => w.ChairId == c.Id && w.WorkDate == today)?.UserId)).ToArray(), options));
+        var currentVisitChairId = role == RoleCodes.Dentist
+            ? await visits.GetActiveChairIdForDentistAsync(actorId, ct)
+            : null;
+        var chairOptions = allChairs.Select(chair => new WorkspaceChairOption(chair.Id, chair.ChairNumber,
+            chair.RoomName, (int)chair.Status, chair.IsActive,
+            dentistAssignments.Values.FirstOrDefault(w => w.ChairId == chair.Id ||
+                (chair.RoomId.HasValue && w.RoomId == chair.RoomId))?.UserId)
+        {
+            IsCurrentVisitRoom = currentVisitChairId == chair.Id && chair.Status == DentalChairStatus.Occupied
+        }).ToArray();
+        return Result<WorkspaceOptions>.Success(new(chairOptions, options));
     }
 
     public async Task<Result<WorkspaceSnapshot>> ChangeAsync(int actorId, string? role, int targetId,
@@ -89,31 +111,50 @@ public sealed class StaffWorkspaceService(IStaffWorkspaceRepository workspaces, 
                     return Result<WorkspaceSnapshot>.Failure(Error.Validation);
 
                 var today = clock.Today;
-                var sameConfirmedSelection = workspace is not null &&
+                if (request.DentistId is int dentistId)
+                {
+                    var dentist = await users.FindByIdAsync(dentistId, transactionCt);
+                    if (dentist is not { IsActive: true } || dentist.Role?.RoleCode != RoleCodes.Dentist)
+                        return Result<WorkspaceSnapshot>.Failure(InvalidTarget);
+                    var dentistWorkspace = await workspaces.FindAsync(dentistId, transactionCt);
+                    if (!HasDentistConfirmedRoom(dentistWorkspace) || dentistWorkspace?.ChairId is not int dentistChairId ||
+                        !IsRoomOperational(await chairs.FindAsync(dentistChairId, transactionCt)))
+                        return Result<WorkspaceSnapshot>.Failure(DentistNotWorking);
+                }
+                var confirmsAssistantChoice = targetRole == RoleCodes.Assistant && target.IsActive &&
+                    (actorId == targetId || request.DentistId.HasValue);
+                DateOnly? workDate = request.ChairId.HasValue || confirmsAssistantChoice ? today : null;
+                var sameSelection = workspace is not null &&
                     workspace.ChairId == request.ChairId &&
                     workspace.DentistId == request.DentistId &&
-                    (!request.ChairId.HasValue || workspace.WorkDate == today);
-                if (sameConfirmedSelection)
+                    workspace.WorkDate == workDate;
+                var confirmingReservedRoom = sameSelection && role == RoleCodes.Dentist && request.ChairId.HasValue &&
+                    !HasDentistConfirmedRoom(workspace);
+                if (sameSelection && !confirmingReservedRoom)
                     return Result<WorkspaceSnapshot>.Success(await SnapshotAsync(target, transactionCt));
 
-                if (targetRole == RoleCodes.Dentist && IsConfirmedToday(workspace) && await IsBusy(targetId, transactionCt))
+                if (!confirmingReservedRoom && targetRole == RoleCodes.Dentist &&
+                    IsConfirmedToday(workspace) && await IsBusy(targetId, transactionCt))
                     return Result<WorkspaceSnapshot>.Failure(Busy);
 
                 DentalChair? selectedChair = null;
-                if (request.ChairId.HasValue)
+                if (request.ChairId is int selectedChairId)
                 {
-                    if (await workspaces.ReleaseStaleChairClaimsAsync(request.ChairId.Value, targetId, today, actorId, clock.UtcNow, transactionCt))
+                    selectedChair = await chairs.FindAsync(selectedChairId, transactionCt);
+                    var visitChairId = await visits.GetActiveChairIdForDentistAsync(targetId, transactionCt);
+                    if (visitChairId.HasValue && visitChairId != selectedChairId)
+                        return Result<WorkspaceSnapshot>.Failure(Busy);
+                    var reclaimingActiveRoom = visitChairId == selectedChairId;
+                    if (selectedChair is not { IsActive: true } ||
+                        selectedChair.Status != (reclaimingActiveRoom ? DentalChairStatus.Occupied : DentalChairStatus.Available) ||
+                        (!reclaimingActiveRoom && await IsServingVisitAsync(selectedChair, transactionCt)))
+                        return Result<WorkspaceSnapshot>.Failure(Unavailable);
+
+                    if (await workspaces.ReleaseStaleChairClaimsAsync(selectedChairId, targetId, today, actorId, clock.UtcNow, transactionCt))
                         await uow.SaveChangesAsync(transactionCt);
 
-                    selectedChair = await chairs.FindAsync(request.ChairId.Value, transactionCt);
-                    if (selectedChair is not { IsActive: true, Status: DentalChairStatus.Available } ||
-                        await workspaces.ChairClaimedAsync(selectedChair.Id, targetId, transactionCt))
+                    if (await workspaces.ChairClaimedAsync(selectedChairId, targetId, transactionCt))
                         return Result<WorkspaceSnapshot>.Failure(Unavailable);
-                }
-                if (request.DentistId.HasValue)
-                {
-                    var dentist = await users.FindByIdAsync(request.DentistId.Value, transactionCt);
-                    if (dentist is not { IsActive: true } || dentist.Role?.RoleCode != RoleCodes.Dentist) return Result<WorkspaceSnapshot>.Failure(InvalidTarget);
                 }
                 var oldChair = workspace?.ChairId;
                 var oldWorkDate = workspace?.WorkDate;
@@ -126,77 +167,126 @@ public sealed class StaffWorkspaceService(IStaffWorkspaceRepository workspaces, 
                 else workspace.Version++;
                 workspace.ChairId = request.ChairId;
                 workspace.RoomId = selectedChair?.RoomId;
-                workspace.WorkDate = request.ChairId.HasValue ? today : null;
+                workspace.WorkDate = workDate;
                 workspace.DentistId = request.DentistId;
                 workspace.UpdatedAt = clock.UtcNow; workspace.UpdatedByUserId = actorId;
+                var releasedAssistants = oldChair.HasValue && !request.ChairId.HasValue
+                    ? await ReleaseAssistantLinksAsync(targetId, actorId, transactionCt)
+                    : 0;
                 await uow.SaveChangesAsync(transactionCt);
                 await audit.LogRequiredAsync("MOD_MST_WORKSPACE_CHANGED", "StaffWorkspace", targetId, actorId,
                     JsonSerializer.Serialize(new { oldChairId = oldChair, chairId = workspace.ChairId, roomId = workspace.RoomId,
                         oldWorkDate, workDate = workspace.WorkDate, oldDentistId = previousDentist,
-                        dentistId = workspace.DentistId, version = workspace.Version }), ct: transactionCt);
+                        dentistId = workspace.DentistId, releasedAssistants, version = workspace.Version }), ct: transactionCt);
                 return Result<WorkspaceSnapshot>.Success(await SnapshotAsync(target, transactionCt));
             }, ct);
         }
         catch (ConcurrentOperationException) { return Result<WorkspaceSnapshot>.Failure(Changed); }
     }
 
-    /// <summary>Tự động giải phóng phòng và cập nhật trạng thái phòng về Sẵn sàng khi nha sĩ đăng xuất.</summary>
+    private async Task<bool> IsServingVisitAsync(DentalChair chair, CancellationToken ct)
+        => await visits.HasActiveVisitForChairAsync(chair.Id, 0, ct) ||
+            (chair.RoomId is int roomId && await visits.HasActiveVisitForRoomAsync(roomId, 0, ct));
+
+    private async Task<int> ReleaseAssistantLinksAsync(int dentistId, int actorId, CancellationToken ct)
+    {
+        var assistants = await workspaces.GetAssistantLinksForUpdateAsync(dentistId, ct);
+        foreach (var assistant in assistants)
+        {
+            assistant.DentistId = null;
+            assistant.WorkDate = null;
+            assistant.Version++;
+            assistant.UpdatedAt = clock.UtcNow;
+            assistant.UpdatedByUserId = actorId;
+        }
+        return assistants.Count;
+    }
+
+    /// <summary>Xóa phân công làm việc khi nhân viên đăng xuất.</summary>
     public async Task ReleaseOnLogoutAsync(int userId, CancellationToken ct = default)
     {
         if (userId <= 0) return;
-        await uow.ExecuteSerializableTransactionAsync(async transactionCt =>
+
+        try { await ReleaseAssignmentsAsync(userId, ct); }
+        catch (ConcurrentOperationException)
+        {
+            // The serializable transaction rolled back and logout cleanup is idempotent.
+            await ReleaseAssignmentsAsync(userId, ct);
+        }
+    }
+
+    private Task<bool> ReleaseAssignmentsAsync(int userId, CancellationToken ct)
+        => uow.ExecuteSerializableTransactionAsync(async transactionCt =>
         {
             var target = await users.FindByIdAsync(userId, transactionCt);
-            if (target?.Role?.RoleCode != RoleCodes.Dentist) return false;
+            var role = target?.Role?.RoleCode;
+            if (role is not (RoleCodes.Dentist or RoleCodes.Assistant)) return false;
             var workspace = await workspaces.FindAsync(userId, transactionCt);
-            if (workspace is not { ChairId: int chairId }) return false;
-            if (await IsBusy(userId, transactionCt)) return false;
+            var releasedAssistants = role == RoleCodes.Dentist
+                ? await ReleaseAssistantLinksAsync(userId, userId, transactionCt)
+                : 0;
+            var hasAssignment = workspace is not null &&
+                (workspace.ChairId.HasValue || workspace.RoomId.HasValue || workspace.WorkDate.HasValue || workspace.DentistId.HasValue);
+            if (!hasAssignment && releasedAssistants == 0) return false;
 
-            var oldChairId = workspace.ChairId;
-            var oldRoomId = workspace.RoomId;
-            var oldWorkDate = workspace.WorkDate;
-            workspace.ChairId = null;
-            workspace.RoomId = null;
-            workspace.WorkDate = null;
-            workspace.Version++;
-            workspace.UpdatedAt = clock.UtcNow;
-            workspace.UpdatedByUserId = userId;
+            var oldChairId = workspace?.ChairId;
+            var oldRoomId = workspace?.RoomId;
+            var oldWorkDate = workspace?.WorkDate;
+            var oldDentistId = workspace?.DentistId;
+            if (hasAssignment && workspace is not null)
+            {
+                workspace.ChairId = null;
+                workspace.RoomId = null;
+                workspace.WorkDate = null;
+                workspace.DentistId = null;
+                workspace.Version++;
+                workspace.UpdatedAt = clock.UtcNow;
+                workspace.UpdatedByUserId = userId;
+            }
 
             int? updatedChairStatus = null;
-            var chair = await chairs.FindAsync(chairId, transactionCt);
-            if (chair is { IsActive: true, Status: DentalChairStatus.Occupied } &&
-                !await visits.HasActiveVisitForChairAsync(chairId, 0, transactionCt))
+            if (role == RoleCodes.Dentist && oldChairId is int chairId)
             {
-                chair.Status = DentalChairStatus.Available;
-                chair.Version++;
-                chair.UpdatedAt = clock.UtcNow;
-                chair.UpdatedByUserId = userId;
-                updatedChairStatus = (int)chair.Status;
+                var chair = await chairs.FindAsync(chairId, transactionCt);
+                if (chair is { IsActive: true, Status: DentalChairStatus.Occupied } &&
+                    !await IsServingVisitAsync(chair, transactionCt))
+                {
+                    chair.Status = DentalChairStatus.Available;
+                    chair.Version++;
+                    chair.UpdatedAt = clock.UtcNow;
+                    chair.UpdatedByUserId = userId;
+                    updatedChairStatus = (int)chair.Status;
+                }
             }
 
             await uow.SaveChangesAsync(transactionCt);
             await audit.LogRequiredAsync("MOD_MST_WORKSPACE_LOGOUT_RELEASED", "StaffWorkspace", userId, userId,
-                JsonSerializer.Serialize(new { oldChairId, oldRoomId, oldWorkDate, updatedChairStatus, version = workspace.Version }),
+                JsonSerializer.Serialize(new { oldChairId, oldRoomId, oldWorkDate, oldDentistId, releasedAssistants,
+                    updatedChairStatus, version = workspace?.Version }),
                 ct: transactionCt);
             return true;
         }, ct);
-    }
 
     private async Task<WorkspaceSnapshot> SnapshotAsync(User target, CancellationToken ct)
     {
         var workspace = await workspaces.FindAsync(target.UserId, ct);
-        var isDentist = target.Role?.RoleCode == RoleCodes.Dentist;
-        var dentistId = isDentist ? target.UserId : workspace?.DentistId;
+        var role = target.Role?.RoleCode;
+        var isDentist = role == RoleCodes.Dentist;
+        var assistantConfirmed = role == RoleCodes.Assistant && workspace?.WorkDate == clock.Today;
+        var dentistId = isDentist ? target.UserId : assistantConfirmed ? workspace?.DentistId : null;
         var dentist = isDentist ? target : dentistId.HasValue ? await users.FindByIdAsync(dentistId.Value, ct) : null;
-        var dentistWorkspace = isDentist || workspace?.ChairId.HasValue == true ? workspace : dentistId.HasValue ? await workspaces.FindAsync(dentistId.Value, ct) : null;
+        var dentistWorkspace = isDentist ? workspace : dentistId.HasValue ? await workspaces.FindAsync(dentistId.Value, ct) : null;
         var confirmedToday = IsConfirmedToday(dentistWorkspace);
         var chair = confirmedToday && dentistWorkspace?.ChairId is int chairId ? await chairs.FindAsync(chairId, ct) : null;
-        var ownerId = workspace?.ChairId.HasValue == true ? target.UserId : dentistId;
-        var busy = ownerId.HasValue && await IsBusy(ownerId.Value, ct);
-        return new(target.UserId, target.FullName, target.Role?.RoleCode ?? string.Empty, target.IsActive, workspace?.Version ?? 0,
+        var dentistConfirmed = HasDentistConfirmedRoom(dentistWorkspace);
+        var canChange = !isDentist || !dentistConfirmed || !await IsBusy(target.UserId, ct);
+        return new(target.UserId, target.FullName, role ?? string.Empty, target.IsActive, workspace?.Version ?? 0,
             dentistId, dentist?.FullName, chair?.Id, chair?.ChairNumber, chair?.RoomName,
-            target.IsActive && target.Role?.RoleCode is (RoleCodes.Dentist or RoleCodes.Assistant) &&
+            target.IsActive &&
             dentist is { IsActive: true } && dentist.Role?.RoleCode == RoleCodes.Dentist &&
-            confirmedToday && chair is { IsActive: true, Status: DentalChairStatus.Available }, !isDentist || !confirmedToday || !busy);
+            dentistConfirmed && IsRoomOperational(chair), canChange)
+        {
+            HasConfirmedToday = isDentist ? dentistConfirmed : assistantConfirmed
+        };
     }
 }

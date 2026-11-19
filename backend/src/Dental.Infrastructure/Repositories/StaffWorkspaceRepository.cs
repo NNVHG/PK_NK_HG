@@ -1,4 +1,5 @@
 using Dental.Application.Interfaces;
+using Dental.Domain.Constants;
 using Dental.Domain.Entities;
 using Dental.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -11,10 +12,15 @@ public sealed class StaffWorkspaceRepository(DentalDbContext db) : IStaffWorkspa
         => db.StaffWorkspaces.FirstOrDefaultAsync(x => x.UserId == userId, ct);
 
     public async Task<IReadOnlyList<StaffWorkspace>> GetAllAsync(CancellationToken ct = default)
-        => await db.StaffWorkspaces.AsNoTracking().OrderBy(x => x.UserId).ToListAsync(ct);
+        => await db.StaffWorkspaces.AsNoTracking()
+            .Where(x => x.User.IsActive && (x.User.Role.RoleCode == RoleCodes.Dentist || x.User.Role.RoleCode == RoleCodes.Assistant))
+            .OrderBy(x => x.UserId).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<StaffWorkspace>> GetAssistantLinksForUpdateAsync(int dentistId, CancellationToken ct = default)
+        => await db.StaffWorkspaces.Where(x => x.DentistId == dentistId).ToListAsync(ct);
 
     public Task<bool> ChairClaimedAsync(int chairId, int exceptUserId, CancellationToken ct = default)
-        => db.StaffWorkspaces.AnyAsync(x => x.ChairId == chairId && x.UserId != exceptUserId, ct);
+        => ClaimsForRoom(chairId, exceptUserId).AnyAsync(ct);
 
     public async Task<bool> ReleaseStaleChairClaimsAsync(
         int chairId,
@@ -24,8 +30,9 @@ public sealed class StaffWorkspaceRepository(DentalDbContext db) : IStaffWorkspa
         DateTime updatedAtUtc,
         CancellationToken ct = default)
     {
-        var stale = await db.StaffWorkspaces
-            .Where(x => x.ChairId == chairId && x.UserId != exceptUserId && (x.WorkDate == null || x.WorkDate != workDate))
+        var stale = await ClaimsForRoom(chairId, exceptUserId)
+            .Where(x => x.WorkDate == null || x.WorkDate != workDate ||
+                !x.User.IsActive || x.User.Role.RoleCode != RoleCodes.Dentist)
             .ToListAsync(ct);
         if (stale.Count == 0)
             return false;
@@ -44,4 +51,9 @@ public sealed class StaffWorkspaceRepository(DentalDbContext db) : IStaffWorkspa
 
     public async Task AddAsync(StaffWorkspace workspace, CancellationToken ct = default)
         => await db.StaffWorkspaces.AddAsync(workspace, ct);
+
+    private IQueryable<StaffWorkspace> ClaimsForRoom(int chairId, int exceptUserId)
+        => db.StaffWorkspaces.Where(workspace => workspace.UserId != exceptUserId &&
+            (workspace.ChairId == chairId || (workspace.RoomId.HasValue &&
+                db.DentalChairs.Any(chair => chair.Id == chairId && chair.RoomId == workspace.RoomId))));
 }
