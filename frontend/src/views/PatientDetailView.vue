@@ -11,11 +11,12 @@
       <header class="profile-header panel">
         <div>
           <p class="eyebrow">HỒ SƠ BỆNH NHÂN · {{ patient.patientCode }}</p>
-          <h1>{{ patient.fullName }}</h1>
+          <h1>{{ patientDisplayName(patient.fullName) }}</h1>
           <div class="quick-facts">
             <span>{{ calculateAge(patient.dateOfBirth) }} tuổi</span>
-            <span>{{ formatGender(patient.gender) }}</span>
-            <span>{{ patient.phone }}</span>
+            <span>{{ formatPatientGender(patient.gender) }}</span>
+            <span v-if="isDemoPatient(patient.fullName)">Hồ sơ mẫu</span>
+            <span>{{ patient.phone || 'Chưa cập nhật' }}</span>
           </div>
         </div>
         <button v-if="canCreateVisit" class="button button-primary" type="button" :disabled="creatingVisit || activeVisitLoading || Boolean(activeVisit)" @click="createVisit">
@@ -37,13 +38,13 @@
           <button v-if="canEdit" class="button button-quiet" type="button" @click="openEditForm">Sửa hồ sơ</button>
         </header>
         <dl class="profile-grid">
-          <div><dt>Họ và tên</dt><dd>{{ patient.fullName }}</dd></div>
+          <div><dt>Họ và tên</dt><dd>{{ patientDisplayName(patient.fullName) }}</dd></div>
           <div><dt>Mã bệnh nhân</dt><dd>{{ patient.patientCode }}</dd></div>
           <div><dt>Ngày sinh</dt><dd>{{ formatDate(patient.dateOfBirth) }}</dd></div>
-          <div><dt>Giới tính</dt><dd>{{ formatGender(patient.gender) }}</dd></div>
-          <div><dt>Số điện thoại</dt><dd>{{ patient.phone }}</dd></div>
+          <div><dt>Giới tính</dt><dd>{{ formatPatientGender(patient.gender) }}</dd></div>
+          <div><dt>Số điện thoại</dt><dd>{{ patient.phone || 'Chưa cập nhật' }}</dd></div>
           <div><dt>Email</dt><dd>{{ patient.email || 'Chưa cập nhật' }}</dd></div>
-          <div class="wide"><dt>Địa chỉ</dt><dd>{{ patient.address || 'Chưa cập nhật' }}</dd></div>
+          <div class="wide"><dt>Địa chỉ</dt><dd>{{ patientDisplayAddress(patient.fullName, patient.address) || 'Chưa cập nhật' }}</dd></div>
         </dl>
         <PatientCitizenId :patient-id="patient.patientId" />
         <PatientGuardianPanel :patient-id="patient.patientId" :ward-date-of-birth="patient.dateOfBirth" @promoted="loadPatient" />
@@ -269,6 +270,7 @@ import {
   type VisitDetails
 } from '@/services/patients';
 import { useAuthStore } from '@/stores/auth';
+import { formatPatientGender, isDemoPatient, patientDisplayAddress, patientDisplayName, patientGenderValue } from '@/utils/patientDisplay';
 import { visitsService, type PostTreatmentNote } from '@/services/visits';
 
 type TabId = 'info' | 'timeline' | 'history' | 'vitals' | 'prescriptions' | 'images';
@@ -695,10 +697,10 @@ function openEditForm() {
   Object.assign(editForm, {
     fullName: patient.value.fullName,
     dateOfBirth: patient.value.dateOfBirth.slice(0, 10),
-    gender: patient.value.gender ?? '',
+    gender: patientGenderValue(patient.value.gender),
     phone: patient.value.phone,
     email: patient.value.email ?? '',
-    address: patient.value.address ?? ''
+    address: patientDisplayAddress(patient.value.fullName, patient.value.address)
   });
   editError.value = '';
   editVisible.value = true;
@@ -795,12 +797,6 @@ function formatDateTime(value: string): string {
   return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh' }).format(date);
 }
 
-function formatGender(value: string | null): string {
-  if (value === 'Male') return 'Nam';
-  if (value === 'Female') return 'Nữ';
-  if (value === 'Other') return 'Khác';
-  return 'Chưa cung cấp';
-}
 
 function formatVisitStatus(status: string): string {
   const labels: Record<string, string> = { Created: 'Đã tạo', InProgress: 'Đang khám', Completed: 'Hoàn thành', Cancelled: 'Đã hủy', Correcting: 'Đang đính chính' };

@@ -24,10 +24,11 @@ public sealed class StaffWorkspacesController(StaffWorkspaceService service, ICu
         return result.IsSuccess ? Ok(result.Value) : Failure(result.Error);
     }
     [HttpGet("options")]
+    [Authorize(Policy = AppPolicies.AdminOnly)]
     [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
-    public async Task<IActionResult> GetOptions(CancellationToken ct)
+    public async Task<IActionResult> GetOptions([FromQuery] int? targetId, CancellationToken ct)
     {
-        var result = await service.GetOptionsAsync(actor.UserId ?? 0, actor.RoleCode, ct);
+        var result = await service.GetOptionsAsync(actor.UserId ?? 0, actor.RoleCode, ct, targetId);
         return result.IsSuccess ? Ok(result.Value) : Failure(result.Error);
     }
     [HttpGet("staff")]
@@ -39,6 +40,7 @@ public sealed class StaffWorkspacesController(StaffWorkspaceService service, ICu
         return result.IsSuccess ? Ok(result.Value) : Failure(result.Error);
     }
     [HttpPut("{id:int}")]
+    [Authorize(Policy = AppPolicies.AdminOnly)]
     public async Task<IActionResult> Change(int id, [FromBody] ChangeWorkspaceRequest request, CancellationToken ct)
     {
         var result = await service.ChangeAsync(actor.UserId ?? 0, actor.RoleCode, id, request, ct);

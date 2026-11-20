@@ -56,6 +56,8 @@ const busy = ref(false);
 const error = ref('');
 const history = ref<CashPaymentResponse[]>([]);
 const historyReady = ref(false);
+const canLeave = computed(() => !busy.value && !pending.value);
+defineExpose({ canLeave });
 const canPay = computed(() => [1, 2, 5].includes(props.status) && props.remainingAmount > 0);
 const valid = computed(() => canPay.value && Number.isSafeInteger(Number(amount.value)) && Number(amount.value) > 0 &&
   Number(amount.value) <= props.remainingAmount && Number.isSafeInteger(Number(tendered.value)) && Number(tendered.value) >= Number(amount.value));

@@ -60,9 +60,6 @@ onMounted(() => { void loadTargets(); void loadStock(); if (visitId.value > 0) v
         <h1>Vật tư tiêu hao theo ca khám</h1>
         <p class="subtitle">Ghi nhận lượng vật tư y tế thực tế sử dụng cho ca điều trị đã kết thúc và xác nhận trừ tồn kho.</p>
       </div>
-      <div class="header-actions">
-        <RouterLink class="btn btn-outline" to="/management/inventory/receipts">📦 Xem tồn & Nhập kho</RouterLink>
-      </div>
     </div>
 
     <div class="rules-card">
@@ -336,7 +333,6 @@ onMounted(() => { void loadTargets(); void loadStock(); if (visitId.value > 0) v
 .header-titles { flex: 1; min-width: 260px; }
 .header-titles h1 { margin: 0; font-size: 1.6rem; color: #0f172a; font-weight: 700; }
 .subtitle { margin: 0.25rem 0 0; color: #64748b; font-size: 0.95rem; }
-.header-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 .rules-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 1.25rem; display: flex; gap: 0.5rem; }
 .rule-item { display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.875rem; color: #334155; }
 .rule-icon { font-size: 1.1rem; flex-shrink: 0; }

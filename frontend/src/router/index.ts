@@ -77,7 +77,7 @@ const router = createRouter({
     { path: '/management/clinical/visits/:visitId/invoice-draft', name: 'management-invoice-draft', component: () => import('@/views/InvoiceDraftView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'DENTIST', 'RECEPTIONIST'] } },
     { path: '/management/clinical/visits/:visitId/services', name: 'management-fdi-services', component: () => import('@/views/FdiServiceAssignmentView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'DENTIST', 'RECEPTIONIST', 'ASSISTANT'] } },
     { path: '/management/clinical/visits/:visitId/fdi', name: 'management-fdi-condition', component: () => import('@/views/FdiConditionView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'DENTIST', 'RECEPTIONIST', 'ASSISTANT'] } },
-    { path: '/management/staff/workspace', name: 'management-staff-workspace', component: () => import('@/views/StaffWorkspacesView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'DENTIST', 'ASSISTANT'] } },
+    { path: '/management/staff/workspace', name: 'management-staff-workspace', component: () => import('@/views/StaffWorkspacesView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
     { path: '/management/staff/chair-status', name: 'management-chair-status', redirect: '/management/admin/chairs' },
     { path: '/management/staff/signatures/:doctorId', name: 'management-doctor-signature', component: () => import('@/views/DoctorSignatureView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'DENTIST'] } },
     { path: '/management/inventory/receipts', name: 'management-stock-receipts', component: () => import('@/views/StockReceiptsView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'ASSISTANT', 'DENTIST'] } },
@@ -115,7 +115,7 @@ const router = createRouter({
     { path: '/admin/medical-supplies', name: 'medical-supply-catalog', component: () => import('@/views/MedicalSupplyCatalogView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
     { path: '/admin/diagnoses', name: 'diagnosis-catalog', component: () => import('@/views/DiagnosisCatalogView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
     { path: '/management/admin/role-permissions', alias: '/admin/role-permissions', redirect: { name: 'management-admin-staff' } },
-    { path: '/staff/workspace', name: 'staff-workspace', component: () => import('@/views/StaffWorkspacesView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'DENTIST', 'ASSISTANT'] } },
+    { path: '/staff/workspace', name: 'staff-workspace', component: () => import('@/views/StaffWorkspacesView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
     { path: '/admin/chairs', name: 'dental-chairs', component: () => import('@/views/DentalChairsView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
     {
       path: '/admin/services',

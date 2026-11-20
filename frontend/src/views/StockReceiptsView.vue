@@ -48,9 +48,8 @@ onMounted(() => { void loadStock(); void loadHistory(); });
         <h1>Tồn kho & phiếu nhập vật tư</h1>
         <p class="subtitle">Quản lý tồn kho hiện hành, cảnh báo chạm ngưỡng và lập phiếu nhập kho vật tư y tế.</p>
       </div>
-      <div v-if="canWrite" class="header-actions">
-        <RouterLink class="btn btn-outline" to="/management/inventory/issues">📋 Ghi tiêu hao ca khám</RouterLink>
-        <RouterLink v-if="auth.role === 'ADMIN'" class="btn btn-outline" to="/management/admin/medical-supplies">⚙️ Quản lý danh mục</RouterLink>
+      <div v-if="auth.role === 'ADMIN'" class="header-actions">
+        <RouterLink class="btn btn-outline" to="/management/admin/medical-supplies">⚙️ Quản lý danh mục</RouterLink>
       </div>
     </div>
 

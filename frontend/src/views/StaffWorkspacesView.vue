@@ -3,8 +3,8 @@
     <div class="header-banner">
       <div class="header-icon">🏥</div>
       <div>
-        <h1>Phòng làm việc nha sĩ & phụ tá</h1>
-        <p class="subtitle">Nha sĩ chọn phòng điều trị. Phụ tá có thể chọn nha sĩ đã nhận phòng hoặc tiếp tục làm việc độc lập.</p>
+        <h1>Phân công phòng và phụ tá</h1>
+        <p class="subtitle">Phân công phòng điều trị cho nha sĩ và ghép phụ tá theo ngày.</p>
       </div>
     </div>
 
@@ -61,12 +61,12 @@
         <div v-if="store.snapshot.isLocationUsable && store.snapshot.chairId" class="location-card location-active">
           <div class="loc-icon">🟢</div>
           <div class="loc-info">
-            <div class="loc-label">Phòng điều trị đã xác nhận hôm nay</div>
+            <div class="loc-label">Phòng điều trị được phân công hôm nay</div>
             <div class="loc-val">{{ store.snapshot.roomName || 'Chưa có phòng' }}</div>
           </div>
         </div>
         <div v-else class="unconfirmed-warning" role="alert">
-          ⚠️ Chưa xác nhận phòng làm việc hôm nay. Vui lòng chọn phòng làm việc bên dưới và xác nhận để bắt đầu đón bệnh nhân.
+          ⚠️ Chưa có phòng điều trị sẵn sàng được phân công hôm nay.
         </div>
       </div>
 
@@ -80,11 +80,11 @@
             </div>
           </div>
           <div v-else class="unconfirmed-warning" role="alert">
-            Nha sĩ ({{ store.snapshot.dentistName }}) chưa xác nhận phòng làm việc hôm nay.
+            Nha sĩ ({{ store.snapshot.dentistName }}) chưa có phòng điều trị sẵn sàng hôm nay.
           </div>
         </template>
         <div v-else class="empty-dentist-prompt">
-          {{ store.snapshot.hasConfirmedToday ? 'Đã chọn không hỗ trợ nha sĩ nào.' : 'Chọn nha sĩ đã nhận phòng hoặc chọn không hỗ trợ nha sĩ nào.' }}
+          Chưa được phân công hỗ trợ nha sĩ hôm nay.
         </div>
       </div>
 
@@ -105,7 +105,7 @@
           <select id="chair-choice-select" v-model.number="chairChoice" :disabled="saving || loading || needsReview || !store.snapshot.canChange" @change="markDirty">
             <option :value="0">❌ Bỏ chọn phòng làm việc hiện tại</option>
             <option v-for="chair in options?.chairs ?? []" :key="chair.id" :value="chair.id" :disabled="!canSelectChair(chair, store.snapshot.userId)">
-              {{ chair.roomName }}{{ chair.isCurrentVisitRoom ? ' · Phòng ca khám của bạn' : '' }}
+              {{ chair.roomName }}{{ chair.isCurrentVisitRoom ? ' · Phòng ca khám đang mở' : '' }}
             </option>
           </select>
         </div>
@@ -146,7 +146,6 @@ import { useWorkspacesStore } from '@/stores/workspaces';
 import {
   isSelectableWorkspaceChair,
   isWorkingDentist,
-  WORKSPACE_UPDATED_EVENT,
   workspacesService,
   type WorkspaceChair,
   type WorkspaceOptions,
@@ -159,7 +158,7 @@ const loading = ref(false), saving = ref(false), targetsLoading = ref(false), er
 const chairChoice = ref(0), dentistChoice = ref(0), confirmed = ref(false), dirty = ref(false);
 const selectedDentist = computed(() => options.value?.dentists.find(d => d.dentistId === dentistChoice.value));
 let life = 0, version = 0, targetVersion = 0, timer: ReturnType<typeof setInterval> | undefined;
-const permitted = () => ['ADMIN', 'DENTIST', 'ASSISTANT'].includes(auth.role);
+const permitted = () => auth.role === 'ADMIN';
 function canSelectChair(chair: WorkspaceChair, userId: number) {
   const hasCurrentVisitRoom = options.value?.chairs.some(option => option.isCurrentVisitRoom);
   return (!hasCurrentVisitRoom || chair.isCurrentVisitRoom === true) && isSelectableWorkspaceChair(chair, userId);
@@ -173,12 +172,12 @@ async function loadTargets(page = 1) {
   finally { if (ticket === targetVersion) targetsLoading.value = false; }
 }
 async function load(id: number, automatic = false) {
-  if (!permitted() || saving.value || !Number.isInteger(id) || id <= 0 || (auth.role !== 'ADMIN' && id !== auth.user?.userId) || (automatic && (loading.value || dirty.value || needsReview.value))) return;
+  if (!permitted() || saving.value || !Number.isInteger(id) || id <= 0 || (automatic && (loading.value || dirty.value || needsReview.value))) return;
   const ticket = ++version; targetId.value = id; loading.value = true; error.value = ''; confirmed.value = false;
   if (!automatic) { store.reset(); options.value = null; dirty.value = false; chairChoice.value = 0; dentistChoice.value = 0; }
   try {
-    const [snapshot, choices] = await Promise.all([workspacesService.get(id), workspacesService.options()]);
-    if (ticket !== version || !permitted() || (auth.role !== 'ADMIN' && id !== auth.user?.userId)) return;
+    const [snapshot, choices] = await Promise.all([workspacesService.get(id), workspacesService.options(id)]);
+    if (ticket !== version || !permitted()) return;
     if (snapshot.userId !== id) throw new Error('Invalid workspace response');
     store.replace(snapshot); options.value = choices;
     chairChoice.value = snapshot.roleCode === 'DENTIST' && snapshot.isActive ? snapshot.chairId ?? 0 : 0;
@@ -190,7 +189,7 @@ async function load(id: number, automatic = false) {
 async function save() {
   const snapshot = store.snapshot;
   if (!permitted() || !snapshot || saving.value || loading.value || needsReview.value || !confirmed.value || !snapshot.canChange ||
-      (auth.role !== 'ADMIN' && snapshot.userId !== auth.user?.userId) || !Number.isInteger(snapshot.version) || snapshot.version < 0) return;
+      !Number.isInteger(snapshot.version) || snapshot.version < 0) return;
   let chairId: number | null = null, dentistId: number | null = null;
   if (snapshot.isActive && snapshot.roleCode === 'DENTIST') {
     if (!Number.isInteger(chairChoice.value) || chairChoice.value < 0) return;
@@ -212,14 +211,13 @@ async function save() {
       }
       dentistId = dentistChoice.value;
     }
-  } else if (auth.role !== 'ADMIN') return;
+  }
   const ticket = life, principal = auth.user?.userId; saving.value = true; error.value = ''; message.value = '';
   try {
     const result = await workspacesService.change(snapshot.userId, { chairId, dentistId, expectedVersion: snapshot.version, confirmed: true });
     if (ticket !== life || !permitted() || principal !== auth.user?.userId) return;
     if (result.userId !== snapshot.userId || result.version < snapshot.version) throw new Error('Invalid workspace result');
     message.value = 'Đã cập nhật phòng hoặc nhóm làm việc.';
-    window.dispatchEvent(new CustomEvent(WORKSPACE_UPDATED_EVENT, { detail: result }));
     confirmed.value = false; dirty.value = false; needsReview.value = true; saving.value = false; await load(snapshot.userId);
   } catch (err: unknown) {
     if (ticket !== life || principal !== auth.user?.userId) return;
@@ -230,7 +228,7 @@ async function save() {
 onMounted(async () => {
   if (!permitted()) return;
   const ticket = life;
-  if (auth.role === 'ADMIN') await loadTargets(); else await load(auth.user?.userId ?? 0);
+  await loadTargets();
   if (ticket !== life || !permitted()) return;
   timer = setInterval(() => { if (targetId.value) void load(targetId.value, true); }, 15000);
 });

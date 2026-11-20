@@ -153,7 +153,7 @@ Script không xóa database hoặc Docker volume hiện có. Đóng cửa sổ A
 
 Lần chạy đầu cần Internet để Git clone, tải NuGet package và npm package. Nếu Windows báo chặn script, dùng đúng lệnh PowerShell ở trên; không cần đổi Execution Policy toàn máy.
 
-Luồng demo chính: khách đặt lịch công khai hoặc PATIENT đặt lịch trong portal → Lễ tân đối soát và xác nhận tiếp đón tại quầy → hàng đợi chung → Nha sĩ chọn phòng, xem cảnh báo an toàn, khám và cập nhật FDI → kê đơn/kết thúc khám → thu ngân xử lý hóa đơn. Đặt lịch công khai không tạo lượt chờ; gọi số không tự bắt đầu khám. Với trẻ dưới 14 tuổi không nhập CCCD trẻ; liên kết người giám hộ chỉ sau khi nhân viên xác minh trực tiếp. Menu không thay thế phân quyền backend.
+Luồng demo chính: khách đặt lịch công khai hoặc PATIENT đặt lịch trong portal → Lễ tân đối soát và xác nhận tiếp đón tại quầy → hàng đợi chung → Nha sĩ vào phòng do Admin phân công, xem cảnh báo an toàn, khám và cập nhật FDI → kê đơn/kết thúc khám → thu ngân xử lý hóa đơn. Đặt lịch công khai không tạo lượt chờ; gọi số không tự bắt đầu khám. Với trẻ dưới 14 tuổi không nhập CCCD trẻ; liên kết người giám hộ chỉ sau khi nhân viên xác minh trực tiếp. Menu không thay thế phân quyền backend.
 
 ### Bước 3: Mở trình duyệt và trải nghiệm
 - **Giao diện ứng dụng (Frontend):** `http://localhost:5173`

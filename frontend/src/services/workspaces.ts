@@ -7,8 +7,6 @@ export interface WorkspaceOptions { chairs: WorkspaceChair[]; dentists: Workspac
 export interface WorkspaceTarget { userId: number; fullName: string; roleCode: string; isActive: boolean; }
 export interface ChangeWorkspace { chairId: number | null; dentistId: number | null; expectedVersion: number; confirmed: boolean; }
 
-export const WORKSPACE_UPDATED_EVENT = 'staff-workspace-updated';
-
 export function isWorkingDentist(dentist: WorkspaceDentist): boolean {
   return dentist.isReady && dentist.chairId !== null && Boolean(dentist.roomName);
 }
@@ -21,7 +19,7 @@ export function isSelectableWorkspaceChair(chair: WorkspaceChair, userId: number
 
 export const workspacesService = {
   async get(id: number): Promise<WorkspaceSnapshot> { return (await apiClient.get<WorkspaceSnapshot>(`/workspaces/${id}`)).data; },
-  async options(): Promise<WorkspaceOptions> { return (await apiClient.get<WorkspaceOptions>('/workspaces/options')).data; },
+  async options(targetId: number): Promise<WorkspaceOptions> { return (await apiClient.get<WorkspaceOptions>('/workspaces/options', { params: { targetId } })).data; },
   async targets(page = 1, keyword?: string): Promise<PagedResult<WorkspaceTarget>> { return (await apiClient.get<PagedResult<WorkspaceTarget>>('/workspaces/staff', { params: { page, keyword } })).data; },
   async change(id: number, input: ChangeWorkspace): Promise<WorkspaceSnapshot> { return (await apiClient.put<WorkspaceSnapshot>(`/workspaces/${id}`, input)).data; }
 };

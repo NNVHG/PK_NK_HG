@@ -2,9 +2,8 @@
   <section class="patients-page">
     <header class="page-heading">
       <div>
-        <p class="eyebrow">QUẢN LÝ HỒ SƠ BỆNH NHÂN</p>
         <h1>Hồ sơ bệnh nhân</h1>
-        <p class="subtitle">Tìm kiếm nhanh và quản lý thông tin hồ sơ bệnh nhân.</p>
+        <p class="subtitle">Tìm hồ sơ theo tên, mã bệnh nhân hoặc số điện thoại.</p>
       </div>
       <button v-if="canCreate" class="button button-primary" type="button" @click="openCreateForm">
         + Thêm bệnh nhân
@@ -17,12 +16,12 @@
     <QrPatientIntake v-if="canCreate" @created="loadPatients" />
     <section class="panel search-panel" aria-label="Tìm kiếm hồ sơ bệnh nhân">
       <label class="search-field">
-        <span>Tìm theo SĐT, mã bệnh nhân hoặc họ tên</span>
+        <span>Tìm hồ sơ</span>
         <input
           v-model="keyword"
           type="search"
           maxlength="100"
-          placeholder="Nhập SĐT, BN000001 hoặc tên"
+          placeholder="Tên, mã bệnh nhân hoặc số điện thoại"
           autocomplete="off"
         />
       </label>
@@ -37,37 +36,39 @@
     </section>
 
     <section class="panel list-panel">
-      <div v-if="loading" class="empty-state">Đang tải hồ sơ bệnh nhân...</div>
+      <div v-if="loading" class="empty-state" role="status">Đang tải hồ sơ bệnh nhân...</div>
       <div v-else-if="!patients.length" class="empty-state">Không tìm thấy hồ sơ bệnh nhân phù hợp.</div>
       <div v-else class="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>Mã bệnh nhân</th>
-              <th>Họ và tên</th>
-              <th>Ngày sinh</th>
-              <th>Giới tính</th>
-              <th>Số điện thoại</th>
-              <th class="actions-heading">Thao tác</th>
+        <table role="table" aria-label="Danh sách hồ sơ bệnh nhân">
+          <thead role="rowgroup">
+            <tr role="row">
+              <th scope="col">Bệnh nhân</th>
+              <th scope="col">Ngày sinh</th>
+              <th scope="col">Giới tính</th>
+              <th scope="col">Điện thoại liên hệ</th>
+              <th scope="col" class="actions-heading">Thao tác</th>
             </tr>
           </thead>
-          <tbody>
-            <tr v-for="patient in patients" :key="patient.patientCode">
-              <td><span class="patient-code">{{ patient.patientCode }}</span></td>
-              <td><strong>{{ patient.fullName }}</strong></td>
-              <td>{{ formatDate(patient.dateOfBirth) }}</td>
-              <td>{{ formatGender(patient.gender) }}</td>
-              <td>{{ patient.phone }}</td>
-              <td class="row-actions">
+          <tbody role="rowgroup">
+            <tr v-for="patient in patients" :key="patient.patientCode" role="row">
+              <td role="cell" class="patient-identity">
                 <router-link
-                  class="text-button"
+                  class="patient-name"
                   :to="{ name: 'management-patient-detail', params: { id: patient.patientId } }"
-                >
-                  Chi tiết
-                </router-link>
+                >{{ patientDisplayName(patient.fullName) }}</router-link>
+                <div class="identity-meta">
+                  <span class="patient-code">{{ patient.patientCode }}</span>
+                  <span v-if="isDemoPatient(patient.fullName)" class="sample-tag">Hồ sơ mẫu</span>
+                </div>
+              </td>
+              <td role="cell"><span class="mobile-field" aria-hidden="true">Ngày sinh</span>{{ formatDate(patient.dateOfBirth) }}</td>
+              <td role="cell"><span class="mobile-field" aria-hidden="true">Giới tính</span>{{ formatPatientGender(patient.gender) }}</td>
+              <td role="cell" class="patient-phone"><span class="mobile-field" aria-hidden="true">Điện thoại liên hệ</span>{{ patient.phone || 'Chưa cập nhật' }}</td>
+              <td role="cell" class="row-actions">
                 <button
                   v-if="canEdit"
                   class="text-button"
+                  :aria-label="`Sửa hồ sơ ${patient.patientCode}`"
                   type="button"
                   :disabled="patient.patientId === undefined"
                   :title="patient.patientId === undefined ? 'API danh sách chưa trả mã định danh hồ sơ' : 'Sửa hồ sơ'"
@@ -95,84 +96,80 @@
       </footer>
     </section>
 
-    <div v-if="formVisible" class="modal-backdrop" @click.self="closeForm">
-      <section class="modal-card" role="dialog" aria-modal="true" :aria-labelledby="formTitleId">
-        <header class="modal-heading">
-          <div>
-            <p class="eyebrow">QUẢN LÝ HỒ SƠ</p>
-            <h2 :id="formTitleId">{{ editingPatientId === null ? 'Thêm bệnh nhân' : 'Cập nhật hồ sơ' }}</h2>
-          </div>
-          <button class="close-button" type="button" aria-label="Đóng" :disabled="saving || formLoading" @click="closeForm">×</button>
-        </header>
-
-        <form class="patient-form" @submit.prevent="savePatient">
-          <div class="form-grid">
-            <label class="field field-wide">
-              <span>Họ và tên <b>*</b></span>
-              <input v-model="form.fullName" maxlength="100" autocomplete="name" required />
-            </label>
-            <label class="field">
-              <span>Ngày sinh <b>*</b></span>
-              <input v-model="form.dateOfBirth" type="date" required />
-            </label>
-            <label class="field">
-              <span>Giới tính</span>
-              <select v-model="form.gender">
-                <option value="">Chưa cung cấp</option>
-                <option value="Male">Nam</option>
-                <option value="Female">Nữ</option>
-                <option value="Other">Khác</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>Số điện thoại <b>*</b></span>
-              <input v-model="form.phone" type="tel" inputmode="numeric" maxlength="10" autocomplete="tel" required />
-            </label>
-            <label class="field">
-              <span>Email</span>
-              <input v-model="form.email" type="email" maxlength="100" autocomplete="email" />
-            </label>
-            <label class="field field-wide">
-              <span>Địa chỉ</span>
-              <textarea v-model="form.address" rows="3" maxlength="500" autocomplete="street-address" />
-            </label>
-          </div>
-
-          <p v-if="formLoading" class="form-loading">Đang tải thông tin hồ sơ...</p>
-          <p v-if="formError" class="alert alert-error" role="alert">{{ formError }}</p>
-          <footer class="modal-actions">
-            <button class="button button-quiet" type="button" :disabled="saving || formLoading" @click="closeForm">Hủy</button>
-            <button class="button button-primary" type="submit" :disabled="saving || formLoading">
-              {{ saving ? 'Đang lưu...' : editingPatientId === null ? 'Tạo hồ sơ' : 'Lưu thay đổi' }}
-            </button>
-          </footer>
-        </form>
-      </section>
-    </div>
-
-    <div v-if="duplicateDialogVisible" class="modal-backdrop duplicate-backdrop" @click.self="cancelDuplicate">
-      <section class="confirm-card" role="dialog" aria-modal="true" aria-labelledby="duplicate-title">
-        <p class="eyebrow">KIỂM TRA HỒ SƠ TRÙNG</p>
-        <h2 id="duplicate-title">Có hồ sơ có thể trùng</h2>
-        <p class="duplicate-description">
-          Kiểm tra danh sách bên dưới. Chỉ tiếp tục nếu xác nhận đây là {{ pendingDuplicate?.kind === 'create' ? 'người khác' : 'thông tin của hồ sơ khác' }}.
-        </p>
-        <div class="duplicate-list">
-          <article v-for="duplicate in possibleDuplicates" :key="duplicate.patientCode" class="duplicate-item">
-            <strong>{{ duplicate.patientCode }} · {{ duplicate.fullName }}</strong>
-            <span>Ngày sinh: {{ formatDate(duplicate.dateOfBirth) }}</span>
-            <span>SĐT: {{ duplicate.phone }}</span>
-          </article>
+    <dialog v-if="formVisible" ref="formDialog" class="modal-card" :aria-labelledby="formTitleId" @cancel.prevent="closeForm">
+      <header class="modal-heading">
+        <div>
+          <p class="eyebrow">QUẢN LÝ HỒ SƠ</p>
+          <h2 :id="formTitleId">{{ editingPatientId === null ? 'Thêm bệnh nhân' : 'Cập nhật hồ sơ' }}</h2>
         </div>
-        <p v-if="duplicateError" class="alert alert-error" role="alert">{{ duplicateError }}</p>
-        <footer class="modal-actions duplicate-actions">
-          <button class="button button-quiet" type="button" :disabled="duplicateSaving" @click="cancelDuplicate">Hủy</button>
-          <button class="button button-primary" type="button" :disabled="duplicateSaving" @click="confirmDuplicate">
-            {{ duplicateSaving ? 'Đang lưu...' : pendingDuplicate?.kind === 'create' ? 'Đây là người khác — vẫn tạo mới' : 'Đây là hồ sơ khác — vẫn cập nhật' }}
+        <button class="close-button" type="button" aria-label="Đóng" :disabled="saving || formLoading" @click="closeForm">×</button>
+      </header>
+
+      <form class="patient-form" @submit.prevent="savePatient">
+        <div class="form-grid">
+          <label class="field field-wide">
+            <span>Họ và tên <b>*</b></span>
+            <input v-model="form.fullName" maxlength="100" autocomplete="name" autofocus required />
+          </label>
+          <label class="field">
+            <span>Ngày sinh <b>*</b></span>
+            <input v-model="form.dateOfBirth" type="date" required />
+          </label>
+          <label class="field">
+            <span>Giới tính</span>
+            <select v-model="form.gender">
+              <option value="">Chưa cung cấp</option>
+              <option value="Male">Nam</option>
+              <option value="Female">Nữ</option>
+              <option value="Other">Khác</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Số điện thoại <b>*</b></span>
+            <input v-model="form.phone" type="tel" inputmode="numeric" maxlength="10" autocomplete="tel" required />
+          </label>
+          <label class="field">
+            <span>Email</span>
+            <input v-model="form.email" type="email" maxlength="100" autocomplete="email" />
+          </label>
+          <label class="field field-wide">
+            <span>Địa chỉ</span>
+            <textarea v-model="form.address" rows="3" maxlength="500" autocomplete="street-address" />
+          </label>
+        </div>
+
+        <p v-if="formLoading" class="form-loading">Đang tải thông tin hồ sơ...</p>
+        <p v-if="formError" class="alert alert-error" role="alert">{{ formError }}</p>
+        <footer class="modal-actions">
+          <button class="button button-quiet" type="button" :disabled="saving || formLoading" @click="closeForm">Hủy</button>
+          <button class="button button-primary" type="submit" :disabled="saving || formLoading">
+            {{ saving ? 'Đang lưu...' : editingPatientId === null ? 'Tạo hồ sơ' : 'Lưu thay đổi' }}
           </button>
         </footer>
-      </section>
-    </div>
+      </form>
+    </dialog>
+
+    <dialog v-if="duplicateDialogVisible" ref="duplicateDialog" class="confirm-card" aria-labelledby="duplicate-title" @cancel.prevent="cancelDuplicate">
+      <p class="eyebrow">KIỂM TRA HỒ SƠ TRÙNG</p>
+      <h2 id="duplicate-title">Có hồ sơ có thể trùng</h2>
+      <p class="duplicate-description">
+        Kiểm tra danh sách bên dưới. Chỉ tiếp tục nếu xác nhận đây là {{ pendingDuplicate?.kind === 'create' ? 'người khác' : 'thông tin của hồ sơ khác' }}.
+      </p>
+      <div class="duplicate-list">
+        <article v-for="duplicate in possibleDuplicates" :key="duplicate.patientCode" class="duplicate-item">
+          <strong>{{ duplicate.patientCode }} · {{ duplicate.fullName }}</strong>
+          <span>Ngày sinh: {{ formatDate(duplicate.dateOfBirth) }}</span>
+          <span>SĐT: {{ duplicate.phone }}</span>
+        </article>
+      </div>
+      <p v-if="duplicateError" class="alert alert-error" role="alert">{{ duplicateError }}</p>
+      <footer class="modal-actions duplicate-actions">
+        <button class="button button-quiet" type="button" :disabled="duplicateSaving" @click="cancelDuplicate">Hủy</button>
+        <button class="button button-primary" type="button" :disabled="duplicateSaving" @click="confirmDuplicate">
+          {{ duplicateSaving ? 'Đang lưu...' : pendingDuplicate?.kind === 'create' ? 'Đây là người khác — vẫn tạo mới' : 'Đây là hồ sơ khác — vẫn cập nhật' }}
+        </button>
+      </footer>
+    </dialog>
   </section>
 </template>
 
@@ -189,6 +186,7 @@ import {
   type PatientSummary
 } from '@/services/patients';
 import { useAuthStore } from '@/stores/auth';
+import { formatPatientGender, isDemoPatient, patientDisplayAddress, patientDisplayName, patientGenderValue } from '@/utils/patientDisplay';
 
 interface PatientForm {
   fullName: string;
@@ -218,11 +216,13 @@ const loading = ref(false);
 const pageError = ref('');
 const successMessage = ref('');
 const formVisible = ref(false);
+const formDialog = ref<HTMLDialogElement | null>(null);
 const formLoading = ref(false);
 const editingPatientId = ref<number | null>(null);
 const saving = ref(false);
 const formError = ref('');
 const duplicateDialogVisible = ref(false);
+const duplicateDialog = ref<HTMLDialogElement | null>(null);
 const possibleDuplicates = ref<PatientDuplicateInfo[]>([]);
 const pendingDuplicate = ref<PendingDuplicate | null>(null);
 const duplicateSaving = ref(false);
@@ -306,6 +306,11 @@ function changePage(nextPage: number) {
   void loadPatients();
 }
 
+watch([formDialog, duplicateDialog], ([formElement, duplicateElement]) => {
+  if (formElement && !formElement.open) formElement.showModal();
+  if (duplicateElement && !duplicateElement.open) duplicateElement.showModal();
+}, { flush: 'post' });
+
 function openCreateForm() {
   editingPatientId.value = null;
   Object.assign(form, emptyForm());
@@ -338,15 +343,16 @@ function setFormFromDetails(patient: PatientDetails) {
   Object.assign(form, {
     fullName: patient.fullName,
     dateOfBirth: patient.dateOfBirth.slice(0, 10),
-    gender: patient.gender ?? '',
+    gender: patientGenderValue(patient.gender),
     phone: patient.phone,
     email: patient.email ?? '',
-    address: patient.address ?? ''
+    address: patientDisplayAddress(patient.fullName, patient.address)
   });
 }
 
 function closeForm() {
   if (saving.value || formLoading.value) return;
+  formDialog.value?.close();
   formVisible.value = false;
   editingPatientId.value = null;
   formError.value = '';
@@ -428,6 +434,7 @@ function showDuplicateDialog(error: unknown, action: PendingDuplicate): boolean 
 
 function cancelDuplicate() {
   if (duplicateSaving.value) return;
+  duplicateDialog.value?.close();
   duplicateDialogVisible.value = false;
   possibleDuplicates.value = [];
   pendingDuplicate.value = null;
@@ -456,6 +463,8 @@ async function confirmDuplicate() {
 }
 
 function finishSave(message: string) {
+  duplicateDialog.value?.close();
+  formDialog.value?.close();
   duplicateDialogVisible.value = false;
   possibleDuplicates.value = [];
   pendingDuplicate.value = null;
@@ -468,15 +477,9 @@ function finishSave(message: string) {
 
 function formatDate(value: string): string {
   const [year, month, day] = value.slice(0, 10).split('-');
-  return year && month && day ? `${day}/${month}/${year}` : '—';
+  return year && month && day ? `${day}/${month}/${year}` : 'Chưa cập nhật';
 }
 
-function formatGender(value: string | null): string {
-  if (value === 'Male') return 'Nam';
-  if (value === 'Female') return 'Nữ';
-  if (value === 'Other') return 'Khác';
-  return '—';
-}
 </script>
 
 <style scoped>
@@ -614,7 +617,6 @@ table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
-  white-space: nowrap;
 }
 
 th,
@@ -629,7 +631,6 @@ th {
   font-size: 0.74rem;
   font-weight: 750;
   letter-spacing: 0.035em;
-  text-transform: uppercase;
 }
 
 td {
@@ -637,9 +638,12 @@ td {
   font-size: 0.88rem;
 }
 
-td strong {
-  color: #26394c;
-}
+tbody tr:hover { background: #f7fbfd; }
+.patient-name { color: #153f5b; font-weight: 750; overflow-wrap: anywhere; }
+.identity-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-top: 0.3rem; font-size: 0.78rem; }
+.sample-tag { padding: 0.13rem 0.45rem; border-radius: 6px; color: #5b4524; background: #fff1d6; }
+.patient-phone { font-variant-numeric: tabular-nums; }
+.mobile-field { display: none; }
 
 .patient-code {
   color: #35627d;
@@ -650,11 +654,7 @@ td strong {
   text-align: right;
 }
 
-.row-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.7rem;
-}
+.row-actions { text-align: end; }
 
 .text-button {
   padding: 0;
@@ -722,37 +722,30 @@ td strong {
   color: #176341;
 }
 
-.modal-backdrop {
-  position: fixed;
-  z-index: 20;
-  inset: 0;
-  display: grid;
-  align-items: center;
-  justify-items: center;
-  overflow-y: auto;
-  padding: 1.25rem;
-  background: rgba(22, 37, 51, 0.52);
+.modal-card::backdrop,
+.confirm-card::backdrop {
+  background: rgba(15, 28, 45, 0.63);
 }
 
-.duplicate-backdrop {
-  z-index: 30;
-}
+.confirm-card::backdrop { background: rgba(15, 28, 45, 0.38); }
 
 .modal-card,
 .confirm-card {
-  width: min(100%, 660px);
-  max-height: calc(100vh - 2.5rem);
+  width: min(calc(100% - 1.5rem), 660px);
+  max-height: calc(100dvh - 1.5rem);
+  margin: auto;
+  box-sizing: border-box;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 1.5rem;
   border: 1px solid #e3eaf0;
   border-radius: 14px;
+  color: #26394c;
   background: #fff;
   box-shadow: 0 20px 60px rgba(17, 37, 55, 0.2);
 }
 
-.confirm-card {
-  width: min(100%, 550px);
-}
+.confirm-card { width: min(calc(100% - 1.5rem), 550px); }
 
 .modal-heading {
   display: flex;
@@ -845,6 +838,21 @@ td strong {
 }
 
 @media (max-width: 700px) {
+  .table-scroll { overflow: visible; }
+  table, tbody { display: block; }
+  thead { position: absolute; width: 1px; height: 1px; clip-path: inset(50%); overflow: hidden; }
+  tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid #edf1f4;
+  }
+  td { padding: 0; border: 0; min-width: 0; overflow-wrap: anywhere; }
+  .patient-identity { grid-column: 1 / -1; }
+  .mobile-field { display: block; color: #52677d; font-size: 0.76rem; margin-bottom: 0.1rem; }
+  .row-actions { align-self: end; }
+
   .page-heading {
     align-items: flex-start;
     flex-direction: column;

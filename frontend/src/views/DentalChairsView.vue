@@ -7,7 +7,7 @@
       </div>
       <div class="header-actions">
         <router-link to="/management/staff/workspace" class="button button-secondary">
-          Phân bổ phòng làm việc →
+          Phân công phòng &amp; phụ tá
         </router-link>
         <button type="button" class="button button-secondary" :disabled="saving || loading" @click="load(store.result?.page ?? 1)">
           Làm mới

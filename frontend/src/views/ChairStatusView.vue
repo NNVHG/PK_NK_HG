@@ -11,7 +11,7 @@
     <div class="rules-card">
       <div class="rule-item">
         <span class="rule-icon">ℹ️</span>
-        <span>Phòng đã được nha sĩ chọn nhận ca cần được nha sĩ/Admin đổi hoặc bỏ phòng trước. <router-link to="/management/staff/workspace" class="link-btn">Mở phân bổ phòng làm việc →</router-link></span>
+        <span>Khi phòng đã được phân công, Admin cần đổi hoặc bỏ phân công trước khi cập nhật trạng thái. <router-link v-if="allowed()" to="/management/staff/workspace" class="link-btn">Quản lý phân công phòng</router-link></span>
       </div>
       <div class="rule-item">
         <span class="rule-icon">🔒</span>
