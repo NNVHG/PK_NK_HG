@@ -9,7 +9,7 @@ namespace Dental.Application.Features.MOD_MST.Services;
 public sealed class VisitChairService(IStaffWorkspaceRepository workspaces, IDentalChairRepository chairs,
     IVisitRepository visits, IUserRepository users, VietnamClock clock) : IVisitChairCoordinator
 {
-    public static readonly Error Unavailable = new("MST065", "Chưa có phòng điều trị sẵn sàng cho nha sĩ. Liên hệ Admin để kiểm tra phân công trước khi gọi hoặc bắt đầu khám.");
+    public static readonly Error Unavailable = new("MST065", "Chưa có phòng điều trị sẵn sàng cho nha sĩ. Kiểm tra phòng làm việc trước khi gọi hoặc bắt đầu khám.");
     public static readonly Error Inconsistent = new("MST066", "Vị trí hoặc trạng thái ghế đã thay đổi. Tải lại và đối chiếu trước khi tiếp tục.");
     public Task<Result> CheckReadyAsync(Visit visit, int dentistId, CancellationToken ct = default)
         => AllocateCoreAsync(visit, dentistId, 0, false, ct);

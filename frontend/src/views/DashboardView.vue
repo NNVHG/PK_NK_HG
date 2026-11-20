@@ -252,10 +252,25 @@
           <section class="panel">
             <div class="panel-header">
               <div>
-                <h3 class="panel-title">An toàn lâm sàng</h3>
-                <p class="panel-subtitle">Các bước kiểm tra trước và trong ca khám</p>
+                <h3 class="panel-title">Phòng Làm Việc &amp; Quy Tắc Lâm Sàng</h3>
+                <p class="panel-subtitle">Trạng thái phòng hiện tại và lưu ý an toàn điều trị</p>
               </div>
+              <RouterLink class="panel-link" to="/management/staff/workspace">Đổi phòng →</RouterLink>
             </div>
+
+            <div class="workspace-card" :class="{ 'workspace-card--empty': !myWorkspace?.roomName }">
+              <div class="ws-row">
+                <span class="ws-label">Phòng điều trị hiện tại</span>
+                <strong class="ws-val">{{ myWorkspace?.roomName || 'Chưa chọn phòng làm việc hôm nay' }}</strong>
+              </div>
+              <p v-if="!myWorkspace?.roomName" class="ws-hint">
+                Vui lòng chọn phòng làm việc trước khi gọi bệnh nhân và bắt đầu ca khám.
+              </p>
+              <p v-else class="ws-hint">
+                Phòng đang đồng bộ tới màn hình hàng đợi, phụ tá hỗ trợ và TV gọi số.
+              </p>
+            </div>
+
             <ul class="safety-checklist">
               <li><strong>Kiểm tra tiền sử &amp; sinh hiệu:</strong> Luôn xem cảnh báo dị ứng thuốc và huyết áp trước khi tiêm tê/thủ thuật.</li>
               <li><strong>Sơ đồ răng FDI:</strong> Chọn đúng bộ răng 32/20 răng và 5 mặt răng; cập nhật trạng thái sau điều trị dưới dạng bản ghi mới.</li>
@@ -295,8 +310,8 @@
           <section class="panel">
             <div class="panel-header">
               <div>
-                <h3 class="panel-title">Cảnh báo tồn kho</h3>
-                <p class="panel-subtitle">Vật tư đã chạm ngưỡng nhập thêm</p>
+                <h3 class="panel-title">Cảnh Báo Tồn Kho &amp; Hàng Đợi Hỗ Trợ</h3>
+                <p class="panel-subtitle">Vật tư chạm ngưỡng tối thiểu và danh sách bệnh nhân chờ gọi số</p>
               </div>
               <RouterLink class="panel-link" to="/management/inventory/issues">Tiêu hao theo ca →</RouterLink>
             </div>
@@ -318,6 +333,17 @@
               </ul>
             </div>
 
+            <div class="sub-block">
+              <div class="sub-block-title">Nha sĩ đồng hành &amp; Hàng đợi ({{ queueItems.length }} lượt)</div>
+              <div class="workspace-card" :class="{ 'workspace-card--empty': !myWorkspace?.dentistName }">
+                <div class="ws-row">
+                  <span class="ws-label">Nha sĩ đang hỗ trợ</span>
+                  <strong class="ws-val">{{ assistantWorkspaceLabel }}</strong>
+                </div>
+                <p class="ws-hint" v-if="myWorkspace?.roomName">Phòng đồng bộ: <strong>{{ myWorkspace.roomName }}</strong></p>
+                <p class="ws-hint" v-else-if="!myWorkspace?.hasConfirmedToday">Chọn nha sĩ tại mục Nhóm &amp; phòng làm việc để đồng bộ phòng điều trị.</p>
+              </div>
+            </div>
           </section>
         </div>
       </template>
@@ -326,7 +352,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { apiClient } from '@/services/api';
 import { reportsService } from '@/services/reports';
@@ -337,6 +363,7 @@ import { bookingRequestsService, type BookingRequestRow } from '@/services/booki
 import { appointmentsService, type AppointmentResponse } from '@/services/appointments';
 import { chairStatusService, type ChairStatusRow } from '@/services/chairStatus';
 import { stockReceiptsService, type StockItem } from '@/services/stockReceipts';
+import { WORKSPACE_UPDATED_EVENT, workspacesService, type WorkspaceSnapshot } from '@/services/workspaces';
 
 const authStore = useAuthStore();
 
@@ -363,6 +390,9 @@ const pendingRequests = ref<BookingRequestRow[]>([]);
 const deskAppointments = ref<AppointmentResponse[]>([]);
 const chairItems = ref<ChairStatusRow[]>([]);
 const lowStockItems = ref<StockItem[]>([]);
+const myWorkspace = ref<WorkspaceSnapshot | null>(null);
+const assistantWorkspaceLabel = computed(() => myWorkspace.value?.dentistName
+  || (myWorkspace.value?.hasConfirmedToday ? 'Không hỗ trợ nha sĩ' : 'Chưa chọn nha sĩ hỗ trợ'));
 
 const isStaff = computed(() => ['ADMIN', 'RECEPTIONIST', 'DENTIST', 'ASSISTANT'].includes(authStore.role));
 const roleSlug = computed(() => (authStore.role || 'staff').toLowerCase());
@@ -392,7 +422,7 @@ const actorMeta = computed(() => {
       return {
         badge: 'Nha sĩ điều trị',
         title: 'Bảng Điều Khiển Lâm Sàng Nha Sĩ',
-        quickHint: 'Gọi bệnh nhân từ hàng đợi và cập nhật sơ đồ FDI'
+        quickHint: 'Chọn phòng làm việc, gọi bệnh nhân từ hàng đợi và cập nhật sơ đồ FDI'
       };
     case 'ASSISTANT':
       return {
@@ -427,12 +457,14 @@ const roleKpis = computed(() => {
       ];
     case 'DENTIST':
       return [
+        { label: 'Phòng làm việc', tag: 'Hôm nay', value: myWorkspace.value?.roomName || 'Chưa chọn', foot: myWorkspace.value?.chairNumber ? `Ghế đồng bộ: ${myWorkspace.value.chairNumber}` : 'Cần chọn phòng trước khi khám', tone: myWorkspace.value?.roomName ? 'teal' : 'amber' },
         { label: 'Bệnh nhân chờ khám', tag: 'Hàng đợi', value: `${waitingQueueCount.value}`, foot: 'Sẵn sàng gọi vào phòng', tone: 'blue' },
         { label: 'Đang khám / Tạm dừng', tag: 'Lâm sàng', value: `${inConsultationCount.value} / ${pausedQueueCount.value}`, foot: 'Bao gồm ca chờ bàn giao', tone: 'indigo' },
         { label: 'Hoàn tất hôm nay', tag: 'Kết quả', value: `${completedQueueCount.value} ca`, foot: `Tổng ${queueItems.value.length} lượt trong hàng đợi`, tone: 'emerald' }
       ];
     case 'ASSISTANT':
       return [
+        { label: 'Nha sĩ đồng hành', tag: 'Phối hợp', value: assistantWorkspaceLabel.value, foot: myWorkspace.value?.roomName || 'Nhóm & phòng làm việc', tone: 'blue' },
         { label: 'Khách đang chờ', tag: 'Hàng đợi', value: `${waitingQueueCount.value}`, foot: `Tổng ${queueItems.value.length} lượt khám hôm nay`, tone: 'indigo' },
         { label: 'Đang gọi / Khám', tag: 'Phối hợp', value: `${inConsultationCount.value}`, foot: 'Ca đang xử lý tại phòng', tone: 'teal' },
         { label: 'Vật tư tồn thấp', tag: 'Cảnh báo kho', value: `${lowStockItems.value.length} mã`, foot: 'Chạm hoặc dưới ngưỡng tối thiểu', tone: lowStockItems.value.length ? 'amber' : 'emerald' }
@@ -464,6 +496,7 @@ const roleQuickActions = computed(() => {
     case 'DENTIST':
       return [
         { label: 'Khám & Chẩn đoán FDI', to: '/management/clinical/diagnosis', primary: true },
+        { label: 'Chọn phòng làm việc', to: '/management/staff/workspace' },
         { label: 'Hàng đợi hôm nay', to: '/management/queue/today' },
         { label: 'Hồ sơ bệnh nhân', to: '/management/patients' },
         { label: 'Xem tồn vật tư', to: '/management/inventory/receipts' }
@@ -472,6 +505,7 @@ const roleQuickActions = computed(() => {
       return [
         { label: 'Xác nhận tiêu hao theo ca', to: '/management/inventory/issues', primary: true },
         { label: 'Nhập kho vật tư', to: '/management/inventory/receipts' },
+        { label: 'Nhóm & phòng làm việc', to: '/management/staff/workspace' },
         { label: 'Hàng đợi hôm nay', to: '/management/queue/today' }
       ];
     default:
@@ -636,22 +670,44 @@ async function refreshAllData() {
       bookingRequestsService.list(1).then(res => { pendingRequests.value = res.items || []; }).catch(() => { pendingRequests.value = []; }),
       appointmentsService.getForDesk(todayStr, 1).then(res => { deskAppointments.value = res.items || []; }).catch(() => { deskAppointments.value = []; })
     );
+  } else if (role === 'DENTIST') {
+    if (authStore.user?.userId) {
+      tasks.push(
+        workspacesService.get(authStore.user.userId).then(res => { myWorkspace.value = res; }).catch(() => { myWorkspace.value = null; })
+      );
+    }
   } else if (role === 'ASSISTANT') {
     tasks.push(
       stockReceiptsService.stock('', 1)
         .then(res => { lowStockItems.value = (res.items || []).filter(s => s.isActive && s.onHand <= s.minimumStockThreshold); })
         .catch(() => { lowStockItems.value = []; })
     );
+    if (authStore.user?.userId) {
+      tasks.push(
+        workspacesService.get(authStore.user.userId).then(res => { myWorkspace.value = res; }).catch(() => { myWorkspace.value = null; })
+      );
+    }
   }
 
   await Promise.allSettled(tasks);
   loadingData.value = false;
 }
 
+function onWorkspaceUpdated(ev: Event) {
+  const detail = (ev as CustomEvent<WorkspaceSnapshot>).detail;
+  if (detail && detail.userId === authStore.user?.userId) {
+    myWorkspace.value = detail;
+  }
+}
+
 onMounted(() => {
+  window.addEventListener(WORKSPACE_UPDATED_EVENT, onWorkspaceUpdated);
   if (isStaff.value) void refreshAllData();
 });
 
+onBeforeUnmount(() => {
+  window.removeEventListener(WORKSPACE_UPDATED_EVENT, onWorkspaceUpdated);
+});
 </script>
 
 <style scoped>
@@ -830,7 +886,13 @@ onMounted(() => {
 .chip-danger { background: #fee2e2; color: #b91c1c; }
 .chip-muted { background: #f1f5f9; color: #64748b; }
 
-/* An toàn lâm sàng */
+/* Dentist Workspace & Safety */
+.workspace-card { padding: 0.9rem 1rem; border-radius: 12px; border: 1px solid #bae6fd; background: #f0f9ff; }
+.workspace-card--empty { border-color: #fde68a; background: #fffbeb; }
+.ws-row { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.ws-label { font-size: 0.82rem; font-weight: 700; color: #475569; }
+.ws-val { font-size: 0.98rem; color: #0f2d59; }
+.ws-hint { margin: 0.35rem 0 0; font-size: 0.8rem; color: #475569; }
 .safety-checklist { margin: 0; padding-left: 1.15rem; display: grid; gap: 0.5rem; font-size: 0.84rem; color: #334155; }
 
 /* Assistant Chairs Grid */
