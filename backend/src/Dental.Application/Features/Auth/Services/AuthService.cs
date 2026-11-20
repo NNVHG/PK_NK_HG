@@ -18,6 +18,7 @@ public sealed class AuthService
     private readonly IAuditLogger _auditLogger;
     private readonly ILoginLockoutService? _lockoutService;
     private readonly IKeyedIdentityHasher? _identityHasher;
+    private readonly VietnamClock _clock;
 
     public AuthService(
         IUserRepository userRepo,
@@ -27,7 +28,8 @@ public sealed class AuthService
         IAuditLogger auditLogger,
         IPatientRepository patientRepository,
         ILoginLockoutService? lockoutService = null,
-        IKeyedIdentityHasher? identityHasher = null)
+        IKeyedIdentityHasher? identityHasher = null,
+        VietnamClock? clock = null)
     {
         _userRepo = userRepo;
         _unitOfWork = unitOfWork;
@@ -36,6 +38,7 @@ public sealed class AuthService
         _auditLogger = auditLogger;
         _lockoutService = lockoutService;
         _identityHasher = identityHasher;
+        _clock = clock ?? new VietnamClock(TimeProvider.System);
     }
 
     /// <summary>DL326: tài khoản chỉ được tạo sau duyệt lịch; giữ lỗi rõ ràng cho caller cũ.</summary>
@@ -151,6 +154,11 @@ public sealed class AuthService
 
         // Mật khẩu đúng -> Xóa bộ đếm sai (DL-365)
         _lockoutService?.ResetAttempts(lockoutKey);
+
+        if (user.Role.RoleCode == RoleCodes.Patient &&
+            (user.Patient?.DateOfBirth ?? user.DateOfBirth) is DateOnly birthDate &&
+            birthDate > PatientAccountAge.LatestEligibleBirthDate(_clock.Today))
+            return Result<LoginResponse>.Failure(Error.InvalidCredentials);
 
         if (user.RequiresPhoneActivation)
             return Result<LoginResponse>.Failure(new Error("AUTH_ACTIVATION_REQUIRED", "Cần xác minh số điện thoại bằng OTP trước khi đăng nhập."));

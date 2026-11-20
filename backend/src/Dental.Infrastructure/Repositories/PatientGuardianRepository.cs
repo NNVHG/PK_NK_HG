@@ -13,8 +13,11 @@ using Npgsql;
 
 namespace Dental.Infrastructure.Repositories;
 
-public sealed class PatientGuardianRepository(DentalDbContext db, IPasswordHasher passwordHasher, IKeyedIdentityHasher identityHasher) : IPatientGuardianRepository
+public sealed class PatientGuardianRepository(DentalDbContext db, IPasswordHasher passwordHasher,
+    IKeyedIdentityHasher identityHasher, VietnamClock? clock = null) : IPatientGuardianRepository
 {
+    private readonly VietnamClock _clock = clock ?? new VietnamClock(TimeProvider.System);
+
     public async Task<PatientGuardian?> GetActiveByWardPatientIdAsync(int wardPatientId, CancellationToken ct = default)
     {
         return await db.PatientGuardians
@@ -231,6 +234,10 @@ public sealed class PatientGuardianRepository(DentalDbContext db, IPasswordHashe
             var ward = await db.Patients.FirstOrDefaultAsync(p => p.PatientId == wardPatientId, ct);
             if (ward is null || !ward.IsActive)
                 return Result<PatientResponse>.Failure(new Error("PAT_WARD_NOT_FOUND", "Hồ sơ bệnh nhân không tồn tại hoặc đã ngừng hoạt động."));
+
+            if (ward.DateOfBirth > PatientAccountAge.LatestEligibleBirthDate(_clock.Today))
+                return Result<PatientResponse>.Failure(new Error("PAT_WARD_UNDER_AGE",
+                    "Trẻ dưới 14 tuổi chưa được cấp tài khoản riêng. Hãy tiếp tục sử dụng quyền của người giám hộ."));
 
             if (ward.UserId.HasValue)
                 return Result<PatientResponse>.Failure(new Error("PAT_WARD_ALREADY_INDEPENDENT", "Bệnh nhân này đã có tài khoản người dùng độc lập."));

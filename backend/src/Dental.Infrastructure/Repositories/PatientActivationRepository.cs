@@ -17,8 +17,13 @@ public sealed class PatientActivationRepository(DentalDbContext db, VietnamClock
 {
     private IQueryable<User> EligibleStaff() => db.Users.Include(u => u.Role).Where(u => u.IsActive && u.RequiresPhoneActivation &&
         RoleCodes.StaffRoles.Contains(u.Role.RoleCode));
-    private IQueryable<User> EligiblePatient() => db.Users.Include(u => u.Role).Where(u => u.IsActive && u.RequiresPhoneActivation &&
-        u.LoginByCitizenId && u.Role.RoleCode == RoleCodes.Patient && db.Patients.Any(p => p.UserId == u.UserId && p.IsActive && p.CitizenIdHash != null));
+    private IQueryable<User> EligiblePatient()
+    {
+        var cutoff = PatientAccountAge.LatestEligibleBirthDate(clock.Today);
+        return db.Users.Include(u => u.Role).Where(u => u.IsActive && u.RequiresPhoneActivation &&
+            u.LoginByCitizenId && u.Role.RoleCode == RoleCodes.Patient && u.Patient != null &&
+            u.Patient.IsActive && u.Patient.CitizenIdHash != null && u.Patient.DateOfBirth <= cutoff);
+    }
     private static string Stamp(User u) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new {
         u.UserId, u.Phone, u.PasswordHash, u.TokenVersion, u.RoleId, u.Role.RoleCode, u.IsActive, u.RequiresPhoneActivation, u.PhoneActivationReason, u.LoginByCitizenId, u.UpdatedAt
     })));
@@ -82,9 +87,14 @@ public sealed class PatientActivationRepository(DentalDbContext db, VietnamClock
         catch (Exception e) when (IsConflict(e)) { return false; }
         finally { if (!committed) db.ChangeTracker.Clear(); }
     }
-    private IQueryable<User> EligibleAccounts() => db.Users.Include(u => u.Role).Where(u =>
-        u.IsActive && u.RequiresPhoneActivation && (RoleCodes.StaffRoles.Contains(u.Role.RoleCode) ||
-        u.LoginByCitizenId && u.Role.RoleCode == RoleCodes.Patient && db.Patients.Any(p => p.UserId == u.UserId && p.IsActive && p.CitizenIdHash != null)));
+    private IQueryable<User> EligibleAccounts()
+    {
+        var cutoff = PatientAccountAge.LatestEligibleBirthDate(clock.Today);
+        return db.Users.Include(u => u.Role).Where(u => u.IsActive && u.RequiresPhoneActivation &&
+            (RoleCodes.StaffRoles.Contains(u.Role.RoleCode) ||
+             u.LoginByCitizenId && u.Role.RoleCode == RoleCodes.Patient && u.Patient != null &&
+             u.Patient.IsActive && u.Patient.CitizenIdHash != null && u.Patient.DateOfBirth <= cutoff));
+    }
     private static bool IsConflict(Exception e)
     {
         for (Exception? x = e; x is not null; x = x.InnerException)

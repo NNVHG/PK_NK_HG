@@ -21,11 +21,12 @@ public sealed class UserRepository : IUserRepository
     public async Task<User?> FindByPhoneAsync(string phone, CancellationToken ct = default)
         => await _db.Users
             .Include(u => u.Role)
+            .Include(u => u.Patient)
             .SingleOrDefaultAsync(u => u.Phone == phone && !u.LoginByCitizenId, ct);
 
     public async Task<User?> FindByCitizenIdHashAsync(string citizenIdHash, CancellationToken ct = default)
     {
-        var matches = await _db.Users.Include(u => u.Role).Where(u => u.LoginByCitizenId &&
+        var matches = await _db.Users.Include(u => u.Role).Include(u => u.Patient).Where(u => u.LoginByCitizenId &&
             u.Role.RoleCode == RoleCodes.Patient && _db.Patients.Any(p => p.UserId == u.UserId && p.CitizenIdHash == citizenIdHash && p.IsActive))
             .Take(2).ToListAsync(ct);
         return matches.Count == 1 ? matches[0] : null;

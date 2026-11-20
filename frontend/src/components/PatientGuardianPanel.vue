@@ -42,6 +42,7 @@
           Thu hồi quyền giám hộ
         </button>
         <button
+          v-if="!isChild"
           type="button"
           class="button button-success"
           :disabled="actionLoading"
@@ -146,7 +147,7 @@
     </div>
 
     <!-- Modal Tách Tài Khoản Độc Lập -->
-    <div v-if="showPromoteModal" class="modal-backdrop">
+    <div v-if="showPromoteModal && canManage && !isChild" class="modal-backdrop">
       <div class="modal-content">
         <h3>Chuyển đổi thành tài khoản độc lập</h3>
         <p>Bệnh nhân đã đủ điều kiện có CCCD riêng. Khi tạo tài khoản độc lập, quyền giám hộ hiện hành sẽ được chấm dứt tự động cùng giao dịch.</p>
@@ -284,6 +285,7 @@ async function submitRevoke() {
 }
 
 async function submitPromote() {
+  if (!canManage.value || isChild.value || !activeGuardian.value || actionLoading.value) return;
   actionLoading.value = true;
   errorMessage.value = '';
   successMessage.value = '';
