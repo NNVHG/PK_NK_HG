@@ -88,11 +88,8 @@
           </div>
 
           <div class="form-group">
-            <label for="slot">Khung giờ hẹn <span class="required">*</span></label>
-            <select id="slot" v-model="slot" :disabled="busy" required @change="bookingDetailsChanged">
-              <option value="" disabled>-- Chọn khung giờ --</option>
-              <option v-for="time in slots" :key="time" :value="time">{{ time }}</option>
-            </select>
+            <label for="slot">Giờ mong muốn <span class="required">*</span></label>
+            <BookingTimeInput input-id="slot" v-model="slot" :slots="slots" :disabled="busy || scheduleLoading" @update:model-value="bookingDetailsChanged" />
           </div>
         </div>
 
@@ -148,6 +145,7 @@ import { qrPatientIntakeService, type ScannedIdentity } from '@/services/qrPatie
 import { patientsService, type PatientSummary } from '@/services/patients';
 import { appointmentsService, type AppointmentResponse } from '@/services/appointments';
 import { useBookingSchedule } from '@/composables/useBookingSchedule';
+import BookingTimeInput from '@/components/BookingTimeInput.vue';
 
 const isCameraOpen = ref(false);
 const keyword = ref(''), patients = ref<PatientSummary[]>([]), selected = ref<PatientSummary | null>(null);
@@ -155,7 +153,7 @@ const day = ref(''), slot = ref(''), notes = ref(''), confirmed = ref(false);
 const searching = ref(false), searched = ref(false), busy = ref(false), error = ref(''), success = ref<AppointmentResponse | null>(null);
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const { slots, revision: scheduleRevision, duration: slotDurationMinutes, loading: scheduleLoading, error: scheduleError, load: loadSchedule } = useBookingSchedule();
-watch(scheduleRevision, () => { confirmed.value = false; slot.value = ''; });
+watch(scheduleRevision, bookingDetailsChanged);
 let version = 0;
 async function search() {
   if (busy.value || searching.value || !keyword.value.trim() || keyword.value.length > 200) return;
@@ -206,7 +204,7 @@ async function book() {
   if (busy.value || searching.value || !confirmed.value || !selected.value || success.value) return;
   error.value = '';
   if (!patients.value.some(p => p.patientId === selected.value?.patientId) || !/^\d{4}-\d{2}-\d{2}$/.test(day.value) ||
-      !scheduleRevision.value || scheduleLoading.value || day.value < today || !slots.value.includes(slot.value) || notes.value.trim().length > 500) {
+      !scheduleRevision.value || scheduleLoading.value || day.value < today || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(slot.value) || notes.value.trim().length > 500) {
     error.value = 'Kiểm tra lại hồ sơ, ngày khám, khung giờ và lý do.'; return;
   }
   const ticket = version; busy.value = true;
@@ -220,7 +218,7 @@ async function book() {
   } catch (cause) {
     if (ticket === version) {
       const data = axios.isAxiosError(cause) ? cause.response?.data as { code?: string; message?: string; details?: unknown } | undefined : undefined;
-      if (data?.code === 'APP_SCHEDULE') { slot.value = ''; await loadSchedule(); }
+      if (data?.code === 'APP_SCHEDULE') await loadSchedule();
       if (ticket !== version) return;
       confirmed.value = false;
       error.value = data?.message ?? (axios.isAxiosError(cause) ? cause.response?.data?.errors?.[0]?.message ?? 'Không thể đặt lịch. Tải lại để đối chiếu trước khi thử tiếp.' : 'Chưa xác định kết quả. Đối chiếu lịch hẹn trước khi thử tiếp.');

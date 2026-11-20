@@ -116,7 +116,9 @@ public sealed class AppointmentService
         var snapshot = await _appointmentRepository.GetScheduleAsync(ct) ?? new ScheduleSnapshot(ClinicSchedule.Default, "", true);
         if (request.ExpectedScheduleRevision is not null && request.ExpectedScheduleRevision != snapshot.Revision)
             return Result<AppointmentResponse>.Failure(new Error("APP_SCHEDULE", "Cấu hình giờ khám đã đổi. Tải lại và chọn lại khung giờ trước khi gửi."));
-        if (!snapshot.Schedule.IsValidSlot(request.SlotTime) || request.Notes?.Length > 500)
+        if (!snapshot.Schedule.AllowsAppointmentStart(request.SlotTime))
+            return Result<AppointmentResponse>.Failure(Error.AppointmentInvalidTime);
+        if (request.Notes?.Length > 500)
             return Result<AppointmentResponse>.Failure(Error.Validation);
         var patient = await _patientRepository.GetByIdAsync(request.PatientId, ct);
         if (patient is null)
@@ -605,7 +607,7 @@ public sealed class AppointmentService
         var snapshot = await _appointmentRepository.GetScheduleAsync(ct) ?? new ScheduleSnapshot(ClinicSchedule.Default, "", true);
         if (request.ExpectedScheduleRevision is not null && request.ExpectedScheduleRevision != snapshot.Revision)
             return Result<AppointmentResponse>.Failure(new Error("APP_SCHEDULE", "Cấu hình giờ khám đã đổi. Tải lại và chọn lại khung giờ trước khi gửi."));
-        if (!snapshot.Schedule.IsValidSlot(request.SlotTime)) return Result<AppointmentResponse>.Failure(Error.AppointmentInvalidTime);
+        if (!snapshot.Schedule.AllowsAppointmentStart(request.SlotTime)) return Result<AppointmentResponse>.Failure(Error.AppointmentInvalidTime);
 
         if (actorRoleCode == RoleCodes.Patient && SelfReschedulingMessage(appointment) is string message)
             return Result<AppointmentResponse>.Failure(Error.AppointmentCannotReschedule.Code, message);

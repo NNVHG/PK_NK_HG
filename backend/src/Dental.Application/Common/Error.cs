@@ -49,7 +49,7 @@ public record Error(string Code, string Message, object? Details = null)
     // Lỗi đặt lịch khám (MOD_APP)
     public static readonly Error AppointmentNotFound           = new("APP_001", "Không tìm thấy lịch hẹn.");
     public static readonly Error AppointmentSlotFull           = new("APP_002", "Khung giờ này đã đủ số lượng đặt hẹn tối đa (100 khách). Vui lòng chọn khung giờ khác.");
-    public static readonly Error AppointmentInvalidTime        = new("APP_003", "Giờ đặt hẹn không hợp lệ. Khung giờ khám: 08:00–11:30 và 13:30–16:30, slot 30 phút.");
+    public static readonly Error AppointmentInvalidTime        = new("APP_003", "Giờ hẹn phải nằm trong giờ làm việc và đủ thời lượng khám trước giờ nghỉ hoặc đóng cửa.");
     public static readonly Error AppointmentDateInPast         = new("APP_004", "Không thể đặt lịch hẹn trong quá khứ.");
     public static readonly Error AppointmentPatientHasActive   = new("APP_005", "Bệnh nhân đã có lịch hẹn chưa hoàn tất trong ngày này.");
     public static readonly Error AppointmentCannotCancel       = new("APP_006", "Chỉ có thể hủy lịch hẹn đang ở trạng thái chờ khám.");

@@ -14,7 +14,15 @@ public sealed record ClinicSchedule(TimeOnly WorkStart, TimeOnly LunchStart, Tim
                 result.Add(new TimeOnly(minute / 60, minute % 60));
         return result.ToArray();
     }
-    public bool IsValidSlot(TimeOnly time) => Slots().Contains(time);
+    public bool AllowsAppointmentStart(TimeOnly time)
+    {
+        if (DurationMinutes is < 1 or > 1440 || time.Ticks % TimeSpan.TicksPerMinute != 0)
+            return false;
+
+        var endTicks = time.Ticks + DurationMinutes * TimeSpan.TicksPerMinute;
+        return (time >= WorkStart && endTicks <= LunchStart.Ticks)
+            || (time >= LunchEnd && endTicks <= WorkEnd.Ticks);
+    }
     public static bool TryParse(string? start, string? lunchStart, string? lunchEnd, string? end, int duration, out ClinicSchedule schedule)
     {
         schedule = Default;

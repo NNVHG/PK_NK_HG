@@ -26,7 +26,14 @@ public sealed class BookingRequestRepository(DentalDbContext db,VietnamClock clo
         if(actor.HasValue&&!(role==RoleCodes.Patient&&await db.Users.AnyAsync(u=>u.UserId==actor&&u.IsActive&&u.Role.RoleCode==RoleCodes.Patient&&u.Phone==i.Phone,ct)))return Result<bool>.Failure(Error.Forbidden);
         if(i.PatientId.HasValue&&(!actor.HasValue||!await db.Patients.AnyAsync(p=>p.PatientId==i.PatientId&&p.IsActive&&p.UserId==actor&&p.FullName==i.FullName.Trim()&&p.DateOfBirth==i.DateOfBirth,ct)))return Result<bool>.Failure(Error.NotFound);
         var s=await ClinicScheduleReader.ReadAsync(db,ct);
-        if(s.Revision!=i.ScheduleRevision||!s.Schedule.IsValidSlot(i.SlotTime)||i.AppointmentDate<clock.Today||i.AppointmentDate==clock.Today&&i.SlotTime<=TimeOnly.FromDateTime(clock.Now))return Result<bool>.Failure(new Error("APP_REQUEST_SCHEDULE","Khung hẹn không còn hợp lệ. Tải lại và chọn giờ trước khi gửi."));
+        if (s.Revision != i.ScheduleRevision)
+            return Result<bool>.Failure(new Error("APP_REQUEST_SCHEDULE", "Giờ làm việc vừa thay đổi. Hãy kiểm tra lại giờ hẹn trước khi gửi."));
+        if (!s.Schedule.AllowsAppointmentStart(i.SlotTime))
+            return Result<bool>.Failure(Error.AppointmentInvalidTime);
+        if (i.AppointmentDate < clock.Today)
+            return Result<bool>.Failure(Error.AppointmentDateInPast);
+        if (i.AppointmentDate == clock.Today && i.SlotTime <= TimeOnly.FromDateTime(clock.Now))
+            return Result<bool>.Failure(Error.AppointmentInvalidTime.Code, "Không thể đặt lịch cho khung giờ đã qua trong ngày.");
         if(i.DentistId.HasValue)return Result<bool>.Failure(Error.Validation);
         return Result<bool>.Success(true);
     }

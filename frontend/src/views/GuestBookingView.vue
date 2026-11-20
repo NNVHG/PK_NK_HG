@@ -17,7 +17,7 @@
         <RouterLink to="/" class="back-link">← Về trang chủ</RouterLink>
         <p class="eyebrow">Nha khoa Hoàng Gia</p>
         <h1 id="booking-title">Đặt lịch khám</h1>
-        <p class="intro-copy">Chọn ngày và khung giờ phù hợp. Không cần đăng nhập hoặc mã OTP để gửi yêu cầu.</p>
+        <p class="intro-copy">Chọn ngày và nhập giờ mong muốn, hoặc dùng một giờ gợi ý. Không cần đăng nhập hoặc mã OTP để gửi yêu cầu.</p>
       </div>
 
       <div class="booking-layout">
@@ -60,21 +60,17 @@
                 <div class="section-divider"></div>
                 <div class="section-heading"><div><p class="card-kicker">Thời gian phù hợp</p><h3>Chọn lịch khám</h3></div></div>
                 <div class="field-grid">
-                  <label class="field"><span>Ngày khám <span class="required" aria-hidden="true">*</span></span><input v-model="form.appointmentDate" type="date" :min="catalog.today" required /></label>
-                  
+                  <label class="field"><span>Ngày khám <span class="required" aria-hidden="true">*</span></span><input v-model="form.appointmentDate" type="date" :min="catalog.today" required @input="confirmed = false" /></label>
+                  <label class="field">
+                    <span>Giờ mong muốn <span class="required" aria-hidden="true">*</span></span>
+                    <input v-model="form.slot" type="time" step="60" required @input="confirmed = false" />
+                    <span class="field-hint">Nhập giờ trong thời gian làm việc. Mỗi ca khám dự kiến {{ catalog.durationMinutes }} phút.</span>
+                  </label>
+
                   <div class="field field-wide slot-field-wrap">
-                    <div class="slot-header-row">
-                      <span class="field-label">Khung giờ khám <span class="required" aria-hidden="true">*</span></span>
-                      <span v-if="form.slot" class="slot-chosen-badge">✓ Đã chọn: <strong>{{form.slot}}</strong></span>
-                      <span v-else class="slot-hint-badge">Vui lòng chọn 1 khung giờ</span>
-                    </div>
-                    <select v-model="form.slot" class="sr-only" required aria-label="Khung giờ khám">
-                      <option value="">Chọn khung giờ</option>
-                      <option v-for="s in catalog.slots" :key="s" :value="s">{{s}}</option>
-                    </select>
                     <div class="slot-picker-box">
                       <div v-if="morningSlots.length" class="slot-subgroup">
-                        <span class="slot-subgroup-title">🌅 Buổi Sáng (08:00 – 11:30)</span>
+                        <span class="slot-subgroup-title">Giờ gợi ý buổi sáng</span>
                         <div class="slot-chips-row">
                           <button
                             v-for="s in morningSlots"
@@ -82,14 +78,15 @@
                             type="button"
                             class="slot-chip"
                             :class="{ selected: form.slot === s }"
-                            @click="form.slot = s"
+                            :aria-pressed="form.slot === s"
+                            @click="pickTime(s)"
                           >
                             {{ s }}
                           </button>
                         </div>
                       </div>
                       <div v-if="afternoonSlots.length" class="slot-subgroup">
-                        <span class="slot-subgroup-title">🌇 Buổi Chiều &amp; Tối (13:30 – 19:30)</span>
+                        <span class="slot-subgroup-title">Giờ gợi ý buổi chiều và tối</span>
                         <div class="slot-chips-row">
                           <button
                             v-for="s in afternoonSlots"
@@ -97,7 +94,8 @@
                             type="button"
                             class="slot-chip"
                             :class="{ selected: form.slot === s }"
-                            @click="form.slot = s"
+                            :aria-pressed="form.slot === s"
+                            @click="pickTime(s)"
                           >
                             {{ s }}
                           </button>
@@ -158,11 +156,22 @@ const afternoonSlots=computed(()=>(catalog.value?.slots||[]).filter(s=>s>='12:00
 const busy=ref(false),confirmed=ref(false),error=ref(''),receipt=ref<BookingReceipt|null>(null),retryBody=ref<BookingSubmission|null>(null);let snapshot:BookingIntent|null=null,generation=0,disposed=false;
 const identity=()=>`${auth.user?.userId}/${auth.role}`;
 function alive(ticket:number,owner:string){return !disposed&&ticket===generation&&owner===identity();}
+function pickTime(time: string) {
+  form.slot = time;
+  confirmed.value = false;
+}
 function clear(){catalog.value=null;patient.value=null;patientId.value=0;Object.assign(form,{fullName:'',phone:'',dateOfBirth:'',gender:'',email:'',appointmentDate:'',slot:'',notes:''});snapshot=null;retryBody.value=null;receipt.value=null;confirmed.value=false;error.value='';profilesError.value='';}
+async function readCatalog() {
+  const data = await bookingRequestsService.catalog();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data.today) || !Array.isArray(data.slots) || !data.slots.length ||
+      data.slots.some(time => !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) || !/^[A-F0-9]{64}$/.test(data.revision) ||
+      !Number.isInteger(data.durationMinutes) || data.durationMinutes < 1 || data.durationMinutes > 1440)
+    throw new Error('Invalid booking catalog');
+  return data;
+}
 async function load(){
  const ticket=++generation,owner=identity();clear();busy.value=true;
- try{const data=await bookingRequestsService.catalog();if(!alive(ticket,owner))return;
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(data.today)||!Array.isArray(data.slots)||!data.slots.length||data.slots.some(s=>!/^\d{2}:\d{2}$/.test(s))||!/^[A-F0-9]{64}$/.test(data.revision))throw Error();
+ try{const data=await readCatalog();if(!alive(ticket,owner))return;
   catalog.value=data;form.appointmentDate=data.today;
   if(auth.role==='PATIENT'){try{const mine=await patientsService.getMyPatient();if(alive(ticket,owner)){patient.value=mine;patientId.value=mine.patientId;Object.assign(form,{fullName:mine.fullName,phone:mine.phone,dateOfBirth:mine.dateOfBirth,gender:mine.gender});}}catch{if(alive(ticket,owner))profilesError.value='Không tải được hồ sơ cá nhân. Tải lại trước khi tiếp tục.';}}
  }catch{if(alive(ticket,owner))error.value='Không tải được khung hẹn. Vui lòng thử lại.';}
@@ -171,7 +180,7 @@ async function load(){
 function validDay(value:string){const d=new Date(value+'T00:00:00Z');return /^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===value;}
 function intent():BookingIntent|null{
  const s=catalog.value;if(!s)return null;const minBirth=new Date(s.today+'T00:00:00Z'),month=minBirth.getUTCMonth();minBirth.setUTCFullYear(minBirth.getUTCFullYear()-120);if(minBirth.getUTCMonth()!==month)minBirth.setUTCDate(0);
- if(!form.fullName.trim()||form.fullName.length>100||form.fullName.includes('\0')||!/^0\d{9}$/.test(form.phone)||!validDay(form.dateOfBirth)||form.dateOfBirth<minBirth.toISOString().slice(0,10)||form.dateOfBirth>s.today||!['Male','Female','Other'].includes(form.gender)||!validDay(form.appointmentDate)||form.appointmentDate<s.today||!s.slots.includes(form.slot)||form.notes.length>500||form.notes.includes('\0')||form.email.length>100||form.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)||patientId.value>0&&(!patient.value||patient.value.patientId!==patientId.value||patient.value.fullName!==form.fullName.trim()||patient.value.dateOfBirth!==form.dateOfBirth))return null;
+ if(!form.fullName.trim()||form.fullName.length>100||form.fullName.includes('\0')||!/^0\d{9}$/.test(form.phone)||!validDay(form.dateOfBirth)||form.dateOfBirth<minBirth.toISOString().slice(0,10)||form.dateOfBirth>s.today||!['Male','Female','Other'].includes(form.gender)||!validDay(form.appointmentDate)||form.appointmentDate<s.today||!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(form.slot)||form.notes.length>500||form.notes.includes('\0')||form.email.length>100||form.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)||patientId.value>0&&(!patient.value||patient.value.patientId!==patientId.value||patient.value.fullName!==form.fullName.trim()||patient.value.dateOfBirth!==form.dateOfBirth))return null;
  if(isChild.value&&(!guardianForm.fullName.trim()||guardianForm.fullName.length>100))return null;
  let combinedNotes=form.notes.trim()||'';
  if(isChild.value){
@@ -187,8 +196,27 @@ async function submit(){
  const body=retryBody.value,ticket=generation,owner=identity();busy.value=true;error.value='';
  try{const data=await bookingRequestsService.submit(body);if(!alive(ticket,owner))return;if(data.requestId!==body.clientRequestId||!['Pending','Rejected','Approved'].includes(data.status))throw Error();receipt.value=data;retryBody.value=null;snapshot=null;confirmed.value=false;Object.assign(form,{fullName:'',phone:'',dateOfBirth:'',gender:'',email:'',notes:''});patient.value=null;patientId.value=0;}
  catch(cause){if(alive(ticket,owner)){
-  const status=isAxiosError(cause)?cause.response?.status:undefined;
-  if(status&&[400,401,403,404,409].includes(status)){retryBody.value=null;snapshot=null;confirmed.value=false;catalog.value=null;error.value='Yêu cầu chưa được nhận: thông tin hoặc chỗ hẹn không còn hợp lệ. Tải lại khung hẹn trước khi gửi yêu cầu mới.';}
+  const response=isAxiosError(cause)?cause.response:undefined;
+  if(response&&[400,401,403,404,409].includes(response.status)){
+    retryBody.value=null;snapshot=null;confirmed.value=false;
+    const code = response.data?.code;
+    if (code === 'APP_REQUEST_SCHEDULE') {
+      try {
+        const refreshed = await readCatalog();
+        if (alive(ticket, owner)) {
+          catalog.value = refreshed;
+          error.value = 'Giờ làm việc vừa thay đổi. Hãy kiểm tra lại giờ hẹn.';
+        }
+      } catch {
+        if (alive(ticket, owner)) error.value = 'Chưa tải được giờ làm việc mới. Vui lòng thử gửi lại sau.';
+      }
+    } else if (['APP_002', 'APP_003', 'APP_004'].includes(code) && typeof response.data.message === 'string') {
+      error.value = response.data.message;
+    } else {
+      catalog.value = null;
+      error.value = 'Yêu cầu chưa được nhận: thông tin hoặc chỗ hẹn không còn hợp lệ. Tải lại khung hẹn trước khi gửi yêu cầu mới.';
+    }
+  }
   else error.value='Chưa xác minh kết quả. Gửi lại cùng yêu cầu để đối chiếu; không tạo yêu cầu khác khi chưa rõ kết quả.';
  }}
  finally{if(alive(ticket,owner))busy.value=false;}
@@ -207,10 +235,7 @@ watch(identity,()=>{generation++;busy.value=false;clear();if(!disposed)void load
 .booking-content{max-width:1160px;margin:0 auto;padding:30px 24px 80px;box-sizing:border-box}.intro{margin-bottom:26px}.back-link{display:inline-block;margin-bottom:23px;color:var(--hg-primary,#1857b6)}.eyebrow,.card-kicker{margin:0 0 6px;font-size:.75rem;font-weight:750;letter-spacing:.07em;text-transform:uppercase;color:var(--hg-primary,#1857b6)}h1,h2,h3,p{margin-top:0}h1,h2,h3{color:var(--hg-navy,#102e56)}h1{font-size:clamp(1.75rem,3vw,2.35rem);line-height:1.2;margin-bottom:9px}.intro-copy{color:#4a6176;line-height:1.6;max-width:660px;margin-bottom:0}
 .booking-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(250px,320px);align-items:start;gap:24px}.form-card,.summary-card{background:#fff;border:1px solid #e0ebf4;border-radius:16px;box-shadow:0 4px 18px rgba(16,46,86,.05);min-width:0}.card-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:22px 26px;border-bottom:1px solid #edf2f7}.card-heading h2,.summary-card h2,.info-card h2{font-size:1.08rem;line-height:1.35;margin:0}.step-label{flex-shrink:0;border-radius:999px;background:#edf6fc;color:#1857b6;font-size:.75rem;font-weight:700;padding:6px 10px}.card-body{padding:24px 26px 28px}fieldset{min-width:0;margin:0;padding:0;border:0}fieldset:disabled{opacity:.72}.field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 20px}.field{display:flex;flex-direction:column;gap:8px;min-width:0;font-size:.9rem;font-weight:650;color:#18354c}.field-wide{grid-column:1/-1}.required{color:#b42318}.optional,.field-hint{font-weight:400;color:#536a7e}.field-hint{font-size:.78rem;line-height:1.4;margin-top:5px;color:#4a6378}
 .slot-field-wrap{display:flex;flex-direction:column;gap:8px}
-.slot-header-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
 .field-label{font-size:.9rem;font-weight:650;color:#18354c}
-.slot-chosen-badge{background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;padding:3px 10px;border-radius:999px;font-size:.78rem;font-weight:600}
-.slot-hint-badge{color:#854d0e;background:#fef9c3;border:1px solid #fef08a;padding:3px 10px;border-radius:999px;font-size:.75rem;font-weight:600}
 .slot-picker-box{background:#f8fbff;border:1px solid #d4e4f2;border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:14px}
 .slot-subgroup{display:flex;flex-direction:column;gap:8px}
 .slot-subgroup-title{font-size:.78rem;font-weight:750;color:#244b70;text-transform:uppercase;letter-spacing:.04em}

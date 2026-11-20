@@ -66,13 +66,10 @@
 
             <div class="form-group">
               <label for="appointment-slot" class="form-label">
-                <span>Khung giờ hẹn <b class="req">*</b></span>
+                <span>Giờ mong muốn <b class="req">*</b></span>
                 <small v-if="slotDurationMinutes" class="label-hint">({{ slotDurationMinutes }} phút/ca)</small>
               </label>
-              <select id="appointment-slot" v-model="slotTime" :disabled="submitting || scheduleLoading" required class="form-select">
-                <option value="" disabled>Chọn khung giờ</option>
-                <option v-for="slot in slots" :key="slot" :value="slot">{{ slot }}</option>
-              </select>
+              <BookingTimeInput input-id="appointment-slot" v-model="slotTime" :slots="slots" :disabled="submitting || scheduleLoading" />
             </div>
           </div>
 
@@ -146,12 +143,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import axios from 'axios';
 import { appointmentsService, type AppointmentResponse } from '@/services/appointments';
 import { patientsService, type PatientSummary } from '@/services/patients';
 import { patientGuardiansService, type WardSummary } from '@/services/patientGuardians';
 import { useBookingSchedule } from '@/composables/useBookingSchedule';
+import BookingTimeInput from '@/components/BookingTimeInput.vue';
 
 const emit = defineEmits<{
   (e: 'success', appointment: AppointmentResponse): void;
@@ -187,7 +185,6 @@ const currentProfile = computed(() => {
 });
 
 const { slots, revision: scheduleRevision, duration: slotDurationMinutes, loading: scheduleLoading, error: scheduleError, load: loadSchedule } = useBookingSchedule();
-watch(scheduleRevision, () => { slotTime.value = ''; });
 
 onMounted(async () => {
   const ticket = version;
@@ -222,7 +219,7 @@ async function submit() {
   errorMessage.value = '';
   success.value = null;
 
-  if (!selectedPatientId.value || !appointmentDate.value || !slots.value.includes(slotTime.value) || notes.value.length > 500) {
+  if (!selectedPatientId.value || !appointmentDate.value || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(slotTime.value) || notes.value.length > 500) {
     errorMessage.value = 'Vui lòng chọn hồ sơ, ngày và khung giờ khám.';
     return;
   }
@@ -244,7 +241,7 @@ async function submit() {
   } catch (error) {
     if (ticket !== version) return;
     const response = axios.isAxiosError(error) ? error.response?.data : null;
-    if (response?.code === 'APP_SCHEDULE') { slotTime.value = ''; await loadSchedule(); }
+    if (response?.code === 'APP_SCHEDULE') await loadSchedule();
     if (ticket !== version) return;
     errorMessage.value = response?.message
       ?? response?.errors?.[0]?.message

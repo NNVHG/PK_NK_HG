@@ -55,10 +55,7 @@
                 Giờ mới <b class="req">*</b>
                 <small v-if="slotDurationMinutes" class="text-muted">({{ slotDurationMinutes }}p)</small>
               </label>
-              <select :id="'new-time-' + appointmentId" v-model="time" :disabled="busy || scheduleLoading" required class="form-select">
-                <option value="" disabled>Chọn khung giờ</option>
-                <option v-for="slot in slots" :key="slot" :value="slot">{{ slot }}</option>
-              </select>
+              <BookingTimeInput :input-id="'new-time-' + appointmentId" v-model="time" :slots="slots" :disabled="busy || scheduleLoading" @update:model-value="confirmed = false" />
             </div>
           </div>
 
@@ -109,6 +106,7 @@ import { onUnmounted, ref, watch } from 'vue';
 import axios from 'axios';
 import { appointmentsService, type AppointmentResponse, type SelfReschedulingEligibility } from '@/services/appointments';
 import { useBookingSchedule } from '@/composables/useBookingSchedule';
+import BookingTimeInput from '@/components/BookingTimeInput.vue';
 const props = defineProps<{ appointmentId: number; patientName: string; selfService?: boolean }>();
 const emit = defineEmits<{ rescheduled: [] }>();
 const dialog = ref<HTMLDialogElement | null>(null), current = ref<AppointmentResponse | null>(null);
@@ -116,7 +114,7 @@ const eligibility = ref<SelfReschedulingEligibility | null>(null);
 const reading = ref(false), busy = ref(false), confirmed = ref(false), day = ref(''), time = ref(''), reason = ref(''), error = ref('');
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const { slots, revision: scheduleRevision, duration: slotDurationMinutes, loading: scheduleLoading, error: scheduleError, load: loadSchedule } = useBookingSchedule(false);
-watch(scheduleRevision, () => { confirmed.value = false; time.value = ''; });
+watch(scheduleRevision, () => { confirmed.value = false; });
 let version = 0;
 async function readCurrent(ticket: number) {
   if (props.selfService) {
@@ -143,7 +141,7 @@ function close() { if (!busy.value) reset(); }
 async function save() {
   if (busy.value || reading.value || scheduleLoading.value || !scheduleRevision.value || !confirmed.value || current.value?.status !== 'Scheduled' || current.value.appointmentId !== props.appointmentId) return;
   if (props.selfService && !eligibility.value?.canReschedule) return;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(day.value) || day.value < today || !slots.value.includes(time.value) || !reason.value.trim() || reason.value.trim().length > 500 ||
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day.value) || day.value < today || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time.value) || !reason.value.trim() || reason.value.trim().length > 500 ||
       (day.value === current.value.appointmentDate && time.value === current.value.slotTime.slice(0, 5))) { error.value = 'Chọn ngày/giờ mới hợp lệ và nhập lý do đổi lịch.'; return; }
   const ticket = version; busy.value = true; error.value = '';
   try {
@@ -151,7 +149,7 @@ async function save() {
     if (ticket === version) { busy.value = false; reset(); emit('rescheduled'); }
   } catch (cause) {
     if (ticket !== version) return;
-    if (axios.isAxiosError(cause) && cause.response?.data?.code === 'APP_SCHEDULE') { time.value = ''; await loadSchedule(); }
+    if (axios.isAxiosError(cause) && cause.response?.data?.code === 'APP_SCHEDULE') await loadSchedule();
     if (ticket !== version) return;
     confirmed.value = false;
     error.value = axios.isAxiosError(cause) ? cause.response?.data?.message ?? 'Chưa xác định kết quả. Tải lại lịch trước khi thử tiếp.' : 'Chưa xác định kết quả. Tải lại lịch trước khi thử tiếp.';
