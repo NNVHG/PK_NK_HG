@@ -2,57 +2,87 @@
   <section class="invoice-desk" aria-labelledby="invoice-desk-title">
     <header class="desk-heading">
       <h1 id="invoice-desk-title">Tra cứu &amp; thu hóa đơn điều trị</h1>
-      <p>Tìm hóa đơn, đối chiếu công nợ và in biên lai tại quầy.</p>
+      <p>Tìm hóa đơn bên cạnh, mở chi tiết trong hộp thoại nổi để đối chiếu công nợ và in biên lai.</p>
     </header>
 
-    <div class="desk-layout">
-      <section class="desk-panel lookup-panel" aria-labelledby="lookup-title">
-        <h2 id="lookup-title">Tra cứu hóa đơn</h2>
-        <form @submit.prevent="lookup">
-          <label for="invoice-code-input">Mã hóa đơn</label>
-          <div class="lookup-controls">
-            <input
-              id="invoice-code-input"
-              ref="invoiceCodeInput"
-              v-model="code"
-              class="app-input"
-              maxlength="50"
-              autocomplete="off"
-              autocapitalize="characters"
-              spellcheck="false"
-              enterkeyhint="search"
-              placeholder="Nhập mã trên hóa đơn"
-              :disabled="busy || paymentOpen"
-            />
-            <button type="submit" class="app-btn app-btn--primary" :disabled="busy || paymentOpen || !allowed">
-              {{ busy && !paymentOpen ? 'Đang tìm…' : 'Tra cứu' }}
+    <InvoiceHistoryPanel
+      ref="historyPanel"
+      :disabled="busy || paymentOpen || !!invoice"
+      @selected="selectFromHistory"
+    >
+      <template #before-filters>
+        <section class="desk-panel quick-lookup-panel" aria-labelledby="lookup-title">
+          <h2 id="lookup-title">Tra cứu nhanh theo mã</h2>
+          <form @submit.prevent="lookup()">
+            <label for="invoice-code-input">Mã hóa đơn</label>
+            <div class="lookup-controls">
+              <input
+                id="invoice-code-input"
+                ref="invoiceCodeInput"
+                v-model="code"
+                class="app-input"
+                maxlength="50"
+                autocomplete="off"
+                autocapitalize="characters"
+                spellcheck="false"
+                enterkeyhint="search"
+                placeholder="Nhập mã trên hóa đơn"
+                :disabled="busy || paymentOpen || !!invoice"
+              />
+              <button
+                type="submit"
+                class="app-btn app-btn--primary"
+                :disabled="busy || paymentOpen || !!invoice || !allowed"
+              >
+                {{ busy && !invoice && lookupSource === 'manual' ? 'Đang tìm…' : 'Tra cứu' }}
+              </button>
+            </div>
+          </form>
+          <p v-if="error && !invoice && lookupSource === 'manual'" class="desk-error" role="alert">{{ error }}</p>
+        </section>
+      </template>
+
+      <template #results-banner>
+        <p v-if="busy && !invoice && lookupSource === 'history'" class="desk-status" role="status">
+          Đang tải chi tiết hóa đơn…
+        </p>
+        <p v-else-if="error && !invoice && lookupSource === 'history'" class="desk-error" role="alert">
+          {{ error }}
+        </p>
+      </template>
+    </InvoiceHistoryPanel>
+
+    <dialog
+      v-if="invoice"
+      :ref="bindDetailDialog"
+      class="invoice-detail-dialog"
+      aria-labelledby="invoice-reference"
+      @cancel="onDetailDialogCancel"
+    >
+      <div class="detail-modal-shell">
+        <header class="detail-modal-header">
+          <div class="detail-modal-title-group">
+            <p class="desk-muted">Hóa đơn {{ invoice.invoiceCode }}</p>
+            <h2 id="invoice-reference">{{ invoice.patientName }}</h2>
+            <p class="desk-muted">{{ invoice.patientCode }} · {{ dateTime.format(new Date(invoice.createdAt)) }}</p>
+          </div>
+          <div class="detail-modal-header-actions">
+            <span class="app-badge" :class="statusBadgeClass(invoice.status)">
+              {{ statuses[invoice.status] ?? 'Không xác định' }}
+            </span>
+            <button
+              type="button"
+              class="detail-close-btn"
+              aria-label="Đóng chi tiết hóa đơn"
+              :disabled="!canCloseDetail"
+              @click="closeDetail"
+            >
+              ✕
             </button>
           </div>
-        </form>
-        <p v-if="error && !paymentOpen" class="desk-error" role="alert">{{ error }}</p>
-        <div v-if="!paymentOpen" class="recent-invoices">
-          <h3>Hóa đơn gần đây</h3>
-          <InvoiceHistoryPanel :disabled="busy" @selected="selectFromHistory" />
-        </div>
-        <p v-else class="desk-muted">Bạn đang đối chiếu hóa đơn {{ invoice?.invoiceCode }}.</p>
-      </section>
+        </header>
 
-      <div class="desk-results">
-        <section v-if="invoice" class="desk-panel" aria-labelledby="invoice-reference">
-          <header class="invoice-heading">
-            <div>
-              <p class="desk-muted">Hóa đơn {{ invoice.invoiceCode }}</p>
-              <h2 id="invoice-reference">{{ invoice.patientName }}</h2>
-              <p class="desk-muted">{{ invoice.patientCode }} · {{ dateTime.format(new Date(invoice.createdAt)) }}</p>
-            </div>
-            <span class="app-badge" :class="{
-              'app-badge--success': invoice.status === 3,
-              'app-badge--warning': [2, 5].includes(invoice.status),
-              'app-badge--danger': invoice.status === 4,
-              'app-badge--info': [0, 1, 6].includes(invoice.status)
-            }">{{ statuses[invoice.status] ?? 'Không xác định' }}</span>
-          </header>
-
+        <div class="detail-modal-body">
           <dl class="invoice-amounts">
             <div class="outstanding">
               <dt>Phải thu còn lại</dt>
@@ -68,53 +98,87 @@
             </div>
           </dl>
 
-          <div v-if="!paymentOpen && eligible" class="payment-confirmation">
-            <label>
-              <input v-model="confirmed" type="checkbox" />
-              <span>Tôi đã đối chiếu mã hóa đơn, tên bệnh nhân và số tiền còn phải thu.</span>
-            </label>
-            <button type="button" class="app-btn app-btn--primary" :disabled="!confirmed || busy" @click="openPayment">
-              {{ invoice.remainingAmount > 0 ? 'Mở thu tiền và biên lai' : 'Xem lịch sử thu và biên lai' }}
-            </button>
-          </div>
-          <p v-else-if="!eligible && !paymentOpen" class="desk-muted">Hóa đơn này chưa thể mở phần thu tiền.</p>
-        </section>
-
-        <section v-else class="desk-panel empty-invoice" aria-live="polite">
-          <h2>{{ busy ? 'Đang tìm hóa đơn…' : 'Chi tiết hóa đơn' }}</h2>
-          <p v-if="!busy">Nhập mã hoặc chọn hóa đơn gần đây để xem số tiền còn phải thu.</p>
-        </section>
-
-        <section v-if="invoice && paymentOpen" class="desk-panel payment-panel" aria-labelledby="payment-title">
-          <header class="payment-heading">
-            <h2 id="payment-title" ref="paymentHeading" tabindex="-1">Thu tiền và biên lai</h2>
-            <div class="payment-actions">
-              <button type="button" class="app-btn app-btn--secondary" :disabled="busy" @click="refresh">Đối chiếu lại công nợ</button>
-              <button
-                type="button"
-                class="app-btn app-btn--secondary"
-                :disabled="busy || reviewRequired || !paymentPanel?.canLeave"
-                @click="startNewLookup"
-              >Tra hóa đơn khác</button>
+          <template v-if="!paymentOpen">
+            <div v-if="eligible" class="payment-confirmation">
+              <label>
+                <input v-model="confirmed" type="checkbox" />
+                <span>Tôi đã đối chiếu mã hóa đơn, tên bệnh nhân và số tiền còn phải thu.</span>
+              </label>
+              <div class="detail-footer-actions">
+                <button
+                  type="button"
+                  class="app-btn app-btn--secondary"
+                  :disabled="!canCloseDetail"
+                  @click="closeDetail"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  class="app-btn app-btn--primary"
+                  :disabled="!confirmed || busy"
+                  @click="openPayment"
+                >
+                  {{ invoice.remainingAmount > 0 ? 'Mở thu tiền và biên lai' : 'Xem lịch sử thu và biên lai' }}
+                </button>
+              </div>
             </div>
-          </header>
-          <p v-if="error" class="desk-error" role="alert">{{ error }}</p>
-          <div v-if="lastPayment" class="receipt-summary" aria-label="Biên lai lần thu vừa ghi nhận">
-            <strong>Đã ghi nhận giao dịch #{{ lastPayment.id }}</strong>
-            <span>Thực thu {{ money(lastPayment.amount) }}</span>
-            <span v-if="lastPayment.changeAmount && lastPayment.changeAmount > 0">Tiền thối {{ money(lastPayment.changeAmount) }}</span>
-            <PaymentReceiptModal :invoice-id="invoice.invoiceId" :payment-id="lastPayment.id" />
-          </div>
-          <InvoiceCashPayment
-            ref="paymentPanel"
-            :invoice-id="invoice.invoiceId"
-            :remaining-amount="reviewRequired ? 0 : invoice.remainingAmount"
-            :status="reviewRequired ? 0 : invoice.status"
-            @paid="onPaid"
-          />
-        </section>
+            <div v-else class="detail-ineligible">
+              <p class="desk-muted">Hóa đơn này chưa thể mở phần thu tiền.</p>
+              <div class="detail-footer-actions">
+                <button
+                  type="button"
+                  class="app-btn app-btn--secondary"
+                  :disabled="!canCloseDetail"
+                  @click="closeDetail"
+                >
+                  Đóng
+                </button>
+              </div>
+            </div>
+          </template>
+
+          <section v-else class="payment-panel" aria-labelledby="payment-title">
+            <header class="payment-heading">
+              <h3 id="payment-title" ref="paymentHeading" tabindex="-1">Thu tiền và biên lai</h3>
+              <div class="payment-actions">
+                <button type="button" class="app-btn app-btn--secondary" :disabled="busy" @click="refresh">
+                  Đối chiếu lại công nợ
+                </button>
+                <button
+                  type="button"
+                  class="app-btn app-btn--secondary"
+                  :disabled="busy || reviewRequired || !paymentPanel?.canLeave"
+                  @click="startNewLookup"
+                >
+                  Đóng &amp; tra hóa đơn khác
+                </button>
+              </div>
+            </header>
+
+            <p v-if="!canCloseDetail" class="desk-notice">
+              Đang xử lý hoặc cần đối chiếu lại công nợ trước khi đóng hộp thoại.
+            </p>
+            <p v-if="error" class="desk-error" role="alert">{{ error }}</p>
+            <div v-if="lastPayment" class="receipt-summary" aria-label="Biên lai lần thu vừa ghi nhận">
+              <strong>Đã ghi nhận giao dịch #{{ lastPayment.id }}</strong>
+              <span>Thực thu {{ money(lastPayment.amount) }}</span>
+              <span v-if="lastPayment.changeAmount && lastPayment.changeAmount > 0">
+                Tiền thối {{ money(lastPayment.changeAmount) }}
+              </span>
+              <PaymentReceiptModal :invoice-id="invoice.invoiceId" :payment-id="lastPayment.id" />
+            </div>
+            <InvoiceCashPayment
+              ref="paymentPanel"
+              :invoice-id="invoice.invoiceId"
+              :remaining-amount="reviewRequired ? 0 : invoice.remainingAmount"
+              :status="reviewRequired ? 0 : invoice.status"
+              @paid="onPaid"
+            />
+          </section>
+        </div>
       </div>
-    </div>
+    </dialog>
   </section>
 </template>
 <script setup lang="ts">
@@ -136,23 +200,44 @@ const paymentOpen = ref(false);
 const reviewRequired = ref(false);
 const busy = ref(false);
 const error = ref('');
+const lookupSource = ref<'manual' | 'history'>('manual');
 const statuses = ['Nháp', 'Chờ thanh toán', 'Thanh toán một phần', 'Đã thanh toán', 'Đã hủy', 'Đã hoàn một phần', 'Đã hoàn toàn bộ'];
 const invoiceCodeInput = ref<HTMLInputElement | null>(null);
 const paymentPanel = ref<InstanceType<typeof InvoiceCashPayment> | null>(null);
 const paymentHeading = ref<HTMLHeadingElement | null>(null);
+const historyPanel = ref<{ refresh: () => Promise<void> } | null>(null);
+let detailDialogEl: HTMLDialogElement | null = null;
+let paymentRecorded = false;
 const dateTime = new Intl.DateTimeFormat('vi-VN', {
   dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh'
 });
 const eligible = computed(() => allowed.value && !!invoice.value && [1, 2, 3, 5, 6].includes(invoice.value.status));
+const canCloseDetail = computed(() => !busy.value && (!paymentOpen.value || (!reviewRequired.value && !!paymentPanel.value?.canLeave)));
 const money = (value: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
 let version = 0;
+function statusBadgeClass(value: number) {
+  if (value === 3) return 'app-badge--success';
+  if (value === 2 || value === 5) return 'app-badge--warning';
+  if (value === 4) return 'app-badge--danger';
+  return 'app-badge--info';
+}
+function bindDetailDialog(element: unknown) {
+  if (typeof HTMLDialogElement !== 'undefined' && element instanceof HTMLDialogElement) {
+    detailDialogEl = element;
+    if (!element.open) element.showModal();
+  } else if (element === null) {
+    detailDialogEl = null;
+  }
+}
 async function selectFromHistory(selectedCode: string) {
   if (!allowed.value || busy.value || paymentOpen.value) return;
   code.value = selectedCode;
-  await lookup();
+  await lookup('history');
 }
-async function lookup() {
+async function lookup(source: 'manual' | 'history' = 'manual') {
   if (!allowed.value || busy.value || paymentOpen.value) return;
+  const activeSource = source === 'history' ? 'history' : 'manual';
+  lookupSource.value = activeSource;
   invoice.value = null; confirmed.value = false; error.value = '';
   const normalized = code.value.trim().toUpperCase();
   if (!/^[A-Z0-9-]{1,50}$/.test(normalized)) { error.value = 'Nhập đúng mã hóa đơn, tối đa 50 chữ/số hoặc dấu gạch nối.'; return; }
@@ -169,19 +254,53 @@ function openPayment() {
   paymentOpen.value = true;
   void nextTick(() => paymentHeading.value?.focus());
 }
+function refreshHistoryIfNeeded() {
+  if (!paymentRecorded) return;
+  paymentRecorded = false;
+  void nextTick(() => {
+    void historyPanel.value?.refresh();
+  });
+}
+function closeDetail() {
+  if (paymentOpen.value) {
+    startNewLookup();
+    return;
+  }
+  if (busy.value) return;
+  detailDialogEl?.close();
+  confirmed.value = false;
+  invoice.value = null;
+  lastPayment.value = null;
+  code.value = '';
+  error.value = '';
+  refreshHistoryIfNeeded();
+  if (lookupSource.value === 'manual') {
+    void nextTick(() => invoiceCodeInput.value?.focus());
+  }
+}
 function startNewLookup() {
   if (busy.value || reviewRequired.value || !paymentPanel.value?.canLeave) return;
+  detailDialogEl?.close();
   paymentOpen.value = false;
   confirmed.value = false;
   invoice.value = null;
   lastPayment.value = null;
   code.value = '';
   error.value = '';
-  void nextTick(() => invoiceCodeInput.value?.focus());
+  refreshHistoryIfNeeded();
+  if (lookupSource.value === 'manual') {
+    void nextTick(() => invoiceCodeInput.value?.focus());
+  }
+}
+function onDetailDialogCancel(event: Event) {
+  if (event.target !== detailDialogEl) return;
+  event.preventDefault();
+  closeDetail();
 }
 async function onPaid(payment: CashPaymentResponse) {
   if (!allowed.value || !invoice.value || payment.invoiceId !== invoice.value.invoiceId) return;
   lastPayment.value = payment;
+  paymentRecorded = true;
   version++; busy.value = false;
   await refresh();
 }
@@ -196,53 +315,239 @@ async function refresh() {
   } catch { if (ticket === version) error.value = 'Chưa đối chiếu được công nợ mới. Không nhận thêm tiền; đối chiếu lại hóa đơn.'; }
   finally { if (ticket === version) busy.value = false; }
 }
-onUnmounted(() => { version++; lastPayment.value = null; invoice.value = null; code.value = ''; confirmed.value = false; paymentOpen.value = false; });
+onUnmounted(() => {
+  version++;
+  detailDialogEl?.close();
+  detailDialogEl = null;
+  paymentRecorded = false;
+  lastPayment.value = null;
+  invoice.value = null;
+  code.value = '';
+  confirmed.value = false;
+  paymentOpen.value = false;
+  reviewRequired.value = false;
+  error.value = '';
+});
 </script>
 <style scoped>
 .invoice-desk { container-type: inline-size; color: #172b42; }
 .desk-heading { margin-bottom: 1.2rem; }
 .desk-heading h1 { margin: 0; font-size: clamp(1.45rem, 3vw, 2.1rem); line-height: 1.2; }
 .desk-heading p { margin: 0.45rem 0 0; color: #51647a; }
-.desk-layout { display: grid; gap: 1rem; align-items: start; }
-.desk-results { display: grid; gap: 1rem; min-width: 0; }
+
 .desk-panel {
   display: grid;
-  gap: 1rem;
+  gap: 0.85rem;
   min-width: 0;
-  padding: clamp(0.9rem, 2.5cqw, 1.35rem);
+  padding: clamp(0.9rem, 2.2cqw, 1.25rem);
   border: 1px solid #dbe5ed;
   border-radius: 14px;
   background: #fff;
 }
-.desk-panel h2, .desk-panel h3, .desk-panel p { margin: 0; }
-.desk-panel h2 { font-size: 1.16rem; line-height: 1.3; }
-.desk-panel h3 { font-size: 0.95rem; }
-.desk-muted, .empty-invoice p { color: #51647a; font-size: 0.88rem; }
-.lookup-panel form { display: grid; gap: 0.45rem; }
-.lookup-panel label { font-size: 0.88rem; font-weight: 650; }
+
+.desk-panel h2,
+.desk-panel p { margin: 0; }
+.desk-panel h2 { font-size: 1.12rem; line-height: 1.3; color: #102e56; }
+.desk-muted { color: #51647a; font-size: 0.88rem; }
+.quick-lookup-panel form { display: grid; gap: 0.45rem; }
+.quick-lookup-panel label { font-size: 0.86rem; font-weight: 650; color: #243b53; }
 .lookup-controls { display: flex; flex-wrap: wrap; gap: 0.45rem; }
-.lookup-controls input { flex: 1 1 9rem; min-width: 0; max-width: 100%; }
-.desk-panel .app-btn { min-height: 42px; white-space: normal; text-align: center; }
-.recent-invoices { display: grid; gap: 0.6rem; padding-top: 0.8rem; border-top: 1px solid #e4ecf2; }
-.invoice-heading, .payment-heading { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.65rem; }
-.invoice-heading > div { display: grid; gap: 0.25rem; overflow-wrap: anywhere; }
+.lookup-controls input { flex: 1 1 9rem; min-width: 0; max-width: 100%; min-height: 44px; }
+.desk-panel .app-btn { min-height: 44px; white-space: normal; text-align: center; }
+
+.desk-status {
+  padding: 0.7rem 0.9rem;
+  border: 1px solid #bfdbfe;
+  border-radius: 9px;
+  background: #f0f7ff;
+  color: #075985;
+  font-size: 0.9rem;
+}
+
+.desk-notice {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid #fed7aa;
+  border-radius: 9px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 0.86rem;
+}
+
+.desk-error,
+.receipt-summary { border-radius: 9px; padding: 0.7rem 0.9rem; }
+.desk-error { background: #fff0ed; border: 1px solid #fecaca; color: #8d2624; }
+.receipt-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 0.65rem; background: #edf8ef; color: #1d5733; }
+
+.invoice-detail-dialog {
+  box-sizing: border-box;
+  width: min(820px, calc(100% - 1.5rem));
+  max-width: 100%;
+  max-height: calc(100dvh - 1.5rem);
+  margin: auto;
+  padding: 0;
+  border: 1px solid #dbe5ed;
+  border-radius: 16px;
+  background: #fff;
+  color: #172b42;
+  box-shadow: 0 24px 70px rgba(15, 28, 45, 0.28);
+  overflow: hidden;
+}
+
+.invoice-detail-dialog:modal {
+  overscroll-behavior: contain;
+}
+
+.invoice-detail-dialog::backdrop {
+  background: rgba(15, 28, 45, 0.52);
+  backdrop-filter: blur(3px);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+.detail-modal-shell {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 1.5rem);
+  min-width: 0;
+}
+
+.detail-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: clamp(0.9rem, 2.5vw, 1.25rem);
+  border-bottom: 1px solid #e4ecf2;
+  background: #f8fafc;
+}
+
+.detail-modal-title-group {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  flex: 1 1 14rem;
+  overflow-wrap: anywhere;
+}
+
+.detail-modal-title-group h2,
+.detail-modal-title-group p { margin: 0; }
+.detail-modal-title-group h2 { font-size: clamp(1.15rem, 2.5vw, 1.4rem); line-height: 1.25; color: #102e56; }
+
+.detail-modal-header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.detail-close-btn {
+  flex: 0 0 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: #fff;
+  color: #172b42;
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.detail-close-btn:hover:not(:disabled) { background: #f1f5f9; }
+.detail-close-btn:focus-visible { outline: 3px solid rgba(2, 132, 199, 0.35); outline-offset: 2px; }
+.detail-close-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.detail-modal-body {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  padding: clamp(0.9rem, 2.5vw, 1.25rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  container-type: inline-size;
+}
+
+.detail-modal-body .app-btn {
+  min-height: 44px;
+  white-space: normal;
+  text-align: center;
+}
+
 .invoice-amounts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem; margin: 0; }
-.invoice-amounts > div { padding: 0.8rem; background: #f1f5f9; border-radius: 9px; }
+.invoice-amounts > div { padding: 0.8rem; background: #f1f5f9; border-radius: 9px; min-width: 0; }
 .invoice-amounts dt { font-size: 0.82rem; color: #3f546b; }
 .invoice-amounts dd { margin: 0.28rem 0 0; font-weight: 750; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .invoice-amounts .outstanding { grid-column: 1 / -1; color: #064e52; background: #e3f3f1; }
-.outstanding dd { font-size: clamp(1.24rem, 4cqw, 1.9rem); }
-.payment-confirmation { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.85rem; }
+.outstanding dd { font-size: clamp(1.2rem, 4cqw, 1.75rem); }
+
+.payment-confirmation,
+.detail-ineligible {
+  display: grid;
+  gap: 0.9rem;
+  padding-top: 0.25rem;
+}
+
 .payment-confirmation label { display: flex; align-items: flex-start; gap: 0.6rem; cursor: pointer; }
 .payment-confirmation input { margin-top: 0.2rem; width: 1.1rem; height: 1.1rem; flex: none; }
+
+.detail-footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.payment-panel {
+  display: grid;
+  gap: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid #e4ecf2;
+  min-width: 0;
+}
+
+.payment-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.payment-heading h3 { margin: 0; font-size: 1.12rem; color: #102e56; }
 .payment-actions { display: flex; flex-wrap: wrap; gap: 0.45rem; }
-.desk-error, .receipt-summary { border-radius: 9px; padding: 0.7rem 0.9rem; }
-.desk-error { background: #fff0ed; color: #8d2624; }
-.receipt-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 0.65rem; background: #edf8ef; color: #1d5733; }
-.empty-invoice { background: #f8fafc; }
-@container (min-width: 740px) {
-  .desk-layout { grid-template-columns: minmax(15rem, 1fr) minmax(0, 1.9fr); }
+
+@container (min-width: 540px) {
   .invoice-amounts { grid-template-columns: minmax(0, 1.35fr) repeat(2, minmax(0, 1fr)); }
   .invoice-amounts .outstanding { grid-column: auto; }
+}
+
+@container (max-width: 360px) {
+  .invoice-amounts { grid-template-columns: 1fr; }
+  .detail-footer-actions,
+  .payment-actions { flex-direction: column; align-items: stretch; }
+}
+
+@media print {
+  :global(body.receipt-printing) .invoice-detail-dialog,
+  :global(body.receipt-printing) .detail-modal-shell,
+  :global(body.receipt-printing) .detail-modal-body {
+    position: static;
+    inset: auto;
+    width: auto;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    overflow: visible;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  :global(body.receipt-printing) .invoice-detail-dialog::backdrop {
+    display: none;
+  }
 }
 </style>
