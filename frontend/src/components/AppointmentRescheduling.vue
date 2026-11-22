@@ -55,7 +55,7 @@
                 Giờ mới <b class="req">*</b>
                 <small v-if="slotDurationMinutes" class="text-muted">({{ slotDurationMinutes }}p)</small>
               </label>
-              <BookingTimeInput :input-id="'new-time-' + appointmentId" v-model="time" :slots="slots" :disabled="busy || scheduleLoading" @update:model-value="confirmed = false" />
+              <BookingTimeInput :input-id="'new-time-' + appointmentId" v-model="time" :slots="slots" :selected-date="day" hide-past-slots :disabled="busy || scheduleLoading" @update:model-value="confirmed = false" />
             </div>
           </div>
 

@@ -3,13 +3,18 @@ using Dental.Application.Interfaces;
 using FluentValidation;
 using Dental.Domain.Constants;
 using Dental.Domain.Enums;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace Dental.Application.Features.MOD_AUTH;
 
 public sealed record RecoveryRequest(string Phone, string? CitizenId = null, IdentityDocumentType? DocumentType = null, string? NationalityCode = null);
 public sealed record ResetPasswordRequest(Guid ChallengeId, string Phone, string Code, string NewPassword, string? CitizenId = null, IdentityDocumentType? DocumentType = null, string? NationalityCode = null);
-public sealed record RecoveryResponse(Guid ChallengeId, int ExpiresInSeconds = 300, int ResendAfterSeconds = 60);
+public sealed record RecoveryResponse(
+    Guid ChallengeId,
+    int ExpiresInSeconds = 300,
+    int ResendAfterSeconds = 60,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? DevelopmentCode = null);
 public sealed record RecoveryAccount(int UserId, string PasswordHash, string Phone, string? CitizenIdHash, int TokenVersion = 0, IdentityDocumentType? DocumentType = null, string? IssuingCountryCode = null);
 public sealed record RecoveryCode(Guid ChallengeId, string Code);
 
@@ -28,6 +33,7 @@ public interface IPasswordRecoverySms
 public interface IPasswordRecoveryDelivery
 {
     bool IsConfigured { get; }
+    bool ShowDevelopmentCode => false;
     bool Enqueue(string phone, RecoveryCode code);
 }
 
@@ -97,7 +103,7 @@ public sealed class PasswordRecoveryService(IPasswordRecoveryRepository reposito
         // Enqueue without awaiting external delivery: provider latency must not identify registered accounts.
         if (account is not null && !sms.Enqueue(account.Phone, code))
             codes.Revoke(request.Phone, code.ChallengeId);
-        return Result<RecoveryResponse>.Success(new(code.ChallengeId));
+        return Result<RecoveryResponse>.Success(new(code.ChallengeId, DevelopmentCode: sms.ShowDevelopmentCode && account is not null ? code.Code : null));
     }
 
     public async Task<Result<bool>> ResetAsync(ResetPasswordRequest request, CancellationToken ct = default)

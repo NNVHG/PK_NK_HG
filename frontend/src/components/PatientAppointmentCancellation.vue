@@ -153,8 +153,13 @@ onUnmounted(() => reset());
 }
 
 .custom-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
   max-width: 500px;
   width: calc(100% - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
   padding: 0;
   border: 1px solid #cbd5e1;
   border-radius: 12px;

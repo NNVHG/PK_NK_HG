@@ -231,6 +231,7 @@ button:disabled {
 }
 
 dialog {
+  margin: auto;
   width: min(90vw, 600px);
   max-height: 85vh;
   overflow: auto;

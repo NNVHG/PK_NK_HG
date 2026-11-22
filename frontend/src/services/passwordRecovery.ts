@@ -1,6 +1,6 @@
 import { apiClient } from '@/services/api';
 
-export interface RecoveryChallenge { challengeId: string; expiresInSeconds: number; resendAfterSeconds: number }
+export interface RecoveryChallenge { challengeId: string; expiresInSeconds: number; resendAfterSeconds: number; developmentCode?: string | null }
 export const passwordRecoveryService = {
   async request(phone: string, citizenId?: string, documentType?: 1 | 2, nationalityCode?: string): Promise<RecoveryChallenge> {
     return (await apiClient.post<RecoveryChallenge>('/auth/password-recovery/request', { phone, citizenId: citizenId || null, documentType, nationalityCode })).data;

@@ -6,6 +6,7 @@
       'layout--patient': authStore.isAuthenticated && isPatient
     }"
   >
+    <PageTransitionLoader :visible="routeTransitionVisible" />
     <!-- ==================== 0. THANH ĐIỀU HƯỚNG TRÊN CÙNG: DÀNH RIÊNG CHO BỆNH NHÂN ==================== -->
     <header v-if="authStore.isAuthenticated && isPatient" class="patient-topbar" :data-menu-open="menuOpen">
       <div class="patient-topbar-inner">
@@ -528,6 +529,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useRouter, useRoute } from 'vue-router';
+import PageTransitionLoader from '@/components/PageTransitionLoader.vue';
 import {
   isSelectableWorkspaceChair,
   isWorkingDentist,
@@ -555,6 +557,52 @@ const leftNavCollapsed = ref(false);
 const rightNavCollapsed = ref(false);
 const menuButton = ref<HTMLButtonElement | null>(null);
 const mainContent = ref<HTMLElement | null>(null);
+
+const routeTransitionVisible = ref(false);
+let transitionStartedAt = 0;
+let transitionHideTimer: ReturnType<typeof setTimeout> | undefined;
+let transitionFailsafeTimer: ReturnType<typeof setTimeout> | undefined;
+
+function clearTransitionTimers() {
+  if (transitionHideTimer) {
+    clearTimeout(transitionHideTimer);
+    transitionHideTimer = undefined;
+  }
+  if (transitionFailsafeTimer) {
+    clearTimeout(transitionFailsafeTimer);
+    transitionFailsafeTimer = undefined;
+  }
+}
+
+const removeBeforeEach = router.beforeEach((to, from) => {
+  if (from.matched.length > 0 && to.path !== from.path) {
+    clearTransitionTimers();
+    transitionStartedAt = Date.now();
+    routeTransitionVisible.value = true;
+    transitionFailsafeTimer = setTimeout(() => {
+      routeTransitionVisible.value = false;
+    }, 4000);
+  }
+});
+
+const removeAfterEach = router.afterEach(() => {
+  if (!routeTransitionVisible.value) return;
+  clearTransitionTimers();
+  const elapsed = Date.now() - transitionStartedAt;
+  const remaining = Math.max(0, 520 - elapsed);
+  if (remaining === 0) {
+    routeTransitionVisible.value = false;
+  } else {
+    transitionHideTimer = setTimeout(() => {
+      routeTransitionVisible.value = false;
+    }, remaining);
+  }
+});
+
+const removeOnError = router.onError(() => {
+  clearTransitionTimers();
+  routeTransitionVisible.value = false;
+});
 
 const isDentist = computed(() => authStore.role === 'DENTIST');
 const isWorkspaceRole = computed(() => isDentist.value || authStore.role === 'ASSISTANT');
@@ -826,6 +874,10 @@ onMounted(() => {
 onBeforeUnmount(() => {
   workspaceRequest++;
   clearInterval(assistantWorkspaceTimer);
+  clearTransitionTimers();
+  removeBeforeEach();
+  removeAfterEach();
+  removeOnError();
   document.removeEventListener('keydown', onKeydown);
   window.removeEventListener('resize', onResize);
   window.removeEventListener(WORKSPACE_UPDATED_EVENT, onWorkspaceUpdatedEvent);

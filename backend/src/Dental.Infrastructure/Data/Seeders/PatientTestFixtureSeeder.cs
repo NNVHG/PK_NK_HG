@@ -63,6 +63,8 @@ public static class PatientTestFixtureSeeder
             return;
         }
 
+        await SeedPassportTestAccountIfMissingAsync(db, identityHasher, password, logger, ct);
+
         if (await HasSeedMarkerAsync(db, ct)) return;
 
         var receptionist = await db.Users.FirstOrDefaultAsync(x => x.Phone == "0900000002", ct);
@@ -235,6 +237,63 @@ public static class PatientTestFixtureSeeder
 
     private static async Task<bool> HasSeedMarkerAsync(DentalDbContext db, CancellationToken ct) =>
         await db.AuditLogs.AnyAsync(x => x.EntityType == MarkerType && x.Action == MarkerAction && x.Detail == MarkerDetail, ct);
+
+    private static async Task SeedPassportTestAccountIfMissingAsync(
+        DentalDbContext db, IKeyedIdentityHasher hasher, string demoPassword, ILogger logger, CancellationToken ct)
+    {
+        var passportHash = hasher.Hash("P1234567", IdentityDocumentType.Passport, "USA");
+        var existingPatient = await db.Patients.FirstOrDefaultAsync(x => x.CitizenIdHash == passportHash, ct);
+        if (existingPatient is { UserId: not null }) return;
+
+        var patientRole = await db.Roles.FirstOrDefaultAsync(x => x.RoleCode == RoleCodes.Patient, ct);
+        if (patientRole is null) return;
+
+        var now = DateTime.UtcNow;
+        var dob = new DateOnly(1990, 5, 12);
+        var user = new User
+        {
+            Phone = "0900000109",
+            LoginByCitizenId = true,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(demoPassword, 12),
+            FullName = "JOHN MILLER (DEMO)",
+            DateOfBirth = dob,
+            Gender = "Nam",
+            RoleId = patientRole.RoleId,
+            IsActive = true,
+            RequiresPhoneActivation = false,
+            PhoneVerifiedAtUtc = now,
+            CreatedAt = now,
+        };
+        db.Users.Add(user);
+
+        if (existingPatient is null)
+        {
+            db.Patients.Add(new Patient
+            {
+                FullName = "JOHN MILLER (DEMO)",
+                DateOfBirth = dob,
+                Gender = "Nam",
+                Phone = "0900000109",
+                CitizenIdHash = passportHash,
+                CitizenIdMasked = hasher.Mask("P1234567", IdentityDocumentType.Passport),
+                DocumentType = IdentityDocumentType.Passport,
+                IssuingCountryCode = "USA",
+                HashScheme = IdentityHashScheme.HmacCanonical,
+                IdentityKeyVersion = hasher.CurrentVersion,
+                CitizenIdVersion = 1,
+                IsActive = true,
+                CreatedAt = now,
+                User = user,
+            });
+        }
+        else
+        {
+            existingPatient.User = user;
+        }
+
+        await db.SaveChangesAsync(ct);
+        logger.LogInformation("Patient test fixtures: ensured passport test patient KH-109 is available.");
+    }
 
     private sealed record SourcePerson(string SourceCode, string Name, DateOnly DateOfBirth, string Gender, string Phone, string Address, string? CitizenId);
 

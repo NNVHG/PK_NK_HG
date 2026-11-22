@@ -76,7 +76,7 @@ watch(() => [props.invoiceId, props.paymentId], () => { close(); receipt.value =
 onUnmounted(cleanup);
 </script>
 <style>
-.receipt-dialog { width: min(90vw, 500px); max-height: 85vh; overflow: auto; }
+.receipt-dialog { margin: auto; width: min(90vw, 500px); max-height: 85vh; overflow: auto; }
 .receipt-dialog::backdrop { background: rgb(0 0 0 / .4); }
 .payment-receipt { background: white; color: black; padding: 12px; font: 12px Arial, sans-serif; }
 .receipt-logo { display: block; margin: 0 auto 4px; }

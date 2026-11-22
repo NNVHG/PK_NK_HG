@@ -47,11 +47,36 @@
       <label>Mã OTP kích hoạt<input v-model="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" :disabled="busy" class="input-otp" placeholder="••••••" /></label>
       <p class="hint-text">Mã có 6 số, hiệu lực 5 phút, tối đa 5 lần sai. Xin mã mới cách ít nhất 60 giây.</p>
       <div v-if="challenge.developmentCode" class="demo-code">
-        <span>Mã hỗ trợ demo (Development): <strong>{{ challenge.developmentCode }}</strong></span>
-        <button type="button" :disabled="busy" @click="code = challenge.developmentCode || ''">Dùng mã này</button>
+        <span>Mã OTP tạm thời (chưa kết nối API SMS): <strong>{{ challenge.developmentCode }}</strong></span>
+        <div class="demo-code-actions">
+          <button type="button" :disabled="busy" @click="code = challenge.developmentCode || ''">Điền mã này</button>
+          <button type="button" :disabled="busy" @click="showOtpPopup = true">Hiện popup OTP</button>
+        </div>
       </div>
       <button type="submit" :disabled="busy">Xác minh OTP</button>
     </form>
+
+    <div
+      v-if="showOtpPopup && challenge?.developmentCode"
+      class="otp-temp-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="activation-otp-popup-title"
+      @click.self="showOtpPopup = false"
+    >
+      <div class="otp-temp-card">
+        <div class="otp-temp-head">
+          <h2 id="activation-otp-popup-title">Mã OTP kích hoạt (Tạm thời)</h2>
+          <button type="button" class="otp-temp-close" aria-label="Đóng" @click="showOtpPopup = false">✕</button>
+        </div>
+        <p class="otp-temp-desc">Hệ thống chưa kết nối API gửi SMS về điện thoại — hiển thị mã OTP tạm để kiểm thử:</p>
+        <div class="otp-temp-code">{{ challenge.developmentCode }}</div>
+        <div class="otp-temp-actions">
+          <button type="button" class="otp-temp-btn-secondary" @click="showOtpPopup = false">Đóng</button>
+          <button type="button" class="otp-temp-btn-primary" @click="fillDevelopmentCode">Điền mã OTP ngay</button>
+        </div>
+      </div>
+    </div>
     <form v-if="grant && !uncertain" @submit.prevent="complete" novalidate>
       <h2>{{ grant.mustChangePassword ? 'Đổi mật khẩu bắt buộc' : 'Chọn mật khẩu đăng nhập' }}</h2>
       <p class="hint-text">OTP đã được xác minh. Hoàn tất lựa chọn trong 5 phút.</p>
@@ -88,10 +113,17 @@ const loginMode = ref<'cccd' | 'passport'>('cccd');
 const nationalityCode = ref('');
 const phone = ref(''), password = ref(''), code = ref(''), newPassword = ref(''), repeatPassword = ref('');
 const choice = ref('new'), confirmed = ref(false), busy = ref(false), done = ref(false), uncertain = ref(false);
-const challenge = ref<ActivationChallenge | null>(null), grant = ref<ActivationGrant | null>(null), error = ref(''), message = ref('');
+const challenge = ref<ActivationChallenge | null>(null), grant = ref<ActivationGrant | null>(null), error = ref(''), message = ref(''), showOtpPopup = ref(false);
 let generation = 0, disposed = false;
 const identity = () => `${auth.user?.userId}/${auth.role}`;
 const alive = (t: number, owner: string) => !disposed && t === generation && owner === identity();
+
+function fillDevelopmentCode() {
+  if (challenge.value?.developmentCode) {
+    code.value = challenge.value.developmentCode;
+  }
+  showOtpPopup.value = false;
+}
 
 onMounted(() => {
   const prefill = takeActivationPrefill();
@@ -101,7 +133,7 @@ onMounted(() => {
   nationalityCode.value = prefill.nationalityCode;
 });
 
-function clear() { phone.value = ''; password.value = ''; nationalityCode.value = ''; code.value = ''; newPassword.value = ''; repeatPassword.value = ''; challenge.value = null; grant.value = null; confirmed.value = false; choice.value = 'new'; }
+function clear() { phone.value = ''; password.value = ''; nationalityCode.value = ''; code.value = ''; newPassword.value = ''; repeatPassword.value = ''; challenge.value = null; grant.value = null; confirmed.value = false; choice.value = 'new'; showOtpPopup.value = false; }
 function restart() { if (disposed || busy.value) return; generation++; clear(); done.value = false; uncertain.value = false; error.value = ''; message.value = ''; }
 function failure(cause: unknown, fallback: string) { const data = (cause as { response?: { data?: { message?: unknown } } })?.response?.data; return typeof data?.message === 'string' ? data.message : fallback; }
 async function requestCode() {
@@ -133,7 +165,7 @@ async function requestCode() {
     const data = await patientActivationService.request(val, password.value, docType, country);
     if (!alive(t, owner)) return;
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.challengeId) || data.expiresInSeconds !== 300 || data.resendAfterSeconds !== 60 || data.developmentCode != null && !/^[0-9]{6}$/.test(data.developmentCode)) throw Error();
-    challenge.value = data; phone.value = ''; message.value = data.developmentCode ? 'Mã OTP mô phỏng chỉ hiển thị trong Development.' : 'Nếu thông tin đúng và tài khoản đủ điều kiện, mã kích hoạt sẽ được gửi tới SĐT đăng ký.';
+    challenge.value = data; phone.value = ''; showOtpPopup.value = Boolean(data.developmentCode); message.value = data.developmentCode ? 'Mã OTP tạm thời hiển thị do chưa kết nối API SMS.' : 'Nếu thông tin đúng và tài khoản đủ điều kiện, mã kích hoạt sẽ được gửi tới SĐT đăng ký.';
   } catch (cause) { if (alive(t, owner)) error.value = failure(cause, 'Chưa yêu cầu được mã kích hoạt. Thử lại sau hoặc liên hệ phòng khám.'); }
   finally { if (alive(t, owner)) { busy.value = false; password.value = ''; } }
 }
@@ -459,6 +491,99 @@ button:disabled {
   background: #dbeafe;
   color: #1e40af;
   border: 1px solid #bfdbfe;
+  box-shadow: none;
+}
+
+.demo-code-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.otp-temp-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(15, 45, 89, 0.5);
+  backdrop-filter: blur(3px);
+}
+
+.otp-temp-card {
+  width: min(420px, 100%);
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 16px;
+  padding: 1.25rem 1.35rem;
+  box-shadow: 0 24px 50px rgba(15, 23, 42, 0.25);
+}
+
+.otp-temp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.otp-temp-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #0f2d59;
+}
+
+.otp-temp-close {
+  width: auto !important;
+  min-height: 32px !important;
+  margin: 0 !important;
+  padding: 0.2rem 0.55rem !important;
+  background: #f1f5f9 !important;
+  color: #334155 !important;
+  box-shadow: none !important;
+}
+
+.otp-temp-desc {
+  margin: 0.65rem 0 0.85rem;
+  font-size: 0.86rem;
+  color: #475569;
+  line-height: 1.45;
+  text-align: left;
+}
+
+.otp-temp-code {
+  text-align: center;
+  font-size: 2rem;
+  font-weight: 850;
+  letter-spacing: 0.35rem;
+  color: #1857b6;
+  background: #eff6ff;
+  border: 1.5px dashed #93c5fd;
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.otp-temp-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+.otp-temp-btn-secondary {
+  width: auto !important;
+  margin: 0 !important;
+  padding: 0.5rem 1rem !important;
+  background: #ffffff !important;
+  color: #334155 !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: none !important;
+}
+
+.otp-temp-btn-primary {
+  width: auto !important;
+  margin: 0 !important;
+  padding: 0.5rem 1rem !important;
 }
 
 [role="alert"] {

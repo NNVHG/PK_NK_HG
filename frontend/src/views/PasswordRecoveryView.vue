@@ -48,6 +48,13 @@
       </template>
       <template v-if="store.challenge">
         <p class="hint-text">Mã gồm 6 chữ số, có hiệu lực 5 phút và tối đa 5 lần nhập sai. Có thể yêu cầu mã mới sau 60 giây.</p>
+        <div v-if="developmentCode" class="demo-code">
+          <span>Mã OTP tạm thời (chưa kết nối API SMS): <strong>{{ developmentCode }}</strong></span>
+          <div class="demo-code-actions">
+            <button type="button" :disabled="busy" @click="code = developmentCode || ''">Điền mã này</button>
+            <button type="button" :disabled="busy" @click="showOtpPopup = true">Hiện popup OTP</button>
+          </div>
+        </div>
         <label for="recovery-code">Mã OTP từ SMS</label>
         <input id="recovery-code" ref="codeInput" v-model="code" name="code" type="text" inputmode="numeric" maxlength="6"
           autocomplete="one-time-code" :disabled="busy" :aria-invalid="invalidField === 'code'" aria-describedby="recovery-error" class="input-otp" placeholder="••••••" />
@@ -69,6 +76,28 @@
     <footer class="recovery-nav">
       <RouterLink to="/login">Quay lại đăng nhập</RouterLink>
     </footer>
+
+    <div
+      v-if="showOtpPopup && developmentCode"
+      class="otp-temp-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="recovery-otp-popup-title"
+      @click.self="showOtpPopup = false"
+    >
+      <div class="otp-temp-card">
+        <div class="otp-temp-head">
+          <h2 id="recovery-otp-popup-title">Mã OTP khôi phục (Tạm thời)</h2>
+          <button type="button" class="otp-temp-close" aria-label="Đóng" @click="showOtpPopup = false">✕</button>
+        </div>
+        <p class="otp-temp-desc">Hệ thống chưa kết nối API gửi SMS về điện thoại — hiển thị mã OTP tạm để kiểm thử:</p>
+        <div class="otp-temp-code">{{ developmentCode }}</div>
+        <div class="otp-temp-actions">
+          <button type="button" class="otp-temp-btn-secondary" @click="showOtpPopup = false">Đóng</button>
+          <button type="button" class="otp-temp-btn-primary" @click="fillDevelopmentCode">Điền mã OTP ngay</button>
+        </div>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -83,6 +112,7 @@ const accountType = ref<'patient' | 'staff'>('patient'), documentType = ref<1 | 
 const countryInput = ref<HTMLInputElement | null>(null);
 const phone = ref(''), citizenId = ref(''), code = ref(''), password = ref(''), confirmPassword = ref('');
 const error = ref(''), message = ref(''), invalidField = ref(''), busy = ref(false), done = ref(false);
+const developmentCode = ref<string | null>(null), showOtpPopup = ref(false);
 const phoneInput = ref<HTMLInputElement | null>(null), codeInput = ref<HTMLInputElement | null>(null);
 const citizenIdInput = ref<HTMLInputElement | null>(null);
 const passwordInput = ref<HTMLInputElement | null>(null), confirmInput = ref<HTMLInputElement | null>(null);
@@ -101,6 +131,10 @@ function changeDocument() {
   citizenId.value = ''; nationalityCode.value = ''; error.value = ''; invalidField.value = '';
 }
 function clearSecrets() { code.value = ''; password.value = ''; confirmPassword.value = ''; }
+function fillDevelopmentCode() {
+  if (developmentCode.value) code.value = developmentCode.value;
+  showOtpPopup.value = false;
+}
 async function requestCode() {
   if (busy.value || !active || done.value) return;
   error.value = ''; invalidField.value = '';
@@ -118,11 +152,16 @@ async function requestCode() {
   try {
     const response = await passwordRecoveryService.request(phone.value, ...identityArguments());
     if (!active || version !== requestVersion) return;
-    store.set(response); clearSecrets(); resendAt = Date.now() + response.resendAfterSeconds * 1000;
-    message.value = 'Nếu thông tin khớp tài khoản đang hoạt động, bạn sẽ nhận được mã SMS. Nếu chưa nhận được, kiểm tra giấy tờ và số điện thoại đăng ký hoặc liên hệ phòng khám.';
+    const { developmentCode: devCode, ...challengeMeta } = response;
+    store.set(challengeMeta); clearSecrets(); resendAt = Date.now() + response.resendAfterSeconds * 1000;
+    developmentCode.value = typeof devCode === 'string' && /^[0-9]{6}$/.test(devCode) ? devCode : null;
+    showOtpPopup.value = Boolean(developmentCode.value);
+    message.value = developmentCode.value
+      ? 'Nếu thông tin khớp tài khoản đang hoạt động, mã OTP tạm thời đã hiển thị do chưa kết nối API SMS.'
+      : 'Nếu thông tin khớp tài khoản đang hoạt động, bạn sẽ nhận được mã SMS. Nếu chưa nhận được, kiểm tra giấy tờ và số điện thoại đăng ký hoặc liên hệ phòng khám.';
     await nextTick(); if (active) codeInput.value?.focus();
   } catch (err: any) {
-    if (active && version === requestVersion) { clearSecrets(); error.value = err.response?.data?.message || 'Chưa thể yêu cầu mã. Vui lòng thử lại hoặc liên hệ phòng khám.'; }
+    if (active && version === requestVersion) { clearSecrets(); developmentCode.value = null; showOtpPopup.value = false; error.value = err.response?.data?.message || 'Chưa thể yêu cầu mã. Vui lòng thử lại hoặc liên hệ phòng khám.'; }
   } finally { if (active && version === requestVersion) busy.value = false; }
 }
 async function submit() {
@@ -139,7 +178,7 @@ async function submit() {
   try {
     await passwordRecoveryService.reset(store.challenge.challengeId, phone.value, code.value, password.value, ...identityArguments());
     if (!active || version !== requestVersion) return;
-    store.clear(); phone.value = ''; citizenId.value = ''; nationalityCode.value = ''; clearSecrets(); done.value = true;
+    store.clear(); phone.value = ''; citizenId.value = ''; nationalityCode.value = ''; clearSecrets(); developmentCode.value = null; showOtpPopup.value = false; done.value = true;
     message.value = 'Đã đặt mật khẩu mới. Vui lòng đăng nhập lại bằng mật khẩu mới.';
   } catch (err: any) {
     if (active && version === requestVersion) { clearSecrets(); error.value = err.response?.data?.message || 'Chưa xác định được kết quả. Hãy thử đăng nhập bằng mật khẩu mới hoặc yêu cầu mã khác.'; }
@@ -147,12 +186,12 @@ async function submit() {
 }
 function changeIdentity() {
   if (busy.value) return;
-  ++requestVersion; store.clear(); clearSecrets(); phone.value = ''; citizenId.value = ''; nationalityCode.value = ''; error.value = ''; message.value = ''; invalidField.value = '';
+  ++requestVersion; store.clear(); clearSecrets(); developmentCode.value = null; showOtpPopup.value = false; phone.value = ''; citizenId.value = ''; nationalityCode.value = ''; error.value = ''; message.value = ''; invalidField.value = '';
   // Keep the local resend deadline; changing the form must not bypass the server cooldown.
   nextTick(() => phoneInput.value?.focus());
 }
 onMounted(() => { store.clear(); phoneInput.value?.focus(); });
-onUnmounted(() => { active = false; ++requestVersion; store.clear(); clearSecrets(); phone.value = ''; citizenId.value = ''; nationalityCode.value = ''; message.value = ''; });
+onUnmounted(() => { active = false; ++requestVersion; store.clear(); clearSecrets(); developmentCode.value = null; showOtpPopup.value = false; phone.value = ''; citizenId.value = ''; nationalityCode.value = ''; message.value = ''; });
 </script>
 
 <style scoped>
@@ -418,6 +457,123 @@ button:disabled {
 
 .recovery-nav a:hover {
   text-decoration: underline;
+}
+
+.demo-code {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 0.85rem;
+  border-radius: 10px;
+  color: #1e40af;
+  margin: 0.75rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.88rem;
+}
+
+.demo-code-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.demo-code button {
+  width: auto;
+  min-height: 32px;
+  margin: 0.25rem 0 0;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.82rem;
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+  box-shadow: none;
+}
+
+.otp-temp-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(15, 45, 89, 0.5);
+  backdrop-filter: blur(3px);
+}
+
+.otp-temp-card {
+  width: min(420px, 100%);
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 16px;
+  padding: 1.25rem 1.35rem;
+  box-shadow: 0 24px 50px rgba(15, 23, 42, 0.25);
+}
+
+.otp-temp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.otp-temp-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #0f2d59;
+}
+
+.otp-temp-close {
+  width: auto !important;
+  min-height: 32px !important;
+  margin: 0 !important;
+  padding: 0.2rem 0.55rem !important;
+  background: #f1f5f9 !important;
+  color: #334155 !important;
+  box-shadow: none !important;
+}
+
+.otp-temp-desc {
+  margin: 0.65rem 0 0.85rem;
+  font-size: 0.86rem;
+  color: #475569;
+  line-height: 1.45;
+  text-align: left;
+}
+
+.otp-temp-code {
+  text-align: center;
+  font-size: 2rem;
+  font-weight: 850;
+  letter-spacing: 0.35rem;
+  color: #1857b6;
+  background: #eff6ff;
+  border: 1.5px dashed #93c5fd;
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.otp-temp-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+.otp-temp-btn-secondary {
+  width: auto !important;
+  margin: 0 !important;
+  padding: 0.5rem 1rem !important;
+  background: #ffffff !important;
+  color: #334155 !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: none !important;
+}
+
+.otp-temp-btn-primary {
+  width: auto !important;
+  margin: 0 !important;
+  padding: 0.5rem 1rem !important;
 }
 
 @media (max-width: 440px) {
