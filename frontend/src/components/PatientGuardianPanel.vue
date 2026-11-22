@@ -1,5 +1,5 @@
 <template>
-  <div class="guardian-management">
+  <div v-if="canManage || isChild || activeGuardian" class="guardian-management">
     <div class="section-header">
       <div>
         <p class="eyebrow">QUAN HỆ ĐẠI DIỆN HỢP PHÁP</p>
@@ -23,8 +23,9 @@
     <div v-else-if="activeGuardian" class="active-guardian-card">
       <div class="card-header">
         <span class="status-badge active">Đang hiệu lực</span>
-        <h4>{{ activeGuardian.guardianFullName }} ({{ activeGuardian.relationship }})</h4>
-        <p class="code">Mã BN: {{ activeGuardian.guardianPatientCode }}</p>
+        <h4>Người giám hộ: {{ activeGuardian.guardianFullName }}</h4>
+        <span class="rel-pill">Quan hệ với bệnh nhi: {{ activeGuardian.relationship }}</span>
+        <span class="code">Mã hồ sơ giám hộ: {{ activeGuardian.guardianPatientCode }}</span>
       </div>
       <div class="card-body">
         <p><strong>Ngày gán:</strong> {{ formatDate(activeGuardian.assignedAt) }}</p>
@@ -176,7 +177,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { patientGuardiansService, type PatientGuardianSummary } from '@/services/patientGuardians';
 import { isUnderFourteen } from '@/services/patientAge';
@@ -307,6 +308,7 @@ async function submitPromote() {
   }
 }
 
+watch(() => props.patientId, loadData);
 onMounted(loadData);
 </script>
 
@@ -314,7 +316,10 @@ onMounted(loadData);
 .guardian-management { margin-top: 1.5rem; }
 .section-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; }
 .active-guardian-card { border: 1px solid #cbd5e1; border-radius: 8px; padding: 1.25rem; background: #f8fafc; margin-bottom: 1.5rem; }
-.card-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
+.card-header { display: flex; align-items: center; flex-wrap: wrap; gap: 0.65rem; margin-bottom: 0.75rem; }
+.card-header h4 { margin: 0; color: #0f2d59; font-size: 1rem; }
+.rel-pill { font-size: 0.78rem; font-weight: 700; background: #fef3c7; color: #92400e; padding: 0.2rem 0.55rem; border-radius: 4px; }
+.code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; font-weight: 700; background: #e2e8f0; color: #334155; padding: 0.2rem 0.55rem; border-radius: 4px; }
 .status-badge { font-size: 0.75rem; font-weight: 600; padding: 0.2rem 0.5rem; border-radius: 4px; }
 .status-badge.active { background: #dcfce7; color: #15803d; }
 .card-actions { display: flex; gap: 0.75rem; margin-top: 1rem; }

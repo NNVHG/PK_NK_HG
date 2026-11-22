@@ -14,19 +14,22 @@ public sealed class MedicalHistoryService
     private readonly IMedicalHistoryRepository _medicalHistoryRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IAuditLogger _auditLogger;
+    private readonly IPatientGuardianRepository? _guardianRepository;
 
     public MedicalHistoryService(
         IPatientRepository patientRepository,
         IVisitRepository visitRepository,
         IMedicalHistoryRepository medicalHistoryRepository,
         IUnitOfWork unitOfWork,
-        IAuditLogger auditLogger)
+        IAuditLogger auditLogger,
+        IPatientGuardianRepository? guardianRepository = null)
     {
         _patientRepository = patientRepository;
         _visitRepository = visitRepository;
         _medicalHistoryRepository = medicalHistoryRepository;
         _unitOfWork = unitOfWork;
         _auditLogger = auditLogger;
+        _guardianRepository = guardianRepository;
     }
 
     public async Task<Result<MedicalHistoryRecordResponse>> RecordAsync(
@@ -119,10 +122,20 @@ public sealed class MedicalHistoryService
         CancellationToken ct)
     {
         var patient = await _patientRepository.GetByIdAsync(patientId, ct);
-        if (patient is null ||
-            (currentRoleCode == RoleCodes.Patient && patient.UserId != currentUserId))
+        if (patient is null)
         {
             return Result.Failure(Error.NotFound);
+        }
+
+        if (currentRoleCode == RoleCodes.Patient)
+        {
+            var isSelf = patient.UserId == currentUserId;
+            var isGuardian = !isSelf && _guardianRepository is not null &&
+                await _guardianRepository.HasActiveGuardianshipAsync(currentUserId, patientId, ct);
+            if (!isSelf && !isGuardian)
+            {
+                return Result.Failure(Error.NotFound);
+            }
         }
 
         return Result.Success();

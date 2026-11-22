@@ -32,7 +32,8 @@
         <button v-for="tab in tabs" :key="tab.id" type="button" :class="{ active: activeTab === tab.id }" :aria-current="activeTab === tab.id ? 'page' : undefined" @click="activeTab = tab.id">{{ tab.label }}</button>
       </nav>
 
-      <section v-if="activeTab === 'info'" class="panel content-panel">
+      <Transition name="detail-tab-fade" mode="out-in">
+      <section v-if="activeTab === 'info'" key="tab-info" class="panel content-panel">
         <header class="section-heading">
           <div><p class="eyebrow">THÔNG TIN CƠ BẢN</p><h2>Hồ sơ cá nhân</h2></div>
           <button v-if="canEdit" class="button button-quiet" type="button" @click="openEditForm">Sửa hồ sơ</button>
@@ -46,20 +47,20 @@
           <div><dt>Email</dt><dd>{{ patient.email || 'Chưa cập nhật' }}</dd></div>
           <div class="wide"><dt>Địa chỉ</dt><dd>{{ patientDisplayAddress(patient.fullName, patient.address) || 'Chưa cập nhật' }}</dd></div>
         </dl>
-        <PatientCitizenId :patient-id="patient.patientId" />
+        <PatientCitizenId v-if="!isChildPatient" :patient-id="patient.patientId" />
         <PatientGuardianPanel :patient-id="patient.patientId" :ward-date-of-birth="patient.dateOfBirth" @promoted="loadPatient" />
 
       </section>
 
-      <section v-else-if="activeTab === 'prescriptions'" class="panel content-panel">
+      <section v-else-if="activeTab === 'prescriptions'" key="tab-prescriptions" class="panel content-panel">
         <PatientPrescriptionHistory :key="patient.patientId" :patient-id="patient.patientId" />
       </section>
 
-      <section v-else-if="activeTab === 'images'" class="panel content-panel">
+      <section v-else-if="activeTab === 'images'" key="tab-images" class="panel content-panel">
         <DentalImageAttachments :patient-id="patient.patientId" />
       </section>
 
-      <section v-else-if="activeTab === 'timeline'" class="panel content-panel">
+      <section v-else-if="activeTab === 'timeline'" key="tab-timeline" class="panel content-panel">
         <header class="section-heading"><div><p class="eyebrow">CÁC LẦN KHÁM</p><h2>Lịch sử khám</h2></div></header>
         <p v-if="timelineError" class="notice error" role="alert">{{ timelineError }}</p>
         <p v-else-if="timelineLoading && !timeline.length" class="empty-state">Đang tải lịch sử khám...</p>
@@ -128,7 +129,7 @@
         <button v-if="timelinePage.hasNextPage" class="button button-quiet load-more" type="button" :disabled="timelineLoading" @click="loadMoreTimeline">{{ timelineLoading ? 'Đang tải...' : 'Xem thêm' }}</button>
       </section>
 
-      <section v-else-if="activeTab === 'history'" class="panel content-panel">
+      <section v-else-if="activeTab === 'history'" key="tab-history" class="panel content-panel">
         <header class="section-heading">
           <div><p class="eyebrow">BẢN CHỤP MỚI NHẤT</p><h2>Tiền sử &amp; dị ứng</h2></div>
           <button v-if="canWriteRecords" class="button button-quiet" type="button" :disabled="!activeVisit" @click="openMedicalHistoryForm">Cập nhật tiền sử</button>
@@ -181,7 +182,7 @@
         </section>
       </section>
 
-      <section v-else class="panel content-panel">
+      <section v-else key="tab-vitals" class="panel content-panel">
         <header class="section-heading">
           <div><p class="eyebrow">GHI NHẬN THEO LẦN KHÁM</p><h2>Sinh hiệu</h2></div>
           <button v-if="canWriteRecords" class="button button-quiet" type="button" :disabled="!activeVisit" @click="openVitalForm">Ghi sinh hiệu</button>
@@ -216,6 +217,7 @@
           <button v-if="vitalSignsPage.hasNextPage" class="button button-quiet load-more" type="button" :disabled="vitalSignsLoading" @click="loadMoreVitalSigns">{{ vitalSignsLoading ? 'Đang tải...' : 'Xem thêm sinh hiệu' }}</button>
         </section>
       </section>
+      </Transition>
     </template>
 
     <div v-if="editVisible" class="modal-backdrop" @click.self="closeEditForm">
@@ -290,6 +292,10 @@ const tabIds: TabId[] = ['info', 'timeline', 'history', 'vitals', 'prescriptions
 const queryTab = Array.isArray(route.query.tab) ? route.query.tab[0] : route.query.tab;
 const activeTab = ref<TabId>(tabIds.find(id => id === queryTab) ?? 'info');
 const isPatientView = computed(() => authStore.role === 'PATIENT');
+const isChildPatient = computed(() => {
+  const age = calculateAge(patient.value?.dateOfBirth ?? '');
+  return typeof age === 'number' && age < 14;
+});
 const tabs: Array<{ id: TabId; label: string }> = [
   { id: 'info', label: 'Thông tin' }, { id: 'timeline', label: 'Lịch sử khám' },
   { id: 'prescriptions', label: 'Đơn thuốc' }, { id: 'images', label: 'Ảnh hồ sơ' }, { id: 'history', label: 'Tiền sử & dị ứng' }, { id: 'vitals', label: 'Sinh hiệu' }
@@ -534,6 +540,7 @@ async function loadHistoryArchive(reset: boolean) {
 function loadMoreHistory() { if (!historyArchiveLoading.value) void loadHistoryArchive(false); }
 
 async function loadOpenVisits() {
+  if (!canCreateVisit.value && !canWriteRecords.value) { openVisits.value = []; openVisitError.value = ''; return; }
   activeVisitLoading.value = true;
   openVisitError.value = '';
   try {
@@ -825,7 +832,11 @@ function formatVisitStatus(status: string): string {
 .tabs { display: flex; flex-wrap: wrap; gap: 0.45rem; padding: 0.35rem; background: #f4faff; border: 1px solid #dce7f3; border-radius: 12px; }
 .tabs button { border: 0; border-radius: 9px; padding: 0.65rem 1rem; background: transparent; color: #4a6479; font-weight: 700; font-size: 0.9rem; cursor: pointer; transition: all 0.15s ease; }
 .tabs button:hover:not(.active) { background: #e8f4fd; color: #102e56; }
-.tabs button.active { background: #1857b6; color: #ffffff; box-shadow: 0 2px 8px rgba(24, 87, 182, 0.22); }
+.tabs button.active { background: #1857b6; color: #ffffff; box-shadow: 0 2px 8px rgba(24, 87, 182, 0.22); transform: translateY(-1px); }
+.detail-tab-fade-enter-active, .detail-tab-fade-leave-active { transition: opacity 0.2s ease, transform 0.22s cubic-bezier(0.22, 1, 0.36, 1); }
+.detail-tab-fade-enter-from { opacity: 0; transform: translateY(8px); }
+.detail-tab-fade-leave-to { opacity: 0; transform: translateY(-6px); }
+@media (prefers-reduced-motion: reduce) { .tabs button, .detail-tab-fade-enter-active, .detail-tab-fade-leave-active { transition: none; } }
 .content-panel { min-height: 240px; padding: 1.5rem; display: flex; flex-direction: column; gap: 1.15rem; }
 .section-heading { margin-bottom: 0; padding-bottom: 0.85rem; border-bottom: 1px solid #ebf1f6; }
 .section-heading h2 { margin: 0; font-size: 1.25rem; font-weight: 800; color: #102e56; }

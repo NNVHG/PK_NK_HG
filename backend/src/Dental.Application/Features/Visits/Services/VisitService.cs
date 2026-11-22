@@ -13,17 +13,20 @@ public sealed class VisitService
     private readonly IVisitRepository _visitRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IAuditLogger _auditLogger;
+    private readonly IPatientGuardianRepository? _guardianRepository;
 
     public VisitService(
         IPatientRepository patientRepository,
         IVisitRepository visitRepository,
         IUnitOfWork unitOfWork,
-        IAuditLogger auditLogger)
+        IAuditLogger auditLogger,
+        IPatientGuardianRepository? guardianRepository = null)
     {
         _patientRepository = patientRepository;
         _visitRepository = visitRepository;
         _unitOfWork = unitOfWork;
         _auditLogger = auditLogger;
+        _guardianRepository = guardianRepository;
     }
 
     public async Task<Result<VisitResponse>> CreateVisitAsync(
@@ -73,10 +76,20 @@ public sealed class VisitService
         CancellationToken ct = default)
     {
         var patient = await _patientRepository.GetByIdAsync(patientId, ct);
-        if (patient is null ||
-            (currentRoleCode == RoleCodes.Patient && patient.UserId != currentUserId))
+        if (patient is null)
         {
             return Result<PagedResult<VisitResponse>>.Failure(Error.NotFound);
+        }
+
+        if (currentRoleCode == RoleCodes.Patient)
+        {
+            var isSelf = patient.UserId == currentUserId;
+            var isGuardian = !isSelf && _guardianRepository is not null &&
+                await _guardianRepository.HasActiveGuardianshipAsync(currentUserId, patientId, ct);
+            if (!isSelf && !isGuardian)
+            {
+                return Result<PagedResult<VisitResponse>>.Failure(Error.NotFound);
+            }
         }
 
         var visits = await _visitRepository.GetPatientVisitsAsync(patientId, request.Page, request.PageSize, ct);
@@ -102,7 +115,12 @@ public sealed class VisitService
         if (currentRoleCode == RoleCodes.Patient)
         {
             var patient = await _patientRepository.GetByIdAsync(visit.PatientId, ct);
-            if (patient is null || patient.UserId != currentUserId)
+            if (patient is null)
+                return Result<VisitResponse>.Failure(Error.NotFound);
+            var isSelf = patient.UserId == currentUserId;
+            var isGuardian = !isSelf && _guardianRepository is not null &&
+                await _guardianRepository.HasActiveGuardianshipAsync(currentUserId, visit.PatientId, ct);
+            if (!isSelf && !isGuardian)
                 return Result<VisitResponse>.Failure(Error.NotFound);
         }
 

@@ -21,7 +21,7 @@
             <h4 class="ward-name">{{ ward.fullName }}</h4>
             <div class="ward-tags">
               <span class="code-badge">{{ ward.wardPatientCode }}</span>
-              <span class="rel-badge">{{ ward.relationship }}</span>
+              <span class="rel-badge">Người giám hộ: {{ ward.relationship }}</span>
             </div>
           </div>
         </div>
@@ -30,6 +30,10 @@
           <div class="ward-meta-item">
             <span class="meta-label">Ngày sinh:</span>
             <span class="meta-value">{{ formatDate(ward.dateOfBirth) }}</span>
+          </div>
+          <div v-if="ward.gender" class="ward-meta-item">
+            <span class="meta-label">Giới tính:</span>
+            <span class="meta-value">{{ formatGender(ward.gender) }}</span>
           </div>
         </div>
 
@@ -58,6 +62,12 @@ function formatDate(dateStr?: string) {
   const parts = dateStr.split('-');
   if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
   return dateStr;
+}
+
+function formatGender(gender?: string | null) {
+  if (gender === 'Male' || gender === 'Nam') return 'Nam';
+  if (gender === 'Female' || gender === 'Nữ') return 'Nữ';
+  return gender || 'Chưa cập nhật';
 }
 
 onMounted(async () => {

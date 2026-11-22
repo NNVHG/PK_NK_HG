@@ -272,8 +272,8 @@ async function loadSummary(patientId: number, current: number) {
 }
 
 function genderLabel(gender: string) {
-  if (gender === 'Male') return 'Nam';
-  if (gender === 'Female') return 'Nữ';
+  if (gender === 'Male' || gender === 'Nam') return 'Nam';
+  if (gender === 'Female' || gender === 'Nữ') return 'Nữ';
   return 'Khác';
 }
 

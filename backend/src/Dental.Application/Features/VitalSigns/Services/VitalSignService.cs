@@ -14,19 +14,22 @@ public sealed class VitalSignService
     private readonly IVitalSignRepository _vitalSignRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IAuditLogger _auditLogger;
+    private readonly IPatientGuardianRepository? _guardianRepository;
 
     public VitalSignService(
         IPatientRepository patientRepository,
         IVisitRepository visitRepository,
         IVitalSignRepository vitalSignRepository,
         IUnitOfWork unitOfWork,
-        IAuditLogger auditLogger)
+        IAuditLogger auditLogger,
+        IPatientGuardianRepository? guardianRepository = null)
     {
         _patientRepository = patientRepository;
         _visitRepository = visitRepository;
         _vitalSignRepository = vitalSignRepository;
         _unitOfWork = unitOfWork;
         _auditLogger = auditLogger;
+        _guardianRepository = guardianRepository;
     }
 
     public async Task<Result<VitalSignRecordResponse>> RecordAsync(
@@ -79,10 +82,20 @@ public sealed class VitalSignService
         CancellationToken ct = default)
     {
         var patient = await _patientRepository.GetByIdAsync(patientId, ct);
-        if (patient is null ||
-            (currentRoleCode == RoleCodes.Patient && patient.UserId != currentUserId))
+        if (patient is null)
         {
             return Result<PagedResult<VitalSignRecordResponse>>.Failure(Error.NotFound);
+        }
+
+        if (currentRoleCode == RoleCodes.Patient)
+        {
+            var isSelf = patient.UserId == currentUserId;
+            var isGuardian = !isSelf && _guardianRepository is not null &&
+                await _guardianRepository.HasActiveGuardianshipAsync(currentUserId, patientId, ct);
+            if (!isSelf && !isGuardian)
+            {
+                return Result<PagedResult<VitalSignRecordResponse>>.Failure(Error.NotFound);
+            }
         }
 
         var records = await _vitalSignRepository.GetPatientRecordsAsync(
