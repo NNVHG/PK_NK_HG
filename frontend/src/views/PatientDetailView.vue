@@ -721,7 +721,8 @@ function validateEdit(): string | null {
   if (editForm.fullName.trim().length > 100) return 'Họ tên không được vượt quá 100 ký tự.';
   if (!editForm.dateOfBirth) return 'Ngày sinh không được để trống.';
   const birth = new Date(`${editForm.dateOfBirth}T00:00:00`);
-  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' });
+  const today = new Date(`${todayStr}T00:00:00`);
   const earliest = new Date(today); earliest.setFullYear(earliest.getFullYear() - 120);
   if (Number.isNaN(birth.getTime()) || birth > today || birth < earliest) return 'Ngày sinh không hợp lệ (từ 0 đến 120 tuổi).';
   if (!/^0\d{9}$/.test(editForm.phone.trim())) return 'Số điện thoại không hợp lệ (định dạng: 0xxxxxxxxx).';
@@ -789,7 +790,8 @@ function apiError(error: unknown, fallback: string): string {
 function calculateAge(dateOfBirth: string): number | string {
   const birth = new Date(`${dateOfBirth.slice(0, 10)}T00:00:00`);
   if (Number.isNaN(birth.getTime())) return '—';
-  const today = new Date();
+  const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' });
+  const today = new Date(`${todayStr}T00:00:00`);
   let age = today.getFullYear() - birth.getFullYear();
   if (today.getMonth() < birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) age -= 1;
   return age;

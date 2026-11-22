@@ -57,7 +57,6 @@
             <div class="queue-patient-row">
               <strong>{{ row.patientName }}</strong>
               <span v-if="row.isChildPatient" class="child-pill">👶 Trẻ &lt;14</span>
-              <span v-if="row.missingGuardianAccount" class="missing-account-pill">⚠️ Thiếu tài khoản</span>
             </div>
             <span>{{ row.patientCode }} · {{ row.queueDate }}</span>
           </div>

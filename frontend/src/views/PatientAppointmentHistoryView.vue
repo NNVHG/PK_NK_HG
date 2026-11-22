@@ -75,7 +75,6 @@
                 <h3 class="patient-name">{{ row.patientName }}</h3>
                 <span class="code-badge">{{ row.patientCode }}</span>
                 <span v-if="row.isChildPatient" class="child-appt-badge">👶 Trẻ em (&lt; 14 tuổi)</span>
-                <span v-if="row.missingGuardianAccount" class="missing-account-badge">⚠️ Thiếu tài khoản</span>
               </div>
               <span class="status-badge" :class="'status-' + row.status.toLowerCase()">
                 {{ statusLabel(row.status) }}

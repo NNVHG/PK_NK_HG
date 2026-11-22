@@ -189,8 +189,7 @@ let version = 0;
 
 const today = computed(() => {
   const date = new Date();
-  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return localDate.toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
 });
 
 const currentProfile = computed(() => {

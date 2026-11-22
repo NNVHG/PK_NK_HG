@@ -293,7 +293,6 @@
                       <div class="patient-cell-name">
                         <span>{{ item.patientName }}</span>
                         <span v-if="item.isChildPatient" class="cell-child-badge">👶 Trẻ em</span>
-                        <span v-if="item.missingGuardianAccount" class="cell-missing-badge">⚠️ Thiếu tài khoản</span>
                       </div>
                       <div class="patient-cell-code">#{{ item.patientCode }}</div>
                     </td>
@@ -553,8 +552,7 @@
                   <div class="child-badge-notice">
                     <div class="child-badge-row">
                       <span>👶 <strong>Bệnh nhân là Trẻ em (&lt; 14 tuổi)</strong></span>
-                      <span v-if="!confirmedGuardianPatient && !matchedPatient?.hasActiveGuardian" class="cell-missing-badge">⚠️ Thiếu tài khoản</span>
-                      <span v-else class="cell-linked-badge">👨‍👩‍👧 Đã xác nhận giám hộ</span>
+                      <span v-if="confirmedGuardianPatient || matchedPatient?.hasActiveGuardian" class="cell-linked-badge">👨‍👩‍👧 Đã xác nhận giám hộ</span>
                     </div>
                     <p class="field-hint">Trẻ em không yêu cầu CCCD riêng và không có tài khoản riêng. Lễ tân kiểm tra hoặc xác nhận người giám hộ có tài khoản tại quầy; nếu chưa có tài khoản giám hộ phù hợp, hồ sơ trẻ vẫn được lưu với trạng thái Thiếu tài khoản.</p>
                   </div>

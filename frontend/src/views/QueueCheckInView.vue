@@ -95,9 +95,8 @@
                   <div class="desk-patient-name-row">
                     <strong>{{ patient.fullName }}</strong>
                     <span v-if="patient.isUnderFourteen ?? isUnderFourteen(patient.dateOfBirth)" class="app-badge app-badge--info">👶 Trẻ &lt;14</span>
-                    <span v-if="patient.missingGuardianAccount" class="app-badge app-badge--warning">⚠️ Thiếu tài khoản</span>
                   </div>
-                  <span>Mã: {{ patient.patientCode }} · SĐT: {{ patient.phone }}</span>
+                  <span>Mã: {{ patient.patientCode }} · NS: {{ patient.dateOfBirth }} · SĐT: {{ patient.phone }}</span>
                 </div>
                 <div class="patient-result-status">
                   <span v-if="selectedPatient?.patientId === patient.patientId" class="app-badge app-badge--success">✓ Đã chọn</span>
@@ -124,19 +123,22 @@
         </article>
 
         <!-- Card 2: Biểu mẫu đối chiếu & xác nhận tiếp đón (Hiển thị khi đã chọn bệnh nhân) -->
-        <article v-if="selectedPatient" class="app-card checkin-form-card">
+        <article v-if="selectedPatient" class="app-card checkin-form-card" :class="{ 'checkin-form-card--child': isChild }">
           <div class="app-card-header">
             <div class="app-card-title-group">
-              <span class="app-card-icon">📋</span>
+              <span class="app-card-icon">{{ isChild ? '👶' : '📋' }}</span>
               <div>
                 <h2 class="app-card-title">{{ isChild ? 'Tiếp Đón Trẻ Em' : 'Đối Chiếu Giấy Tờ' }}: {{ selectedPatient.fullName }}</h2>
-                <p class="app-card-subtitle">
-                  Mã hồ sơ: <strong>{{ selectedPatient.patientCode }}</strong>
-                  · Ngày sinh: <strong>{{ selectedPatient.dateOfBirth }}</strong>
-                  <span v-if="isChild" class="app-badge app-badge--info" style="margin-left: 0.4rem;">👶 Trẻ dưới 14 tuổi</span>
+                <p class="app-card-subtitle checkin-subtitle-row">
+                  <span class="meta-chip">Mã: <strong>{{ selectedPatient.patientCode }}</strong></span>
+                  <span class="meta-chip">Sinh: <strong>{{ selectedPatient.dateOfBirth }}</strong></span>
+                  <span v-if="isChild" class="child-header-pill">Trẻ em (&lt; 14 tuổi)</span>
                 </p>
               </div>
             </div>
+            <button type="button" class="app-btn app-btn--secondary app-btn--sm" :disabled="checkingIn || guardianLinkSaving" @click="clearSelection">
+              Đổi hồ sơ
+            </button>
           </div>
 
           <div class="app-card-body">
@@ -196,54 +198,11 @@
               />
               <p v-if="fieldErrors.nationalityCode" id="country-error" class="error-msg">{{ fieldErrors.nationalityCode }}</p>
             </div>
-            </template>
 
-            <section v-else class="guardian-check-section" aria-labelledby="guardian-check-title">
-              <div class="child-badge-notice">
-                <h3 id="guardian-check-title">Trẻ dưới 14 tuổi · Không yêu cầu CCCD riêng</h3>
-                <p>Đối chiếu người giám hộ trực tiếp tại quầy. Số điện thoại trùng không tự tạo tài khoản hoặc quyền xem hồ sơ.</p>
-              </div>
-              <p v-if="guardianLoading" class="app-hint" role="status">Đang kiểm tra liên kết giám hộ…</p>
-              <p v-else-if="guardianLookupFailed" class="error-banner" role="alert">
-                Không kiểm tra được liên kết giám hộ. Tải lại hồ sơ trước khi tiếp đón.
-                <button type="button" class="app-btn app-btn--secondary app-btn--sm" @click="loadActiveGuardian(selectedPatient)">Thử lại</button>
-              </p>
-              <div v-else-if="linkedGuardian" class="info-pill-note" role="status">
-                Đã liên kết: <strong>{{ linkedGuardian.guardianFullName }}</strong> · {{ linkedGuardian.relationship }}.
-                Vẫn cần xác minh người giám hộ có mặt tại quầy.
-                <p v-if="guardianLinkSuccess">{{ guardianLinkSuccess }}</p>
-              </div>
-              <div v-else class="warning-callout" role="status">
-                <strong>Chưa có liên kết giám hộ hiệu lực</strong>
-                <p>Hồ sơ trẻ vẫn được tiếp đón sau khi xác minh người đi cùng. Không cấp quyền chỉ vì số điện thoại trùng.</p>
-                <RouterLink :to="`/management/patients/${selectedPatient.patientId}`" target="_blank">Mở hồ sơ trẻ để quản lý liên kết giám hộ</RouterLink>
-              </div>
-
-              <div class="app-form-group">
-                <label class="app-label" for="guardian-full-name">Họ tên người giám hộ <span class="app-label-required">*</span></label>
-                <input id="guardian-full-name" v-model.trim="guardianFullName" class="app-input" maxlength="100" autocomplete="off" />
-                <p v-if="fieldErrors.guardian" class="error-msg">{{ fieldErrors.guardian }}</p>
-              </div>
-              <div class="app-form-group">
-                <label class="app-label" for="guardian-relationship">Quan hệ với trẻ <span class="app-label-required">*</span></label>
-                <select id="guardian-relationship" v-model="guardianRelationship" class="app-select">
-                  <option value="">Chọn quan hệ</option>
-                  <option v-for="rel in GUARDIAN_RELATIONSHIP_OPTIONS" :key="rel" :value="rel">{{ rel }}</option>
-                  <option v-if="guardianRelationship && !GUARDIAN_RELATIONSHIP_OPTIONS.includes(guardianRelationship)" :value="guardianRelationship">{{ guardianRelationship }}</option>
-                </select>
-                <p v-if="fieldErrors.guardian" class="error-msg">{{ fieldErrors.guardian }}</p>
-              </div>
-              <label class="guardian-verification-label">
-                <input v-model="guardianVerifiedAtCounter" type="checkbox" />
-                Tôi đã đối chiếu người giám hộ trực tiếp tại quầy.
-              </label>
-              <p v-if="fieldErrors.guardianVerifiedAtCounter" class="error-msg">{{ fieldErrors.guardianVerifiedAtCounter }}</p>
-            </section>
-
-            <!-- Số điện thoại -->
+            <!-- Số điện thoại người lớn -->
             <div class="app-form-group">
               <label class="app-label" for="checkin-phone">
-                <span>{{ isChild ? 'Số điện thoại liên hệ của người giám hộ' : 'Số điện thoại đăng ký trong hồ sơ' }}</span>
+                <span>Số điện thoại đăng ký trong hồ sơ</span>
                 <span class="app-label-required">*</span>
               </label>
               <input
@@ -255,42 +214,149 @@
                 inputmode="tel"
                 autocomplete="tel"
                 maxlength="10"
-                placeholder="Ví dụ: 0912345678"
+                placeholder="Nhập số điện thoại đã lưu"
               />
               <p v-if="fieldErrors.phone" id="phone-error" class="error-msg">{{ fieldErrors.phone }}</p>
-              <span class="app-hint">{{ isChild ? 'Chỉ đối chiếu số liên hệ đã lưu; số điện thoại không tự cấp quyền giám hộ.' : 'Hệ thống đối chiếu bảo mật tại quầy, không lưu bản rõ số giấy tờ trong nhật ký.' }}</span>
+              <span class="app-hint">Hệ thống đối chiếu bảo mật tại quầy, không lưu bản rõ số giấy tờ trong nhật ký.</span>
             </div>
+            </template>
 
-            <div v-if="isChild && !linkedGuardian && !guardianLookupFailed" class="guardian-account-lookup">
-              <button type="button" class="app-btn app-btn--secondary app-btn--sm" :disabled="guardianAccountSearchLoading || !/^0[0-9]{9}$/.test(checkInPhone.trim())" @click="searchGuardianAccounts">
-                {{ guardianAccountSearchLoading ? 'Đang tra hồ sơ…' : 'Tra hồ sơ người giám hộ theo số điện thoại' }}
-              </button>
-              <p class="app-hint">Số điện thoại có thể dùng chung. Chỉ nhân viên chọn đúng người và xác nhận tại quầy mới tạo liên kết; hệ thống không tự liên kết theo số điện thoại.</p>
-              <p v-if="guardianAccountSearchError" class="error-msg" role="alert">{{ guardianAccountSearchError }}</p>
-              <p v-if="guardianAccountSearchComplete && guardianCandidates.length === 0" class="app-hint" role="status">
-                Không tìm thấy hồ sơ theo số này. Có thể tiếp đón trẻ sau khi xác minh người đi cùng; không tự tạo tài khoản hoặc quyền xem hồ sơ.
-              </p>
-              <template v-if="guardianCandidates.length > 0">
-                <label class="app-label" for="guardian-account-select">Chọn đúng hồ sơ người giám hộ đang có mặt</label>
-                <select id="guardian-account-select" v-model.number="selectedGuardianPatientId" class="app-select" @change="selectGuardianAccount">
-                  <option :value="null">Chọn hồ sơ đã đối chiếu</option>
-                  <option
-                    v-for="candidate in guardianCandidates"
-                    :key="candidate.patientId"
-                    :value="candidate.patientId"
-                    :disabled="candidate.hasUserAccount === false"
-                  >
-                    {{ candidate.fullName }} · {{ candidate.patientCode }} · {{ candidate.dateOfBirth }}{{ candidate.hasUserAccount === false ? ' — Chưa có tài khoản' : candidate.hasUserAccount === true ? ' — Có tài khoản' : '' }}
-                  </option>
-                </select>
-                <p v-if="guardianAccountSearchHasMore" class="app-hint">Có thêm hồ sơ cùng số điện thoại. Nếu chưa thấy đúng người, hãy tra cứu trong hồ sơ bệnh nhân trước khi xác nhận.</p>
-                <button type="button" class="app-btn app-btn--primary app-btn--sm" :disabled="guardianLinkSaving || selectedGuardianPatientId === null || !guardianVerifiedAtCounter || !guardianFullName.trim() || !guardianRelationship.trim() || guardianSearchPhone !== checkInPhone.trim()" @click="confirmGuardianLink">
-                  {{ guardianLinkSaving ? 'Đang tạo liên kết…' : 'Xác nhận liên kết người giám hộ' }}
-                </button>
-              </template>
-              <p v-if="guardianLinkError" class="error-msg" role="alert">{{ guardianLinkError }}</p>
-              <p v-if="guardianLinkSuccess" class="info-pill-note" role="status">{{ guardianLinkSuccess }}</p>
-            </div>
+            <section v-else class="guardian-check-section" aria-labelledby="guardian-check-title">
+              <div class="child-policy-banner">
+                <span class="policy-icon" aria-hidden="true">🛡️</span>
+                <div class="policy-copy">
+                  <h3 id="guardian-check-title">Tiếp đón trẻ dưới 14 tuổi · Không yêu cầu CCCD riêng</h3>
+                  <p>Xác minh người giám hộ đi cùng trực tiếp tại quầy trước khi cấp số thứ tự.</p>
+                </div>
+              </div>
+
+              <p v-if="guardianLoading" class="app-hint" role="status">Đang kiểm tra liên kết giám hộ…</p>
+              <div v-else-if="guardianLookupFailed" class="error-banner" role="alert">
+                Không kiểm tra được liên kết giám hộ. Tải lại hồ sơ trước khi tiếp đón.
+                <button type="button" class="app-btn app-btn--secondary app-btn--sm" @click="loadActiveGuardian(selectedPatient)">Thử lại</button>
+              </div>
+              <div v-else-if="linkedGuardian" class="guardian-status-card guardian-status-card--linked" role="status">
+                <span class="status-icon" aria-hidden="true">✅</span>
+                <div class="status-copy">
+                  <strong>Đã liên kết giám hộ: {{ linkedGuardian.guardianFullName }} ({{ linkedGuardian.relationship }})</strong>
+                  <p>Vẫn cần xác minh người giám hộ đang có mặt tại quầy. <span v-if="guardianLinkSuccess">{{ guardianLinkSuccess }}</span></p>
+                </div>
+              </div>
+              <div v-else class="guardian-status-card guardian-status-card--unlinked" role="status">
+                <div class="status-main">
+                  <span class="status-icon" aria-hidden="true">👨‍👩‍👧</span>
+                  <div class="status-copy">
+                    <strong>Chưa liên kết tài khoản giám hộ</strong>
+                    <p>Vẫn có thể tiếp đón sau khi xác minh người đi cùng (SĐT trùng không tự cấp quyền).</p>
+                  </div>
+                </div>
+                <RouterLink class="app-btn app-btn--secondary app-btn--sm guardian-profile-link" :to="`/management/patients/${selectedPatient.patientId}`" target="_blank">
+                  Quản lý ở Hồ sơ →
+                </RouterLink>
+              </div>
+
+              <div class="guardian-fields-panel">
+                <p class="panel-section-title">Thông tin người giám hộ đi cùng</p>
+                <div class="guardian-form-grid">
+                  <div class="app-form-group">
+                    <label class="app-label" for="guardian-full-name">Họ tên người giám hộ <span class="app-label-required">*</span></label>
+                    <input
+                      id="guardian-full-name"
+                      v-model.trim="guardianFullName"
+                      class="app-input"
+                      :aria-invalid="!!fieldErrors.guardian"
+                      maxlength="100"
+                      autocomplete="off"
+                      placeholder="Nhập họ tên người đi cùng"
+                    />
+                  </div>
+                  <div class="app-form-group">
+                    <label class="app-label" for="guardian-relationship">Quan hệ với trẻ <span class="app-label-required">*</span></label>
+                    <select
+                      id="guardian-relationship"
+                      v-model="guardianRelationship"
+                      class="app-select"
+                      :aria-invalid="!!fieldErrors.guardian"
+                    >
+                      <option value="">Chọn quan hệ</option>
+                      <option v-for="rel in GUARDIAN_RELATIONSHIP_OPTIONS" :key="rel" :value="rel">{{ rel }}</option>
+                      <option v-if="guardianRelationship && !GUARDIAN_RELATIONSHIP_OPTIONS.includes(guardianRelationship)" :value="guardianRelationship">{{ guardianRelationship }}</option>
+                    </select>
+                  </div>
+                </div>
+                <p v-if="fieldErrors.guardian" class="error-msg">{{ fieldErrors.guardian }}</p>
+
+                <div class="app-form-group guardian-phone-group">
+                  <label class="app-label" for="checkin-phone">
+                    <span>Số điện thoại liên hệ của người giám hộ</span>
+                    <span class="app-label-required">*</span>
+                  </label>
+                  <div class="guardian-phone-row">
+                    <input
+                      id="checkin-phone"
+                      v-model="checkInPhone"
+                      class="app-input"
+                      :aria-invalid="!!fieldErrors.phone"
+                      aria-describedby="phone-error"
+                      inputmode="tel"
+                      autocomplete="tel"
+                      maxlength="10"
+                      placeholder="Ví dụ: 0912345678"
+                    />
+                    <button
+                      v-if="!linkedGuardian && !guardianLookupFailed"
+                      type="button"
+                      class="app-btn app-btn--secondary app-btn--sm guardian-lookup-btn"
+                      :disabled="guardianAccountSearchLoading || !/^0[0-9]{9}$/.test(checkInPhone.trim())"
+                      @click="searchGuardianAccounts"
+                    >
+                      {{ guardianAccountSearchLoading ? 'Đang tra…' : '🔍 Tra tài khoản giám hộ' }}
+                    </button>
+                  </div>
+                  <p v-if="fieldErrors.phone" id="phone-error" class="error-msg">{{ fieldErrors.phone }}</p>
+                  <span class="app-hint">Chỉ đối chiếu số liên hệ đã lưu; số điện thoại không tự tạo quyền giám hộ.</span>
+                </div>
+
+                <div
+                  v-if="!linkedGuardian && !guardianLookupFailed && (guardianAccountSearchError || guardianAccountSearchComplete || guardianCandidates.length > 0 || guardianLinkError || guardianLinkSuccess)"
+                  class="guardian-lookup-drawer"
+                >
+                  <p v-if="guardianAccountSearchError" class="error-msg" role="alert">{{ guardianAccountSearchError }}</p>
+                  <p v-else-if="guardianAccountSearchComplete && guardianCandidates.length === 0" class="app-hint" role="status">
+                    Không tìm thấy hồ sơ theo số này. Có thể tiếp đón trẻ sau khi xác minh người đi cùng; không tự tạo tài khoản hoặc quyền xem hồ sơ.
+                  </p>
+                  <template v-if="guardianCandidates.length > 0">
+                    <label class="app-label" for="guardian-account-select">Chọn đúng hồ sơ người giám hộ đang có mặt</label>
+                    <select id="guardian-account-select" v-model.number="selectedGuardianPatientId" class="app-select" @change="selectGuardianAccount">
+                      <option :value="null">Chọn hồ sơ đã đối chiếu</option>
+                      <option
+                        v-for="candidate in guardianCandidates"
+                        :key="candidate.patientId"
+                        :value="candidate.patientId"
+                        :disabled="candidate.hasUserAccount === false"
+                      >
+                        {{ candidate.fullName }} · {{ candidate.patientCode }} · {{ candidate.dateOfBirth }}{{ candidate.hasUserAccount === false ? ' — Chưa có tài khoản' : candidate.hasUserAccount === true ? ' — Có tài khoản' : '' }}
+                      </option>
+                    </select>
+                    <p v-if="guardianAccountSearchHasMore" class="app-hint">Có thêm hồ sơ cùng số điện thoại. Nếu chưa thấy đúng người, hãy tra cứu trong hồ sơ bệnh nhân trước khi xác nhận.</p>
+                    <button type="button" class="app-btn app-btn--primary app-btn--sm" :disabled="guardianLinkSaving || selectedGuardianPatientId === null || !guardianVerifiedAtCounter || !guardianFullName.trim() || !guardianRelationship.trim() || guardianSearchPhone !== checkInPhone.trim()" @click="confirmGuardianLink">
+                      {{ guardianLinkSaving ? 'Đang tạo liên kết…' : '✓ Xác nhận liên kết người giám hộ' }}
+                    </button>
+                  </template>
+                  <p v-if="guardianLinkError" class="error-msg" role="alert">{{ guardianLinkError }}</p>
+                  <p v-if="guardianLinkSuccess" class="info-pill-note" role="status">{{ guardianLinkSuccess }}</p>
+                </div>
+
+                <label class="guardian-verify-card" :class="{ 'guardian-verify-card--checked': guardianVerifiedAtCounter }">
+                  <input v-model="guardianVerifiedAtCounter" type="checkbox" />
+                  <div class="verify-card-copy">
+                    <strong>Tôi đã đối chiếu người giám hộ trực tiếp tại quầy.</strong>
+                    <span>Xác nhận người đi cùng trùng khớp thông tin giám hộ trước khi cấp số thứ tự.</span>
+                  </div>
+                </label>
+                <p v-if="fieldErrors.guardianVerifiedAtCounter" class="error-msg">{{ fieldErrors.guardianVerifiedAtCounter }}</p>
+              </div>
+            </section>
 
             <!-- Khối cảnh báo công nợ nếu có -->
             <div v-if="debtLoading" class="app-hint" role="status">Đang đối soát công nợ cũ…</div>
@@ -418,7 +484,12 @@
             <template v-else>
               <p v-if="!deskRows.length" class="app-hint">Không còn lịch hẹn nào chờ tiếp đón trong ngày.</p>
               <div v-else class="desk-appointment-list">
-                <div v-for="row in deskRows" :key="row.appointmentId" class="desk-appointment-item">
+                <div
+                  v-for="row in deskRows"
+                  :key="row.appointmentId"
+                  class="desk-appointment-item"
+                  :class="{ 'desk-appointment-item--active': selectedPatient?.patientId === row.patientId && appointmentId === row.appointmentId }"
+                >
                   <div class="desk-time-box">
                     <strong>{{ row.slotTime.slice(0, 5) }}</strong>
                     <span>Khung giờ</span>
@@ -427,7 +498,6 @@
                     <div class="desk-patient-name-row">
                       <strong>{{ row.patientName }}</strong>
                       <span v-if="row.isChildPatient || (row.patientDateOfBirth && isUnderFourteen(row.patientDateOfBirth))" class="app-badge app-badge--info">👶 Trẻ &lt;14</span>
-                      <span v-if="row.missingGuardianAccount" class="app-badge app-badge--warning">⚠️ Thiếu tài khoản</span>
                     </div>
                     <span>Mã: {{ row.patientCode }}</span>
                   </div>
@@ -480,7 +550,6 @@
                     <div class="desk-patient-name-row">
                       <strong>{{ row.patientName }}</strong>
                       <span v-if="row.isChildPatient || (row.patientDateOfBirth && isUnderFourteen(row.patientDateOfBirth))" class="app-badge app-badge--info">👶 Trẻ &lt;14</span>
-                      <span v-if="row.missingGuardianAccount" class="app-badge app-badge--warning">⚠️ Thiếu tài khoản</span>
                     </div>
                     <span>{{ row.patientCode }} · {{ row.statusText }}</span>
                   </div>
@@ -1440,6 +1509,13 @@ function todayLocal(): string {
   background: var(--color-surface-subtle);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-md);
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.desk-appointment-item--active {
+  background: #f0f9ff;
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.14);
 }
 
 .desk-time-box {
@@ -1530,15 +1606,299 @@ function todayLocal(): string {
   font-size: var(--font-size-sm);
 }
 
-.app-badge--warning {
-  background: #fef3c7;
-  color: #92400e;
-  border: 1px solid #f59e0b;
-}
-
 .waiting-item-info > span {
   font-size: var(--font-size-xs);
   color: var(--color-text-subtle);
+}
+
+/* Biểu mẫu tiếp đón trẻ dưới 14 tuổi */
+.checkin-form-card .app-card-header {
+  align-items: flex-start;
+  flex-wrap: nowrap;
+  gap: 0.75rem;
+}
+
+.checkin-form-card .app-card-title-group {
+  flex: 1;
+  min-width: 0;
+}
+
+.checkin-form-card .app-card-header > .app-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.checkin-form-card--child {
+  border-color: #bae6fd;
+  box-shadow: 0 8px 24px rgba(14, 116, 144, 0.08);
+}
+
+.checkin-form-card .app-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.95rem;
+}
+
+.checkin-subtitle-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 0.76rem;
+}
+
+.child-header-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+  font-size: 0.74rem;
+  font-weight: 750;
+}
+
+.guardian-check-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.child-policy-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  border: 1px solid #bae6fd;
+  border-left: 4px solid #0284c7;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+}
+
+.policy-icon {
+  font-size: 1.25rem;
+  line-height: 1.2;
+  flex-shrink: 0;
+}
+
+.policy-copy h3 {
+  margin: 0 0 0.2rem;
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #0c4a6e;
+}
+
+.policy-copy p {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #0369a1;
+}
+
+.guardian-status-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  font-size: 0.82rem;
+}
+
+.guardian-status-card--linked {
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  color: #166534;
+}
+
+.guardian-status-card--unlinked {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
+
+.status-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  flex: 1;
+  min-width: 210px;
+}
+
+.status-icon {
+  font-size: 1.15rem;
+  line-height: 1.2;
+  flex-shrink: 0;
+}
+
+.status-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.status-copy strong {
+  font-size: 0.84rem;
+  font-weight: 750;
+}
+
+.status-copy p {
+  margin: 0;
+  font-size: 0.77rem;
+  line-height: 1.4;
+  opacity: 0.92;
+}
+
+.guardian-profile-link {
+  white-space: nowrap;
+  flex-shrink: 0;
+  text-decoration: none;
+}
+
+.guardian-fields-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border: 1px solid #dbe5f0;
+  border-radius: 12px;
+}
+
+.panel-section-title {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #334155;
+}
+
+.guardian-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr);
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.guardian-form-grid .app-input,
+.guardian-form-grid .app-select {
+  block-size: var(--input-height, 44px);
+}
+
+.guardian-form-grid .app-select {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-inline: 0.75rem;
+}
+
+.guardian-phone-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.guardian-phone-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.guardian-phone-row .app-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.guardian-lookup-btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.guardian-lookup-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.75rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.guardian-verify-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.75rem 0.9rem;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.guardian-verify-card:hover {
+  border-color: #93c5fd;
+  background: #f0f9ff;
+}
+
+.guardian-verify-card--checked {
+  border-color: #16a34a;
+  background: #f0fdf4;
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.12);
+}
+
+.guardian-verify-card input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0.12rem 0 0;
+  flex: 0 0 auto;
+  accent-color: #16a34a;
+}
+
+.verify-card-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.verify-card-copy strong {
+  font-size: 0.84rem;
+  color: #0f172a;
+}
+
+.verify-card-copy span {
+  font-size: 0.76rem;
+  color: #475569;
+  line-height: 1.35;
+}
+
+@media (max-width: 640px) {
+  .checkin-form-card .app-card-header {
+    flex-wrap: wrap;
+  }
+
+  .guardian-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .guardian-phone-row {
+    flex-direction: column;
+  }
 }
 
 .pagination-bar {

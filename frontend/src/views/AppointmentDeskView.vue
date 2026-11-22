@@ -76,7 +76,6 @@
               <span class="patient-name">{{ row.patientName }}</span>
               <span class="patient-code">({{ row.patientCode }})</span>
               <span v-if="row.isChildPatient" class="child-pill">👶 Trẻ &lt;14</span>
-              <span v-if="row.missingGuardianAccount" class="missing-account-pill">⚠️ Thiếu tài khoản</span>
             </div>
 
             <div class="time-meta">

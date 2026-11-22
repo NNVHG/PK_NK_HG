@@ -58,6 +58,8 @@
                 >{{ patientDisplayName(patient.fullName) }}</router-link>
                 <div class="identity-meta">
                   <span class="patient-code">{{ patient.patientCode }}</span>
+                  <span v-if="patient.isUnderFourteen ?? isUnderFourteen(patient.dateOfBirth)" class="child-tag">👶 Trẻ &lt;14</span>
+                  <span v-if="patient.missingGuardianAccount" class="missing-account-tag">⚠️ Thiếu tài khoản</span>
                   <span v-if="isDemoPatient(patient.fullName)" class="sample-tag">Hồ sơ mẫu</span>
                 </div>
               </td>
@@ -492,8 +494,8 @@ function validateForm(): string | null {
 
   const dateOfBirth = new Date(`${form.dateOfBirth}T00:00:00`);
   if (Number.isNaN(dateOfBirth.getTime())) return 'Ngày sinh không hợp lệ.';
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' });
+  const today = new Date(`${todayStr}T00:00:00`);
   if (dateOfBirth > today) return 'Ngày sinh không được ở tương lai.';
   const earliestDate = new Date(today);
   earliestDate.setFullYear(earliestDate.getFullYear() - 120);

@@ -61,7 +61,7 @@
                 v-for="p in context.patients"
                 :key="p.patientId"
                 :value="String(p.patientId)"
-                :disabled="!p.canSelect"
+                :disabled="!canSelectCandidate(p)"
               >
                 {{ p.fullName }} · {{ p.dateOfBirth }} · #{{ p.patientId }}{{ candidateDisabledLabel(p) }}
               </option>
@@ -126,8 +126,12 @@ function isAgeGroupMismatch(dateOfBirth?: string | null): boolean {
   return Boolean(context.value && dateOfBirth && isChildBirthDate(dateOfBirth) !== isChildContext.value);
 }
 
+function canSelectCandidate(p: { dateOfBirth?: string | null; canSelect: boolean }): boolean {
+  return p.canSelect && !isAgeGroupMismatch(p.dateOfBirth);
+}
+
 function candidateDisabledLabel(p: { dateOfBirth?: string | null; canSelect: boolean }): string {
-  if (p.canSelect) return '';
+  if (canSelectCandidate(p)) return '';
   return isAgeGroupMismatch(p.dateOfBirth) ? ' · Khác nhóm tuổi (< 14 / ≥ 14)' : ' · Không đủ điều kiện';
 }
 
@@ -144,7 +148,7 @@ const emit = defineEmits<{ approved: [result: BookingApprovalResult]; working: [
 const auth = useAuthStore();
 const context = ref<BookingApprovalContext | null>(null), selection = ref(''), counter = ref(false), confirmed = ref(false), confirmedNew = ref(false);
 const isChildContext = computed(() => Boolean(context.value && (context.value.isChildPatient || isChildBirthDate(context.value.dateOfBirth))));
-const hasAgeMismatchCandidates = computed(() => Boolean(context.value?.patients.some(p => !p.canSelect && isAgeGroupMismatch(p.dateOfBirth))));
+const hasAgeMismatchCandidates = computed(() => Boolean(context.value?.patients.some(p => isAgeGroupMismatch(p.dateOfBirth))));
 const parsedNotes = computed(() => parseRequestNotes(context.value?.notes));
 const busy = ref(false), needsReview = ref(true), error = ref(''), message = ref('');
 let generation = 0, disposed = false;
@@ -168,7 +172,7 @@ async function approve() {
   const c = context.value;
   if (disposed || busy.value || needsReview.value || !allowed() || !c || c.id !== props.requestId || c.result || c.blockReason) return;
   const patientId = selection.value === 'new' ? null : Number(selection.value);
-  if (!confirmed.value || patientId === null && (!confirmedNew.value || c.verifiedPatientId !== null) || patientId !== null && !c.patients.some(p => p.patientId === patientId && p.canSelect) || c.requiresCounterConfirmation && !counter.value) {
+  if (!confirmed.value || patientId === null && (!confirmedNew.value || c.verifiedPatientId !== null) || patientId !== null && !c.patients.some(p => p.patientId === patientId && canSelectCandidate(p)) || c.requiresCounterConfirmation && !counter.value) {
     error.value = 'Chọn đúng hồ sơ và hoàn tất các xác nhận đối soát trước khi gửi.'; return;
   }
   const t = generation, owner = identity(); busy.value = true; emit('working', true); error.value = '';
