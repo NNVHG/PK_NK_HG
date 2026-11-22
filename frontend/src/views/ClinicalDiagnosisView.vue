@@ -109,7 +109,7 @@
                 :disabled="busy || tvCalling"
                 @click="triggerTvRecall"
               >
-                {{ tvCalling ? 'Đang phát tín hiệu TV…' : 'Gọi lại trên TV' }}
+                {{ tvCalling ? `Đang gọi trên TV (${tvCallRemainingSeconds}s)…` : 'Gọi lại trên TV' }}
               </button>
               <button type="button" class="btn btn-outline-sm" :disabled="busy" @click="reloadVisit">
                 {{ dirty ? 'Hủy sửa và tải lại' : 'Tải lại hồ sơ' }}
@@ -191,9 +191,11 @@ const page = ref(1);
 const totalPages = ref(1);
 const loadingQueue = ref(false);
 const loadingVisit = ref(false);
+const TV_CALL_DURATION_SECONDS = 15;
 const starting = ref(false);
 const saving = ref(false);
 const tvCalling = ref(false);
+const tvCallRemainingSeconds = ref(0);
 const tvCalledMsg = ref('');
 const queueError = ref('');
 const visitError = ref('');
@@ -201,6 +203,7 @@ const actionError = ref('');
 const successMessage = ref('');
 const needsReview = ref(false), dentists = ref<BookingDentist[]>([]), startDentistId = ref(0), dentistsLoading = ref(false), dentistError = ref('');
 let life = 0, queueVersion = 0, visitVersion = 0, dentistVersion = 0;
+let tvCallTimer: ReturnType<typeof setInterval> | null = null;
 const targetDentistId = computed(() => auth.role === 'DENTIST' ? auth.user?.userId : startDentistId.value);
 const busy = computed(() => loadingQueue.value || loadingVisit.value || starting.value || saving.value);
 const canEdit = computed(() => !needsReview.value && !visit.value?.isLocked && ['InProgress', 'Correcting'].includes(visit.value?.status ?? '')
@@ -232,8 +235,19 @@ async function loadDentists() {
   } catch { if (ticket === dentistVersion) { startDentistId.value = 0; dentistError.value = 'Không tải được nha sĩ hoạt động. Tải lại trước khi bắt đầu khám.'; } }
   finally { if (ticket === dentistVersion) dentistsLoading.value = false; }
 }
+function clearTvCallTimer() {
+  if (tvCallTimer !== null) {
+    clearInterval(tvCallTimer);
+    tvCallTimer = null;
+  }
+  tvCalling.value = false;
+  tvCallRemainingSeconds.value = 0;
+  tvCalledMsg.value = '';
+}
+
 async function loadQueue(targetPage = 1) {
   if (busy.value || dirty.value || !Number.isInteger(targetPage) || targetPage < 1 || targetPage > 1_000_000) return;
+  clearTvCallTimer();
   const ticket = ++queueVersion; entries.value = []; selected.value = null; visit.value = null; diagnosis.value = ''; clinicalNotes.value = ''; startDentistId.value = 0;
   loadingQueue.value = true;
   queueError.value = '';
@@ -255,6 +269,7 @@ async function loadQueue(targetPage = 1) {
 
 async function selectEntry(entry: QueueEntryResponse) {
   if (busy.value || dirty.value) return;
+  clearTvCallTimer();
   selected.value = entry; startDentistId.value = entry.dentistId ?? 0;
   needsReview.value = false;
   const request = reloadVisit();
@@ -295,7 +310,9 @@ async function startConsultation() {
   actionError.value = '';
   try {
     const updated = await queueService.startConsultation(selected.value.queueEntryId, Number(targetDentistId.value));
-    if (ticket !== life) return; needsReview.value = true;
+    if (ticket !== life) return;
+    clearTvCallTimer();
+    needsReview.value = true;
     entries.value = entries.value.map(entry => entry.queueEntryId === updated.queueEntryId ? updated : entry);
     selected.value = updated;
     await reloadVisit();
@@ -332,8 +349,9 @@ async function saveDiagnosis() {
 
 function triggerTvRecall() {
   if (!selected.value || selected.value.status !== 6 || tvCalling.value) return;
+  clearTvCallTimer();
   tvCalling.value = true;
-  tvCalledMsg.value = '';
+  tvCallRemainingSeconds.value = TV_CALL_DURATION_SECONDS;
 
   const payload = {
     queueNumberDisplay: `A-${String(selected.value.queueNumber).padStart(3, '0')}`,
@@ -348,15 +366,19 @@ function triggerTvRecall() {
     channel.close();
   } catch {}
 
-  tvCalledMsg.value = `Đã phát tín hiệu gọi TV cho số ${payload.queueNumberDisplay} (30s)`;
-  setTimeout(() => {
-    tvCalling.value = false;
-    setTimeout(() => { tvCalledMsg.value = ''; }, 4000);
+  tvCalledMsg.value = `Đã phát tín hiệu gọi TV cho số ${payload.queueNumberDisplay} (${tvCallRemainingSeconds.value}s)`;
+  tvCallTimer = setInterval(() => {
+    tvCallRemainingSeconds.value--;
+    if (tvCallRemainingSeconds.value <= 0) {
+      clearTvCallTimer();
+      return;
+    }
+    tvCalledMsg.value = `Đã phát tín hiệu gọi TV cho số ${payload.queueNumberDisplay} (${tvCallRemainingSeconds.value}s)`;
   }, 1000);
 }
 
 onMounted(() => Promise.all([loadQueue(), loadDentists()]));
-onUnmounted(() => { life++; queueVersion++; visitVersion++; dentistVersion++; entries.value = []; selected.value = null; visit.value = null; diagnosis.value = ''; clinicalNotes.value = ''; dentists.value = []; startDentistId.value = 0; dentistError.value = ''; actionError.value = ''; successMessage.value = ''; queueError.value = ''; visitError.value = ''; });
+onUnmounted(() => { life++; queueVersion++; visitVersion++; dentistVersion++; clearTvCallTimer(); entries.value = []; selected.value = null; visit.value = null; diagnosis.value = ''; clinicalNotes.value = ''; dentists.value = []; startDentistId.value = 0; dentistError.value = ''; actionError.value = ''; successMessage.value = ''; queueError.value = ''; visitError.value = ''; });
 </script>
 
 <style scoped>

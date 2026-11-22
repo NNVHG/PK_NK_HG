@@ -51,15 +51,12 @@ export interface PublicQueueMonitorResponse {
 }
 
 export function maskPublicQueueName(fullName: string | null | undefined): string {
-  const parts = fullName?.trim().split(/\s+/).filter(Boolean) ?? [];
-  if (!parts.length) return 'Bệnh nhân';
-  if (parts.length === 1) {
-    const name = parts[0];
-    return name.length <= 2 ? name : `${name[0]}***${name[name.length - 1]}`;
-  }
-  if (parts.length === 2) return `${parts[0]} *** ${parts[1]}`;
-  const last = parts[parts.length - 1] ?? '';
-  return `${parts[0]} ${parts.slice(1, -1).map(part => `${part[0]}***`).join(' ')} ${last}`;
+  const normalized = fullName?.trim().replace(/\s+/g, ' ') ?? '';
+  if (!normalized) return 'Bệnh nhân';
+  const withoutDemo = normalized.endsWith(' (DEMO)')
+    ? normalized.slice(0, -' (DEMO)'.length).trim()
+    : normalized;
+  return withoutDemo || 'Bệnh nhân';
 }
 
 export interface CallNextPayload {

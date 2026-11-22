@@ -15,13 +15,29 @@
         <button
           type="button"
           class="sound-toggle"
-          :class="{ active: soundEnabled }"
+          :class="{ active: soundEnabled && !playbackBlocked }"
+          :aria-pressed="soundEnabled && !playbackBlocked"
           @click="toggleSound"
         >
-          {{ soundEnabled ? '🔊 Âm thanh: BẬT' : '🔇 Âm thanh: TẮT (Click để bật)' }}
+          {{ playbackBlocked ? '🔓 Mở khóa loa TV' : (soundEnabled ? '🔊 Âm thanh: BẬT' : '🔇 Bật âm thanh') }}
+        </button>
+        <button
+          v-if="soundEnabled && !playbackBlocked"
+          type="button"
+          class="sound-toggle"
+          :disabled="isPlayingAudio || !!activeCall"
+          @click="previewVoice"
+        >
+          Nghe thử giọng
         </button>
         <div class="clock">{{ currentTime }}</div>
-        <small v-if="soundEnabled && !hasLocalVietnameseVoice" role="status">Thiết bị chưa có giọng tiếng Việt cục bộ. Màn hình sẽ phát chuông khi gọi.</small>
+        <small v-if="soundEnabled && (playbackBlocked || viettelTtsExpiredOrUnavailable)" class="sound-status" role="status">
+          {{
+            playbackBlocked
+              ? 'Trình duyệt đang chặn tự phát âm thanh. Bấm Mở khóa loa TV để bật tiếng đọc mời bệnh nhân.'
+              : 'Dịch vụ đọc giọng Viettel AI tạm hết hạn hoặc gián đoạn — đang phát chuông Bing-Bong báo hiệu khách hàng chú ý màn hình.'
+          }}
+        </small>
       </div>
     </header>
 
@@ -29,7 +45,7 @@
       {{ error }}
     </div>
 
-    <!-- MÀN HÌNH NỔI BẬT KHI ĐANG GỌI SỐ (Hiển thị 30 giây) -->
+    <!-- MÀN HÌNH NỔI BẬT KHI ĐANG GỌI SỐ (Hiển thị 15 giây) -->
     <section v-if="activeCall" class="call-active-banner" aria-live="assertive">
       <div class="call-banner-top">
         <span class="call-pulse-dot"></span> XIN MỜI KHÁCH HÀNG VÀO PHÒNG KHÁM
@@ -40,7 +56,7 @@
         <span class="banner-pill">🏢 {{ locationLabel(activeCall) }}</span>
       </div>
       <div class="call-progress-track">
-        <div class="call-progress-fill" :style="{ width: ((remainingCallSeconds / 30) * 100) + '%' }"></div>
+        <div class="call-progress-fill" :style="{ width: ((remainingCallSeconds / CALL_DURATION_SECONDS) * 100) + '%' }"></div>
       </div>
       <p class="call-guide-tip">
         Quý khách vui lòng mang theo sổ/hồ sơ khám di chuyển đến phòng khám trên.
@@ -70,7 +86,7 @@
           <div class="tip-icon">📢</div>
           <div class="tip-content">
             <h3>Lắng nghe gọi tên & số thứ tự</h3>
-            <p>Hệ thống phát âm thanh chuông báo, đọc tên và hiển thị số thứ tự cùng phòng trong 30 giây sau khi được gọi.</p>
+            <p>Hệ thống phát âm thanh chuông báo, đọc tên và hiển thị số thứ tự cùng phòng trong 15 giây sau khi được gọi.</p>
           </div>
         </div>
 
@@ -111,12 +127,18 @@
 import { onMounted, onUnmounted, ref } from 'vue';
 import { queueService, type PublicQueueItemResponse } from '@/services/queue';
 
+const SOUND_STORAGE_KEY = 'dental.tv.sound';
+const CALL_DURATION_SECONDS = 15;
+const CALL_TTL_MS = CALL_DURATION_SECONDS * 1000;
+const VIETTEL_CACHE_LIMIT = 20;
+
 const inConsultation = ref<PublicQueueItemResponse[]>([]);
 const waiting = ref<PublicQueueItemResponse[]>([]);
 const error = ref('');
 const currentTime = ref('');
-const soundEnabled = ref(false);
-const hasLocalVietnameseVoice = ref(false);
+const soundEnabled = ref(true);
+const playbackBlocked = ref(false);
+const viettelTtsExpiredOrUnavailable = ref(false);
 
 interface ActiveCallData {
   queueNumberDisplay: string;
@@ -125,8 +147,13 @@ interface ActiveCallData {
   status: number;
 }
 
+interface AudioQueueItem {
+  text: string;
+  expiresAt: number;
+}
+
 const activeCall = ref<ActiveCallData | null>(null);
-const remainingCallSeconds = ref(30);
+const remainingCallSeconds = ref(CALL_DURATION_SECONDS);
 let callTimer: ReturnType<typeof setInterval> | null = null;
 let broadcastChannel: BroadcastChannel | null = null;
 
@@ -144,7 +171,7 @@ function triggerCallBanner(data: ActiveCallData) {
     ...data,
     maskedPatientName: formatCallPatientName(data.maskedPatientName)
   };
-  remainingCallSeconds.value = 30;
+  remainingCallSeconds.value = CALL_DURATION_SECONDS;
   if (callTimer) clearInterval(callTimer);
 
   callTimer = setInterval(() => {
@@ -155,13 +182,6 @@ function triggerCallBanner(data: ActiveCallData) {
       activeCall.value = null;
     }
   }, 1000);
-}
-
-interface AudioQueueItem {
-  queueNumberDisplay: string;
-  patientName: string;
-  roomName: string | null;
-  text: string;
 }
 
 function locationLabel(item: { roomName?: string | null }): string {
@@ -196,41 +216,56 @@ function formatSpokenRoomClause(roomName: string | null | undefined): string {
   return `vào phòng số ${normalized.replace(/[-_]+/g, ' ').trim()}`;
 }
 
-function buildCallAnnouncementText(item: {
-  queueNumberDisplay?: string | null;
-  maskedPatientName?: string | null;
-  patientName?: string | null;
-  roomName?: string | null;
-}): string {
-  const patientName = formatCallPatientName(item.patientName ?? item.maskedPatientName);
+function buildCallAnnouncementText(
+  item: Pick<PublicQueueItemResponse, 'maskedPatientName'> & {
+    queueNumberDisplay?: string | null;
+    roomName?: string | null;
+  }
+): string {
+  // Chuẩn hóa họ tên NFC, giữ dấu tiếng Việt và bỏ các từ bị che ký tự '*' nếu có.
+  const rawName = formatCallPatientName(item.maskedPatientName)
+    .normalize('NFC')
+    .split(' ')
+    .filter(part => part && !part.includes('*'))
+    .join(' ');
+  const lowercaseName = rawName.toLocaleLowerCase('vi-VN');
+  const hasSpecificName = Boolean(rawName) && lowercaseName !== 'bệnh nhân';
+  const spokenName = hasSpecificName
+    ? (rawName === rawName.toLocaleUpperCase('vi-VN')
+        ? lowercaseName.replace(/(^|[\s-])\p{L}/gu, part => part.toLocaleUpperCase('vi-VN'))
+        : rawName)
+    : '';
+
   const spokenNumber = formatSpokenQueueNumber(item.queueNumberDisplay);
   const roomClause = formatSpokenRoomClause(item.roomName);
-  const lead = spokenNumber
-    ? `Mời bệnh nhân số ${spokenNumber}, ${patientName}`
-    : `Mời bệnh nhân ${patientName}`;
-  return roomClause ? `${lead}, ${roomClause}` : lead;
-}
 
-function pickVietnameseVoice(): SpeechSynthesisVoice | null {
-  if (typeof window === 'undefined' || typeof window.speechSynthesis?.getVoices !== 'function') return null;
-  const localVoices = window.speechSynthesis.getVoices().filter(voice =>
-    voice.localService && /^vi(?:[-_]|$)/i.test(voice.lang)
-  );
-  return localVoices.find(voice => /^vi[-_]vn$/i.test(voice.lang)) ?? localVoices[0] ?? null;
-}
-
-function updateVoiceAvailability() {
-  hasLocalVietnameseVoice.value = pickVietnameseVoice() !== null;
+  if (spokenNumber && hasSpecificName) {
+    const lead = `Mời bệnh nhân số ${spokenNumber}, ${spokenName}`;
+    return roomClause ? `${lead}, ${roomClause}.` : `${lead}.`;
+  }
+  if (spokenNumber) {
+    const lead = `Mời bệnh nhân số ${spokenNumber}`;
+    return roomClause ? `${lead}, ${roomClause}.` : `${lead}.`;
+  }
+  if (hasSpecificName) {
+    const lead = `Mời bệnh nhân ${spokenName}`;
+    return roomClause ? `${lead}, ${roomClause}.` : `${lead}.`;
+  }
+  return roomClause ? `Mời bệnh nhân ${roomClause}.` : 'Mời bệnh nhân.';
 }
 
 const audioQueue: AudioQueueItem[] = [];
-let isPlayingAudio = false;
+const isPlayingAudio = ref(false);
 const seenCallNumbers = new Set<string>();
+const viettelAudioCache = new Map<string, ArrayBuffer>();
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let clockTimer: ReturnType<typeof setInterval> | null = null;
 let audioCtx: AudioContext | null = null;
+let activeAudioSource: AudioBufferSourceNode | null = null;
+let activeFetchController: AbortController | null = null;
 let speechTimer: ReturnType<typeof setTimeout> | null = null;
 let speechSessionId = 0;
+let initialSnapshotLoaded = false;
 
 function updateClock() {
   const now = new Date();
@@ -242,6 +277,28 @@ function updateClock() {
   }).format(now);
 }
 
+function getSessionStorage(): Storage | null {
+  try {
+    return typeof window !== 'undefined' && window.sessionStorage ? window.sessionStorage : null;
+  } catch {
+    return null;
+  }
+}
+
+function syncSoundPreference() {
+  const saved = getSessionStorage()?.getItem(SOUND_STORAGE_KEY);
+  soundEnabled.value = saved !== 'false';
+}
+
+function saveSoundPreference(enabled: boolean) {
+  const storage = getSessionStorage();
+  if (!storage) return;
+  try {
+    if (enabled) storage.removeItem(SOUND_STORAGE_KEY);
+    else storage.setItem(SOUND_STORAGE_KEY, 'false');
+  } catch {}
+}
+
 function ensureAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
   if (!audioCtx || audioCtx.state === 'closed') {
@@ -250,25 +307,50 @@ function ensureAudioContext(): AudioContext | null {
       (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (AudioContextClass) audioCtx = new AudioContextClass();
   }
-  if (audioCtx && audioCtx.state === 'suspended') {
-    void audioCtx.resume().catch(() => {});
-  }
   return audioCtx;
+}
+
+async function tryResumeAudioContext(): Promise<boolean> {
+  const ctx = ensureAudioContext();
+  if (!ctx) return true;
+  if (ctx.state === 'running') {
+    playbackBlocked.value = false;
+    return true;
+  }
+  try {
+    await ctx.resume();
+    const resumed = (ctx.state as AudioContextState) === 'running';
+    playbackBlocked.value = !resumed;
+    return resumed;
+  } catch {
+    playbackBlocked.value = true;
+    return false;
+  }
 }
 
 function stopActiveSpeech() {
   speechSessionId++;
   if (speechTimer !== null) clearTimeout(speechTimer);
   speechTimer = null;
-  isPlayingAudio = false;
-  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
+  if (activeFetchController) {
+    try {
+      activeFetchController.abort();
+    } catch {}
+    activeFetchController = null;
   }
+  if (activeAudioSource) {
+    try {
+      activeAudioSource.stop();
+      activeAudioSource.disconnect();
+    } catch {}
+    activeAudioSource = null;
+  }
+  isPlayingAudio.value = false;
 }
 
 function playTone(freq: number, duration: number, delay: number) {
   const ctx = ensureAudioContext();
-  if (!ctx) return;
+  if (!ctx || ctx.state === 'suspended') return;
 
   const now = ctx.currentTime + delay;
   const osc = ctx.createOscillator();
@@ -292,46 +374,149 @@ function playDingDong() {
   playTone(600, 0.45, 0.25);
 }
 
+function playBingBongAttention() {
+  // Chuông Bing-Bong 2 hồi vang rõ giúp khách hàng chú ý màn hình TV khi Viettel AI hết hạn/gián đoạn.
+  playTone(880, 0.28, 0);
+  playTone(659.25, 0.48, 0.28);
+  playTone(880, 0.28, 0.9);
+  playTone(659.25, 0.55, 1.18);
+}
+
+function setCachedViettelAudio(text: string, data: ArrayBuffer) {
+  if (viettelAudioCache.size >= VIETTEL_CACHE_LIMIT) {
+    const oldestKey = viettelAudioCache.keys().next().value;
+    if (oldestKey !== undefined) viettelAudioCache.delete(oldestKey);
+  }
+  viettelAudioCache.set(text, data.slice(0));
+}
+
+function isAudioPayloadBuffer(audioBytes: ArrayBuffer, contentType: string): boolean {
+  if (!(audioBytes instanceof ArrayBuffer) || audioBytes.byteLength <= 256) return false;
+  if (contentType.includes('json')) return false;
+  const view = new Uint8Array(audioBytes, 0, Math.min(16, audioBytes.byteLength));
+  for (let i = 0; i < view.length; i++) {
+    const ch = view[i];
+    if (ch === 0x20 || ch === 0x09 || ch === 0x0a || ch === 0x0d) continue;
+    return ch !== 0x7b; // '{' biểu thị JSON lỗi thay vì luồng MP3/WAV
+  }
+  return false;
+}
+
+async function requestViettelTtsAudio(text: string): Promise<ArrayBuffer | null> {
+  const cached = viettelAudioCache.get(text);
+  if (cached) return cached.slice(0);
+  if (typeof fetch !== 'function') return null;
+
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  activeFetchController = controller;
+  const timeoutId = controller ? setTimeout(() => controller.abort(), 8000) : null;
+
+  try {
+    const response = await fetch('/tts-viettel', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        accept: '*/*'
+      },
+      body: JSON.stringify({ text }),
+      ...(controller ? { signal: controller.signal } : {})
+    });
+    if (timeoutId) clearTimeout(timeoutId);
+    if (activeFetchController === controller) activeFetchController = null;
+
+    if (!response || !response.ok) return null;
+    const contentType = (response.headers?.get?.('content-type') || '').toLowerCase();
+    const audioBytes = await response.arrayBuffer();
+    if (!isAudioPayloadBuffer(audioBytes, contentType)) return null;
+
+    setCachedViettelAudio(text, audioBytes);
+    return audioBytes.slice(0);
+  } catch {
+    if (timeoutId) clearTimeout(timeoutId);
+    if (activeFetchController === controller) activeFetchController = null;
+    return null;
+  }
+}
+
+function pruneExpiredAudioQueue(now = Date.now()) {
+  while (audioQueue.length > 0 && audioQueue[0].expiresAt <= now) {
+    audioQueue.shift();
+  }
+}
+
 function processAudioQueue() {
-  if (!active || isPlayingAudio || audioQueue.length === 0 || !soundEnabled.value) return;
+  pruneExpiredAudioQueue();
+  if (!active || isPlayingAudio.value || !soundEnabled.value || audioQueue.length === 0) return;
+
+  const ctx = ensureAudioContext();
+  if (ctx && ctx.state === 'suspended') {
+    void tryResumeAudioContext().then((resumed) => {
+      if (resumed && active && soundEnabled.value && !isPlayingAudio.value) {
+        processAudioQueue();
+      }
+    });
+    return;
+  }
+
   const item = audioQueue.shift();
   if (!item) return;
 
-  isPlayingAudio = true;
+  isPlayingAudio.value = true;
   const sessionId = ++speechSessionId;
   playDingDong();
   let finished = false;
 
-  function finish(cancelSpeech = false) {
+  function finish() {
     if (finished || sessionId !== speechSessionId) return;
     finished = true;
     if (speechTimer !== null) clearTimeout(speechTimer);
-    if (cancelSpeech) window.speechSynthesis.cancel();
     speechTimer = setTimeout(() => {
       if (sessionId !== speechSessionId) return;
       speechTimer = null;
-      isPlayingAudio = false;
+      isPlayingAudio.value = false;
       processAudioQueue();
     }, 400);
   }
 
-  speechTimer = setTimeout(() => {
+  speechTimer = setTimeout(async () => {
     if (!active || !soundEnabled.value || sessionId !== speechSessionId) return;
-    const voice = pickVietnameseVoice();
-    if (!voice || typeof SpeechSynthesisUtterance === 'undefined') {
-      finish();
-      return;
+    speechTimer = setTimeout(finish, 12_000);
+
+    const audioBytes = await requestViettelTtsAudio(item.text);
+    if (!active || !soundEnabled.value || sessionId !== speechSessionId) return;
+
+    const currentCtx = ensureAudioContext();
+    if (audioBytes && currentCtx) {
+      try {
+        const decoded = await currentCtx.decodeAudioData(audioBytes);
+        if (!active || !soundEnabled.value || sessionId !== speechSessionId) return;
+
+        viettelTtsExpiredOrUnavailable.value = false;
+        const source = currentCtx.createBufferSource();
+        source.buffer = decoded;
+        source.connect(currentCtx.destination);
+        activeAudioSource = source;
+        source.addEventListener(
+          'ended',
+          () => {
+            if (activeAudioSource === source) activeAudioSource = null;
+            finish();
+          },
+          { once: true }
+        );
+        source.start(0);
+        return;
+      } catch {
+        // Khi giải mã thất bại, chuyển sang phát chuông Bing-Bong báo hiệu.
+      }
     }
 
-    const utterance = new SpeechSynthesisUtterance(item.text);
-    utterance.voice = voice;
-    utterance.lang = voice.lang;
-    utterance.rate = 0.92;
-    utterance.onend = () => finish();
-    utterance.onerror = () => finish();
-    speechTimer = setTimeout(() => finish(true), 12_000);
-    window.speechSynthesis.speak(utterance);
-  }, 700);
+    // Viettel AI TTS hết hạn, hết lưu lượng hoặc gián đoạn -> phát chuông Bing-Bong để khách chú ý.
+    viettelTtsExpiredOrUnavailable.value = true;
+    playBingBongAttention();
+    if (speechTimer !== null) clearTimeout(speechTimer);
+    speechTimer = setTimeout(finish, 1800);
+  }, 850);
 }
 
 function enqueueCallAudio(
@@ -343,33 +528,46 @@ function enqueueCallAudio(
   if (audioQueue.length >= 3) {
     audioQueue.shift();
   }
-  const queueNumberDisplay = item.queueNumberDisplay?.trim() ?? '';
-  const patientName = formatCallPatientName(item.maskedPatientName);
-  const roomName = item.roomName?.trim() || null;
-  const text = buildCallAnnouncementText({
-    queueNumberDisplay,
-    patientName,
-    roomName
-  });
   audioQueue.push({
-    queueNumberDisplay,
-    patientName,
-    roomName,
-    text
+    text: buildCallAnnouncementText(item),
+    expiresAt: Date.now() + CALL_TTL_MS
+  });
+  processAudioQueue();
+}
+
+function previewVoice() {
+  if (!soundEnabled.value || playbackBlocked.value || activeCall.value || isPlayingAudio.value) return;
+  audioQueue.push({
+    text: 'Mời bệnh nhân số A 001, Nguyễn Văn An, vào phòng số 1.',
+    expiresAt: Date.now() + CALL_TTL_MS
   });
   processAudioQueue();
 }
 
 function toggleSound() {
+  if (playbackBlocked.value) {
+    soundEnabled.value = true;
+    saveSoundPreference(true);
+    void tryResumeAudioContext().then((resumed) => {
+      if (resumed && active && soundEnabled.value) {
+        playDingDong();
+        processAudioQueue();
+      }
+    });
+    return;
+  }
+
   soundEnabled.value = !soundEnabled.value;
+  saveSoundPreference(soundEnabled.value);
   if (soundEnabled.value) {
-    ensureAudioContext();
-    updateVoiceAvailability();
-    playDingDong();
-    processAudioQueue();
+    void tryResumeAudioContext().then((resumed) => {
+      if (resumed && active && soundEnabled.value) {
+        playDingDong();
+        processAudioQueue();
+      }
+    });
   } else {
     audioQueue.length = 0;
-    isPlayingAudio = false;
     stopActiveSpeech();
   }
 }
@@ -383,6 +581,9 @@ async function loadQueueData() {
     if (!active || ticket !== requestVersion) return;
     error.value = '';
 
+    const isInitialSnapshot = !initialSnapshotLoaded;
+    initialSnapshotLoaded = true;
+
     const currentCalls = data.inConsultation.filter(item => item.status === 6);
     for (const item of currentCalls) {
       if (!seenCallNumbers.has(item.queueNumberDisplay)) {
@@ -392,7 +593,7 @@ async function loadQueueData() {
           roomName: item.roomName,
           status: item.status
         });
-        if (soundEnabled.value) {
+        if (soundEnabled.value && !isInitialSnapshot) {
           enqueueCallAudio(item);
         }
       }
@@ -420,24 +621,19 @@ function setupExternalListeners() {
         seenCallNumbers.add(item.queueNumberDisplay);
         triggerCallBanner(item);
         if (soundEnabled.value) {
-          enqueueCallAudio({
-            queueNumberDisplay: item.queueNumberDisplay,
-            maskedPatientName: item.maskedPatientName,
-            roomName: item.roomName
-          });
+          enqueueCallAudio(item);
         }
       }
     };
   } catch {}
-
 }
 
 onMounted(() => {
   updateClock();
   clockTimer = setInterval(updateClock, 1000);
-  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-    updateVoiceAvailability();
-    window.speechSynthesis.onvoiceschanged = updateVoiceAvailability;
+  syncSoundPreference();
+  if (soundEnabled.value) {
+    void tryResumeAudioContext();
   }
   setupExternalListeners();
   void loadQueueData();
@@ -454,11 +650,8 @@ onUnmounted(() => {
     broadcastChannel = null;
   }
   stopActiveSpeech();
-  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-    window.speechSynthesis.onvoiceschanged = null;
-  }
   audioQueue.length = 0;
-  isPlayingAudio = false;
+  viettelAudioCache.clear();
   if (audioCtx && audioCtx.state !== 'closed') {
     void audioCtx.close();
   }
@@ -520,7 +713,13 @@ onUnmounted(() => {
 .header-right {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 1.25rem;
+}
+
+.sound-status {
+  flex-basis: 100%;
 }
 
 .call-badge {
@@ -534,7 +733,7 @@ onUnmounted(() => {
   animation: pulse 1s infinite alternate;
 }
 
-/* Call Banner 30s nổi bật cực đại */
+/* Call Banner 15s nổi bật cực đại */
 .call-active-banner {
   background: linear-gradient(135deg, #0284c7 0%, #0f2d59 100%);
   border: 3px solid #38bdf8;
@@ -617,8 +816,13 @@ onUnmounted(() => {
   transition: all 0.2s;
 }
 
-.sound-toggle:hover {
+.sound-toggle:hover:not(:disabled) {
   background: #e2e8f0;
+}
+
+.sound-toggle:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .sound-toggle.active {

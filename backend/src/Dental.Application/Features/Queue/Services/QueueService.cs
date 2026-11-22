@@ -1170,22 +1170,13 @@ public sealed class QueueService
         if (string.IsNullOrWhiteSpace(fullName))
             return "Bệnh nhân";
 
-        var parts = fullName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 1)
+        var normalized = string.Join(" ", fullName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        if (normalized.EndsWith(" (DEMO)", StringComparison.OrdinalIgnoreCase))
         {
-            var w = parts[0];
-            return w.Length <= 2 ? w : $"{w[0]}***{w[^1]}";
+            normalized = normalized[..^" (DEMO)".Length].Trim();
         }
 
-        if (parts.Length == 2)
-        {
-            return $"{parts[0]} *** {parts[1]}";
-        }
-
-        var first = parts[0];
-        var last = parts[^1];
-        var middle = string.Join(" ", parts.Skip(1).Take(parts.Length - 2).Select(m => $"{m[0]}***"));
-        return $"{first} {middle} {last}";
+        return string.IsNullOrWhiteSpace(normalized) ? "Bệnh nhân" : normalized;
     }
 
     public static string FormatQueueNumber(int queueNumber, bool isPriority)
