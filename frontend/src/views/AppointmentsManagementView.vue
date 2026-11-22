@@ -27,316 +27,330 @@
     </header>
 
     <!-- Thông báo toàn trang -->
-    <div v-if="globalSuccess" class="alert-box alert-success" role="status" aria-live="polite">
-      ✅ {{ globalSuccess }}
-    </div>
-    <div v-if="globalError" class="alert-box alert-error" role="alert">
-      ⚠️ {{ globalError }}
-    </div>
+    <Transition name="alert-slide">
+      <div v-if="globalSuccess" class="alert-box alert-success" role="status" aria-live="polite">
+        ✅ {{ globalSuccess }}
+      </div>
+    </Transition>
+    <Transition name="alert-slide">
+      <div v-if="globalError" class="alert-box alert-error" role="alert">
+        ⚠️ {{ globalError }}
+      </div>
+    </Transition>
 
-    <!-- ====================================================================== -->
-    <!-- PHẦN 1 TRỌNG TÂM: DANH SÁCH KHÁCH HÀNG YÊU CẦU DUYỆT TRỰC TUYẾN -->
-    <!-- ====================================================================== -->
-    <section class="section-card requests-section" aria-labelledby="requests-heading">
-      <div class="section-header">
-        <div class="section-title-wrap">
-          <span class="section-icon">📑</span>
-          <div>
-            <h2 id="requests-heading">Yêu cầu đặt hẹn trực tuyến chờ duyệt</h2>
-            <p class="section-desc">Khách gửi yêu cầu từ trang chủ. Khi lễ tân duyệt, hệ thống sẽ xác nhận lịch hẹn chính thức.</p>
+    <!-- Thanh chuyển Tab khu vực quản lý lịch hẹn -->
+    <nav class="appointments-tabs" role="tablist" aria-label="Chuyển mục quản lý lịch hẹn">
+      <button
+        type="button"
+        role="tab"
+        class="appointments-tab-btn"
+        :class="{ 'is-active': activeTab === 'all' }"
+        :aria-selected="activeTab === 'all'"
+        @click="activeTab = 'all'"
+      >
+        <span>📊 Tất cả (Tổng hợp)</span>
+      </button>
+      <button
+        type="button"
+        role="tab"
+        class="appointments-tab-btn"
+        :class="{ 'is-active': activeTab === 'requests' }"
+        :aria-selected="activeTab === 'requests'"
+        @click="activeTab = 'requests'"
+      >
+        <span>📑 Yêu cầu chờ duyệt</span>
+        <span class="tab-badge" :class="{ 'tab-badge--warn': requestsRows.length > 0 }">
+          {{ requestsRows.length }}
+        </span>
+      </button>
+      <button
+        type="button"
+        role="tab"
+        class="appointments-tab-btn"
+        :class="{ 'is-active': activeTab === 'desk' }"
+        :aria-selected="activeTab === 'desk'"
+        @click="activeTab = 'desk'"
+      >
+        <span>🗓️ Lịch khám đã chốt</span>
+        <span class="tab-badge">{{ deskTotal }}</span>
+      </button>
+    </nav>
+
+    <Transition name="appt-tab-switch" mode="out-in">
+      <div :key="activeTab" class="appointments-tab-stage">
+        <!-- ====================================================================== -->
+        <!-- PHẦN 1 TRỌNG TÂM: DANH SÁCH KHÁCH HÀNG YÊU CẦU DUYỆT TRỰC TUYẾN -->
+        <!-- ====================================================================== -->
+        <section
+          v-if="activeTab === 'all' || activeTab === 'requests'"
+          class="section-card requests-section"
+          aria-labelledby="requests-heading"
+        >
+          <div class="section-header">
+            <div class="section-title-wrap">
+              <span class="section-icon">📑</span>
+              <div>
+                <h2 id="requests-heading">Yêu cầu đặt hẹn trực tuyến chờ duyệt</h2>
+                <p class="section-desc">Khách gửi yêu cầu từ trang chủ. Khi lễ tân duyệt trong popup, hệ thống sẽ xác nhận lịch hẹn chính thức.</p>
+              </div>
+            </div>
+            <div class="section-badge-wrap">
+              <span v-if="requestsRows.length" class="badge-count badge-warning">
+                {{ requestsRows.length }} yêu cầu chờ duyệt
+              </span>
+              <span v-else class="badge-count badge-neutral">
+                0 yêu cầu chờ duyệt
+              </span>
+            </div>
           </div>
-        </div>
-        <div class="section-badge-wrap">
-          <span v-if="requestsRows.length" class="badge-count badge-warning">
-            {{ requestsRows.length }} yêu cầu chờ duyệt
-          </span>
-          <span v-else class="badge-count badge-neutral">
-            0 yêu cầu chờ duyệt
-          </span>
-        </div>
-      </div>
 
-      <!-- Trạng thái loading / error -->
-      <div v-if="requestsBusy && !requestsRows.length" class="loading-state" role="status">
-        <div class="spinner"></div>
-        <p>Đang tải danh sách yêu cầu đặt lịch…</p>
-      </div>
+          <!-- Trạng thái loading / error -->
+          <div v-if="requestsBusy && !requestsRows.length" class="loading-state" role="status">
+            <div class="spinner"></div>
+            <p>Đang tải danh sách yêu cầu đặt lịch…</p>
+          </div>
 
-      <!-- Trạng thái không có yêu cầu nào chờ duyệt -->
-      <div v-else-if="!requestsBusy && !requestsRows.length" class="empty-requests-state">
-        <div class="empty-icon">🎉</div>
-        <h3>Hiện không có yêu cầu trực tuyến nào đang chờ duyệt</h3>
-        <p>Tất cả yêu cầu đã được xử lý hoặc chưa có khách gửi mới. Bạn có thể đặt lịch cho khách tại quầy.</p>
-        <button type="button" class="app-btn app-btn--primary app-btn--sm" @click="openBookingModal">
-          <span class="btn-icon">🛎️</span> Đặt lịch tại quầy ngay
-        </button>
-      </div>
+          <!-- Trạng thái không có yêu cầu nào chờ duyệt -->
+          <div v-else-if="!requestsBusy && !requestsRows.length" class="empty-requests-state">
+            <div class="empty-icon">🎉</div>
+            <h3>Hiện không có yêu cầu trực tuyến nào đang chờ duyệt</h3>
+            <p>Tất cả yêu cầu đã được xử lý hoặc chưa có khách gửi mới. Bạn có thể đặt lịch cho khách tại quầy.</p>
+            <button type="button" class="app-btn app-btn--primary app-btn--sm" @click="openBookingModal">
+              <span class="btn-icon">🛎️</span> Đặt lịch tại quầy ngay
+            </button>
+          </div>
 
-      <!-- Lưới danh sách yêu cầu trực tuyến -->
-      <div v-else class="requests-container">
-        <ol class="requests-grid" aria-label="Danh sách yêu cầu đặt hẹn trực tuyến">
-          <li v-for="req in requestsRows" :key="req.id" class="request-card">
-            <div class="request-card-header">
-              <div class="patient-main">
-                <h3 class="patient-name">{{ req.fullName }}</h3>
-                <span v-if="req.isReturning" class="badge-returning">✨ Đã từng khám</span>
-                <span v-else class="badge-new">Khách mới</span>
+          <!-- Lưới danh sách yêu cầu trực tuyến -->
+          <div v-else class="requests-container">
+            <Transition name="appt-page-swap" mode="out-in">
+              <div :key="'req-page-' + requestsPage" class="requests-page-frame">
+                <TransitionGroup
+                  name="request-card-list"
+                  tag="ol"
+                  class="requests-grid"
+                  aria-label="Danh sách yêu cầu đặt hẹn trực tuyến"
+                >
+                  <li
+                    v-for="req in requestsRows"
+                    :key="req.id"
+                    class="request-card"
+                    :class="{ 'request-card--active': approvingRequestId === req.id || rejectingRequest?.id === req.id }"
+                  >
+                    <div class="request-card-header">
+                      <div class="patient-main">
+                        <h3 class="patient-name">{{ req.fullName }}</h3>
+                        <span v-if="req.isReturning" class="badge-returning">✨ Đã từng khám</span>
+                        <span v-else class="badge-new">Khách mới</span>
+                      </div>
+                      <span class="request-code">#YC-{{ req.id }}</span>
+                    </div>
+
+                    <div class="request-details">
+                      <div class="detail-item">
+                        <span class="detail-label">Lịch mong muốn:</span>
+                        <span class="detail-val highlight-time">
+                          📅 {{ formatDate(req.appointmentDate) }} · ⏰ {{ req.slotTime.slice(0, 5) }} ({{ req.slotDurationMinutes }} phút)
+                        </span>
+                      </div>
+                      <div class="detail-item">
+                        <span class="detail-label">Số điện thoại:</span>
+                        <span class="detail-val">📞 {{ req.phone }}</span>
+                      </div>
+                      <div class="detail-item">
+                        <span class="detail-label">Ngày sinh:</span>
+                        <span class="detail-val">🎂 {{ formatDate(req.dateOfBirth) }}</span>
+                      </div>
+                    </div>
+
+                    <div v-if="req.notes" class="request-notes">
+                      <span class="notes-tag">Ghi chú:</span> {{ req.notes }}
+                    </div>
+
+                    <!-- Thanh nút thao tác -->
+                    <div class="request-actions">
+                      <button
+                        type="button"
+                        class="app-btn app-btn--success"
+                        :disabled="requestsApprovalBusy || requestsBusy"
+                        @click="startApprove(req)"
+                      >
+                        ✓ Duyệt yêu cầu
+                      </button>
+                      <button
+                        type="button"
+                        class="app-btn app-btn--danger-outline"
+                        :disabled="requestsApprovalBusy || requestsBusy"
+                        @click="startReject(req)"
+                      >
+                        ✕ Từ chối
+                      </button>
+                    </div>
+                  </li>
+                </TransitionGroup>
               </div>
-              <span class="request-code">#YC-{{ req.id }}</span>
-            </div>
+            </Transition>
 
-            <div class="request-details">
-              <div class="detail-item">
-                <span class="detail-label">Lịch mong muốn:</span>
-                <span class="detail-val highlight-time">
-                  📅 {{ formatDate(req.appointmentDate) }} · ⏰ {{ req.slotTime.slice(0, 5) }} ({{ req.slotDurationMinutes }} phút)
-                </span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">Số điện thoại:</span>
-                <span class="detail-val">📞 {{ req.phone }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">Ngày sinh:</span>
-                <span class="detail-val">🎂 {{ formatDate(req.dateOfBirth) }}</span>
-              </div>
-            </div>
-
-            <div v-if="req.notes" class="request-notes">
-              <span class="notes-tag">Ghi chú:</span> {{ req.notes }}
-            </div>
-
-            <!-- Thanh nút thao tác -->
-            <div class="request-actions">
-              <button
-                type="button"
-                class="app-btn app-btn--success"
-                :disabled="requestsApprovalBusy || requestsBusy"
-                @click="startApprove(req)"
-              >
-                ✓ Duyệt yêu cầu
-              </button>
-              <button
-                type="button"
-                class="app-btn app-btn--danger-outline"
-                :disabled="requestsApprovalBusy || requestsBusy"
-                @click="startReject(req)"
-              >
-                ✕ Từ chối
-              </button>
-            </div>
-
-            <!-- Khung duyệt trực tiếp (BookingRequestApproval) -->
-            <div v-if="approvingRequestId === req.id" class="inline-approval-box">
-              <BookingRequestApproval
-                :key="req.id"
-                class="approval-panel"
-                :request-id="req.id"
-                @approved="onApprovedRequest"
-                @working="requestsApprovalBusy = $event"
-              />
-              <button
-                type="button"
-                class="app-btn app-btn--secondary app-btn--xs btn-cancel-approval"
-                :disabled="requestsApprovalBusy"
-                @click="approvingRequestId = null"
-              >
-                Đóng khung duyệt
-              </button>
-            </div>
-
-            <!-- Khung từ chối trực tiếp -->
-            <form v-if="rejectingRequest?.id === req.id" class="inline-reject-box" @submit.prevent="submitReject">
-              <h4>Từ chối yêu cầu của {{ req.fullName }}</h4>
-              <p class="rejection-hint">Yêu cầu khi bị từ chối sẽ ngay lập tức giải phóng khung giờ đã giữ.</p>
-              <div class="form-group">
-                <label for="reject-reason">Lý do từ chối <span class="req">*</span></label>
-                <textarea
-                  id="reject-reason"
-                  v-model.trim="rejectReason"
-                  rows="2"
-                  maxlength="500"
-                  placeholder="Nhập lý do gửi đến bệnh nhân..."
-                  required
-                ></textarea>
-              </div>
-              <label class="confirm-checkbox">
-                <input v-model="rejectConfirmed" type="checkbox" />
-                <span>Xác nhận từ chối yêu cầu đặt hẹn này.</span>
-              </label>
-              <div class="reject-actions">
+            <!-- Phân trang danh sách yêu cầu -->
+            <nav v-if="requestsRows.length || requestsPage > 1" class="pagination-bar" aria-label="Phân trang yêu cầu trực tuyến">
+              <span class="page-info">Trang <strong>{{ requestsPage }}</strong></span>
+              <div class="pagination-controls">
                 <button
                   type="button"
-                  class="app-btn app-btn--secondary app-btn--sm"
-                  :disabled="requestsBusy"
-                  @click="rejectingRequest = null"
+                  class="app-btn app-btn--outline app-btn--sm"
+                  :disabled="requestsApprovalBusy || requestsBusy || requestsPage === 1"
+                  @click="loadRequests(requestsPage - 1)"
                 >
-                  Hủy
+                  ← Trang trước
                 </button>
                 <button
-                  class="app-btn app-btn--danger app-btn--sm"
-                  type="submit"
-                  :disabled="requestsBusy || !rejectConfirmed || !rejectReason.trim()"
+                  type="button"
+                  class="app-btn app-btn--outline app-btn--sm"
+                  :disabled="requestsApprovalBusy || requestsBusy || !requestsHasNext"
+                  @click="loadRequests(requestsPage + 1)"
                 >
-                  Xác nhận từ chối
+                  Trang sau →
                 </button>
               </div>
-            </form>
-          </li>
-        </ol>
-
-        <!-- Phân trang danh sách yêu cầu -->
-        <nav v-if="requestsRows.length || requestsPage > 1" class="pagination-bar" aria-label="Phân trang yêu cầu trực tuyến">
-          <span class="page-info">Trang <strong>{{ requestsPage }}</strong></span>
-          <div class="pagination-controls">
-            <button
-              type="button"
-              class="app-btn app-btn--outline app-btn--sm"
-              :disabled="requestsApprovalBusy || requestsBusy || requestsPage === 1"
-              @click="loadRequests(requestsPage - 1)"
-            >
-              ← Trang trước
-            </button>
-            <button
-              type="button"
-              class="app-btn app-btn--outline app-btn--sm"
-              :disabled="requestsApprovalBusy || requestsBusy || !requestsHasNext"
-              @click="loadRequests(requestsPage + 1)"
-            >
-              Trang sau →
-            </button>
+            </nav>
           </div>
-        </nav>
-      </div>
-    </section>
+        </section>
 
-    <!-- ====================================================================== -->
-    <!-- PHẦN 2 BỔ TRỢ: DANH SÁCH LỊCH HẸN ĐÃ XÁC NHẬN THEO NGÀY -->
-    <!-- ====================================================================== -->
-    <section class="section-card confirmed-section" aria-labelledby="confirmed-heading">
-      <div class="section-header">
-        <div class="section-title-wrap">
-          <span class="section-icon">🗓️</span>
-          <div>
-            <h2 id="confirmed-heading">Lịch khám đã chốt theo ngày</h2>
-            <p class="section-desc">Theo dõi các lịch hẹn đã xác nhận, nhắc hẹn hoặc hủy/dời lịch khi người bệnh yêu cầu.</p>
+        <!-- ====================================================================== -->
+        <!-- PHẦN 2 BỔ TRỢ: DANH SÁCH LỊCH HẸN ĐÃ XÁC NHẬN THEO NGÀY -->
+        <!-- ====================================================================== -->
+        <section
+          v-if="activeTab === 'all' || activeTab === 'desk'"
+          class="section-card confirmed-section"
+          aria-labelledby="confirmed-heading"
+        >
+          <div class="section-header">
+            <div class="section-title-wrap">
+              <span class="section-icon">🗓️</span>
+              <div>
+                <h2 id="confirmed-heading">Lịch khám đã chốt theo ngày</h2>
+                <p class="section-desc">Theo dõi các lịch hẹn đã xác nhận, nhắc hẹn hoặc hủy/dời lịch khi người bệnh yêu cầu.</p>
+              </div>
+            </div>
           </div>
-        </div>
+
+          <!-- Bộ lọc ngày & trạng thái -->
+          <form class="filters-card" @submit.prevent="loadDesk(1)">
+            <div class="filter-group">
+              <label for="desk-day">Ngày hẹn</label>
+              <input id="desk-day" v-model="deskDate" type="date" :disabled="deskBusy" @change="loadDesk(1)" />
+            </div>
+            <div class="filter-group">
+              <label for="desk-status">Trạng thái</label>
+              <select id="desk-status" v-model="deskStatus" :disabled="deskBusy" @change="loadDesk(1)">
+                <option value="Scheduled">Đang chờ khám</option>
+                <option value="">Tất cả trạng thái</option>
+                <option value="Cancelled">Đã hủy</option>
+                <option value="CheckedIn">Đã tiếp đón</option>
+                <option value="Completed">Hoàn tất</option>
+              </select>
+            </div>
+            <button class="app-btn app-btn--primary btn-filter-submit" :disabled="deskLoading || deskBusy">
+              <span v-if="deskLoading">Đang tải…</span>
+              <span v-else>Tra cứu / Tải lại</span>
+            </button>
+          </form>
+
+          <div v-if="deskLoading" class="loading-state" role="status">
+            <div class="spinner"></div>
+            <p>Đang tải danh sách lịch hẹn…</p>
+          </div>
+
+          <div v-else-if="!deskRows.length" class="empty-state">
+            <p>Không có lịch hẹn nào phù hợp với điều kiện tìm kiếm ngày {{ formatDate(deskDate) }}.</p>
+          </div>
+
+          <Transition v-else name="appt-page-swap" mode="out-in">
+            <div :key="'desk-page-' + deskPage + '-' + deskDate + '-' + deskStatus" class="confirmed-table-wrap">
+              <table class="confirmed-table">
+                <thead>
+                  <tr>
+                    <th>Giờ hẹn</th>
+                    <th>Mã lịch</th>
+                    <th>Bệnh nhân</th>
+                    <th>Trạng thái</th>
+                    <th>Ghi chú</th>
+                    <th class="col-actions">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="item in deskRows" :key="item.appointmentId">
+                    <td class="cell-time">
+                      <strong>{{ item.slotTime.slice(0, 5) }}</strong>
+                      <span v-if="item.queueNumber" class="badge-queue">STT #{{ item.queueNumber }}</span>
+                    </td>
+                    <td>#{{ item.appointmentId }}</td>
+                    <td>
+                      <div class="patient-cell-name">{{ item.patientName }}</div>
+                      <div class="patient-cell-code">#{{ item.patientCode }}</div>
+                    </td>
+                    <td>
+                      <span class="status-pill" :class="'status--' + item.status.toLowerCase()">
+                        {{ formatStatus(item.status) }}
+                      </span>
+                    </td>
+                    <td class="cell-notes">{{ item.notes || '—' }}</td>
+                    <td class="col-actions">
+                      <div class="action-buttons">
+                        <AppointmentRescheduling
+                          v-if="item.status === 'Scheduled'"
+                          :appointment-id="item.appointmentId"
+                          :patient-name="item.patientName"
+                          @rescheduled="loadDesk(deskPage)"
+                        />
+                        <button
+                          v-if="item.status === 'Scheduled'"
+                          type="button"
+                          class="action-btn action-btn--cancel"
+                          :disabled="deskBusy"
+                          @click="chooseDeskCancel(item)"
+                        >
+                          Hủy hẹn
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </Transition>
+
+          <!-- Phân trang danh sách lịch hẹn -->
+          <nav v-if="deskTotal > 20 || deskPage > 1" class="pagination-bar" aria-label="Phân trang lịch hẹn">
+            <span class="page-info">Trang <strong>{{ deskPage }}</strong> / Tổng <strong>{{ deskTotal }}</strong> cuộc hẹn</span>
+            <div class="pagination-controls">
+              <button
+                type="button"
+                class="app-btn app-btn--outline app-btn--sm"
+                :disabled="deskBusy || deskPage === 1"
+                @click="loadDesk(deskPage - 1)"
+              >
+                ← Trang trước
+              </button>
+              <button
+                type="button"
+                class="app-btn app-btn--outline app-btn--sm"
+                :disabled="deskBusy || !deskHasNext"
+                @click="loadDesk(deskPage + 1)"
+              >
+                Trang sau →
+              </button>
+            </div>
+          </nav>
+        </section>
       </div>
-
-      <!-- Bộ lọc ngày & trạng thái -->
-      <form class="filters-card" @submit.prevent="loadDesk(1)">
-        <div class="filter-group">
-          <label for="desk-day">Ngày hẹn</label>
-          <input id="desk-day" v-model="deskDate" type="date" :disabled="deskBusy" @change="loadDesk(1)" />
-        </div>
-        <div class="filter-group">
-          <label for="desk-status">Trạng thái</label>
-          <select id="desk-status" v-model="deskStatus" :disabled="deskBusy" @change="loadDesk(1)">
-            <option value="Scheduled">Đang chờ khám</option>
-            <option value="">Tất cả trạng thái</option>
-            <option value="Cancelled">Đã hủy</option>
-            <option value="CheckedIn">Đã tiếp đón</option>
-            <option value="Completed">Hoàn tất</option>
-          </select>
-        </div>
-        <button class="app-btn app-btn--primary btn-filter-submit" :disabled="deskLoading || deskBusy">
-          <span v-if="deskLoading">Đang tải…</span>
-          <span v-else>Tra cứu / Tải lại</span>
-        </button>
-      </form>
-
-      <div v-if="deskLoading" class="loading-state" role="status">
-        <div class="spinner"></div>
-        <p>Đang tải danh sách lịch hẹn…</p>
-      </div>
-
-      <div v-else-if="!deskRows.length" class="empty-state">
-        <p>Không có lịch hẹn nào phù hợp với điều kiện tìm kiếm ngày {{ formatDate(deskDate) }}.</p>
-      </div>
-
-      <div v-else class="confirmed-table-wrap">
-        <table class="confirmed-table">
-          <thead>
-            <tr>
-              <th>Giờ hẹn</th>
-              <th>Mã lịch</th>
-              <th>Bệnh nhân</th>
-              <th>Trạng thái</th>
-              <th>Ghi chú</th>
-              <th class="col-actions">Thao tác</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in deskRows" :key="item.appointmentId">
-              <td class="cell-time">
-                <strong>{{ item.slotTime.slice(0, 5) }}</strong>
-                <span v-if="item.queueNumber" class="badge-queue">STT #{{ item.queueNumber }}</span>
-              </td>
-              <td>#{{ item.appointmentId }}</td>
-              <td>
-                <div class="patient-cell-name">{{ item.patientName }}</div>
-                <div class="patient-cell-code">#{{ item.patientCode }}</div>
-              </td>
-              <td>
-                <span class="status-pill" :class="'status--' + item.status.toLowerCase()">
-                  {{ formatStatus(item.status) }}
-                </span>
-              </td>
-              <td class="cell-notes">{{ item.notes || '—' }}</td>
-              <td class="col-actions">
-                <div class="action-buttons">
-                  <AppointmentRescheduling
-                    v-if="item.status === 'Scheduled'"
-                    :appointment-id="item.appointmentId"
-                    :patient-name="item.patientName"
-                    @rescheduled="loadDesk(deskPage)"
-                  />
-                  <button
-                    v-if="item.status === 'Scheduled'"
-                    type="button"
-                    class="action-btn action-btn--cancel"
-                    :disabled="deskBusy"
-                    @click="chooseDeskCancel(item)"
-                  >
-                    Hủy hẹn
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Phân trang danh sách lịch hẹn -->
-      <nav v-if="deskTotal > 20 || deskPage > 1" class="pagination-bar" aria-label="Phân trang lịch hẹn">
-        <span class="page-info">Trang <strong>{{ deskPage }}</strong> / Tổng <strong>{{ deskTotal }}</strong> cuộc hẹn</span>
-        <div class="pagination-controls">
-          <button
-            type="button"
-            class="app-btn app-btn--outline app-btn--sm"
-            :disabled="deskBusy || deskPage === 1"
-            @click="loadDesk(deskPage - 1)"
-          >
-            ← Trang trước
-          </button>
-          <button
-            type="button"
-            class="app-btn app-btn--outline app-btn--sm"
-            :disabled="deskBusy || !deskHasNext"
-            @click="loadDesk(deskPage + 1)"
-          >
-            Trang sau →
-          </button>
-        </div>
-      </nav>
-    </section>
+    </Transition>
 
     <!-- ====================================================================== -->
     <!-- MODAL ĐẶT LỊCH KHÁM: ĐIỀN THỦ CÔNG / QUÉT CCCD TỰ ĐỘNG CHECK HỒ SƠ -->
     <!-- ====================================================================== -->
     <Teleport to="body">
-      <div v-if="isBookingModalOpen" class="modal-backdrop" @click.self="closeBookingModal">
+      <Transition name="modal-fade">
+        <div v-if="isBookingModalOpen" class="modal-backdrop" @click.self="closeBookingModal">
         <div class="booking-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-booking-title">
           <div class="dialog-header">
             <div class="dialog-title-wrap">
@@ -626,7 +640,168 @@
           </div>
         </div>
       </div>
+      </Transition>
     </Teleport>
+
+    <!-- Popup Đối soát & Duyệt yêu cầu đặt hẹn -->
+    <dialog
+      v-if="approvingRequest"
+      :ref="bindApprovalDialog"
+      class="custom-dialog approval-modal-dialog"
+      aria-labelledby="approval-modal-title"
+      @cancel="onApprovalDialogCancel"
+    >
+      <div class="modal-shell">
+        <div class="dialog-header">
+          <div class="dialog-title-wrap">
+            <span class="dialog-icon">📋</span>
+            <div>
+              <div class="modal-title-badges">
+                <h2 id="approval-modal-title">Đối soát &amp; Duyệt yêu cầu đặt hẹn</h2>
+                <span class="request-code">#YC-{{ approvingRequest.id }}</span>
+                <span v-if="approvingRequest.isReturning" class="badge-returning">✨ Đã từng khám</span>
+                <span v-else class="badge-new">Khách mới</span>
+              </div>
+              <p class="dialog-desc">Kiểm tra thông tin bệnh nhân, chọn hồ sơ nhận lịch và xác nhận.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            class="btn-close-dialog"
+            aria-label="Đóng hộp thoại duyệt"
+            :disabled="requestsApprovalBusy"
+            @click="closeApproveModal"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div class="dialog-body">
+          <div class="approval-request-summary">
+            <div class="summary-main-row">
+              <strong>{{ approvingRequest.fullName }}</strong>
+              <span class="highlight-time">
+                📅 {{ formatDate(approvingRequest.appointmentDate) }} · ⏰ {{ approvingRequest.slotTime.slice(0, 5) }} ({{ approvingRequest.slotDurationMinutes }} phút)
+              </span>
+            </div>
+            <div class="summary-meta-row">
+              <span>📞 {{ approvingRequest.phone }}</span>
+              <span>🎂 {{ formatDate(approvingRequest.dateOfBirth) }}</span>
+            </div>
+            <p v-if="approvingRequest.notes" class="summary-notes">
+              <strong>Ghi chú:</strong> {{ approvingRequest.notes }}
+            </p>
+          </div>
+
+          <BookingRequestApproval
+            :key="approvingRequest.id"
+            class="approval-panel"
+            :request-id="approvingRequest.id"
+            @approved="onApprovedRequest"
+            @working="requestsApprovalBusy = $event"
+          />
+        </div>
+
+        <div class="dialog-footer">
+          <button
+            type="button"
+            class="app-btn app-btn--secondary"
+            :disabled="requestsApprovalBusy"
+            @click="closeApproveModal"
+          >
+            Đóng hộp thoại
+          </button>
+        </div>
+      </div>
+    </dialog>
+
+    <!-- Popup Từ chối yêu cầu đặt hẹn -->
+    <dialog
+      v-if="rejectingRequest"
+      :ref="bindRejectDialog"
+      class="custom-dialog reject-modal-dialog"
+      aria-labelledby="reject-modal-title"
+      @cancel="onRejectDialogCancel"
+    >
+      <form class="modal-shell" @submit.prevent="submitReject">
+        <div class="dialog-header dialog-header--danger">
+          <div class="dialog-title-wrap">
+            <span class="dialog-icon">✕</span>
+            <div>
+              <h2 id="reject-modal-title">Từ chối yêu cầu #YC-{{ rejectingRequest.id }}</h2>
+              <p class="dialog-desc">Bệnh nhân: <strong>{{ rejectingRequest.fullName }}</strong></p>
+            </div>
+          </div>
+          <button
+            type="button"
+            class="btn-close-dialog"
+            aria-label="Đóng hộp thoại từ chối"
+            :disabled="requestsBusy"
+            @click="closeRejectModal"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div class="dialog-body">
+          <div class="approval-request-summary">
+            <div class="summary-main-row">
+              <strong>{{ rejectingRequest.fullName }}</strong>
+              <span class="highlight-time">
+                📅 {{ formatDate(rejectingRequest.appointmentDate) }} · ⏰ {{ rejectingRequest.slotTime.slice(0, 5) }}
+              </span>
+            </div>
+            <div class="summary-meta-row">
+              <span>📞 {{ rejectingRequest.phone }}</span>
+              <span>🎂 {{ formatDate(rejectingRequest.dateOfBirth) }}</span>
+            </div>
+          </div>
+
+          <p class="rejection-hint">Yêu cầu khi bị từ chối sẽ ngay lập tức giải phóng khung giờ đã giữ.</p>
+
+          <div v-if="rejectError" class="alert-box alert-error" role="alert">
+            ⚠️ {{ rejectError }}
+          </div>
+
+          <div class="form-group">
+            <label for="reject-reason">Lý do từ chối <span class="req">*</span></label>
+            <textarea
+              id="reject-reason"
+              v-model.trim="rejectReason"
+              rows="3"
+              maxlength="500"
+              placeholder="Nhập lý do gửi đến bệnh nhân..."
+              :disabled="requestsBusy"
+              autofocus
+              required
+            ></textarea>
+          </div>
+
+          <label class="confirm-checkbox">
+            <input v-model="rejectConfirmed" type="checkbox" :disabled="requestsBusy" />
+            <span>Xác nhận từ chối yêu cầu đặt hẹn này.</span>
+          </label>
+        </div>
+
+        <div class="dialog-footer">
+          <button
+            type="button"
+            class="app-btn app-btn--secondary"
+            :disabled="requestsBusy"
+            @click="closeRejectModal"
+          >
+            Hủy
+          </button>
+          <button
+            class="app-btn app-btn--danger"
+            type="submit"
+            :disabled="requestsBusy || !rejectConfirmed || !rejectReason.trim()"
+          >
+            {{ requestsBusy ? 'Đang từ chối…' : 'Xác nhận từ chối' }}
+          </button>
+        </div>
+      </form>
+    </dialog>
 
     <!-- Hộp thoại Camera quét CCCD -->
     <CameraCccdScanner
@@ -682,7 +857,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import {
   bookingRequestsService,
   type BookingRequestRow,
@@ -711,6 +887,19 @@ import CameraCccdScanner from '@/components/CameraCccdScanner.vue';
 // ============================================================================
 // STATE CHUNG
 // ============================================================================
+type AppointmentTab = 'all' | 'requests' | 'desk';
+const route = useRoute();
+const activeTab = ref<AppointmentTab>('all');
+
+function syncTabFromQuery(tabQuery: unknown) {
+  if (tabQuery === 'requests' || tabQuery === 'desk' || tabQuery === 'all') {
+    activeTab.value = tabQuery;
+  } else if (tabQuery === 'counter') {
+    activeTab.value = 'all';
+    openBookingModal();
+  }
+}
+
 const globalSuccess = ref('');
 const globalError = ref('');
 
@@ -768,15 +957,42 @@ const requestsHasNext = ref(false);
 const requestsBusy = ref(false);
 const requestsApprovalBusy = ref(false);
 const approvingRequestId = ref<number | null>(null);
+const approvingRequest = ref<BookingRequestRow | null>(null);
 
 const rejectingRequest = ref<BookingRequestRow | null>(null);
 const rejectReason = ref('');
 const rejectConfirmed = ref(false);
+const rejectError = ref('');
+
+let approvalDialogEl: HTMLDialogElement | null = null;
+let rejectDialogEl: HTMLDialogElement | null = null;
+
+function bindApprovalDialog(element: unknown) {
+  if (typeof HTMLDialogElement !== 'undefined' && element instanceof HTMLDialogElement) {
+    approvalDialogEl = element;
+    if (!element.open) element.showModal();
+  } else if (element === null) {
+    approvalDialogEl = null;
+  }
+}
+
+function bindRejectDialog(element: unknown) {
+  if (typeof HTMLDialogElement !== 'undefined' && element instanceof HTMLDialogElement) {
+    rejectDialogEl = element;
+    if (!element.open) element.showModal();
+  } else if (element === null) {
+    rejectDialogEl = null;
+  }
+}
 
 async function loadRequests(page = 1) {
   requestsBusy.value = true;
+  approvalDialogEl?.close();
+  rejectDialogEl?.close();
+  approvingRequest.value = null;
   approvingRequestId.value = null;
   rejectingRequest.value = null;
+  rejectError.value = '';
   try {
     const data = await bookingRequestsService.list(page);
     requestsRows.value = data.items;
@@ -789,19 +1005,53 @@ async function loadRequests(page = 1) {
   }
 }
 
+function closeApproveModal() {
+  if (requestsApprovalBusy.value) return;
+  approvalDialogEl?.close();
+  approvingRequest.value = null;
+  approvingRequestId.value = null;
+}
+
+function onApprovalDialogCancel(event: Event) {
+  if (event.target !== approvalDialogEl) return;
+  event.preventDefault();
+  closeApproveModal();
+}
+
 function startApprove(req: BookingRequestRow) {
-  rejectingRequest.value = null;
+  if (requestsApprovalBusy.value || requestsBusy.value) return;
+  closeRejectModal();
+  approvingRequest.value = req;
   approvingRequestId.value = req.id;
 }
 
+function closeRejectModal() {
+  if (requestsBusy.value) return;
+  rejectDialogEl?.close();
+  rejectingRequest.value = null;
+  rejectReason.value = '';
+  rejectConfirmed.value = false;
+  rejectError.value = '';
+}
+
+function onRejectDialogCancel(event: Event) {
+  if (event.target !== rejectDialogEl) return;
+  event.preventDefault();
+  closeRejectModal();
+}
+
 function startReject(req: BookingRequestRow) {
-  approvingRequestId.value = null;
+  if (requestsApprovalBusy.value || requestsBusy.value) return;
+  closeApproveModal();
   rejectingRequest.value = req;
   rejectReason.value = '';
   rejectConfirmed.value = false;
+  rejectError.value = '';
 }
 
 function onApprovedRequest(result: BookingApprovalResult) {
+  approvalDialogEl?.close();
+  approvingRequest.value = null;
   approvingRequestId.value = null;
   showSuccess(`Đã duyệt yêu cầu thành công! Lịch hẹn #${result.appointmentId} đã được tạo.`);
   loadRequests(requestsPage.value);
@@ -811,17 +1061,24 @@ function onApprovedRequest(result: BookingApprovalResult) {
 async function submitReject() {
   if (!rejectingRequest.value || !rejectConfirmed.value || !rejectReason.value.trim()) return;
   requestsBusy.value = true;
+  rejectError.value = '';
   try {
+    const targetName = rejectingRequest.value.fullName;
     await bookingRequestsService.reject(
       rejectingRequest.value.id,
       rejectingRequest.value.version,
       rejectReason.value.trim()
     );
-    showSuccess(`Đã từ chối yêu cầu của ${rejectingRequest.value.fullName} và giải phóng khung giờ.`);
+    rejectDialogEl?.close();
     rejectingRequest.value = null;
+    rejectReason.value = '';
+    rejectConfirmed.value = false;
+    showSuccess(`Đã từ chối yêu cầu của ${targetName} và giải phóng khung giờ.`);
     loadRequests(requestsPage.value);
   } catch (err: any) {
-    showError(err.response?.data?.message || 'Không thể từ chối yêu cầu. Vui lòng thử lại.');
+    const msg = err.response?.data?.message || 'Không thể từ chối yêu cầu. Vui lòng thử lại.';
+    rejectError.value = msg;
+    showError(msg);
   } finally {
     requestsBusy.value = false;
   }
@@ -1185,7 +1442,15 @@ async function submitBookingModal() {
 }
 
 // Khởi chạy khi mount
+watch(
+  () => route?.query?.tab,
+  (tabQuery) => {
+    syncTabFromQuery(tabQuery);
+  }
+);
+
 onMounted(() => {
+  syncTabFromQuery(route?.query?.tab);
   loadRequests(1);
   loadDesk(1);
 });
@@ -1369,6 +1634,84 @@ onMounted(() => {
   border: 1px solid #fecaca;
 }
 
+/* Thanh chuyển Tab */
+.appointments-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  padding: 0.4rem;
+  background: #f1f5f9;
+  border: 1px solid #dbe5ed;
+  border-radius: 12px;
+}
+
+.appointments-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 42px;
+  padding: 0.5rem 1rem;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: #475569;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, transform 0.15s ease;
+}
+
+.appointments-tab-btn:hover:not(.is-active) {
+  background: #e2e8f0;
+  color: #102e56;
+}
+
+.appointments-tab-btn.is-active {
+  background: #102e56;
+  color: #ffffff;
+  box-shadow: 0 3px 10px rgba(16, 46, 86, 0.22);
+}
+
+.appointments-tab-btn:focus-visible {
+  outline: 3px solid rgba(2, 132, 199, 0.35);
+  outline-offset: 2px;
+}
+
+.tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 9999px;
+  background: rgba(15, 23, 42, 0.09);
+  color: inherit;
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.appointments-tab-btn.is-active .tab-badge {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.tab-badge--warn {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.appointments-tab-btn.is-active .tab-badge--warn {
+  background: #e5b95e;
+  color: #102e56;
+}
+
+.appointments-tab-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  min-width: 0;
+}
+
 /* Section Card */
 .section-card {
   background: #ffffff;
@@ -1376,6 +1719,7 @@ onMounted(() => {
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   padding: 1.5rem;
+  min-width: 0;
 }
 
 .section-header {
@@ -1457,9 +1801,13 @@ onMounted(() => {
   margin: 0 0 1.25rem;
 }
 
+.requests-page-frame {
+  min-width: 0;
+}
+
 .requests-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr));
   gap: 1.25rem;
   list-style: none;
   padding: 0;
@@ -1468,19 +1816,26 @@ onMounted(() => {
 
 .request-card {
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 1.25rem;
   background: #ffffff;
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+  min-width: 0;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
 .request-card:hover {
   border-color: #cbd5e1;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 6px 18px rgba(16, 46, 86, 0.07);
+  transform: translateY(-2px);
+}
+
+.request-card--active {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.16);
 }
 
 .request-card-header {
@@ -1535,7 +1890,9 @@ onMounted(() => {
 
 .detail-item {
   display: flex;
-  gap: 0.5rem;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.5rem;
+  min-width: 0;
 }
 
 .detail-label {
@@ -1546,6 +1903,7 @@ onMounted(() => {
 .detail-val {
   color: #1e293b;
   font-weight: 500;
+  overflow-wrap: anywhere;
 }
 
 .highlight-time {
@@ -1560,6 +1918,7 @@ onMounted(() => {
   font-size: 0.84rem;
   color: #334155;
   border-left: 3px solid #94a3b8;
+  overflow-wrap: anywhere;
 }
 
 .notes-tag {
@@ -1569,6 +1928,7 @@ onMounted(() => {
 
 .request-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.6rem;
   margin-top: auto;
   padding-top: 0.6rem;
@@ -1576,50 +1936,17 @@ onMounted(() => {
 }
 
 .request-actions .app-btn {
-  flex: 1;
-}
-
-.inline-approval-box {
-  margin-top: 0.75rem;
-  padding: 0.85rem;
-  background: #f8fafc;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-}
-
-.btn-cancel-approval {
-  margin-top: 0.6rem;
-  width: 100%;
-}
-
-.inline-reject-box {
-  margin-top: 0.75rem;
-  padding: 0.85rem;
-  background: #fff5f5;
-  border: 1px solid #fecaca;
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.inline-reject-box h4 {
-  font-size: 0.92rem;
-  font-weight: 700;
-  color: #991b1b;
-  margin: 0;
+  flex: 1 1 8.5rem;
 }
 
 .rejection-hint {
-  font-size: 0.78rem;
-  color: #b91c1c;
+  font-size: 0.84rem;
+  color: #991b1b;
+  background: #fff5f5;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 0.65rem 0.85rem;
   margin: 0;
-}
-
-.reject-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
 }
 
 /* Lịch khám đã chốt */
@@ -2055,18 +2382,116 @@ onMounted(() => {
   padding: 0.55rem 1.25rem;
 }
 
-/* Dialog hủy */
+/* Dialog popup dùng chung & Popup duyệt / từ chối */
 .custom-dialog {
+  box-sizing: border-box;
+  margin: auto;
   padding: 0;
-  border: none;
-  border-radius: 12px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
-  width: 90%;
-  max-width: 500px;
+  border: 1px solid #dbe5ed;
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+  width: min(520px, calc(100% - 1.25rem));
+  max-height: calc(100dvh - 1.5rem);
+  overflow: hidden;
+  background: #ffffff;
+  color: #1e293b;
+}
+
+.custom-dialog:modal {
+  overscroll-behavior: contain;
+}
+
+.custom-dialog[open] {
+  animation: dialogPopIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .custom-dialog::backdrop {
-  background: rgba(15, 23, 42, 0.5);
+  background: rgba(15, 23, 42, 0.56);
+  backdrop-filter: blur(4px);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+.approval-modal-dialog {
+  width: min(720px, calc(100% - 1.25rem));
+}
+
+.reject-modal-dialog {
+  width: min(540px, calc(100% - 1.25rem));
+}
+
+.modal-shell {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 1.5rem);
+  min-width: 0;
+}
+
+.modal-shell .dialog-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.dialog-header--danger {
+  background: #fff5f5;
+  border-bottom-color: #fecaca;
+}
+
+.dialog-header--danger h2 {
+  color: #991b1b;
+}
+
+.modal-title-badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.approval-request-summary {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid #dbe5ed;
+  border-radius: 10px;
+  background: #f8fafc;
+  overflow-wrap: anywhere;
+}
+
+.summary-main-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.summary-main-row strong {
+  color: #0f2d59;
+  font-size: 1rem;
+}
+
+.summary-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 1rem;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.summary-notes {
+  margin: 0.15rem 0 0;
+  padding-top: 0.45rem;
+  border-top: 1px dashed #cbd5e1;
+  font-size: 0.85rem;
+  color: #334155;
+}
+
+.approval-panel {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 0.9rem;
 }
 
 .dialog-content {
@@ -2082,11 +2507,16 @@ onMounted(() => {
 
 .confirm-checkbox {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
   font-size: 0.85rem;
   color: #475569;
   cursor: pointer;
+}
+
+.confirm-checkbox input {
+  margin-top: 0.15rem;
+  flex: none;
 }
 
 .dialog-actions {
@@ -2119,6 +2549,96 @@ onMounted(() => {
   to { transform: rotate(360deg); }
 }
 
+@keyframes dialogPopIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Hiệu ứng chuyển Tab, chuyển Trang, danh sách Card, Modal & Alert */
+.appt-tab-switch-enter-active,
+.appt-tab-switch-leave-active {
+  transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.appt-tab-switch-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.appt-tab-switch-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.appt-page-swap-enter-active,
+.appt-page-swap-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.appt-page-swap-enter-from {
+  opacity: 0;
+  transform: translateX(10px);
+}
+
+.appt-page-swap-leave-to {
+  opacity: 0;
+  transform: translateX(-10px);
+}
+
+.request-card-list-move,
+.request-card-list-enter-active,
+.request-card-list-leave-active {
+  transition: opacity 0.24s ease, transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.request-card-list-enter-from,
+.request-card-list-leave-to {
+  opacity: 0;
+  transform: scale(0.96) translateY(6px);
+}
+
+.request-card-list-leave-active {
+  position: relative;
+}
+
+.modal-fade-enter-active,
+.modal-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.modal-fade-enter-active .booking-dialog,
+.modal-fade-leave-active .booking-dialog {
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease;
+}
+
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+  opacity: 0;
+}
+
+.modal-fade-enter-from .booking-dialog,
+.modal-fade-leave-to .booking-dialog {
+  opacity: 0;
+  transform: translateY(10px) scale(0.97);
+}
+
+.alert-slide-enter-active,
+.alert-slide-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.alert-slide-enter-from,
+.alert-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
 @media (max-width: 768px) {
   .appointments-page {
     padding: 1rem;
@@ -2126,11 +2646,58 @@ onMounted(() => {
   .header-banner {
     padding: 1.25rem;
   }
+  .section-card {
+    padding: 1rem;
+  }
   .form-grid {
     grid-template-columns: 1fr;
   }
   .requests-grid {
     grid-template-columns: 1fr;
+  }
+  .appointments-tabs {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .appointments-tab-btn {
+    justify-content: space-between;
+  }
+  .pagination-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+  }
+  .pagination-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dialog-footer {
+    flex-wrap: wrap;
+    padding: 0.85rem 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .custom-dialog[open],
+  .spinner {
+    animation: none;
+  }
+  .appt-tab-switch-enter-active,
+  .appt-tab-switch-leave-active,
+  .appt-page-swap-enter-active,
+  .appt-page-swap-leave-active,
+  .request-card-list-move,
+  .request-card-list-enter-active,
+  .request-card-list-leave-active,
+  .modal-fade-enter-active,
+  .modal-fade-leave-active,
+  .modal-fade-enter-active .booking-dialog,
+  .modal-fade-leave-active .booking-dialog,
+  .alert-slide-enter-active,
+  .alert-slide-leave-active,
+  .appointments-tab-btn,
+  .request-card {
+    transition: none;
   }
 }
 </style>

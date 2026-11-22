@@ -1,30 +1,97 @@
 <template>
   <section class="approval" aria-labelledby="booking-approval-heading">
-    <h2 id="booking-approval-heading">Đối soát và xác nhận lịch</h2>
-    <button type="button" :disabled="busy" @click="load">Đối chiếu lại yêu cầu</button>
-    <p v-if="error" role="alert">{{ error }}</p>
-    <p role="status" aria-live="polite">{{ message }}</p>
-    <template v-if="context && !context.result">
-      <p>{{ context.fullName }} · {{ context.dateOfBirth }} · {{ context.phone }}</p>
-      <p>{{ context.appointmentDate }} {{ context.slotTime.slice(0, 5) }} · {{ context.slotDurationMinutes }} phút</p>
-      <p>Tài khoản bệnh nhân được tạo hoặc chuyển tại quầy sau khi lễ tân đối chiếu CCCD và số điện thoại lúc check-in.</p>
-      <p v-if="context.blockReason" role="alert">{{ context.blockReason }}</p>
-      <form v-else @submit.prevent="approve">
-        <label>Hồ sơ nhận lịch
-          <select v-model="selection" :disabled="busy || needsReview || context.verifiedPatientId !== null" required>
-            <option value="">Chọn sau khi đối soát</option>
-            <option v-for="p in context.patients" :key="p.patientId" :value="String(p.patientId)" :disabled="!p.canSelect">{{ p.fullName }} · {{ p.dateOfBirth }} · #{{ p.patientId }}{{ p.canSelect ? '' : ' · Không đủ điều kiện' }}</option>
-            <option v-if="context.verifiedPatientId === null" value="new">Tạo hồ sơ mới theo thông tin yêu cầu</option>
-          </select>
-        </label>
-        <p v-if="context.patients.length">Đã tìm thấy hồ sơ tương đồng. Đối chiếu từng người; không tạo trùng hoặc chuyển hồ sơ đã có chủ.</p>
-        <label v-if="selection === 'new'"><input v-model="confirmedNew" type="checkbox" :disabled="busy || needsReview" /> Tôi đã đối chiếu hồ sơ tương đồng và xác nhận đây là người mới cần tạo hồ sơ</label>
-        <label v-if="context.requiresCounterConfirmation"><input v-model="counter" type="checkbox" :disabled="busy || needsReview" /> Khách/người đại diện đang tại quầy; tôi đã đối soát và xác nhận đúng hồ sơ bệnh nhân</label>
-        <label><input v-model="confirmed" type="checkbox" :disabled="busy || needsReview" /> Tôi đã đối chiếu đúng người và giờ hẹn để xác nhận lịch</label>
-        <button type="submit" :disabled="busy || needsReview">Xác nhận lịch đã hẹn</button>
-      </form>
-    </template>
-    <p v-if="context?.result">Lịch #{{ context.result.appointmentId }} đã được xác nhận. Tài khoản được xử lý tại quầy khi khách check-in và đối chiếu CCCD/SĐT.</p>
+    <header class="approval-toolbar">
+      <div class="approval-title-block">
+        <h2 id="booking-approval-heading">Đối soát hồ sơ &amp; xác nhận lịch</h2>
+        <p class="approval-sub">Chọn hồ sơ bệnh nhân phù hợp hoặc tạo hồ sơ mới sau khi đối chiếu.</p>
+      </div>
+      <button type="button" class="approval-reload-btn" :disabled="busy" @click="load">
+        🔄 Đối chiếu lại yêu cầu
+      </button>
+    </header>
+
+    <p v-if="error" class="approval-alert approval-alert--error" role="alert">{{ error }}</p>
+    <p class="approval-status" :class="{ 'approval-status--empty': !message }" role="status" aria-live="polite">
+      {{ message }}
+    </p>
+
+    <Transition name="approval-fade" mode="out-in">
+      <div v-if="context && !context.result" key="context" class="approval-body">
+        <div class="approval-summary-grid">
+          <div class="approval-summary-item">
+            <span class="summary-label">Người yêu cầu</span>
+            <strong>{{ context.fullName }}</strong>
+            <span class="summary-meta">🎂 {{ context.dateOfBirth }} · 📞 {{ context.phone }}</span>
+          </div>
+          <div class="approval-summary-item">
+            <span class="summary-label">Khung giờ dự kiến</span>
+            <strong class="summary-slot">📅 {{ context.appointmentDate }} · ⏰ {{ context.slotTime.slice(0, 5) }}</strong>
+            <span class="summary-meta">Thời lượng {{ context.slotDurationMinutes }} phút</span>
+          </div>
+        </div>
+
+        <p class="approval-policy-note">
+          Tài khoản bệnh nhân được tạo hoặc chuyển tại quầy sau khi lễ tân đối chiếu CCCD và số điện thoại lúc check-in.
+        </p>
+
+        <p v-if="context.blockReason" class="approval-alert approval-alert--error" role="alert">
+          {{ context.blockReason }}
+        </p>
+
+        <form v-else class="approval-form" @submit.prevent="approve">
+          <label class="approval-field">
+            <span class="field-title">Hồ sơ nhận lịch</span>
+            <select v-model="selection" :disabled="busy || needsReview || context.verifiedPatientId !== null" required>
+              <option value="">Chọn sau khi đối soát</option>
+              <option
+                v-for="p in context.patients"
+                :key="p.patientId"
+                :value="String(p.patientId)"
+                :disabled="!p.canSelect"
+              >
+                {{ p.fullName }} · {{ p.dateOfBirth }} · #{{ p.patientId }}{{ p.canSelect ? '' : ' · Không đủ điều kiện' }}
+              </option>
+              <option v-if="context.verifiedPatientId === null" value="new">
+                Tạo hồ sơ mới theo thông tin yêu cầu
+              </option>
+            </select>
+          </label>
+
+          <p v-if="context.patients.length" class="approval-candidate-hint">
+            Đã tìm thấy hồ sơ tương đồng. Đối chiếu từng người; không tạo trùng hoặc chuyển hồ sơ đã có chủ.
+          </p>
+
+          <div class="approval-checks">
+            <label v-if="selection === 'new'" class="approval-check-card">
+              <input v-model="confirmedNew" type="checkbox" :disabled="busy || needsReview" />
+              <span>Tôi đã đối chiếu hồ sơ tương đồng và xác nhận đây là người mới cần tạo hồ sơ</span>
+            </label>
+            <label v-if="context.requiresCounterConfirmation" class="approval-check-card">
+              <input v-model="counter" type="checkbox" :disabled="busy || needsReview" />
+              <span>Khách/người đại diện đang tại quầy; tôi đã đối soát và xác nhận đúng hồ sơ bệnh nhân</span>
+            </label>
+            <label class="approval-check-card">
+              <input v-model="confirmed" type="checkbox" :disabled="busy || needsReview" />
+              <span>Tôi đã đối chiếu đúng người và giờ hẹn để xác nhận lịch</span>
+            </label>
+          </div>
+
+          <button type="submit" class="approval-submit-btn" :disabled="busy || needsReview">
+            {{ busy ? 'Đang xác nhận lịch…' : '✓ Xác nhận lịch đã hẹn' }}
+          </button>
+        </form>
+      </div>
+
+      <div v-else-if="context?.result" key="result" class="approval-result-card">
+        <strong>✅ Đã xác nhận lịch hẹn #{{ context.result.appointmentId }}</strong>
+        <p>Tài khoản được xử lý tại quầy khi khách check-in và đối chiếu CCCD/SĐT.</p>
+      </div>
+
+      <div v-else-if="busy" key="loading" class="approval-loading-state">
+        <span class="approval-spinner" aria-hidden="true"></span>
+        <span>Đang tải dữ liệu đối soát hồ sơ…</span>
+      </div>
+    </Transition>
   </section>
 </template>
 <script setup lang="ts">
@@ -78,27 +145,151 @@ onMounted(() => void load()); onUnmounted(() => { disposed = true; generation++;
 </script>
 <style scoped>
 .approval {
-  padding: 1.25rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  background: #ffffff;
-  box-shadow: 0 2px 8px rgba(15, 45, 89, 0.04);
-  margin-block: 1rem;
+  display: grid;
+  gap: 0.9rem;
+  color: #1e293b;
 }
 
-h3 {
+.approval-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.approval-title-block h2 {
+  margin: 0;
+  font-size: 1.08rem;
+  font-weight: 750;
   color: #0f2d59;
-  font-weight: 600;
-  margin-top: 0;
-  margin-bottom: 0.75rem;
 }
 
-label {
-  display: block;
+.approval-sub {
+  margin: 0.2rem 0 0;
+  font-size: 0.84rem;
+  color: #51647a;
+}
+
+.approval-reload-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.86rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #102e56;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.approval-reload-btn:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.approval-status {
+  margin: 0;
+  padding: 0.65rem 0.9rem;
+  border-radius: 9px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  font-size: 0.88rem;
   font-weight: 500;
-  color: #334155;
-  margin-block: 0.75rem 0.35rem;
-  font-size: 0.925rem;
+}
+
+.approval-status--empty {
+  display: none;
+}
+
+.approval-alert {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-radius: 9px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.approval-alert--error {
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.approval-body {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.approval-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.approval-summary-item {
+  display: grid;
+  gap: 0.22rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid #dbe5ed;
+  border-radius: 10px;
+  background: #f8fafc;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.summary-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.approval-summary-item strong {
+  font-size: 0.95rem;
+  color: #0f2d59;
+}
+
+.summary-slot {
+  color: #0369a1 !important;
+}
+
+.summary-meta {
+  font-size: 0.82rem;
+  color: #475569;
+}
+
+.approval-policy-note {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  border-left: 3px solid #0284c7;
+  border-radius: 0 8px 8px 0;
+  background: #f0f9ff;
+  color: #0c4a6e;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.approval-form {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.approval-field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.field-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #1e293b;
 }
 
 select {
@@ -107,7 +298,7 @@ select {
   box-sizing: border-box;
   min-height: 44px;
   padding: 0.625rem 0.875rem;
-  font-size: 0.95rem;
+  font-size: 0.94rem;
   color: #1e293b;
   background: #ffffff;
   border: 1px solid #cbd5e1;
@@ -115,44 +306,84 @@ select {
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-select:focus-visible {
+select:focus-visible,
+.approval-reload-btn:focus-visible,
+.approval-submit-btn:focus-visible {
   outline: 3px solid rgba(2, 132, 199, 0.35);
   outline-offset: 2px;
   border-color: #0284c7;
 }
 
-input[type="checkbox"] {
-  width: 1.125rem;
-  height: 1.125rem;
-  accent-color: #0284c7;
-  vertical-align: middle;
-  margin-right: 0.4rem;
+.approval-candidate-hint {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 0.84rem;
+  line-height: 1.45;
 }
 
-button {
+.approval-checks {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.approval-check-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid #dbe5ed;
+  border-radius: 9px;
+  background: #f8fafc;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: #1e293b;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.approval-check-card:hover {
+  border-color: #93c5fd;
+  background: #f0f9ff;
+}
+
+.approval-check-card:has(input:checked) {
+  border-color: #16a34a;
+  background: #f0fdf4;
+  color: #14532d;
+}
+
+.approval-check-card input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin-top: 0.12rem;
+  accent-color: #16a34a;
+}
+
+.approval-submit-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
   min-height: 44px;
-  padding: 0.5rem 1rem;
+  padding: 0.65rem 1.1rem;
   font-size: 0.95rem;
-  font-weight: 600;
-  border-radius: 8px;
+  font-weight: 700;
+  border-radius: 9px;
   border: 1px solid transparent;
-  background: #0f2d59;
+  background: #16a34a;
   color: #ffffff;
   cursor: pointer;
-  transition: all 0.15s ease-in-out;
-  margin: 0.4rem 0.4rem 0.4rem 0;
+  transition: background-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-button:hover:not(:disabled) {
-  background: #1e3a8a;
-}
-
-button:focus-visible {
-  outline: 3px solid rgba(2, 132, 199, 0.35);
-  outline-offset: 2px;
+.approval-submit-btn:hover:not(:disabled) {
+  background: #15803d;
+  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.22);
 }
 
 button:disabled {
@@ -160,20 +391,73 @@ button:disabled {
   cursor: not-allowed;
 }
 
-[role="alert"] {
-  color: #b91c1c;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  font-weight: 500;
-  margin: 0.75rem 0;
+.approval-result-card {
+  padding: 0.9rem 1rem;
+  border-radius: 10px;
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.approval-result-card p {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.approval-loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  padding: 1.5rem 1rem;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.approval-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2.5px solid #e2e8f0;
+  border-top-color: #0284c7;
+  border-radius: 50%;
+  animation: approvalSpin 0.8s linear infinite;
+}
+
+@keyframes approvalSpin {
+  to { transform: rotate(360deg); }
+}
+
+.approval-fade-enter-active,
+.approval-fade-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.approval-fade-enter-from,
+.approval-fade-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
 }
 
 @media (max-width: 640px) {
-  button {
+  .approval-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .approval-reload-btn {
     width: 100%;
-    margin-right: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .approval-fade-enter-active,
+  .approval-fade-leave-active,
+  .approval-spinner {
+    transition: none;
+    animation: none;
   }
 }
 </style>
