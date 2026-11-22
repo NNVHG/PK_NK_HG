@@ -21,6 +21,7 @@
           {{ soundEnabled ? '🔊 Âm thanh: BẬT' : '🔇 Âm thanh: TẮT (Click để bật)' }}
         </button>
         <div class="clock">{{ currentTime }}</div>
+        <small v-if="soundEnabled && !hasLocalVietnameseVoice" role="status">Thiết bị chưa có giọng tiếng Việt cục bộ. Màn hình sẽ phát chuông khi gọi.</small>
       </div>
     </header>
 
@@ -34,7 +35,7 @@
         <span class="call-pulse-dot"></span> XIN MỜI KHÁCH HÀNG VÀO PHÒNG KHÁM
       </div>
       <div class="call-banner-number">{{ activeCall.queueNumberDisplay }}</div>
-      <div class="call-banner-name">{{ activeCall.maskedPatientName }}</div>
+      <div class="call-banner-name">{{ formatCallPatientName(activeCall.maskedPatientName) }}</div>
       <div class="call-banner-meta">
         <span class="banner-pill">🏢 {{ locationLabel(activeCall) }}</span>
       </div>
@@ -115,6 +116,7 @@ const waiting = ref<PublicQueueItemResponse[]>([]);
 const error = ref('');
 const currentTime = ref('');
 const soundEnabled = ref(false);
+const hasLocalVietnameseVoice = ref(false);
 
 interface ActiveCallData {
   queueNumberDisplay: string;
@@ -128,8 +130,20 @@ const remainingCallSeconds = ref(30);
 let callTimer: ReturnType<typeof setInterval> | null = null;
 let broadcastChannel: BroadcastChannel | null = null;
 
+function formatCallPatientName(name: string | null | undefined): string {
+  const normalized = name?.trim().replace(/\s+/g, ' ') ?? '';
+  if (!normalized) return 'Bệnh nhân';
+  const withoutDemo = normalized.endsWith(' (DEMO)')
+    ? normalized.slice(0, -' (DEMO)'.length).trim()
+    : normalized;
+  return withoutDemo || 'Bệnh nhân';
+}
+
 function triggerCallBanner(data: ActiveCallData) {
-  activeCall.value = data;
+  activeCall.value = {
+    ...data,
+    maskedPatientName: formatCallPatientName(data.maskedPatientName)
+  };
   remainingCallSeconds.value = 30;
   if (callTimer) clearInterval(callTimer);
 
@@ -144,18 +158,80 @@ function triggerCallBanner(data: ActiveCallData) {
 }
 
 interface AudioQueueItem {
+  queueNumberDisplay: string;
   patientName: string;
+  roomName: string | null;
+  text: string;
 }
 
 function locationLabel(item: { roomName?: string | null }): string {
   return item.roomName || 'Vui lòng hỏi quầy tiếp đón để được hướng dẫn';
 }
+
+function formatSpokenQueueNumber(queueNumberDisplay: string | null | undefined): string {
+  const normalized = queueNumberDisplay?.trim() ?? '';
+  if (!normalized) return '';
+  return normalized.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function formatSpokenRoomClause(roomName: string | null | undefined): string {
+  const normalized = roomName?.trim().replace(/\s+/g, ' ') ?? '';
+  if (!normalized) return '';
+  if (/^phòng\s+số\s+/i.test(normalized)) {
+    const roomNumber = normalized.replace(/^phòng\s+số\s+/i, '').replace(/[-_]+/g, ' ').trim();
+    return roomNumber ? `vào phòng số ${roomNumber}` : '';
+  }
+  const directNumberMatch = normalized.match(/^phòng\s+(\d+[A-Za-z0-9]*)$/i);
+  if (directNumberMatch) {
+    return `vào phòng số ${directNumberMatch[1]}`;
+  }
+  const namedRoomNumberMatch = normalized.match(/^phòng\s+(.+?)\s+(\d+[A-Za-z0-9]*)$/i);
+  if (namedRoomNumberMatch) {
+    const prefix = namedRoomNumberMatch[1].replace(/\s+số$/i, '').trim();
+    return `vào phòng ${prefix} số ${namedRoomNumberMatch[2]}`;
+  }
+  if (/^phòng\b/i.test(normalized)) {
+    return `vào ${normalized}`;
+  }
+  return `vào phòng số ${normalized.replace(/[-_]+/g, ' ').trim()}`;
+}
+
+function buildCallAnnouncementText(item: {
+  queueNumberDisplay?: string | null;
+  maskedPatientName?: string | null;
+  patientName?: string | null;
+  roomName?: string | null;
+}): string {
+  const patientName = formatCallPatientName(item.patientName ?? item.maskedPatientName);
+  const spokenNumber = formatSpokenQueueNumber(item.queueNumberDisplay);
+  const roomClause = formatSpokenRoomClause(item.roomName);
+  const lead = spokenNumber
+    ? `Mời bệnh nhân số ${spokenNumber}, ${patientName}`
+    : `Mời bệnh nhân ${patientName}`;
+  return roomClause ? `${lead}, ${roomClause}` : lead;
+}
+
+function pickVietnameseVoice(): SpeechSynthesisVoice | null {
+  if (typeof window === 'undefined' || typeof window.speechSynthesis?.getVoices !== 'function') return null;
+  const localVoices = window.speechSynthesis.getVoices().filter(voice =>
+    voice.localService && /^vi(?:[-_]|$)/i.test(voice.lang)
+  );
+  return localVoices.find(voice => /^vi[-_]vn$/i.test(voice.lang)) ?? localVoices[0] ?? null;
+}
+
+function updateVoiceAvailability() {
+  hasLocalVietnameseVoice.value = pickVietnameseVoice() !== null;
+}
+
 const audioQueue: AudioQueueItem[] = [];
 let isPlayingAudio = false;
 const seenCallNumbers = new Set<string>();
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let clockTimer: ReturnType<typeof setInterval> | null = null;
 let audioCtx: AudioContext | null = null;
+let speechTimer: ReturnType<typeof setTimeout> | null = null;
+let speechSessionId = 0;
+
 function updateClock() {
   const now = new Date();
   currentTime.value = new Intl.DateTimeFormat('vi-VN', {
@@ -166,17 +242,37 @@ function updateClock() {
   }).format(now);
 }
 
-function playTone(freq: number, duration: number, delay: number) {
-  if (typeof window === 'undefined') return;
-  if (!audioCtx) {
-    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+function ensureAudioContext(): AudioContext | null {
+  if (typeof window === 'undefined') return null;
+  if (!audioCtx || audioCtx.state === 'closed') {
+    const AudioContextClass =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (AudioContextClass) audioCtx = new AudioContextClass();
   }
-  if (!audioCtx) return;
+  if (audioCtx && audioCtx.state === 'suspended') {
+    void audioCtx.resume().catch(() => {});
+  }
+  return audioCtx;
+}
 
-  const now = audioCtx.currentTime + delay;
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
+function stopActiveSpeech() {
+  speechSessionId++;
+  if (speechTimer !== null) clearTimeout(speechTimer);
+  speechTimer = null;
+  isPlayingAudio = false;
+  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
+}
+
+function playTone(freq: number, duration: number, delay: number) {
+  const ctx = ensureAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime + delay;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
 
   osc.type = 'sine';
   osc.frequency.setValueAtTime(freq, now);
@@ -185,7 +281,7 @@ function playTone(freq: number, duration: number, delay: number) {
   gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
   osc.connect(gain);
-  gain.connect(audioCtx.destination);
+  gain.connect(ctx.destination);
 
   osc.start(now);
   osc.stop(now + duration);
@@ -198,62 +294,83 @@ function playDingDong() {
 
 function processAudioQueue() {
   if (!active || isPlayingAudio || audioQueue.length === 0 || !soundEnabled.value) return;
-
   const item = audioQueue.shift();
   if (!item) return;
 
   isPlayingAudio = true;
+  const sessionId = ++speechSessionId;
   playDingDong();
+  let finished = false;
 
-  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-    const text = `Mời ${item.patientName}`;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'vi-VN';
-    utterance.rate = 0.9;
-
-    utterance.onend = () => {
-      setTimeout(() => {
-        isPlayingAudio = false;
-        processAudioQueue();
-      }, 1000);
-    };
-
-    utterance.onerror = () => {
-      setTimeout(() => {
-        isPlayingAudio = false;
-        processAudioQueue();
-      }, 500);
-    };
-
-    setTimeout(() => {
-      if (active && soundEnabled.value) window.speechSynthesis.speak(utterance);
-    }, 700);
-  } else {
-    setTimeout(() => {
+  function finish(cancelSpeech = false) {
+    if (finished || sessionId !== speechSessionId) return;
+    finished = true;
+    if (speechTimer !== null) clearTimeout(speechTimer);
+    if (cancelSpeech) window.speechSynthesis.cancel();
+    speechTimer = setTimeout(() => {
+      if (sessionId !== speechSessionId) return;
+      speechTimer = null;
       isPlayingAudio = false;
       processAudioQueue();
-    }, 1500);
+    }, 400);
   }
+
+  speechTimer = setTimeout(() => {
+    if (!active || !soundEnabled.value || sessionId !== speechSessionId) return;
+    const voice = pickVietnameseVoice();
+    if (!voice || typeof SpeechSynthesisUtterance === 'undefined') {
+      finish();
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(item.text);
+    utterance.voice = voice;
+    utterance.lang = voice.lang;
+    utterance.rate = 0.92;
+    utterance.onend = () => finish();
+    utterance.onerror = () => finish();
+    speechTimer = setTimeout(() => finish(true), 12_000);
+    window.speechSynthesis.speak(utterance);
+  }, 700);
 }
 
-function enqueueCallAudio(item: Pick<PublicQueueItemResponse, 'maskedPatientName'>) {
+function enqueueCallAudio(
+  item: Pick<PublicQueueItemResponse, 'maskedPatientName'> & {
+    queueNumberDisplay?: string | null;
+    roomName?: string | null;
+  }
+) {
   if (audioQueue.length >= 3) {
     audioQueue.shift();
   }
-  audioQueue.push({ patientName: item.maskedPatientName });
+  const queueNumberDisplay = item.queueNumberDisplay?.trim() ?? '';
+  const patientName = formatCallPatientName(item.maskedPatientName);
+  const roomName = item.roomName?.trim() || null;
+  const text = buildCallAnnouncementText({
+    queueNumberDisplay,
+    patientName,
+    roomName
+  });
+  audioQueue.push({
+    queueNumberDisplay,
+    patientName,
+    roomName,
+    text
+  });
   processAudioQueue();
 }
 
 function toggleSound() {
   soundEnabled.value = !soundEnabled.value;
   if (soundEnabled.value) {
+    ensureAudioContext();
+    updateVoiceAvailability();
     playDingDong();
     processAudioQueue();
   } else {
     audioQueue.length = 0;
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
+    isPlayingAudio = false;
+    stopActiveSpeech();
   }
 }
 
@@ -303,7 +420,11 @@ function setupExternalListeners() {
         seenCallNumbers.add(item.queueNumberDisplay);
         triggerCallBanner(item);
         if (soundEnabled.value) {
-          enqueueCallAudio({ maskedPatientName: item.maskedPatientName });
+          enqueueCallAudio({
+            queueNumberDisplay: item.queueNumberDisplay,
+            maskedPatientName: item.maskedPatientName,
+            roomName: item.roomName
+          });
         }
       }
     };
@@ -314,6 +435,10 @@ function setupExternalListeners() {
 onMounted(() => {
   updateClock();
   clockTimer = setInterval(updateClock, 1000);
+  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    updateVoiceAvailability();
+    window.speechSynthesis.onvoiceschanged = updateVoiceAvailability;
+  }
   setupExternalListeners();
   void loadQueueData();
   pollTimer = setInterval(loadQueueData, 3000);
@@ -328,10 +453,12 @@ onUnmounted(() => {
     broadcastChannel.close();
     broadcastChannel = null;
   }
+  stopActiveSpeech();
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
+    window.speechSynthesis.onvoiceschanged = null;
   }
   audioQueue.length = 0;
+  isPlayingAudio = false;
   if (audioCtx && audioCtx.state !== 'closed') {
     void audioCtx.close();
   }
@@ -455,6 +582,8 @@ onUnmounted(() => {
   color: #e0f2fe;
   margin-bottom: 1.75rem;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  line-height: 1.25;
+  overflow-wrap: break-word;
 }
 .call-banner-meta {
   display: flex;
@@ -705,6 +834,28 @@ onUnmounted(() => {
   .sound-toggle {
     padding: 0.4rem 0.8rem;
     font-size: 0.85rem;
+  }
+  .call-active-banner {
+    padding: 1.5rem 1rem;
+  }
+  .call-banner-top {
+    font-size: 1rem;
+    letter-spacing: 0.08em;
+    padding: 0.35rem 1rem;
+  }
+  .call-banner-number {
+    font-size: clamp(3rem, 14vw, 4.5rem);
+  }
+  .call-banner-name {
+    font-size: clamp(1.5rem, 7vw, 2.2rem);
+    margin-bottom: 1.15rem;
+  }
+  .banner-pill {
+    font-size: 1rem;
+    padding: 0.55rem 1.1rem;
+  }
+  .call-guide-tip {
+    font-size: 1rem;
   }
   .current-section, .waiting-section {
     padding: 1rem;
