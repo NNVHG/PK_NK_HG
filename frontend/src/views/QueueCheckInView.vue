@@ -9,7 +9,7 @@
         </div>
         <h1 class="checkin-title">Tiếp Đón &amp; Check-In Bệnh Nhân Tại Quầy</h1>
         <p class="checkin-desc">
-          Đối chiếu căn cước công dân hoặc hộ chiếu, kiểm tra tiền sử công nợ và lịch hẹn đã đăng ký để cấp số thứ tự vào hàng đợi khám.
+          Đối chiếu CCCD/hộ chiếu (hoặc người giám hộ với trẻ dưới 14 tuổi), kiểm tra tiền sử công nợ và lịch hẹn đã đăng ký để cấp số thứ tự vào hàng đợi khám.
         </p>
       </div>
 
@@ -92,7 +92,11 @@
                   {{ patient.fullName.charAt(0) }}
                 </div>
                 <div class="patient-result-info">
-                  <strong>{{ patient.fullName }}</strong>
+                  <div class="desk-patient-name-row">
+                    <strong>{{ patient.fullName }}</strong>
+                    <span v-if="patient.isUnderFourteen ?? isUnderFourteen(patient.dateOfBirth)" class="app-badge app-badge--info">👶 Trẻ &lt;14</span>
+                    <span v-if="patient.missingGuardianAccount" class="app-badge app-badge--warning">⚠️ Thiếu tài khoản</span>
+                  </div>
                   <span>Mã: {{ patient.patientCode }} · SĐT: {{ patient.phone }}</span>
                 </div>
                 <div class="patient-result-status">
@@ -126,7 +130,11 @@
               <span class="app-card-icon">📋</span>
               <div>
                 <h2 class="app-card-title">{{ isChild ? 'Tiếp Đón Trẻ Em' : 'Đối Chiếu Giấy Tờ' }}: {{ selectedPatient.fullName }}</h2>
-                <p class="app-card-subtitle">Mã hồ sơ: <strong>{{ selectedPatient.patientCode }}</strong></p>
+                <p class="app-card-subtitle">
+                  Mã hồ sơ: <strong>{{ selectedPatient.patientCode }}</strong>
+                  · Ngày sinh: <strong>{{ selectedPatient.dateOfBirth }}</strong>
+                  <span v-if="isChild" class="app-badge app-badge--info" style="margin-left: 0.4rem;">👶 Trẻ dưới 14 tuổi</span>
+                </p>
               </div>
             </div>
           </div>
@@ -220,10 +228,8 @@
                 <label class="app-label" for="guardian-relationship">Quan hệ với trẻ <span class="app-label-required">*</span></label>
                 <select id="guardian-relationship" v-model="guardianRelationship" class="app-select">
                   <option value="">Chọn quan hệ</option>
-                  <option value="Bố/Mẹ">Bố/Mẹ</option>
-                  <option value="Ông/Bà">Ông/Bà</option>
-                  <option value="Người giám hộ hợp pháp">Người giám hộ hợp pháp</option>
-                  <option value="Khác">Khác</option>
+                  <option v-for="rel in GUARDIAN_RELATIONSHIP_OPTIONS" :key="rel" :value="rel">{{ rel }}</option>
+                  <option v-if="guardianRelationship && !GUARDIAN_RELATIONSHIP_OPTIONS.includes(guardianRelationship)" :value="guardianRelationship">{{ guardianRelationship }}</option>
                 </select>
                 <p v-if="fieldErrors.guardian" class="error-msg">{{ fieldErrors.guardian }}</p>
               </div>
@@ -268,8 +274,13 @@
                 <label class="app-label" for="guardian-account-select">Chọn đúng hồ sơ người giám hộ đang có mặt</label>
                 <select id="guardian-account-select" v-model.number="selectedGuardianPatientId" class="app-select" @change="selectGuardianAccount">
                   <option :value="null">Chọn hồ sơ đã đối chiếu</option>
-                  <option v-for="candidate in guardianCandidates" :key="candidate.patientId" :value="candidate.patientId">
-                    {{ candidate.fullName }} · {{ candidate.patientCode }} · {{ candidate.dateOfBirth }}
+                  <option
+                    v-for="candidate in guardianCandidates"
+                    :key="candidate.patientId"
+                    :value="candidate.patientId"
+                    :disabled="candidate.hasUserAccount === false"
+                  >
+                    {{ candidate.fullName }} · {{ candidate.patientCode }} · {{ candidate.dateOfBirth }}{{ candidate.hasUserAccount === false ? ' — Chưa có tài khoản' : candidate.hasUserAccount === true ? ' — Có tài khoản' : '' }}
                   </option>
                 </select>
                 <p v-if="guardianAccountSearchHasMore" class="app-hint">Có thêm hồ sơ cùng số điện thoại. Nếu chưa thấy đúng người, hãy tra cứu trong hồ sơ bệnh nhân trước khi xác nhận.</p>
@@ -413,7 +424,11 @@
                     <span>Khung giờ</span>
                   </div>
                   <div class="desk-patient-info">
-                    <strong>{{ row.patientName }}</strong>
+                    <div class="desk-patient-name-row">
+                      <strong>{{ row.patientName }}</strong>
+                      <span v-if="row.isChildPatient || (row.patientDateOfBirth && isUnderFourteen(row.patientDateOfBirth))" class="app-badge app-badge--info">👶 Trẻ &lt;14</span>
+                      <span v-if="row.missingGuardianAccount" class="app-badge app-badge--warning">⚠️ Thiếu tài khoản</span>
+                    </div>
                     <span>Mã: {{ row.patientCode }}</span>
                   </div>
                   <button
@@ -462,7 +477,11 @@
                     {{ String(row.queueNumber).padStart(3, '0') }}
                   </div>
                   <div class="waiting-item-info">
-                    <strong>{{ row.patientName }}</strong>
+                    <div class="desk-patient-name-row">
+                      <strong>{{ row.patientName }}</strong>
+                      <span v-if="row.isChildPatient || (row.patientDateOfBirth && isUnderFourteen(row.patientDateOfBirth))" class="app-badge app-badge--info">👶 Trẻ &lt;14</span>
+                      <span v-if="row.missingGuardianAccount" class="app-badge app-badge--warning">⚠️ Thiếu tài khoản</span>
+                    </div>
                     <span>{{ row.patientCode }} · {{ row.statusText }}</span>
                   </div>
                   <span class="app-badge app-badge--info">Đang chờ</span>
@@ -507,6 +526,7 @@ import { patientGuardiansService, type PatientGuardianSummary } from '@/services
 import { queueService, type OutstandingDebtResponse, type QueueEntryResponse } from '@/services/queue';
 import { isUnderFourteen } from '@/services/patientAge';
 
+const GUARDIAN_RELATIONSHIP_OPTIONS = ['Bố/Mẹ', 'Cha', 'Mẹ', 'Ông/Bà', 'Người giám hộ hợp pháp', 'Khác'];
 const auth = useAuthStore();
 const canCheckIn = computed(() => ['ADMIN', 'RECEPTIONIST'].includes(auth.role ?? ''));
 const keyword = ref('');
@@ -599,7 +619,10 @@ async function selectFromDesk(row: AppointmentResponse) {
     const patient = await patientsService.getById(row.patientId);
     if (owner !== selectionOwnerSequence || sequence !== selectionSequence || disposed) return;
     await selectPatient(patient, '', owner);
-    if (owner === selectionOwnerSequence && sequence === selectionSequence && appointments.value.some(a => a.appointmentId === row.appointmentId)) appointmentId.value = row.appointmentId;
+    if (owner === selectionOwnerSequence && sequence === selectionSequence && !disposed) {
+      if (appointments.value.some(a => a.appointmentId === row.appointmentId)) appointmentId.value = row.appointmentId;
+      applyGuardianHintFromNotes(row.notes);
+    }
   } catch { if (owner === selectionOwnerSequence && sequence === selectionSequence) searchError.value = 'Không tải được hồ sơ. Vui lòng thử lại.'; }
   finally { if (owner === selectionOwnerSequence) selecting.value = false; }
 }
@@ -686,6 +709,30 @@ watch(() => [auth.user?.userId, auth.role], () => {
 watch(checkInPhone, resetGuardianAccountSearch);
 onMounted(refreshToday);
 
+function parseGuardianNote(rawNotes?: string | null): { name: string; relationship: string } | null {
+  if (!rawNotes) return null;
+  const match = rawNotes.match(/\[Giám hộ:\s*([^\]]+)\]/);
+  if (!match) return null;
+  const content = match[1].trim();
+  if (!content) return null;
+  const sepIdx = content.lastIndexOf(' - ');
+  if (sepIdx > 0) {
+    return { name: content.slice(0, sepIdx).trim(), relationship: content.slice(sepIdx + 3).trim() };
+  }
+  return { name: content, relationship: '' };
+}
+
+function applyGuardianHintFromNotes(rawNotes?: string | null) {
+  if (!isChild.value || linkedGuardian.value || guardianFullName.value) return;
+  const parsed = parseGuardianNote(rawNotes);
+  if (!parsed) return;
+  guardianFullName.value = parsed.name;
+  if (parsed.relationship && !guardianRelationship.value) {
+    guardianRelationship.value = parsed.relationship;
+  }
+  guardianVerifiedAtCounter.value = false;
+}
+
 async function selectPatient(patient: PatientSummary, scannedCitizenId = '', parentOwner?: number) {
   if (!canCheckIn.value || checkingIn.value || disposed) return;
   if (parentOwner === undefined) {
@@ -694,6 +741,7 @@ async function selectPatient(patient: PatientSummary, scannedCitizenId = '', par
   } else if (parentOwner !== selectionOwnerSequence) {
     return;
   }
+  const owner = parentOwner ?? selectionOwnerSequence;
   closeQr();
   notes.value = '';
   if (isUnderFourteen(patient.dateOfBirth) && scannedCitizenId) {
@@ -710,6 +758,11 @@ async function selectPatient(patient: PatientSummary, scannedCitizenId = '', par
   resetGuardianAccountSearch();
   checkInPhone.value = scannedCitizenId || isUnderFourteen(patient.dateOfBirth) ? patient.phone : '';
   await Promise.all([loadAppointments(patient), loadOutstandingDebt(patient), loadActiveGuardian(patient)]);
+  if (owner !== selectionOwnerSequence || selectedPatient.value?.patientId !== patient.patientId || disposed) return;
+  if (isUnderFourteen(patient.dateOfBirth) && !linkedGuardian.value && !guardianFullName.value) {
+    const targetAppointment = appointments.value.find(a => a.appointmentId === appointmentId.value) ?? appointments.value[0];
+    applyGuardianHintFromNotes(targetAppointment?.notes);
+  }
 }
 
 async function loadActiveGuardian(patient: PatientSummary | null) {
@@ -1135,7 +1188,7 @@ function todayLocal(): string {
   color: var(--color-text-main);
 }
 
-.patient-result-info span {
+.patient-result-info > span {
   font-size: var(--font-size-xs);
   color: var(--color-text-subtle);
 }
@@ -1418,12 +1471,19 @@ function todayLocal(): string {
   min-width: 0;
 }
 
+.desk-patient-name-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
 .desk-patient-info strong {
   font-size: var(--font-size-sm);
   color: var(--color-text-main);
 }
 
-.desk-patient-info span {
+.desk-patient-info > span {
   font-size: var(--font-size-xs);
   color: var(--color-text-subtle);
 }
@@ -1470,7 +1530,13 @@ function todayLocal(): string {
   font-size: var(--font-size-sm);
 }
 
-.waiting-item-info span {
+.app-badge--warning {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #f59e0b;
+}
+
+.waiting-item-info > span {
   font-size: var(--font-size-xs);
   color: var(--color-text-subtle);
 }

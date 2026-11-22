@@ -53,10 +53,21 @@ public sealed class BookingApprovalRepository(DentalDbContext db, VietnamClock c
         return new(row.Id, row.Version, row.Status, row.FullName, row.Phone, row.DateOfBirth, row.Gender,
             row.AppointmentDate, row.SlotTime, row.SlotDurationMinutes, row.VerifiedPatientId,
             account is null ? null : new(account.UserId, account.FullName),
-            patients.Take(20).Select(p => new BookingApprovalPatient(p.PatientId, p.FullName, p.DateOfBirth,
-                p.IsActive && (!row.VerifiedPatientId.HasValue || p.UserId == account?.UserId) &&
-                (!row.VerifiedPatientId.HasValue || p.PatientId == row.VerifiedPatientId))).ToArray(),
-            counter, blocked, stamp, result);
+            patients.Take(20).Select(p => new BookingApprovalPatient(
+                p.PatientId,
+                p.FullName,
+                p.DateOfBirth,
+                BookingApprovalPolicy.IsCandidateSelectable(
+                    row.DateOfBirth,
+                    p.DateOfBirth,
+                    p.IsActive,
+                    p.UserId,
+                    row.VerifiedPatientId,
+                    account?.UserId,
+                    p.PatientId,
+                    clock.Today))).ToArray(),
+            counter, blocked, stamp, result, row.Notes,
+            PatientAccountAge.IsUnderMinimumAge(row.DateOfBirth, clock.Today));
     }
     public async Task<Result<BookingApprovalContext>> ReadAsync(int id, int actor, string role, CancellationToken ct)
     {

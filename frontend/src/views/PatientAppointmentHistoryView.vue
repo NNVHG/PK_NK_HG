@@ -74,6 +74,8 @@
                 <span class="appointment-id">#{{ row.appointmentId }}</span>
                 <h3 class="patient-name">{{ row.patientName }}</h3>
                 <span class="code-badge">{{ row.patientCode }}</span>
+                <span v-if="row.isChildPatient" class="child-appt-badge">👶 Trẻ em (&lt; 14 tuổi)</span>
+                <span v-if="row.missingGuardianAccount" class="missing-account-badge">⚠️ Thiếu tài khoản</span>
               </div>
               <span class="status-badge" :class="'status-' + row.status.toLowerCase()">
                 {{ statusLabel(row.status) }}
@@ -584,6 +586,29 @@ h1 {
   color: #0369a1;
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
+}
+
+.child-appt-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1e40af;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.missing-account-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  color: #92400e;
+  font-size: 0.74rem;
+  font-weight: 700;
 }
 
 .status-badge {

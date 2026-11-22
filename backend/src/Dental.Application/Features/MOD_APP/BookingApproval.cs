@@ -10,9 +10,33 @@ public sealed record BookingApprovalResult(int AppointmentId, int PatientId, boo
 public sealed record BookingApprovalContext(int Id, int Version, string Status, string FullName, string Phone,
     DateOnly DateOfBirth, string Gender, DateOnly AppointmentDate, TimeOnly SlotTime, int SlotDurationMinutes,
     int? VerifiedPatientId, BookingApprovalAccount? Account, BookingApprovalPatient[] Patients,
-    bool RequiresCounterConfirmation, string? BlockReason, string ReviewStamp, BookingApprovalResult? Result);
+    bool RequiresCounterConfirmation, string? BlockReason, string ReviewStamp, BookingApprovalResult? Result,
+    string? Notes = null, bool IsChildPatient = false);
 public sealed record ApproveBookingRequest(int ExpectedVersion, string ReviewStamp, int? PatientId,
     bool ConfirmedNewPatient, bool ConfirmedAtCounter, bool Confirmed);
+
+public static class BookingApprovalPolicy
+{
+    public static bool IsCandidateSelectable(
+        DateOnly requestDateOfBirth,
+        DateOnly candidateDateOfBirth,
+        bool candidateIsActive,
+        int? candidateUserId,
+        int? verifiedPatientId,
+        int? accountUserId,
+        int candidatePatientId,
+        DateOnly today)
+    {
+        if (!candidateIsActive) return false;
+        var requestIsChild = PatientAccountAge.IsUnderMinimumAge(requestDateOfBirth, today);
+        var candidateIsChild = PatientAccountAge.IsUnderMinimumAge(candidateDateOfBirth, today);
+        if (requestIsChild != candidateIsChild) return false;
+        if (requestIsChild && candidateUserId.HasValue) return false;
+        if (verifiedPatientId.HasValue && (candidateUserId != accountUserId || candidatePatientId != verifiedPatientId.Value))
+            return false;
+        return true;
+    }
+}
 
 public interface IBookingApprovalRepository
 {

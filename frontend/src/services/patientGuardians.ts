@@ -27,6 +27,7 @@ export interface WardSummary {
   gender: string | null;
   relationship: string;
   assignedAt: string;
+  phone?: string | null;
 }
 
 export interface AssignGuardianPayload {

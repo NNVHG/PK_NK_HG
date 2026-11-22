@@ -125,14 +125,7 @@ public sealed class AppointmentService
             return Result<AppointmentResponse>.Failure(Error.NotFound);
         if (actorRoleCode == RoleCodes.Patient)
         {
-            var isSelf = patient.UserId == actorUserId;
-            var isGuardian = false;
-            if (!isSelf && _guardianRepository is not null)
-            {
-                isGuardian = await _guardianRepository.HasActiveGuardianshipAsync(actorUserId, request.PatientId, ct);
-            }
-
-            if (!isSelf && !isGuardian)
+            if (!await CanPatientAccessAsync(actorUserId, patient, ct))
             {
                 return Result<AppointmentResponse>.Failure(Error.NotFound);
             }
@@ -172,7 +165,7 @@ public sealed class AppointmentService
                 return Result<AppointmentResponse>.Failure(Error.Validation.Code,
                     "Số điện thoại liên hệ không khớp hồ sơ. Hãy đối chiếu thông tin trước khi tiếp đón.");
 
-            var isChild = patient.DateOfBirth.AddYears(14) > today;
+            var isChild = PatientAccountAge.IsUnderMinimumAge(patient.DateOfBirth, today);
             if (isChild)
             {
                 if (!string.IsNullOrWhiteSpace(request.CitizenId))
@@ -401,7 +394,7 @@ public sealed class AppointmentService
             ct: ct);
 
         var created = await _appointmentRepository.GetByIdAsync(appointment.AppointmentId, ct);
-        var resp = ToResponse(created ?? appointment);
+        var resp = await ToResponseAsync(created ?? appointment, ct);
         if (generatedQueueNumber.HasValue)
         {
             resp = resp with { QueueNumber = generatedQueueNumber.Value };
@@ -441,8 +434,10 @@ public sealed class AppointmentService
             ct,
             ownerUserId);
 
+        var responseItems = await ToResponsesAsync(items, ct);
+
         var page = PagedResult<AppointmentResponse>.Create(
-            items.Select(ToResponse).ToList(),
+            responseItems,
             totalCount,
             request.Page,
             request.PageSize);
@@ -458,7 +453,8 @@ public sealed class AppointmentService
         if (role == RoleCodes.Patient && request.PatientId.HasValue)
         {
             var patient = await _patientRepository.GetByIdAsync(request.PatientId.Value, ct);
-            if (patient?.UserId != actorUserId) return Result<PagedResult<AppointmentResponse>>.Failure(Error.NotFound);
+            if (!await CanPatientAccessAsync(actorUserId, patient, ct))
+                return Result<PagedResult<AppointmentResponse>>.Failure(Error.NotFound);
         }
         return await GetAppointmentsAsync(request, ct, role == RoleCodes.Patient ? actorUserId : null);
     }
@@ -473,9 +469,10 @@ public sealed class AppointmentService
         if (role == RoleCodes.Patient)
         {
             var patient = await _patientRepository.GetByIdAsync(appointment.PatientId, ct);
-            if (patient?.UserId != actorUserId) return Result<AppointmentResponse>.Failure(Error.AppointmentNotFound);
+            if (!await CanPatientAccessAsync(actorUserId, patient, ct))
+                return Result<AppointmentResponse>.Failure(Error.AppointmentNotFound);
         }
-        return Result<AppointmentResponse>.Success(ToResponse(appointment));
+        return Result<AppointmentResponse>.Success(await ToResponseAsync(appointment, ct));
     }
 
     public async Task<Result<AppointmentResponse>> GetAppointmentByIdAsync(
@@ -486,7 +483,7 @@ public sealed class AppointmentService
         if (appointment is null)
             return Result<AppointmentResponse>.Failure(Error.AppointmentNotFound);
 
-        return Result<AppointmentResponse>.Success(ToResponse(appointment));
+        return Result<AppointmentResponse>.Success(await ToResponseAsync(appointment, ct));
     }
 
     public async Task<Result<SelfCancellationEligibilityResponse>> GetSelfCancellationEligibilityAsync(
@@ -520,7 +517,7 @@ public sealed class AppointmentService
         if (actorRoleCode == RoleCodes.Patient)
         {
             var patient = await _patientRepository.GetByIdAsync(appointment.PatientId, ct);
-            if (patient?.UserId != actorUserId)
+            if (!await CanPatientAccessAsync(actorUserId, patient, ct))
                 return Result<AppointmentResponse>.Failure(Error.AppointmentNotFound);
             if ((appointment.AppointmentDate.ToDateTime(appointment.SlotTime) - _vietnamClock.Now).TotalMinutes < 120)
                 return Result<AppointmentResponse>.Failure(Error.AppointmentCannotCancel.Code, "Lịch hẹn còn dưới 2 giờ. Vui lòng liên hệ Lễ tân phòng khám để được hỗ trợ.");
@@ -556,7 +553,7 @@ public sealed class AppointmentService
             ipAddress: ipAddress,
             ct: ct);
 
-        return Result<AppointmentResponse>.Success(ToResponse(appointment));
+        return Result<AppointmentResponse>.Success(await ToResponseAsync(appointment, ct));
     }
     public async Task<Result<AppointmentResponse>> RescheduleAppointmentAsync(
         int appointmentId,
@@ -590,7 +587,7 @@ public sealed class AppointmentService
         if (actorRoleCode == RoleCodes.Patient)
         {
             var patient = await _patientRepository.GetByIdAsync(appointment.PatientId, ct);
-            if (patient?.UserId != actorUserId)
+            if (!await CanPatientAccessAsync(actorUserId, patient, ct))
                 return Result<AppointmentResponse>.Failure(Error.AppointmentNotFound);
             // Portal only moves the time; it cannot edit staff notes.
             if (request.Notes is not null)
@@ -603,7 +600,7 @@ public sealed class AppointmentService
         if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Length > 500 || request.Notes?.Length > 500)
             return Result<AppointmentResponse>.Failure(Error.Validation.Code, "Cần lý do đổi lịch tối đa 500 ký tự; ghi chú tối đa 500 ký tự.");
         if (appointment.AppointmentDate == request.AppointmentDate && appointment.SlotTime == request.SlotTime)
-            return Result<AppointmentResponse>.Success(ToResponse(appointment));
+            return Result<AppointmentResponse>.Success(await ToResponseAsync(appointment, ct));
         var snapshot = await _appointmentRepository.GetScheduleAsync(ct) ?? new ScheduleSnapshot(ClinicSchedule.Default, "", true);
         if (request.ExpectedScheduleRevision is not null && request.ExpectedScheduleRevision != snapshot.Revision)
             return Result<AppointmentResponse>.Failure(new Error("APP_SCHEDULE", "Cấu hình giờ khám đã đổi. Tải lại và chọn lại khung giờ trước khi gửi."));
@@ -670,7 +667,7 @@ public sealed class AppointmentService
             ipAddress: ipAddress,
             ct: ct);
 
-        return Result<AppointmentResponse>.Success(ToResponse(appointment));
+        return Result<AppointmentResponse>.Success(await ToResponseAsync(appointment, ct));
     }
 
     public async Task<Result<SelfReschedulingEligibilityResponse>> GetSelfReschedulingEligibilityAsync(
@@ -680,11 +677,11 @@ public sealed class AppointmentService
         if (appointment is null)
             return Result<SelfReschedulingEligibilityResponse>.Failure(Error.AppointmentNotFound);
         var patient = await _patientRepository.GetByIdAsync(appointment.PatientId, ct);
-        if (patient?.UserId != actorUserId)
+        if (!await CanPatientAccessAsync(actorUserId, patient, ct))
             return Result<SelfReschedulingEligibilityResponse>.Failure(Error.AppointmentNotFound);
         var message = SelfReschedulingMessage(appointment);
         return Result<SelfReschedulingEligibilityResponse>.Success(new(
-            ToResponse(appointment), message is null, message, Math.Max(0, 2 - appointment.RescheduleCount)));
+            await ToResponseAsync(appointment, ct), message is null, message, Math.Max(0, 2 - appointment.RescheduleCount)));
     }
 
     private string? SelfReschedulingMessage(Appointment appointment)
@@ -693,8 +690,51 @@ public sealed class AppointmentService
             : (appointment.AppointmentDate.ToDateTime(appointment.SlotTime) - _vietnamClock.Now).TotalMinutes < 120
                 ? "Lịch hẹn còn dưới 2 giờ. Vui lòng liên hệ Lễ tân phòng khám để được hỗ trợ." : null;
 
-    private static AppointmentResponse ToResponse(Appointment a)
-        => new(
+    private async Task<bool> CanPatientAccessAsync(int actorUserId, Dental.Domain.Entities.Patient? patient, CancellationToken ct)
+    {
+        if (patient is null)
+            return false;
+        if (patient.UserId == actorUserId)
+            return true;
+        return _guardianRepository is not null &&
+               await _guardianRepository.HasActiveGuardianshipAsync(actorUserId, patient.PatientId, ct);
+    }
+
+    private async Task<List<AppointmentResponse>> ToResponsesAsync(
+        IReadOnlyCollection<Appointment> appointments,
+        CancellationToken ct)
+    {
+        if (appointments.Count == 0)
+            return [];
+
+        var today = _vietnamClock.Today;
+        var childPatientIds = appointments
+            .Where(a => a.Patient is not null && PatientAccountAge.IsUnderMinimumAge(a.Patient.DateOfBirth, today))
+            .Select(a => a.PatientId)
+            .Distinct()
+            .ToArray();
+
+        IReadOnlySet<int> activeGuardianWardIds = childPatientIds.Length > 0 && _guardianRepository is not null
+            ? await _guardianRepository.GetWardPatientIdsWithActiveGuardianAsync(childPatientIds, ct) ?? new HashSet<int>()
+            : new HashSet<int>();
+
+        return appointments
+            .Select(a => ToResponse(a, activeGuardianWardIds, today))
+            .ToList();
+    }
+
+    private async Task<AppointmentResponse> ToResponseAsync(Appointment a, CancellationToken ct)
+        => (await ToResponsesAsync([a], ct))[0];
+
+    private static AppointmentResponse ToResponse(
+        Appointment a,
+        IReadOnlySet<int> activeGuardianWardIds,
+        DateOnly today)
+    {
+        DateOnly? patientDob = a.Patient?.DateOfBirth;
+        var isChild = patientDob.HasValue && PatientAccountAge.IsUnderMinimumAge(patientDob.Value, today);
+        var missingGuardianAccount = isChild && !activeGuardianWardIds.Contains(a.PatientId);
+        return new(
             a.AppointmentId,
             a.PatientId,
             a.Patient?.PatientCode ?? string.Empty,
@@ -710,7 +750,11 @@ public sealed class AppointmentService
             a.RescheduleReason,
             a.IsEmergency,
             a.EmergencyReason,
-            a.SlotDurationMinutes
+            a.SlotDurationMinutes,
+            PatientDateOfBirth: patientDob,
+            IsChildPatient: isChild,
+            MissingGuardianAccount: missingGuardianAccount
         );
+    }
 
 }

@@ -95,6 +95,38 @@
     <div v-if="showAssignModal" class="modal-backdrop">
       <div class="modal-content">
         <h3>Gán người giám hộ cho bệnh nhân</h3>
+        <div class="guardian-search-block">
+          <label for="panel-guardian-search">Tra cứu nhanh theo SĐT hoặc họ tên:</label>
+          <div class="guardian-search-row">
+            <input
+              id="panel-guardian-search"
+              v-model.trim="guardianSearchKeyword"
+              type="text"
+              placeholder="Nhập SĐT hoặc họ tên người giám hộ"
+              :disabled="guardianSearchBusy || actionLoading"
+            />
+            <button type="button" class="button button-quiet" :disabled="guardianSearchBusy || actionLoading" @click="searchGuardians">
+              {{ guardianSearchBusy ? 'Đang tìm...' : 'Tìm' }}
+            </button>
+          </div>
+          <div v-if="guardianCandidates.length" class="guardian-candidate-list">
+            <button
+              v-for="candidate in guardianCandidates"
+              :key="candidate.patientId"
+              type="button"
+              class="guardian-candidate-btn"
+              :class="{ selected: assignForm.guardianPatientId === candidate.patientId }"
+              :disabled="candidate.hasUserAccount === false"
+              @click="selectGuardianCandidate(candidate)"
+            >
+              <span><strong>{{ candidate.fullName }}</strong> · #{{ candidate.patientId }} ({{ candidate.patientCode }})</span>
+              <span>{{ candidate.phone }}{{ candidate.hasUserAccount === false ? ' · Chưa có tài khoản' : ' · Có tài khoản' }}</span>
+            </button>
+          </div>
+          <p v-else-if="guardianSearchDone && !guardianSearchBusy" class="guardian-search-empty">
+            Không tìm thấy hồ sơ người lớn phù hợp.
+          </p>
+        </div>
         <form @submit.prevent="submitAssign">
           <label>
             ID hồ sơ người giám hộ:
@@ -118,7 +150,7 @@
             Tôi xác nhận đã đối chiếu người giám hộ trực tiếp tại quầy.
           </label>
           <div class="modal-actions">
-            <button type="button" class="button button-quiet" @click="showAssignModal = false">Hủy</button>
+            <button type="button" class="button button-quiet" @click="closeAssignModal">Hủy</button>
             <button type="submit" class="button button-primary" :disabled="actionLoading || !assignForm.verifiedAtCounter">
               {{ actionLoading ? 'Đang lưu...' : 'Xác nhận gán' }}
             </button>
@@ -180,6 +212,7 @@
 import { ref, onMounted, computed, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { patientGuardiansService, type PatientGuardianSummary } from '@/services/patientGuardians';
+import { patientsService, type PatientSummary } from '@/services/patients';
 import { isUnderFourteen } from '@/services/patientAge';
 
 const props = defineProps<{
@@ -207,8 +240,50 @@ const showRevokeModal = ref(false);
 const showPromoteModal = ref(false);
 
 const assignForm = ref({ guardianPatientId: 0, relationship: 'Cha', notes: '', verifiedAtCounter: false });
+const guardianSearchKeyword = ref('');
+const guardianSearchBusy = ref(false);
+const guardianSearchDone = ref(false);
+const guardianCandidates = ref<PatientSummary[]>([]);
 const revokeForm = ref({ notes: '' });
 const promoteForm = ref({ rawCitizenId: '', phone: '', notes: '' });
+
+function resetAssignLookup() {
+  guardianSearchKeyword.value = '';
+  guardianSearchBusy.value = false;
+  guardianSearchDone.value = false;
+  guardianCandidates.value = [];
+}
+
+function closeAssignModal() {
+  showAssignModal.value = false;
+  resetAssignLookup();
+}
+
+async function searchGuardians() {
+  const keyword = guardianSearchKeyword.value.trim();
+  if (!keyword) return;
+  guardianSearchBusy.value = true;
+  guardianSearchDone.value = true;
+  try {
+    const res = await patientsService.search({ keyword, page: 1, pageSize: 20 });
+    guardianCandidates.value = (res.items ?? []).filter(
+      p => !isUnderFourteen(p.dateOfBirth) && p.patientId !== props.patientId
+    );
+  } catch {
+    guardianCandidates.value = [];
+  } finally {
+    guardianSearchBusy.value = false;
+  }
+}
+
+function selectGuardianCandidate(candidate: PatientSummary) {
+  if (candidate.hasUserAccount === false) return;
+  assignForm.value.guardianPatientId = candidate.patientId;
+}
+
+watch(showAssignModal, (open) => {
+  if (!open) resetAssignLookup();
+});
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString('vi-VN');
@@ -253,7 +328,7 @@ async function submitAssign() {
       verifiedAtCounter: true
     });
     successMessage.value = 'Gán người giám hộ thành công.';
-    showAssignModal.value = false;
+    closeAssignModal();
     assignForm.value = { guardianPatientId: 0, relationship: 'Cha', notes: '', verifiedAtCounter: false };
     await loadData();
   } catch (e: any) {
@@ -334,6 +409,15 @@ onMounted(loadData);
 .verification-label { display: flex !important; align-items: flex-start; gap: 0.5rem; font-weight: 400 !important; line-height: 1.45; }
 .verification-label input { width: auto; margin-top: 0.15rem; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.25rem; }
+.guardian-search-block { display: grid; gap: 0.45rem; padding: 0.7rem; border-radius: 6px; background: #f8fafc; border: 1px solid #dbe5ed; }
+.guardian-search-block label { margin-top: 0 !important; font-size: 0.82rem; font-weight: 700; color: #1e3a5f; }
+.guardian-search-row { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+.guardian-search-row input { flex: 1 1 180px; margin-top: 0 !important; }
+.guardian-candidate-list { display: grid; gap: 0.35rem; max-height: 150px; overflow-y: auto; }
+.guardian-candidate-btn { display: flex; flex-direction: column; align-items: flex-start; gap: 0.15rem; padding: 0.45rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #0f2d59; font: inherit; font-size: 0.8rem; cursor: pointer; text-align: left; }
+.guardian-candidate-btn.selected { border-color: #1857b6; background: #eff6ff; }
+.guardian-candidate-btn:disabled { opacity: 0.55; cursor: not-allowed; background: #f1f5f9; }
+.guardian-search-empty { margin: 0; font-size: 0.8rem; color: #92400e; }
 .button-danger { background: #ef4444; color: #fff; border: none; padding: 0.5rem 0.85rem; border-radius: 4px; cursor: pointer; }
 .button-success { background: #10b981; color: #fff; border: none; padding: 0.5rem 0.85rem; border-radius: 4px; cursor: pointer; }
 .empty-state { color: #64748b; font-style: italic; }

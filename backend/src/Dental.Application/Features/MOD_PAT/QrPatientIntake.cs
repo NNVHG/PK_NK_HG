@@ -22,7 +22,13 @@ public sealed class QrPatientIntakeValidator : AbstractValidator<QrPatientIntake
         RuleFor(x => x.CitizenId).NotEmpty().Length(12).Matches("^[0-9]{12}$");
         RuleFor(x => x.Confirmed).Equal(true);
         RuleFor(x => x.Patient).NotNull().SetValidator(new CreatePatientRequestValidator(clock));
-        When(x => x.Patient is not null, () => RuleFor(x => x.Patient.Phone).NotEmpty().Length(10).Matches("^0[0-9]{9}$"));
+        When(x => x.Patient is not null, () =>
+        {
+            RuleFor(x => x.Patient.Phone).NotEmpty().Length(10).Matches("^0[0-9]{9}$");
+            RuleFor(x => x.Patient.DateOfBirth)
+                .Must(dob => !PatientAccountAge.IsUnderMinimumAge(dob, clock.Today))
+                .WithMessage("Người dưới 14 tuổi không sử dụng CCCD để tạo hồ sơ.");
+        });
     }
 }
 public sealed class QrPatientIntakeService(IQrPatientIntakeRepository repository, VietnamClock clock)

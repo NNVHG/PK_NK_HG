@@ -23,5 +23,8 @@ public sealed record QueueEntryResponse(
     string? RoomName = null,
     bool CanCancelConsultation = false,
     bool IsEmergency = false,
-    bool PatientAccountCreated = false
+    bool PatientAccountCreated = false,
+    DateOnly? PatientDateOfBirth = null,
+    bool IsChildPatient = false,
+    bool MissingGuardianAccount = false
 );

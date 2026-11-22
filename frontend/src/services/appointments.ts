@@ -16,6 +16,10 @@ export interface AppointmentResponse {
   slotDurationMinutes?: number;
   queueNumber?: number | null;
   patientAccountCreated?: boolean;
+  patientPhone?: string;
+  patientDateOfBirth?: string | null;
+  isChildPatient?: boolean;
+  missingGuardianAccount?: boolean;
 }
 
 export interface CreateAppointmentPayload {

@@ -6,4 +6,8 @@ public sealed record PatientListItemResponse(
     string FullName,
     DateOnly DateOfBirth,
     string? Gender,
-    string Phone);
+    string Phone,
+    bool HasUserAccount = false,
+    bool HasActiveGuardian = false,
+    bool IsUnderFourteen = false,
+    bool MissingGuardianAccount = false);

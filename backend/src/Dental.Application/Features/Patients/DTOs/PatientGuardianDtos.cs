@@ -46,5 +46,6 @@ public sealed record WardListItemResponse(
     DateOnly DateOfBirth,
     string? Gender,
     string Relationship,
-    DateTime AssignedAt
+    DateTime AssignedAt,
+    string? Phone = null
 );

@@ -13,4 +13,7 @@ public static class PatientAccountAge
             return cutoff.AddDays(1);
         return cutoff;
     }
+
+    public static bool IsUnderMinimumAge(DateOnly dateOfBirth, DateOnly today)
+        => dateOfBirth > LatestEligibleBirthDate(today);
 }

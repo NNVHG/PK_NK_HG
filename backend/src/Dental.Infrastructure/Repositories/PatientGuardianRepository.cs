@@ -57,6 +57,25 @@ public sealed class PatientGuardianRepository(DentalDbContext db, IPasswordHashe
             .ToListAsync(ct);
     }
 
+    public async Task<IReadOnlySet<int>> GetWardPatientIdsWithActiveGuardianAsync(
+        IEnumerable<int> wardPatientIds,
+        CancellationToken ct = default)
+    {
+        var ids = wardPatientIds.Where(id => id > 0).Distinct().ToArray();
+        if (ids.Length == 0)
+            return new HashSet<int>();
+
+        var wardIds = await db.PatientGuardians.AsNoTracking()
+            .Where(g => ids.Contains(g.WardPatientId) && g.IsActive
+                && g.GuardianPatient != null && g.GuardianPatient.IsActive && g.GuardianPatient.UserId != null
+                && db.Users.Any(u => u.UserId == g.GuardianPatient.UserId.Value && u.IsActive && u.Role.RoleCode == RoleCodes.Patient))
+            .Select(g => g.WardPatientId)
+            .Distinct()
+            .ToListAsync(ct);
+
+        return wardIds.ToHashSet();
+    }
+
     public async Task<Result<PatientGuardianResponse>> AssignGuardianAsync(
         AssignPatientGuardianRequest request, int actorUserId, string? ipAddress, CancellationToken ct = default)
     {
@@ -66,6 +85,11 @@ public sealed class PatientGuardianRepository(DentalDbContext db, IPasswordHashe
             var guardian = await db.Patients.FirstOrDefaultAsync(p => p.PatientId == request.GuardianPatientId, ct);
             if (guardian is null || !guardian.IsActive)
                 return Result<PatientGuardianResponse>.Failure(new Error("PAT_GUARDIAN_NOT_FOUND", "Hồ sơ người giám hộ không tồn tại hoặc đã ngừng hoạt động."));
+
+            if (PatientAccountAge.IsUnderMinimumAge(guardian.DateOfBirth, _clock.Today))
+                return Result<PatientGuardianResponse>.Failure(new Error(
+                    "PAT_GUARDIAN_UNDER_AGE",
+                    "Người giám hộ phải từ đủ 14 tuổi trở lên và có tài khoản Bệnh nhân đang hoạt động."));
 
             if (!guardian.UserId.HasValue || !await db.Users.AnyAsync(user =>
                     user.UserId == guardian.UserId.Value && user.IsActive && user.Role.RoleCode == RoleCodes.Patient, ct))
@@ -235,7 +259,7 @@ public sealed class PatientGuardianRepository(DentalDbContext db, IPasswordHashe
             if (ward is null || !ward.IsActive)
                 return Result<PatientResponse>.Failure(new Error("PAT_WARD_NOT_FOUND", "Hồ sơ bệnh nhân không tồn tại hoặc đã ngừng hoạt động."));
 
-            if (ward.DateOfBirth > PatientAccountAge.LatestEligibleBirthDate(_clock.Today))
+            if (PatientAccountAge.IsUnderMinimumAge(ward.DateOfBirth, _clock.Today))
                 return Result<PatientResponse>.Failure(new Error("PAT_WARD_UNDER_AGE",
                     "Trẻ dưới 14 tuổi chưa được cấp tài khoản riêng. Hãy tiếp tục sử dụng quyền của người giám hộ."));
 
@@ -330,7 +354,11 @@ public sealed class PatientGuardianRepository(DentalDbContext db, IPasswordHashe
                 ward.Phone,
                 ward.Email,
                 ward.Address,
-                ward.IsActive
+                ward.IsActive,
+                HasUserAccount: true,
+                HasActiveGuardian: false,
+                IsUnderFourteen: false,
+                MissingGuardianAccount: false
             ));
         }
         catch (Exception e) when (IsConflict(e))

@@ -130,7 +130,8 @@ public sealed class PatientGuardianService(
                 r.WardPatient.DateOfBirth,
                 r.WardPatient.Gender,
                 r.Relationship,
-                r.AssignedAt
+                r.AssignedAt,
+                r.WardPatient.Phone
             ))
             .ToList();
 

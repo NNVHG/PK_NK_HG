@@ -36,6 +36,10 @@ export interface QueueEntryResponse {
   canCancelConsultation: boolean;
   patientAccountCreated?: boolean;
   notes: string | null;
+  patientPhone?: string;
+  patientDateOfBirth?: string | null;
+  isChildPatient?: boolean;
+  missingGuardianAccount?: boolean;
 }
 
 export interface PublicQueueItemResponse {

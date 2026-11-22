@@ -37,22 +37,32 @@
             <form v-if="catalog&&!receipt" @submit.prevent="submit()">
               <fieldset :disabled="busy||!!retryBody">
                 <legend class="sr-only">Thông tin đặt lịch</legend>
-                <p v-if="patient" class="patient-notice">Đặt lịch cho tài khoản cá nhân: <strong>{{patient.fullName}}</strong> · {{patient.patientCode}}</p>
+                <p v-if="patient" class="patient-notice">Đặt lịch cho tài khoản cá nhân: <strong>{{patient.fullName}}</strong> · {{patient.patientCode}} · <RouterLink to="/patient/appointments/mine?tab=book" class="portal-inline-link">Mở cổng lịch hẹn cá nhân</RouterLink></p>
                 <div class="field-grid">
-                  <label class="field field-wide"><span>Họ và tên <span class="required" aria-hidden="true">*</span></span><input v-model="form.fullName" :readonly="patientId>0" maxlength="100" autocomplete="name" required /></label>
-                  <label class="field"><span>Số điện thoại liên hệ <span class="required" aria-hidden="true">*</span></span><input v-model="form.phone" type="tel" inputmode="numeric" maxlength="10" autocomplete="tel" required /><span class="field-hint">Phòng khám dùng số này để liên hệ khi cần.</span></label>
-                  <label class="field"><span>Ngày sinh <span class="required" aria-hidden="true">*</span></span><input v-model="form.dateOfBirth" :readonly="patientId>0" type="date" :max="catalog.today" required /></label>
+                  <label class="field field-wide"><span>Họ và tên <span class="required" aria-hidden="true">*</span></span><input v-model="form.fullName" :readonly="patientId>0" maxlength="100" autocomplete="name" required @input="onGuestNameInput" @blur="onGuestNameBlur" /></label>
+                  <label class="field"><span>{{ isChild ? 'Số điện thoại người giám hộ' : 'Số điện thoại liên hệ' }} <span class="required" aria-hidden="true">*</span></span><input v-model="form.phone" type="tel" inputmode="numeric" maxlength="10" autocomplete="tel" required /><span class="field-hint">{{ isChild ? 'Dùng để đối chiếu và liên kết tài khoản người giám hộ tại quầy.' : 'Phòng khám dùng số này để liên hệ khi cần.' }}</span></label>
                   <label class="field"><span>Giới tính <span class="required" aria-hidden="true">*</span></span><select v-model="form.gender" required><option value="">Chọn giới tính</option><option value="Male">Nam</option><option value="Female">Nữ</option><option value="Other">Khác</option></select></label>
-                  <label class="field"><span>Email <span class="optional">(không bắt buộc)</span></span><input v-model="form.email" type="email" maxlength="100" autocomplete="email" /></label>
+                  <div class="field field-wide">
+                    <span>Ngày sinh <span class="required" aria-hidden="true">*</span></span>
+                    <VietnameseDateOfBirthInput
+                      v-model="form.dateOfBirth"
+                      :max="catalog.today"
+                      :readonly="patientId > 0"
+                      :disabled="busy || !!retryBody"
+                      id-prefix="guest-dob"
+                      required
+                    />
+                  </div>
+                  <label class="field field-wide"><span>Email <span class="optional">(không bắt buộc)</span></span><input v-model="form.email" type="email" maxlength="100" autocomplete="email" /></label>
                 </div>
 
                 <div v-if="isChild" class="guardian-section">
                   <div class="child-badge-notice">
-                    <span>👶 <strong>Đối tượng: Trẻ em (&lt; 14 tuổi)</strong></span>
-                    <p class="field-hint">Theo quy định (§1.6), trẻ dưới 14 tuổi không yêu cầu CCCD. Vui lòng cung cấp thông tin người giám hộ đi cùng.</p>
+                    <span class="child-badge-pill">👶 <strong>Đối tượng: Trẻ em (&lt; 14 tuổi) — Không yêu cầu CCCD của trẻ</strong></span>
+                    <p class="field-hint">Theo quy định (§1.6), trẻ dưới 14 tuổi không có tài khoản riêng và không yêu cầu CCCD. Vui lòng cung cấp thông tin người giám hộ đi cùng để đối chiếu tại quầy.</p>
                   </div>
                   <div class="field-grid">
-                    <label class="field"><span>Họ tên người giám hộ <span class="required" aria-hidden="true">*</span></span><input v-model="guardianForm.fullName" maxlength="100" placeholder="Họ tên cha/mẹ/người giám hộ" :required="isChild" /></label>
+                    <label class="field"><span>Họ tên người giám hộ <span class="required" aria-hidden="true">*</span></span><input v-model="guardianForm.fullName" maxlength="100" placeholder="Họ tên cha/mẹ/người giám hộ" :required="isChild" @input="onGuardianNameInput" @blur="onGuardianNameBlur" /></label>
                     <label class="field"><span>Quan hệ với trẻ <span class="required" aria-hidden="true">*</span></span><select v-model="guardianForm.relationship" :required="isChild"><option value="Bố/Mẹ">Bố/Mẹ</option><option value="Ông/Bà">Ông/Bà</option><option value="Người giám hộ hợp pháp">Người giám hộ hợp pháp</option></select></label>
                   </div>
                 </div>
@@ -101,6 +111,9 @@
                           </button>
                         </div>
                       </div>
+                      <p v-if="!morningSlots.length && !afternoonSlots.length" class="slot-empty-hint">
+                        Hôm nay đã qua các khung giờ gợi ý. Vui lòng chọn ngày khám khác.
+                      </p>
                     </div>
                   </div>
 
@@ -117,6 +130,7 @@
 
             <div v-if="receipt" class="receipt-card">
               <p class="receipt-label">Mã tiếp nhận</p><p class="receipt-code">{{receipt.requestId}}</p>
+              <p v-if="lastSubmittedIsChild" class="receipt-child-note">👶 Yêu cầu dành cho trẻ dưới 14 tuổi (không tạo tài khoản riêng, không cần CCCD của trẻ). Khi đến khám, người giám hộ vui lòng mang CCCD hoặc hộ chiếu để đối chiếu và liên kết giám hộ tại quầy.</p>
               <RouterLink to="/" class="secondary-link">Về trang chủ</RouterLink>
             </div>
           </div>
@@ -129,11 +143,13 @@
             <dl>
               <div><dt>Ngày khám</dt><dd>{{form.appointmentDate ? form.appointmentDate.split('-').reverse().join('/') : 'Chưa chọn'}}</dd></div>
               <div><dt>Giờ khám</dt><dd>{{form.slot || 'Chưa chọn'}}</dd></div>
+              <div v-if="isChild"><dt>Đối tượng</dt><dd><span class="child-summary-tag">👶 Trẻ em (&lt; 14 tuổi)</span></dd></div>
+              <div v-if="isChild"><dt>Người giám hộ</dt><dd>{{ guardianForm.fullName.trim() ? `${guardianForm.fullName.trim()} (${guardianForm.relationship})` : guardianForm.relationship }}</dd></div>
             </dl>
           </div>
           <div class="info-card">
             <span class="info-icon" aria-hidden="true">i</span>
-            <div><h2>Trước khi đến khám</h2><p>Yêu cầu hợp lệ sẽ giữ chỗ trong khi chờ Lễ tân xác nhận. Phòng khám sẽ sắp xếp nha sĩ phù hợp.</p><p>Khi đến, vui lòng mang CCCD hoặc hộ chiếu để đối chiếu thông tin.</p></div>
+            <div><h2>Trước khi đến khám</h2><p>Yêu cầu hợp lệ sẽ giữ chỗ trong khi chờ Lễ tân xác nhận. Phòng khám sẽ sắp xếp nha sĩ phù hợp.</p><p v-if="isChild || lastSubmittedIsChild">Trẻ dưới 14 tuổi không cần CCCD riêng; người giám hộ vui lòng đi cùng và mang CCCD hoặc hộ chiếu để đối chiếu tại quầy.</p><p v-else>Khi đến, vui lòng mang CCCD hoặc hộ chiếu để đối chiếu thông tin.</p></div>
           </div>
         </aside>
       </div>
@@ -147,20 +163,46 @@ import {useAuthStore} from '@/stores/auth';
 import {patientsService,type PatientSummary} from '@/services/patients';
 import {bookingRequestsService,type BookingCatalog,type BookingIntent,type BookingSubmission,type BookingReceipt} from '@/services/bookingRequests';
 import {isUnderFourteen} from '@/services/patientAge';
+import {capitalizeVietnameseName} from '@/utils/vietnameseName';
+import VietnameseDateOfBirthInput from '@/components/VietnameseDateOfBirthInput.vue';
+
+const preselectedService = typeof window !== 'undefined'
+  ? new URLSearchParams(window.location.search).get('service')?.trim() || ''
+  : '';
+
 const auth=useAuthStore(),catalog=ref<BookingCatalog|null>(null),patient=ref<PatientSummary|null>(null),patientId=ref(0),profilesError=ref('');
 const form=reactive({fullName:'',phone:'',dateOfBirth:'',gender:'',email:'',appointmentDate:'',slot:'',notes:''});
 const guardianForm=reactive({fullName:'',relationship:'Bố/Mẹ'});
 const isChild=computed(()=>!!form.dateOfBirth&&isUnderFourteen(form.dateOfBirth,catalog.value?.today));
-const morningSlots=computed(()=>(catalog.value?.slots||[]).filter(s=>s<'12:00'));
-const afternoonSlots=computed(()=>(catalog.value?.slots||[]).filter(s=>s>='12:00'));
-const busy=ref(false),confirmed=ref(false),error=ref(''),receipt=ref<BookingReceipt|null>(null),retryBody=ref<BookingSubmission|null>(null);let snapshot:BookingIntent|null=null,generation=0,disposed=false;
+function vietnamNow(): { date: string; time: string } {
+  const now = new Date();
+  const date = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(now);
+  const time = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  }).format(now);
+  return { date, time };
+}
+const visibleSlots=computed(()=>{
+  const all = catalog.value?.slots || [];
+  const now = vietnamNow();
+  return form.appointmentDate === now.date ? all.filter(s => s > now.time) : all;
+});
+const morningSlots=computed(()=>visibleSlots.value.filter(s=>s<'12:00'));
+const afternoonSlots=computed(()=>visibleSlots.value.filter(s=>s>='12:00'));
+const busy=ref(false),confirmed=ref(false),error=ref(''),receipt=ref<BookingReceipt|null>(null),retryBody=ref<BookingSubmission|null>(null),lastSubmittedIsChild=ref(false);let snapshot:BookingIntent|null=null,generation=0,disposed=false;
 const identity=()=>`${auth.user?.userId}/${auth.role}`;
 function alive(ticket:number,owner:string){return !disposed&&ticket===generation&&owner===identity();}
+function onGuestNameInput(){if(patientId.value===0)form.fullName=capitalizeVietnameseName(form.fullName,false);}
+function onGuestNameBlur(){if(patientId.value===0)form.fullName=capitalizeVietnameseName(form.fullName,true);}
+function onGuardianNameInput(){guardianForm.fullName=capitalizeVietnameseName(guardianForm.fullName,false);}
+function onGuardianNameBlur(){guardianForm.fullName=capitalizeVietnameseName(guardianForm.fullName,true);}
 function pickTime(time: string) {
   form.slot = time;
   confirmed.value = false;
 }
-function clear(){catalog.value=null;patient.value=null;patientId.value=0;Object.assign(form,{fullName:'',phone:'',dateOfBirth:'',gender:'',email:'',appointmentDate:'',slot:'',notes:''});snapshot=null;retryBody.value=null;receipt.value=null;confirmed.value=false;error.value='';profilesError.value='';}
+function clear(){catalog.value=null;patient.value=null;patientId.value=0;Object.assign(form,{fullName:'',phone:'',dateOfBirth:'',gender:'',email:'',appointmentDate:'',slot:'',notes:''});guardianForm.fullName='';guardianForm.relationship='Bố/Mẹ';lastSubmittedIsChild.value=false;snapshot=null;retryBody.value=null;receipt.value=null;confirmed.value=false;error.value='';profilesError.value='';}
 async function readCatalog() {
   const data = await bookingRequestsService.catalog();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(data.today) || !Array.isArray(data.slots) || !data.slots.length ||
@@ -173,6 +215,7 @@ async function load(){
  const ticket=++generation,owner=identity();clear();busy.value=true;
  try{const data=await readCatalog();if(!alive(ticket,owner))return;
   catalog.value=data;form.appointmentDate=data.today;
+  if(preselectedService){form.notes=`Tư vấn ${preselectedService}`.slice(0,500);}
   if(auth.role==='PATIENT'){try{const mine=await patientsService.getMyPatient();if(alive(ticket,owner)){patient.value=mine;patientId.value=mine.patientId;Object.assign(form,{fullName:mine.fullName,phone:mine.phone,dateOfBirth:mine.dateOfBirth,gender:mine.gender});}}catch{if(alive(ticket,owner))profilesError.value='Không tải được hồ sơ cá nhân. Tải lại trước khi tiếp tục.';}}
  }catch{if(alive(ticket,owner))error.value='Không tải được khung hẹn. Vui lòng thử lại.';}
  finally{if(alive(ticket,owner))busy.value=false;}
@@ -180,21 +223,23 @@ async function load(){
 function validDay(value:string){const d=new Date(value+'T00:00:00Z');return /^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===value;}
 function intent():BookingIntent|null{
  const s=catalog.value;if(!s)return null;const minBirth=new Date(s.today+'T00:00:00Z'),month=minBirth.getUTCMonth();minBirth.setUTCFullYear(minBirth.getUTCFullYear()-120);if(minBirth.getUTCMonth()!==month)minBirth.setUTCDate(0);
- if(!form.fullName.trim()||form.fullName.length>100||form.fullName.includes('\0')||!/^0\d{9}$/.test(form.phone)||!validDay(form.dateOfBirth)||form.dateOfBirth<minBirth.toISOString().slice(0,10)||form.dateOfBirth>s.today||!['Male','Female','Other'].includes(form.gender)||!validDay(form.appointmentDate)||form.appointmentDate<s.today||!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(form.slot)||form.notes.length>500||form.notes.includes('\0')||form.email.length>100||form.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)||patientId.value>0&&(!patient.value||patient.value.patientId!==patientId.value||patient.value.fullName!==form.fullName.trim()||patient.value.dateOfBirth!==form.dateOfBirth))return null;
- if(isChild.value&&(!guardianForm.fullName.trim()||guardianForm.fullName.length>100))return null;
+ const cleanFullName=patientId.value>0?form.fullName.trim():capitalizeVietnameseName(form.fullName,true);
+ const cleanGuardianName=capitalizeVietnameseName(guardianForm.fullName,true);
+ if(!cleanFullName||cleanFullName.length>100||cleanFullName.includes('\0')||!/^0\d{9}$/.test(form.phone)||!validDay(form.dateOfBirth)||form.dateOfBirth<minBirth.toISOString().slice(0,10)||form.dateOfBirth>s.today||!['Male','Female','Other'].includes(form.gender)||!validDay(form.appointmentDate)||form.appointmentDate<s.today||!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(form.slot)||form.notes.length>500||form.notes.includes('\0')||form.email.length>100||form.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)||patientId.value>0&&(!patient.value||patient.value.patientId!==patientId.value||patient.value.fullName!==cleanFullName||patient.value.dateOfBirth!==form.dateOfBirth))return null;
+ if(isChild.value&&(!cleanGuardianName||cleanGuardianName.length>100))return null;
  let combinedNotes=form.notes.trim()||'';
  if(isChild.value){
-   const guardianNote=`[Giám hộ: ${guardianForm.fullName.trim()} - ${guardianForm.relationship}]`;
+   const guardianNote=`[Giám hộ: ${cleanGuardianName} - ${guardianForm.relationship}]`;
    combinedNotes=combinedNotes?`${combinedNotes} ${guardianNote}`:guardianNote;
    if(combinedNotes.length>500)return null;
  }
- return{fullName:form.fullName.trim(),phone:form.phone,dateOfBirth:form.dateOfBirth,gender:form.gender,email:form.email.trim()||null,appointmentDate:form.appointmentDate,slotTime:form.slot+':00',dentistId:null,notes:combinedNotes||null,scheduleRevision:s.revision,patientId:patientId.value||null};
+ return{fullName:cleanFullName,phone:form.phone,dateOfBirth:form.dateOfBirth,gender:form.gender,email:form.email.trim()||null,appointmentDate:form.appointmentDate,slotTime:form.slot+':00',dentistId:null,notes:combinedNotes||null,scheduleRevision:s.revision,patientId:patientId.value||null};
 }
 async function submit(){
  if(disposed||busy.value||receipt.value)return;
  if(!retryBody.value){const payload=intent();if(!confirmed.value||!payload){error.value='Kiểm tra lại thông tin cá nhân, người giám hộ, ngày và khung giờ; rút gọn ghi chú nếu cần.';return;}snapshot=payload;retryBody.value={intent:payload,clientRequestId:crypto.randomUUID(),confirmed:true};}
  const body=retryBody.value,ticket=generation,owner=identity();busy.value=true;error.value='';
- try{const data=await bookingRequestsService.submit(body);if(!alive(ticket,owner))return;if(data.requestId!==body.clientRequestId||!['Pending','Rejected','Approved'].includes(data.status))throw Error();receipt.value=data;retryBody.value=null;snapshot=null;confirmed.value=false;Object.assign(form,{fullName:'',phone:'',dateOfBirth:'',gender:'',email:'',notes:''});patient.value=null;patientId.value=0;}
+ try{const data=await bookingRequestsService.submit(body);if(!alive(ticket,owner))return;if(data.requestId!==body.clientRequestId||!['Pending','Rejected','Approved'].includes(data.status))throw Error();const submittedChild=isChild.value;receipt.value=data;lastSubmittedIsChild.value=submittedChild;retryBody.value=null;snapshot=null;confirmed.value=false;Object.assign(form,{fullName:'',phone:'',dateOfBirth:'',gender:'',email:'',notes:''});guardianForm.fullName='';guardianForm.relationship='Bố/Mẹ';patient.value=null;patientId.value=0;}
  catch(cause){if(alive(ticket,owner)){
   const response=isAxiosError(cause)?cause.response:undefined;
   if(response&&[400,401,403,404,409].includes(response.status)){
@@ -224,8 +269,11 @@ async function submit(){
 watch(identity,()=>{generation++;busy.value=false;clear();if(!disposed)void load();});onMounted(()=>void load());onUnmounted(()=>{disposed=true;generation++;clear();});
 </script>
 <style scoped>
-.guardian-section{margin-top:16px;padding:14px;background:#f0f7ff;border:1px solid #cce3f8;border-radius:10px}
+.guardian-section{margin-top:16px;padding:16px;background:#eef7ff;border:1.5px solid #93c5fd;border-radius:12px}
 .child-badge-notice{margin-bottom:12px;color:#1857b6}
+.child-badge-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:#dbeafe;color:#1e40af;font-size:.86rem;margin-bottom:6px}
+.child-summary-tag{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;background:#dbeafe;color:#1e40af;font-size:.82rem;font-weight:750}
+.slot-empty-hint{margin:0;font-size:.86rem;color:#9a3412;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 12px}
 .child-badge-notice strong{font-size:.95rem}
 .booking-page{min-height:100vh;background:var(--hg-canvas,#f4f8fc);color:var(--hg-ink,#18354c);font-family:var(--hg-font,"Segoe UI",system-ui,sans-serif)}
 .booking-header{background:#fff;border-bottom:1px solid #e4edf5}
@@ -243,7 +291,8 @@ watch(identity,()=>{generation++;busy.value=false;clear();if(!disposed)void load
 .slot-chip{padding:8px 14px;font-size:.88rem;font-weight:700;font-family:inherit;color:#18354c;background:#ffffff;border:1.5px solid #c8d9e7;border-radius:8px;cursor:pointer;transition:all .15s ease}
 .slot-chip:hover{border-color:#1857b6;background:#eff6ff;color:#1857b6}
 .slot-chip.selected{background:#1857b6;border-color:#1857b6;color:#ffffff;box-shadow:0 4px 10px rgba(24,87,182,.25);transform:translateY(-1px)}
-.field input,.field select,.field textarea{box-sizing:border-box;display:block;width:100%;min-width:0;min-height:46px;border:1px solid #c8d9e7;border-radius:9px;padding:10px 12px;background:#fff;color:#18354c;font:inherit;font-size:1rem}.field textarea{resize:vertical;line-height:1.5}.field input[readonly]{background:#f4f7fa;color:#445d72}.field input::placeholder,.field textarea::placeholder{color:#687e90}.section-divider{height:1px;background:#e9eff5;margin:26px 0}.section-heading{margin-bottom:18px}.section-heading h3{font-size:1rem;margin:0}.patient-notice,.loading-message{padding:12px 14px;background:#eef7fd;border-radius:9px;line-height:1.5;color:#214e72}.patient-notice{margin:0 0 20px;overflow-wrap:anywhere}
+.field input,.field select,.field textarea{box-sizing:border-box;display:block;width:100%;min-width:0;min-height:46px;border:1px solid #c8d9e7;border-radius:9px;padding:10px 12px;background:#fff;color:#18354c;font:inherit;font-size:1rem}.field textarea{resize:vertical;line-height:1.5}.field input[readonly]{background:#f4f7fa;color:#445d72}.field input::placeholder,.field textarea::placeholder{color:#687e90}.section-divider{height:1px;background:#e9eff5;margin:26px 0}.section-heading{margin-bottom:18px}.section-heading h3{font-size:1rem;margin:0}.patient-notice,.loading-message{padding:12px 14px;background:#eef7fd;border-radius:9px;line-height:1.5;color:#214e72}.patient-notice{margin:0 0 20px;overflow-wrap:anywhere}.portal-inline-link{color:#1857b6;font-weight:700;text-decoration:underline}
+.receipt-child-note{margin:10px 0 12px;padding:10px 12px;border-radius:8px;background:#eef7ff;border:1px solid #bfdbfe;color:#1e40af;font-size:.88rem;line-height:1.5}
 .form-footer{border-top:1px solid #e9eff5;margin-top:26px;padding-top:22px}.consent{display:flex;align-items:flex-start;gap:10px;font-size:.9rem;line-height:1.5;color:#29465d}.consent input{width:18px;height:18px;margin:2px 0 0;flex:none;accent-color:#1857b6}.primary-button,.secondary-button{min-height:48px;border:0;border-radius:9px;padding:11px 20px;font:inherit;font-weight:750;cursor:pointer}.primary-button{margin-top:18px;background:var(--hg-primary,#1857b6);color:#fff}.secondary-button{background:#eaf3fb;color:#1857b6}.primary-button:hover:not(:disabled){background:#144c9e}.primary-button:disabled,.secondary-button:disabled{opacity:.55;cursor:not-allowed}.alert-message{color:#9b1c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:9px;padding:12px 14px;line-height:1.5}.status-message:empty{display:none}.status-visible{color:#145c38;background:#e9f8ef;border:1px solid #b8e7c9;border-radius:9px;padding:12px 14px;line-height:1.5}.receipt-card{padding-top:4px}.receipt-label{font-size:.85rem;color:#536a7e;margin-bottom:4px}.receipt-code{font-weight:700;overflow-wrap:anywhere;color:#102e56}
 .booking-aside{display:grid;gap:18px}.summary-card{padding:22px}.summary-card>p{color:#536a7e;font-size:.88rem;line-height:1.5;margin:8px 0 18px}.summary-card dl{margin:0}.summary-card dl div{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid #edf2f7}.summary-card dt{color:#536a7e}.summary-card dd{margin:0;text-align:right;font-weight:700;color:#102e56}.info-card{display:flex;gap:12px;background:#eaf5fc;border:1px solid #cfe6f5;border-radius:14px;padding:20px;color:#31546f}.info-icon{display:grid;place-items:center;flex:none;width:24px;height:24px;border-radius:50%;background:#1857b6;color:white;font-weight:750}.info-card h2{margin-bottom:9px}.info-card p{font-size:.88rem;line-height:1.55;margin:0 0 10px}.info-card p:last-child{margin:0}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #e5b95e;outline-offset:3px}

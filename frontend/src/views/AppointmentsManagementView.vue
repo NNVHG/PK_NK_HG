@@ -139,6 +139,7 @@
                     <div class="request-card-header">
                       <div class="patient-main">
                         <h3 class="patient-name">{{ req.fullName }}</h3>
+                        <span v-if="isChildBirthDate(req.dateOfBirth)" class="badge-child">👶 Trẻ em (&lt; 14 tuổi)</span>
                         <span v-if="req.isReturning" class="badge-returning">✨ Đã từng khám</span>
                         <span v-else class="badge-new">Khách mới</span>
                       </div>
@@ -162,8 +163,12 @@
                       </div>
                     </div>
 
-                    <div v-if="req.notes" class="request-notes">
-                      <span class="notes-tag">Ghi chú:</span> {{ req.notes }}
+                    <div v-if="parseRequestNotes(req.notes).guardian" class="request-guardian">
+                      👨‍👩‍👧 <strong>Người giám hộ:</strong> {{ parseRequestNotes(req.notes).guardian }}
+                    </div>
+
+                    <div v-if="parseRequestNotes(req.notes).note" class="request-notes">
+                      <span class="notes-tag">Ghi chú:</span> {{ parseRequestNotes(req.notes).note }}
                     </div>
 
                     <!-- Thanh nút thao tác -->
@@ -285,7 +290,11 @@
                     </td>
                     <td>#{{ item.appointmentId }}</td>
                     <td>
-                      <div class="patient-cell-name">{{ item.patientName }}</div>
+                      <div class="patient-cell-name">
+                        <span>{{ item.patientName }}</span>
+                        <span v-if="item.isChildPatient" class="cell-child-badge">👶 Trẻ em</span>
+                        <span v-if="item.missingGuardianAccount" class="cell-missing-badge">⚠️ Thiếu tài khoản</span>
+                      </div>
                       <div class="patient-cell-code">#{{ item.patientCode }}</div>
                     </td>
                     <td>
@@ -378,7 +387,7 @@
             </div>
 
             <!-- Banner quét CCCD nhập nhanh -->
-            <div v-if="form.documentType === 'citizenId'" class="quick-scan-banner">
+            <div v-if="!isChild && form.documentType === 'citizenId'" class="quick-scan-banner">
               <div class="scan-info">
                 <strong>⚡ Nhập nhanh thông tin từ Căn cước công dân</strong>
                 <p>Tự động điền Họ tên, CCCD, Ngày sinh, Giới tính, Địa chỉ vào form bên dưới.</p>
@@ -421,7 +430,8 @@
               <div class="recog-title">
                 ✨ <strong>Bệnh nhân mới (chưa có hồ sơ):</strong>
               </div>
-              <p class="recog-sub">Hệ thống sẽ tự động tạo hồ sơ bệnh nhân mới khi bạn bấm "Xác nhận đặt lịch".</p>
+              <p v-if="isChild" class="recog-sub">Trẻ dưới 14 tuổi không tạo tài khoản riêng và không yêu cầu CCCD; hồ sơ sẽ mang trạng thái <strong>Thiếu tài khoản</strong> nếu chưa xác nhận liên kết người giám hộ tại quầy.</p>
+              <p v-else class="recog-sub">Hệ thống sẽ tự động tạo hồ sơ bệnh nhân mới khi bạn bấm "Xác nhận đặt lịch".</p>
             </div>
 
             <form @submit.prevent="submitBookingModal">
@@ -434,13 +444,14 @@
                     <label for="form-name">Họ và tên <span class="req">*</span></label>
                     <input
                       id="form-name"
-                      v-model.trim="form.fullName"
+                      v-model="form.fullName"
                       type="text"
                       placeholder="VD: Nguyễn Văn A"
                       maxlength="100"
                       :disabled="modalSubmitting"
                       required
-                      @blur="checkExistingPatient"
+                      @input="onCounterNameInput"
+                      @blur="onCounterNameBlur"
                     />
                   </div>
                   <div class="form-group">
@@ -460,13 +471,12 @@
 
                 <div class="form-grid">
                   <div class="form-group">
-                    <label for="form-dob">Ngày sinh <span class="req">*</span></label>
-                    <input
-                      id="form-dob"
+                    <span class="dob-field-label">Ngày sinh <span class="req">*</span></span>
+                    <VietnameseDateOfBirthInput
                       v-model="form.dateOfBirth"
-                      type="date"
                       :max="todayDateStr"
                       :disabled="modalSubmitting"
+                      id-prefix="counter-dob"
                       required
                       @change="checkExistingPatient"
                     />
@@ -541,20 +551,26 @@
                 <!-- Người giám hộ nếu là Trẻ em (< 14 tuổi) theo chuẩn web & §1.6 -->
                 <div v-if="isChild" class="guardian-box">
                   <div class="child-badge-notice">
-                    <span>👶 <strong>Bệnh nhân là Trẻ em (&lt; 14 tuổi)</strong></span>
-                    <p class="field-hint">Trẻ em không yêu cầu CCCD riêng. Vui lòng cung cấp thông tin người giám hộ đi cùng.</p>
+                    <div class="child-badge-row">
+                      <span>👶 <strong>Bệnh nhân là Trẻ em (&lt; 14 tuổi)</strong></span>
+                      <span v-if="!confirmedGuardianPatient && !matchedPatient?.hasActiveGuardian" class="cell-missing-badge">⚠️ Thiếu tài khoản</span>
+                      <span v-else class="cell-linked-badge">👨‍👩‍👧 Đã xác nhận giám hộ</span>
+                    </div>
+                    <p class="field-hint">Trẻ em không yêu cầu CCCD riêng và không có tài khoản riêng. Lễ tân kiểm tra hoặc xác nhận người giám hộ có tài khoản tại quầy; nếu chưa có tài khoản giám hộ phù hợp, hồ sơ trẻ vẫn được lưu với trạng thái Thiếu tài khoản.</p>
                   </div>
                   <div class="form-grid">
                     <div class="form-group">
                       <label for="guardian-name">Họ tên người giám hộ <span class="req">*</span></label>
                       <input
                         id="guardian-name"
-                        v-model.trim="form.guardianName"
+                        v-model="form.guardianName"
                         type="text"
                         placeholder="Họ tên cha / mẹ / người đại diện"
                         maxlength="100"
                         :disabled="modalSubmitting"
                         :required="isChild"
+                        @input="onCounterGuardianInput"
+                        @blur="onCounterGuardianBlur"
                       />
                     </div>
                     <div class="form-group">
@@ -565,6 +581,54 @@
                         <option value="Người giám hộ hợp pháp">Người giám hộ hợp pháp</option>
                       </select>
                     </div>
+                  </div>
+                  <div class="guardian-lookup-panel">
+                    <label for="counter-guardian-search" class="guardian-lookup-label">Liên kết tài khoản người giám hộ (không tự động gắn theo SĐT)</label>
+                    <div class="guardian-lookup-row">
+                      <input
+                        id="counter-guardian-search"
+                        v-model.trim="guardianLookupKeyword"
+                        type="text"
+                        placeholder="Nhập SĐT hoặc họ tên người giám hộ để tra cứu"
+                        :disabled="modalSubmitting || guardianLookupBusy"
+                      />
+                      <button
+                        type="button"
+                        class="app-btn app-btn--secondary"
+                        :disabled="modalSubmitting || guardianLookupBusy"
+                        @click="searchGuardianCandidates"
+                      >
+                        {{ guardianLookupBusy ? 'Đang tìm…' : '🔍 Tra cứu' }}
+                      </button>
+                    </div>
+                    <div v-if="confirmedGuardianPatient" class="guardian-confirmed-pill">
+                      <span>✓ Sẽ liên kết giám hộ: <strong>{{ confirmedGuardianPatient.fullName }}</strong> ({{ confirmedGuardianPatient.patientCode }} · {{ confirmedGuardianPatient.phone }})</span>
+                      <button type="button" class="link-btn" :disabled="modalSubmitting" @click="clearConfirmedGuardian">Bỏ chọn</button>
+                    </div>
+                    <div v-else-if="guardianCandidates.length" class="guardian-candidate-picker">
+                      <select v-model.number="selectedGuardianCandidateId" :disabled="modalSubmitting">
+                        <option :value="0">Chọn hồ sơ người giám hộ đã đối chiếu…</option>
+                        <option
+                          v-for="candidate in guardianCandidates"
+                          :key="candidate.patientId"
+                          :value="candidate.patientId"
+                          :disabled="candidate.hasUserAccount === false"
+                        >
+                          {{ candidate.fullName }} · {{ candidate.phone }} · {{ candidate.patientCode }}{{ candidate.hasUserAccount === false ? ' — Chưa có tài khoản' : ' — Có tài khoản' }}
+                        </option>
+                      </select>
+                      <button
+                        type="button"
+                        class="app-btn app-btn--primary"
+                        :disabled="modalSubmitting || !selectedGuardianCandidateId"
+                        @click="confirmSelectedGuardian"
+                      >
+                        Xác nhận người giám hộ
+                      </button>
+                    </div>
+                    <p v-else-if="guardianLookupSearched && !guardianLookupBusy" class="guardian-lookup-empty">
+                      Chưa tìm thấy hồ sơ người lớn có tài khoản phù hợp. Nếu tiếp tục đặt lịch, hồ sơ trẻ vẫn được lưu với trạng thái <strong>Thiếu tài khoản</strong> để cập nhật sau.
+                    </p>
                   </div>
                   <label class="confirm-checkbox guardian-counter-confirmation">
                     <input v-model="form.guardianVerifiedAtCounter" type="checkbox" />
@@ -659,6 +723,7 @@
               <div class="modal-title-badges">
                 <h2 id="approval-modal-title">Đối soát &amp; Duyệt yêu cầu đặt hẹn</h2>
                 <span class="request-code">#YC-{{ approvingRequest.id }}</span>
+                <span v-if="isChildBirthDate(approvingRequest.dateOfBirth)" class="badge-child">👶 Trẻ em (&lt; 14 tuổi)</span>
                 <span v-if="approvingRequest.isReturning" class="badge-returning">✨ Đã từng khám</span>
                 <span v-else class="badge-new">Khách mới</span>
               </div>
@@ -688,8 +753,11 @@
               <span>📞 {{ approvingRequest.phone }}</span>
               <span>🎂 {{ formatDate(approvingRequest.dateOfBirth) }}</span>
             </div>
-            <p v-if="approvingRequest.notes" class="summary-notes">
-              <strong>Ghi chú:</strong> {{ approvingRequest.notes }}
+            <p v-if="parseRequestNotes(approvingRequest.notes).guardian" class="summary-guardian">
+              <strong>👨‍👩‍👧 Người giám hộ:</strong> {{ parseRequestNotes(approvingRequest.notes).guardian }}
+            </p>
+            <p v-if="parseRequestNotes(approvingRequest.notes).note" class="summary-notes">
+              <strong>Ghi chú:</strong> {{ parseRequestNotes(approvingRequest.notes).note }}
             </p>
           </div>
 
@@ -874,12 +942,15 @@ import {
   type PatientDetails,
   type PatientPayload
 } from '@/services/patients';
+import { patientGuardiansService } from '@/services/patientGuardians';
 import {
   qrPatientIntakeService,
   type ScannedIdentity
 } from '@/services/qrPatientIntake';
 import { useBookingSchedule } from '@/composables/useBookingSchedule';
 import { isUnderFourteen } from '@/services/patientAge';
+import { capitalizeVietnameseName } from '@/utils/vietnameseName';
+import VietnameseDateOfBirthInput from '@/components/VietnameseDateOfBirthInput.vue';
 import BookingRequestApproval from '@/components/BookingRequestApproval.vue';
 import AppointmentRescheduling from '@/components/AppointmentRescheduling.vue';
 import CameraCccdScanner from '@/components/CameraCccdScanner.vue';
@@ -936,6 +1007,35 @@ function formatDate(iso: string): string {
   const parts = iso.slice(0, 10).split('-');
   if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
   return iso;
+}
+
+function isChildBirthDate(dateOfBirth?: string | null): boolean {
+  return !!dateOfBirth && isUnderFourteen(dateOfBirth);
+}
+
+function parseRequestNotes(notes?: string | null): { guardian: string | null; note: string | null } {
+  if (!notes) return { guardian: null, note: null };
+  const match = notes.match(/\[Giám hộ:\s*([^\]]+)\]/);
+  const guardian = match ? match[1].trim() : null;
+  const cleaned = notes.replace(/\[Giám hộ:\s*[^\]]+\]/g, '').trim();
+  return { guardian, note: cleaned || null };
+}
+
+function onCounterNameInput() {
+  if (!matchedPatient.value) form.value.fullName = capitalizeVietnameseName(form.value.fullName, false);
+}
+
+function onCounterNameBlur() {
+  if (!matchedPatient.value) form.value.fullName = capitalizeVietnameseName(form.value.fullName, true);
+  void checkExistingPatient();
+}
+
+function onCounterGuardianInput() {
+  form.value.guardianName = capitalizeVietnameseName(form.value.guardianName, false);
+}
+
+function onCounterGuardianBlur() {
+  form.value.guardianName = capitalizeVietnameseName(form.value.guardianName, true);
 }
 
 function formatStatus(st: string): string {
@@ -1167,6 +1267,12 @@ const matchedPatient = ref<PatientSummary | PatientDetails | null>(null);
 const patientCandidates = ref<PatientSummary[]>([]);
 const checkingPatient = ref(false);
 const lastScannedIdentity = ref<ScannedIdentity | null>(null);
+const guardianLookupKeyword = ref('');
+const guardianLookupBusy = ref(false);
+const guardianLookupSearched = ref(false);
+const guardianCandidates = ref<PatientSummary[]>([]);
+const selectedGuardianCandidateId = ref(0);
+const confirmedGuardianPatient = ref<PatientSummary | null>(null);
 
 // Form nhập thông tin đặt lịch (tương tự trang web + thêm CCCD & Địa chỉ)
 const form = ref({
@@ -1189,6 +1295,55 @@ const form = ref({
 
 // Dùng mốc ngày Việt Nam thống nhất với check-in và booking công khai.
 const isChild = computed(() => !!form.value.dateOfBirth && isUnderFourteen(form.value.dateOfBirth));
+
+watch(isChild, (child) => {
+  if (child) {
+    form.value.cccd = '';
+    form.value.nationalityCode = '';
+    lastScannedIdentity.value = null;
+    isCameraOpen.value = false;
+  }
+  guardianLookupKeyword.value = '';
+  guardianLookupSearched.value = false;
+  guardianCandidates.value = [];
+  selectedGuardianCandidateId.value = 0;
+  confirmedGuardianPatient.value = null;
+});
+
+async function searchGuardianCandidates() {
+  const keyword = guardianLookupKeyword.value.trim() || form.value.phone.trim();
+  if (!keyword) return;
+  guardianLookupKeyword.value = keyword;
+  guardianLookupBusy.value = true;
+  guardianLookupSearched.value = true;
+  confirmedGuardianPatient.value = null;
+  selectedGuardianCandidateId.value = 0;
+  try {
+    const page = await patientsService.search({ keyword, page: 1, pageSize: 20 });
+    guardianCandidates.value = page.items.filter(
+      p => !isUnderFourteen(p.dateOfBirth) && p.patientId !== matchedPatient.value?.patientId
+    );
+  } catch {
+    guardianCandidates.value = [];
+  } finally {
+    guardianLookupBusy.value = false;
+  }
+}
+
+function confirmSelectedGuardian() {
+  const chosen = guardianCandidates.value.find(c => c.patientId === selectedGuardianCandidateId.value);
+  if (!chosen || chosen.hasUserAccount === false) return;
+  confirmedGuardianPatient.value = chosen;
+  if (!form.value.guardianName.trim()) {
+    form.value.guardianName = chosen.fullName;
+  }
+  form.value.guardianVerifiedAtCounter = true;
+}
+
+function clearConfirmedGuardian() {
+  confirmedGuardianPatient.value = null;
+  selectedGuardianCandidateId.value = 0;
+}
 
 const { slots, revision: scheduleRevision, loading: scheduleLoading, load: loadSchedule } = useBookingSchedule(false);
 
@@ -1213,6 +1368,11 @@ function resetForm() {
   matchedPatient.value = null;
   patientCandidates.value = [];
   lastScannedIdentity.value = null;
+  guardianLookupKeyword.value = '';
+  guardianLookupSearched.value = false;
+  guardianCandidates.value = [];
+  selectedGuardianCandidateId.value = 0;
+  confirmedGuardianPatient.value = null;
   modalError.value = '';
 }
 
@@ -1418,6 +1578,22 @@ async function submitBookingModal() {
       nationalityCode: !isChild.value && form.value.documentType === 'passport' ? form.value.nationalityCode.trim().toUpperCase() : null
     });
 
+    let guardianLinked = false;
+    if (isChild.value && confirmedGuardianPatient.value && patientId > 0) {
+      try {
+        await patientGuardiansService.assign({
+          guardianPatientId: confirmedGuardianPatient.value.patientId,
+          wardPatientId: patientId,
+          relationship: form.value.guardianRelation,
+          verifiedAtCounter: true,
+          notes: 'Liên kết người giám hộ khi đặt lịch tại quầy'
+        });
+        guardianLinked = true;
+      } catch {
+        // Non-fatal if ward already has an active guardian or needs manual follow-up in PatientDetailView.
+      }
+    }
+
     // Thông báo thành công kèm số thứ tự (nếu ca hôm nay)
     let successMessage = `Đặt lịch thành công cho bệnh nhân ${patientName} (Mã lịch #${appointment.appointmentId} lúc ${form.value.slot}). Lịch hẹn đã được duyệt và xác nhận!`;
     if (appointment.queueNumber) {
@@ -1425,6 +1601,10 @@ async function submitBookingModal() {
     }
     if (appointment.patientAccountCreated) {
       successMessage += ' Đã tạo tài khoản cá nhân; người bệnh cần kích hoạt lần đầu bằng OTP và đổi mật khẩu.';
+    } else if (isChild.value) {
+      successMessage += guardianLinked
+        ? ' Đã liên kết tài khoản người giám hộ.'
+        : (!matchedPatient.value?.hasActiveGuardian ? ' Hồ sơ trẻ đang mang trạng thái Thiếu tài khoản (chưa liên kết tài khoản người giám hộ).' : '');
     }
 
     closeBookingModal();
@@ -1872,6 +2052,46 @@ onMounted(() => {
   border-radius: 4px;
 }
 
+.badge-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+}
+
+.request-guardian {
+  background: #eff8ff;
+  border: 1px solid #bfdbfe;
+  border-left: 3px solid #1857b6;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.84rem;
+  color: #102e56;
+}
+
+.summary-guardian {
+  margin: 0.35rem 0 0;
+  padding: 0.45rem 0.65rem;
+  background: #eff8ff;
+  border-radius: 6px;
+  font-size: 0.84rem;
+  color: #102e56;
+}
+
+.dob-field-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 0.35rem;
+}
+
 .request-code {
   font-size: 0.78rem;
   font-weight: 600;
@@ -2030,6 +2250,42 @@ onMounted(() => {
 
 .patient-cell-name {
   font-weight: 600;
+}
+
+.patient-cell-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.cell-child-badge,
+.cell-missing-badge,
+.cell-linked-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.cell-child-badge {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.cell-missing-badge {
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  color: #92400e;
+}
+
+.cell-linked-badge {
+  background: #dcfce7;
+  color: #166534;
 }
 
 .patient-cell-code {
@@ -2359,6 +2615,13 @@ onMounted(() => {
   gap: 0.75rem;
 }
 
+.child-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
 .child-badge-notice strong {
   color: #0369a1;
 }
@@ -2367,6 +2630,69 @@ onMounted(() => {
   margin: 0.15rem 0 0;
   color: #64748b;
   font-size: 0.78rem;
+}
+
+.guardian-lookup-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.65rem;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #dbe5ed;
+}
+
+.guardian-lookup-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #1e3a5f;
+}
+
+.guardian-lookup-row,
+.guardian-candidate-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.guardian-lookup-row input,
+.guardian-candidate-picker select {
+  flex: 1 1 200px;
+  min-width: 0;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.86rem;
+}
+
+.guardian-confirmed-pill {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 6px;
+  background: #ecfdf5;
+  border: 1px solid #86efac;
+  color: #166534;
+  font-size: 0.84rem;
+}
+
+.guardian-lookup-empty {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #92400e;
+}
+
+.link-btn {
+  border: 0;
+  background: transparent;
+  color: #0369a1;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
 }
 
 .dialog-footer {

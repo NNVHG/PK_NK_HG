@@ -20,7 +20,11 @@
         <div class="approval-summary-grid">
           <div class="approval-summary-item">
             <span class="summary-label">Người yêu cầu</span>
-            <strong>{{ context.fullName }}</strong>
+            <div class="summary-name-row">
+              <strong>{{ context.fullName }}</strong>
+              <span v-if="isChildContext" class="approval-child-badge">👶 Trẻ em (&lt; 14 tuổi)</span>
+              <span v-if="isChildContext" class="approval-missing-badge">⚠️ Chưa liên kết giám hộ</span>
+            </div>
             <span class="summary-meta">🎂 {{ context.dateOfBirth }} · 📞 {{ context.phone }}</span>
           </div>
           <div class="approval-summary-item">
@@ -28,10 +32,20 @@
             <strong class="summary-slot">📅 {{ context.appointmentDate }} · ⏰ {{ context.slotTime.slice(0, 5) }}</strong>
             <span class="summary-meta">Thời lượng {{ context.slotDurationMinutes }} phút</span>
           </div>
+          <div v-if="isChildContext || parsedNotes.guardian" class="approval-summary-item approval-summary-item--full">
+            <span class="summary-label">Thông tin giám hộ &amp; ghi chú</span>
+            <strong>👨‍👩‍👧 Người giám hộ: {{ parsedNotes.guardian || 'Chưa ghi nhận — đối chiếu tại quầy khi trẻ đến' }}</strong>
+            <span v-if="parsedNotes.note" class="summary-meta">📝 Ghi chú: {{ parsedNotes.note }}</span>
+          </div>
         </div>
 
         <p class="approval-policy-note">
-          Tài khoản bệnh nhân được tạo hoặc chuyển tại quầy sau khi lễ tân đối chiếu CCCD và số điện thoại lúc check-in.
+          <template v-if="isChildContext">
+            Trẻ dưới 14 tuổi không yêu cầu CCCD và không tạo tài khoản riêng (đánh dấu <strong>Thiếu tài khoản</strong> nếu chưa gắn người giám hộ). Khi trẻ đến khám, Lễ tân xác minh và liên kết tài khoản người giám hộ tại quầy.
+          </template>
+          <template v-else>
+            Tài khoản bệnh nhân được tạo hoặc chuyển tại quầy sau khi lễ tân đối chiếu CCCD và số điện thoại lúc check-in.
+          </template>
         </p>
 
         <p v-if="context.blockReason" class="approval-alert approval-alert--error" role="alert">
@@ -49,7 +63,7 @@
                 :value="String(p.patientId)"
                 :disabled="!p.canSelect"
               >
-                {{ p.fullName }} · {{ p.dateOfBirth }} · #{{ p.patientId }}{{ p.canSelect ? '' : ' · Không đủ điều kiện' }}
+                {{ p.fullName }} · {{ p.dateOfBirth }} · #{{ p.patientId }}{{ candidateDisabledLabel(p) }}
               </option>
               <option v-if="context.verifiedPatientId === null" value="new">
                 Tạo hồ sơ mới theo thông tin yêu cầu
@@ -59,6 +73,9 @@
 
           <p v-if="context.patients.length" class="approval-candidate-hint">
             Đã tìm thấy hồ sơ tương đồng. Đối chiếu từng người; không tạo trùng hoặc chuyển hồ sơ đã có chủ.
+          </p>
+          <p v-if="hasAgeMismatchCandidates" class="approval-candidate-hint">
+            Hồ sơ cùng SĐT nhưng khác nhóm tuổi (&lt; 14 / ≥ 14) bị khóa chọn để tránh gắn nhầm trẻ em vào hồ sơ người lớn. Chọn "Tạo hồ sơ mới theo thông tin yêu cầu" nếu đây là người mới.
           </p>
 
           <div class="approval-checks">
@@ -84,7 +101,8 @@
 
       <div v-else-if="context?.result" key="result" class="approval-result-card">
         <strong>✅ Đã xác nhận lịch hẹn #{{ context.result.appointmentId }}</strong>
-        <p>Tài khoản được xử lý tại quầy khi khách check-in và đối chiếu CCCD/SĐT.</p>
+        <p v-if="isChildContext">Trẻ dưới 14 tuổi không tạo tài khoản riêng (trạng thái Thiếu tài khoản nếu chưa liên kết người giám hộ); người giám hộ sẽ được xác minh và liên kết khi trẻ đến khám.</p>
+        <p v-else>Tài khoản được xử lý tại quầy khi khách check-in và đối chiếu CCCD/SĐT.</p>
       </div>
 
       <div v-else-if="busy" key="loading" class="approval-loading-state">
@@ -95,14 +113,39 @@
   </section>
 </template>
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { bookingRequestsService, type BookingApprovalContext, type BookingApprovalResult } from '@/services/bookingRequests';
+import { isUnderFourteen } from '@/services/patientAge';
+
+function isChildBirthDate(dateOfBirth?: string | null): boolean {
+  return typeof isUnderFourteen === 'function' && !!dateOfBirth && isUnderFourteen(dateOfBirth);
+}
+
+function isAgeGroupMismatch(dateOfBirth?: string | null): boolean {
+  return Boolean(context.value && dateOfBirth && isChildBirthDate(dateOfBirth) !== isChildContext.value);
+}
+
+function candidateDisabledLabel(p: { dateOfBirth?: string | null; canSelect: boolean }): string {
+  if (p.canSelect) return '';
+  return isAgeGroupMismatch(p.dateOfBirth) ? ' · Khác nhóm tuổi (< 14 / ≥ 14)' : ' · Không đủ điều kiện';
+}
+
+function parseRequestNotes(notes?: string | null): { guardian: string | null; note: string | null } {
+  if (!notes) return { guardian: null, note: null };
+  const match = notes.match(/\[Giám hộ:\s*([^\]]+)\]/);
+  const guardian = match ? match[1].trim() : null;
+  const cleaned = notes.replace(/\[Giám hộ:\s*([^\]]+)\]/g, '').trim();
+  return { guardian, note: cleaned || null };
+}
 
 const props = defineProps<{ requestId: number }>();
 const emit = defineEmits<{ approved: [result: BookingApprovalResult]; working: [value: boolean] }>();
 const auth = useAuthStore();
 const context = ref<BookingApprovalContext | null>(null), selection = ref(''), counter = ref(false), confirmed = ref(false), confirmedNew = ref(false);
+const isChildContext = computed(() => Boolean(context.value && (context.value.isChildPatient || isChildBirthDate(context.value.dateOfBirth))));
+const hasAgeMismatchCandidates = computed(() => Boolean(context.value?.patients.some(p => !p.canSelect && isAgeGroupMismatch(p.dateOfBirth))));
+const parsedNotes = computed(() => parseRequestNotes(context.value?.notes));
 const busy = ref(false), needsReview = ref(true), error = ref(''), message = ref('');
 let generation = 0, disposed = false;
 const identity = () => `${auth.user?.userId}/${auth.role}/${props.requestId}`;
@@ -249,6 +292,43 @@ onMounted(() => void load()); onUnmounted(() => { disposed = true; generation++;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: #64748b;
+}
+
+.summary-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.approval-child-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.approval-missing-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #f59e0b;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.approval-summary-item--full {
+  grid-column: 1 / -1;
 }
 
 .approval-summary-item strong {

@@ -32,6 +32,7 @@
           <div class="request-heading">
             <div class="patient-main">
               <h2>{{ row.fullName }}</h2>
+              <span v-if="isChildBirthDate(row.dateOfBirth)" class="badge-child">👶 Trẻ em (&lt; 14 tuổi)</span>
               <span v-if="row.isReturning" class="badge-returning">✨ Đã từng khám</span>
             </div>
             <span class="request-id">#YC-{{ row.id }}</span>
@@ -55,8 +56,11 @@
             </div>
           </dl>
 
-          <div v-if="row.notes" class="request-notes">
-            <span class="notes-label">Ghi chú của khách:</span> {{ row.notes }}
+          <div v-if="parseRequestNotes(row.notes).guardian" class="request-guardian">
+            <span class="notes-label">👨‍👩‍👧 Người giám hộ:</span> {{ parseRequestNotes(row.notes).guardian }}
+          </div>
+          <div v-if="parseRequestNotes(row.notes).note" class="request-notes">
+            <span class="notes-label">Ghi chú của khách:</span> {{ parseRequestNotes(row.notes).note }}
           </div>
 
           <div class="actions-bar">
@@ -190,8 +194,17 @@
 </template>
 <script setup lang="ts">
 import{computed,onMounted,onUnmounted,ref,watch}from'vue';import{useAuthStore}from'@/stores/auth';import{bookingRequestsService,type BookingRequestRow}from'@/services/bookingRequests';
+import { isUnderFourteen } from '@/services/patientAge';
 import BookingRequestApproval from '@/components/BookingRequestApproval.vue';
 import type {BookingApprovalResult} from '@/services/bookingRequests';
+function isChildBirthDate(dateOfBirth?: string | null): boolean { return !!dateOfBirth && isUnderFourteen(dateOfBirth); }
+function parseRequestNotes(notes?: string | null): { guardian: string | null; note: string | null } {
+  if (!notes) return { guardian: null, note: null };
+  const match = notes.match(/\[Giám hộ:\s*([^\]]+)\]/);
+  const guardian = match ? match[1].trim() : null;
+  const cleaned = notes.replace(/\[Giám hộ:\s*[^\]]+\]/g, '').trim();
+  return { guardian, note: cleaned || null };
+}
 const approvingId=ref<number|null>(null),approvalBusy=ref(false);
 const auth=useAuthStore(),rows=ref<BookingRequestRow[]>([]),page=ref(1),hasNext=ref(false),busy=ref(false),error=ref(''),message=ref(''),selected=ref<BookingRequestRow|null>(null),reason=ref(''),confirmed=ref(false),needsReview=ref(false);let generation=0,disposed=false;
 let reviewDialogEl:HTMLDialogElement|null=null;
@@ -207,7 +220,7 @@ async function load(next=1){if(disposed||approvalBusy.value||busy.value||!allowe
  catch{if(alive(t,o))error.value='Không tải được danh sách yêu cầu hoặc bạn không có quyền.';}finally{if(alive(t,o))busy.value=false;}}
 function choose(row:BookingRequestRow){if(disposed||approvalBusy.value||busy.value||needsReview.value||!allowed()||!rows.value.some(x=>x.id===row.id&&x.version===row.version))return;approvingId.value=null;selected.value=row;reason.value='';confirmed.value=false;message.value='';}
 function chooseApproval(row:BookingRequestRow){if(disposed||approvalBusy.value||busy.value||needsReview.value||!allowed()||!rows.value.some(x=>x.id===row.id&&x.version===row.version))return;selected.value=null;reason.value='';confirmed.value=false;approvingId.value=row.id;message.value='';}
-function approved(result:BookingApprovalResult){if(disposed||!allowed())return;clear();needsReview.value=true;message.value=`Đã xác nhận lịch #${result.appointmentId}. Tài khoản sẽ được xử lý tại quầy khi khách check-in. Tải lại danh sách để tiếp tục.`;}
+function approved(result:BookingApprovalResult){if(disposed||!allowed())return;const wasChild=isChildBirthDate(approvingRow.value?.dateOfBirth);clear();needsReview.value=true;message.value=wasChild?`Đã xác nhận lịch #${result.appointmentId}. Trẻ dưới 14 tuổi không tạo tài khoản riêng (trạng thái Thiếu tài khoản cho tới khi liên kết người giám hộ tại quầy). Tải lại danh sách để tiếp tục.`:`Đã xác nhận lịch #${result.appointmentId}. Tài khoản sẽ được xử lý tại quầy khi khách check-in. Tải lại danh sách để tiếp tục.`;}
 async function reject(){if(disposed||approvalBusy.value||busy.value||needsReview.value||!allowed()||!selected.value||!confirmed.value||!reason.value.trim()||reason.value.length>500||reason.value.includes('\0'))return;
  const row=selected.value,note=reason.value,t=generation,o=identity();busy.value=true;error.value='';confirmed.value=false;
  try{await bookingRequestsService.reject(row.id,row.version,note);if(!alive(t,o))return;clear();message.value='Đã từ chối yêu cầu và nhả chỗ. Tải lại để tiếp tục.';needsReview.value=true;}
@@ -231,6 +244,8 @@ watch(identity,()=>{generation++;busy.value=false;clear();error.value='';message
 .patient-main { display: flex; align-items: center; gap: 0.5rem; }
 .patient-main h2 { margin: 0; font-size: 1.2rem; color: #0f172a; }
 .badge-returning { background: #dcfce7; color: #15803d; font-size: 0.75rem; font-weight: 600; padding: 0.2rem 0.5rem; border-radius: 9999px; }
+.badge-child { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; font-size: 0.75rem; font-weight: 700; padding: 0.2rem 0.55rem; border-radius: 9999px; }
+.request-guardian { background: #eff8ff; border: 1px solid #bfdbfe; border-left: 3px solid #1857b6; border-radius: 8px; padding: 0.55rem 0.85rem; font-size: 0.85rem; color: #102e56; margin: 0.5rem 0; }
 .request-id { font-size: 0.85rem; color: #64748b; font-weight: 600; }
 
 .details-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.85rem; margin: 0.75rem 0; }

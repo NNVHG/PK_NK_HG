@@ -77,6 +77,7 @@ import { computed, nextTick, onUnmounted, reactive, ref, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import CameraCccdScanner from '@/components/CameraCccdScanner.vue';
 import { decodeCitizenQr, validQrBirthDate, qrPatientIntakeService, type ScannedIdentity, type QrExistingPatient } from '@/services/qrPatientIntake';
+import { isUnderFourteen } from '@/services/patientAge';
 import type { PatientDuplicateInfo } from '@/services/patients';
 
 const emit = defineEmits<{created:[]}>();
@@ -171,6 +172,10 @@ async function scan(value?: string) {
   try {
     const decoded = await decodeCitizenQr(input);
     if (!alive(ticket, owner)) return;
+    if (isUnderFourteen(decoded.dateOfBirth)) {
+      error.value = 'Người dưới 14 tuổi không sử dụng CCCD để tạo hồ sơ. Vui lòng tạo hồ sơ trẻ em và xác nhận người giám hộ.';
+      return;
+    }
     const result = await qrPatientIntakeService.lookup(decoded.citizenId);
     if (!alive(ticket, owner)) return;
     if (!result || !('existing' in result) || result.existing === undefined) throw Error();
@@ -195,6 +200,10 @@ async function save() {
   if (disposed || busy.value || needsReview.value || !opened.value || !allowed.value || !identity.value || existing.value || !confirmed.value || (duplicates.value.length && !duplicateIdentityConfirmed.value)) return;
   if (!form.fullName.trim() || form.fullName.length > 100 || !/^0[0-9]{9}$/.test(form.phone) || form.phone.length !== 10 || !validQrBirthDate(form.dateOfBirth) || !['Male','Female'].includes(form.gender) || form.address.length > 500) {
     error.value = 'Kiểm tra họ tên, ngày sinh, SĐT 10 số và địa chỉ.';
+    return;
+  }
+  if (isUnderFourteen(form.dateOfBirth)) {
+    error.value = 'Người dưới 14 tuổi không sử dụng CCCD để tạo hồ sơ. Vui lòng tạo hồ sơ trẻ em và xác nhận người giám hộ.';
     return;
   }
   const ticket = ++generation;

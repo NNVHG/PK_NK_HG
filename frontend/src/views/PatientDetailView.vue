@@ -14,6 +14,9 @@
           <h1>{{ patientDisplayName(patient.fullName) }}</h1>
           <div class="quick-facts">
             <span>{{ calculateAge(patient.dateOfBirth) }} tuổi</span>
+            <span v-if="isChildPatient" class="fact-child">👶 Trẻ em (&lt; 14 tuổi)</span>
+            <span v-if="isChildPatient && !patient.hasActiveGuardian" class="fact-missing">⚠️ Thiếu tài khoản giám hộ</span>
+            <span v-else-if="isChildPatient && patient.hasActiveGuardian" class="fact-linked">👨‍👩‍👧 Đã liên kết giám hộ</span>
             <span>{{ formatPatientGender(patient.gender) }}</span>
             <span v-if="isDemoPatient(patient.fullName)">Hồ sơ mẫu</span>
             <span>{{ patient.phone || 'Chưa cập nhật' }}</span>
@@ -272,6 +275,7 @@ import {
   type VisitDetails
 } from '@/services/patients';
 import { useAuthStore } from '@/stores/auth';
+import { isUnderFourteen } from '@/services/patientAge';
 import { formatPatientGender, isDemoPatient, patientDisplayAddress, patientDisplayName, patientGenderValue } from '@/utils/patientDisplay';
 import { visitsService, type PostTreatmentNote } from '@/services/visits';
 
@@ -292,10 +296,7 @@ const tabIds: TabId[] = ['info', 'timeline', 'history', 'vitals', 'prescriptions
 const queryTab = Array.isArray(route.query.tab) ? route.query.tab[0] : route.query.tab;
 const activeTab = ref<TabId>(tabIds.find(id => id === queryTab) ?? 'info');
 const isPatientView = computed(() => authStore.role === 'PATIENT');
-const isChildPatient = computed(() => {
-  const age = calculateAge(patient.value?.dateOfBirth ?? '');
-  return typeof age === 'number' && age < 14;
-});
+const isChildPatient = computed(() => Boolean(patient.value?.dateOfBirth && isUnderFourteen(patient.value.dateOfBirth)));
 const tabs: Array<{ id: TabId; label: string }> = [
   { id: 'info', label: 'Thông tin' }, { id: 'timeline', label: 'Lịch sử khám' },
   { id: 'prescriptions', label: 'Đơn thuốc' }, { id: 'images', label: 'Ảnh hồ sơ' }, { id: 'history', label: 'Tiền sử & dị ứng' }, { id: 'vitals', label: 'Sinh hiệu' }
@@ -820,6 +821,9 @@ function formatVisitStatus(status: string): string {
 .eyebrow { margin: 0 0 0.3rem; color: #1857b6; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.09em; }
 .quick-facts { display: flex; flex-wrap: wrap; gap: 0.55rem; }
 .quick-facts span, .visit-flags span { border-radius: 99px; padding: 0.3rem 0.7rem; background: #eef5fb; color: #365268; font-size: 0.82rem; font-weight: 600; }
+.quick-facts .fact-child { background: #dbeafe; color: #1e40af; font-weight: 700; }
+.quick-facts .fact-missing { background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; font-weight: 700; }
+.quick-facts .fact-linked { background: #dcfce7; color: #166534; font-weight: 700; }
 .button { border: 1px solid #cbdbe4; border-radius: 10px; padding: 0.58rem 0.95rem; font-weight: 700; cursor: pointer; transition: all 0.15s ease; }
 .button-primary { border-color: #1857b6; background: #1857b6; color: #fff; }
 .button-primary:hover:not(:disabled) { background: #134898; border-color: #134898; }

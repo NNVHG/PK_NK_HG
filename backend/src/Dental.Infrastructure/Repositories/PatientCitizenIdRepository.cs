@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
 namespace Dental.Infrastructure.Repositories;
-public sealed class PatientCitizenIdRepository(DentalDbContext db, IKeyedIdentityHasher identityHasher) : IPatientCitizenIdRepository
+public sealed class PatientCitizenIdRepository(DentalDbContext db, IKeyedIdentityHasher identityHasher, VietnamClock? clock = null) : IPatientCitizenIdRepository
 {
     public async Task<Result<CitizenIdStatus>> ReadAsync(int patientId, int actorId, string role, CancellationToken ct)
     {
@@ -32,6 +32,9 @@ public sealed class PatientCitizenIdRepository(DentalDbContext db, IKeyedIdentit
                 return Result<CitizenIdStatus>.Failure(Error.Forbidden);
             var p = await db.Patients.SingleOrDefaultAsync(p => p.PatientId == patientId, ct);
             if (p is null) return Result<CitizenIdStatus>.Failure(Error.NotFound);
+            var today = (clock ?? new VietnamClock(TimeProvider.System)).Today;
+            if (PatientAccountAge.IsUnderMinimumAge(p.DateOfBirth, today))
+                return Result<CitizenIdStatus>.Failure(new Error("PAT_CHILD_NO_CITIZEN_ID", "Bệnh nhân dưới 14 tuổi không gắn CCCD riêng."));
             if (p.CitizenIdVersion != request.ExpectedVersion) return Conflict();
             var hash = identityHasher.Hash(request.CitizenId);
             var legacyHash = CitizenIdIdentity.Hash(request.CitizenId);

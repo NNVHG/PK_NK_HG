@@ -54,7 +54,11 @@
         <div class="queue-entry-header">
           <span class="queue-ticket">{{ numberLabel(row.queueNumber) }}</span>
           <div class="queue-patient">
-            <strong>{{ row.patientName }}</strong>
+            <div class="queue-patient-row">
+              <strong>{{ row.patientName }}</strong>
+              <span v-if="row.isChildPatient" class="child-pill">👶 Trẻ &lt;14</span>
+              <span v-if="row.missingGuardianAccount" class="missing-account-pill">⚠️ Thiếu tài khoản</span>
+            </div>
             <span>{{ row.patientCode }} · {{ row.queueDate }}</span>
           </div>
           <span class="status-pill" :class="`status-${row.status}`">{{ row.statusText }}</span>
@@ -555,8 +559,12 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visi
 .queue-entry-header { display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; align-items: center; gap: .85rem; }
 .queue-ticket { display: grid; place-items: center; min-height: 46px; border-radius: 10px; color: #075f5e; background: #e8f5f3; font-size: .95rem; font-weight: 850; letter-spacing: .015em; }
 .queue-patient { display: grid; min-width: 0; gap: .2rem; }
+.queue-patient-row { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
 .queue-patient strong { color: #183149; font-size: 1.02rem; line-height: 1.3; }
-.queue-patient span { color: var(--muted); font-size: .82rem; }
+.queue-patient > span { color: var(--muted); font-size: .82rem; }
+.child-pill, .missing-account-pill { display: inline-flex; align-items: center; padding: .15rem .5rem; border-radius: 999px; font-size: .73rem; font-weight: 700; line-height: 1.2; }
+.child-pill { background: #dbeafe; color: #1e40af; }
+.missing-account-pill { background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; }
 .status-pill, .priority-pill, .queue-type { display: inline-flex; align-items: center; justify-content: center; width: fit-content; min-height: 28px; padding: .3rem .65rem; border-radius: 999px; font-size: .78rem; font-weight: 750; line-height: 1.2; }
 .status-pill { background: #f1f5f8; color: #53687b; }
 .status-1 { background: #fff4da; color: #87590d; }

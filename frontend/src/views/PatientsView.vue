@@ -138,6 +138,69 @@
           </label>
         </div>
 
+        <div v-if="isChildForm" class="child-guardian-box">
+          <div class="child-guardian-head">
+            <strong>👶 Hồ sơ trẻ dưới 14 tuổi</strong>
+            <span v-if="confirmedGuardianPatient || editingPatientHasActiveGuardian" class="linked-guardian-tag">👨‍👩‍👧 Có giám hộ</span>
+            <span v-else class="missing-account-tag">⚠️ Thiếu tài khoản</span>
+          </div>
+          <p class="child-guardian-hint">
+            Trẻ dưới 14 tuổi không có CCCD hoặc tài khoản đăng nhập riêng. Vui lòng tra cứu và xác nhận người giám hộ có tài khoản; nếu chưa có tài khoản giám hộ phù hợp, hồ sơ trẻ vẫn được lưu với trạng thái <strong>Thiếu tài khoản</strong>.
+          </p>
+          <div v-if="editingPatientId === null || !editingPatientHasActiveGuardian" class="guardian-assign-inline">
+            <div class="guardian-lookup-row">
+              <input
+                v-model.trim="guardianKeyword"
+                type="text"
+                placeholder="Tìm người giám hộ theo SĐT hoặc họ tên"
+                :disabled="saving || formLoading || guardianSearching"
+              />
+              <button
+                type="button"
+                class="button button-quiet"
+                :disabled="saving || formLoading || guardianSearching"
+                @click="searchGuardianCandidates"
+              >
+                {{ guardianSearching ? 'Đang tìm...' : 'Tra cứu giám hộ' }}
+              </button>
+            </div>
+            <div v-if="confirmedGuardianPatient" class="guardian-confirmed-pill">
+              <span>✓ Đã xác nhận giám hộ: <strong>{{ confirmedGuardianPatient.fullName }}</strong> ({{ confirmedGuardianPatient.patientCode }} · {{ confirmedGuardianPatient.phone }} · {{ guardianRelationship }})</span>
+              <button type="button" class="link-button" :disabled="saving || formLoading" @click="clearConfirmedGuardian">Bỏ chọn</button>
+            </div>
+            <div v-else-if="guardianCandidates.length" class="guardian-candidate-picker">
+              <select v-model.number="selectedGuardianCandidateId" :disabled="saving || formLoading">
+                <option :value="0">Chọn hồ sơ người giám hộ đã đối chiếu...</option>
+                <option
+                  v-for="candidate in guardianCandidates"
+                  :key="candidate.patientId"
+                  :value="candidate.patientId"
+                  :disabled="candidate.hasUserAccount === false"
+                >
+                  {{ candidate.fullName }} · {{ candidate.phone }} · {{ candidate.patientCode }}{{ candidate.hasUserAccount === false ? ' — Chưa có tài khoản' : ' — Có tài khoản' }}
+                </option>
+              </select>
+              <select v-model="guardianRelationship" :disabled="saving || formLoading">
+                <option value="Cha">Cha</option>
+                <option value="Mẹ">Mẹ</option>
+                <option value="Người giám hộ hợp pháp">Người giám hộ hợp pháp</option>
+                <option value="Khác">Khác</option>
+              </select>
+              <button
+                type="button"
+                class="button button-primary"
+                :disabled="saving || formLoading || !selectedGuardianCandidateId"
+                @click="confirmSelectedGuardian"
+              >
+                Xác nhận người giám hộ
+              </button>
+            </div>
+            <p v-else-if="guardianSearched && !guardianSearching" class="guardian-lookup-empty">
+              Chưa tìm thấy hồ sơ người lớn có tài khoản phù hợp. Hồ sơ trẻ vẫn lưu được và mang trạng thái <strong>Thiếu tài khoản</strong> để cập nhật sau.
+            </p>
+          </div>
+        </div>
+
         <p v-if="formLoading" class="form-loading">Đang tải thông tin hồ sơ...</p>
         <p v-if="formError" class="alert alert-error" role="alert">{{ formError }}</p>
         <footer class="modal-actions">
@@ -185,6 +248,8 @@ import {
   type PatientPayload,
   type PatientSummary
 } from '@/services/patients';
+import { patientGuardiansService } from '@/services/patientGuardians';
+import { isUnderFourteen } from '@/services/patientAge';
 import { useAuthStore } from '@/stores/auth';
 import { formatPatientGender, isDemoPatient, patientDisplayAddress, patientDisplayName, patientGenderValue } from '@/utils/patientDisplay';
 
@@ -228,6 +293,20 @@ const pendingDuplicate = ref<PendingDuplicate | null>(null);
 const duplicateSaving = ref(false);
 const duplicateError = ref('');
 const form = reactive<PatientForm>(emptyForm());
+const editingPatientHasActiveGuardian = ref(false);
+const guardianKeyword = ref('');
+const guardianSearching = ref(false);
+const guardianSearched = ref(false);
+const guardianCandidates = ref<PatientSummary[]>([]);
+const selectedGuardianCandidateId = ref(0);
+const confirmedGuardianPatient = ref<PatientSummary | null>(null);
+const guardianRelationship = ref('Cha');
+
+const isChildForm = computed(() => Boolean(form.dateOfBirth && isUnderFourteen(form.dateOfBirth)));
+
+watch(isChildForm, () => {
+  resetGuardianLookup();
+});
 
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 let listRequestId = 0;
@@ -311,8 +390,51 @@ watch([formDialog, duplicateDialog], ([formElement, duplicateElement]) => {
   if (duplicateElement && !duplicateElement.open) duplicateElement.showModal();
 }, { flush: 'post' });
 
+function resetGuardianLookup() {
+  guardianKeyword.value = '';
+  guardianSearching.value = false;
+  guardianSearched.value = false;
+  guardianCandidates.value = [];
+  selectedGuardianCandidateId.value = 0;
+  confirmedGuardianPatient.value = null;
+  guardianRelationship.value = 'Cha';
+}
+
+async function searchGuardianCandidates() {
+  const query = guardianKeyword.value.trim() || form.phone.trim();
+  if (!query) return;
+  guardianKeyword.value = query;
+  guardianSearching.value = true;
+  guardianSearched.value = true;
+  confirmedGuardianPatient.value = null;
+  selectedGuardianCandidateId.value = 0;
+  try {
+    const res = await patientsService.search({ keyword: query, page: 1, pageSize: 20 });
+    guardianCandidates.value = (res.items ?? []).filter(
+      p => !isUnderFourteen(p.dateOfBirth) && p.patientId !== editingPatientId.value
+    );
+  } catch {
+    guardianCandidates.value = [];
+  } finally {
+    guardianSearching.value = false;
+  }
+}
+
+function confirmSelectedGuardian() {
+  const chosen = guardianCandidates.value.find(c => c.patientId === selectedGuardianCandidateId.value);
+  if (!chosen || chosen.hasUserAccount === false) return;
+  confirmedGuardianPatient.value = chosen;
+}
+
+function clearConfirmedGuardian() {
+  confirmedGuardianPatient.value = null;
+  selectedGuardianCandidateId.value = 0;
+}
+
 function openCreateForm() {
   editingPatientId.value = null;
+  editingPatientHasActiveGuardian.value = false;
+  resetGuardianLookup();
   Object.assign(form, emptyForm());
   formError.value = '';
   formVisible.value = true;
@@ -340,6 +462,8 @@ async function openEditForm(patient: PatientSummary) {
 }
 
 function setFormFromDetails(patient: PatientDetails) {
+  editingPatientHasActiveGuardian.value = Boolean(patient.hasActiveGuardian);
+  resetGuardianLookup();
   Object.assign(form, {
     fullName: patient.fullName,
     dateOfBirth: patient.dateOfBirth.slice(0, 10),
@@ -355,6 +479,8 @@ function closeForm() {
   formDialog.value?.close();
   formVisible.value = false;
   editingPatientId.value = null;
+  editingPatientHasActiveGuardian.value = false;
+  resetGuardianLookup();
   formError.value = '';
   Object.assign(form, emptyForm());
 }
@@ -401,15 +527,22 @@ async function savePatient() {
   }
 
   const payload = toPayload();
+  const isChild = isChildForm.value;
+  const guardianCandidate = isChild ? confirmedGuardianPatient.value : null;
+  const relationship = guardianRelationship.value;
   saving.value = true;
   try {
+    let savedPatient: PatientDetails;
     if (editingPatientId.value === null) {
-      await patientsService.create(payload);
-      finishSave('Đã tạo hồ sơ bệnh nhân thành công.');
+      savedPatient = await patientsService.create(payload);
     } else {
-      await patientsService.update(editingPatientId.value, payload);
-      finishSave('Đã cập nhật hồ sơ bệnh nhân thành công.');
+      savedPatient = await patientsService.update(editingPatientId.value, payload);
     }
+    const baseMessage = editingPatientId.value === null
+      ? 'Đã tạo hồ sơ bệnh nhân thành công.'
+      : 'Đã cập nhật hồ sơ bệnh nhân thành công.';
+    const finalMessage = await maybeAssignGuardianAfterSave(savedPatient, isChild, guardianCandidate, relationship, baseMessage);
+    finishSave(finalMessage);
   } catch (error: unknown) {
     const action: PendingDuplicate = editingPatientId.value === null
       ? { kind: 'create', payload }
@@ -444,22 +577,56 @@ function cancelDuplicate() {
 async function confirmDuplicate() {
   const action = pendingDuplicate.value;
   if (!action) return;
+  const isChild = isUnderFourteen(action.payload.dateOfBirth);
+  const guardianCandidate = isChild ? confirmedGuardianPatient.value : null;
+  const relationship = guardianRelationship.value;
   duplicateSaving.value = true;
   duplicateError.value = '';
   try {
     const payload: PatientPayload = { ...action.payload, confirmNotDuplicate: true };
+    let savedPatient: PatientDetails;
     if (action.kind === 'create') {
-      await patientsService.create(payload);
-      finishSave('Đã tạo hồ sơ bệnh nhân mới thành công.');
+      savedPatient = await patientsService.create(payload);
     } else {
-      await patientsService.update(action.patientId, payload);
-      finishSave('Đã cập nhật hồ sơ bệnh nhân thành công.');
+      savedPatient = await patientsService.update(action.patientId, payload);
     }
+    const baseMessage = action.kind === 'create'
+      ? 'Đã tạo hồ sơ bệnh nhân mới thành công.'
+      : 'Đã cập nhật hồ sơ bệnh nhân thành công.';
+    const finalMessage = await maybeAssignGuardianAfterSave(savedPatient, isChild, guardianCandidate, relationship, baseMessage);
+    finishSave(finalMessage);
   } catch (error: unknown) {
     duplicateError.value = backendError(error, 'Không thể lưu hồ sơ. Vui lòng thử lại.');
   } finally {
     duplicateSaving.value = false;
   }
+}
+
+async function maybeAssignGuardianAfterSave(
+  savedPatient: PatientDetails | undefined,
+  isChild: boolean,
+  guardianCandidate: PatientSummary | null,
+  relationship: string,
+  baseMessage: string
+): Promise<string> {
+  if (!isChild) return baseMessage;
+  if (guardianCandidate && savedPatient?.patientId) {
+    try {
+      await patientGuardiansService.assign({
+        guardianPatientId: guardianCandidate.patientId,
+        wardPatientId: savedPatient.patientId,
+        relationship,
+        verifiedAtCounter: true,
+        notes: 'Liên kết người giám hộ khi tạo/cập nhật hồ sơ trẻ em'
+      });
+      return `${baseMessage} Đã liên kết tài khoản người giám hộ.`;
+    } catch {
+      return `${baseMessage} Chưa thể tự gán giám hộ; vui lòng kiểm tra lại tại chi tiết hồ sơ.`;
+    }
+  }
+  return savedPatient?.hasActiveGuardian
+    ? baseMessage
+    : `${baseMessage} Hồ sơ trẻ đang đánh dấu Thiếu tài khoản.`;
 }
 
 function finishSave(message: string) {
@@ -470,6 +637,8 @@ function finishSave(message: string) {
   pendingDuplicate.value = null;
   formVisible.value = false;
   editingPatientId.value = null;
+  editingPatientHasActiveGuardian.value = false;
+  resetGuardianLookup();
   Object.assign(form, emptyForm());
   successMessage.value = message;
   void loadPatients();
@@ -642,6 +811,9 @@ tbody tr:hover { background: #f7fbfd; }
 .patient-name { color: #153f5b; font-weight: 750; overflow-wrap: anywhere; }
 .identity-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-top: 0.3rem; font-size: 0.78rem; }
 .sample-tag { padding: 0.13rem 0.45rem; border-radius: 6px; color: #5b4524; background: #fff1d6; }
+.child-tag { padding: 0.13rem 0.5rem; border-radius: 999px; background: #dbeafe; color: #1e40af; font-weight: 700; }
+.missing-account-tag { padding: 0.13rem 0.5rem; border-radius: 999px; background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; font-weight: 700; }
+.linked-guardian-tag { padding: 0.13rem 0.5rem; border-radius: 999px; background: #dcfce7; color: #166534; font-weight: 700; }
 .patient-phone { font-variant-numeric: tabular-nums; }
 .mobile-field { display: none; }
 
@@ -796,6 +968,85 @@ tbody tr:hover { background: #f7fbfd; }
   margin: 0;
   color: #748394;
   font-size: 0.85rem;
+}
+
+.child-guardian-box {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.85rem;
+  border-radius: 10px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+}
+
+.child-guardian-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  color: #0f2d59;
+  font-size: 0.88rem;
+}
+
+.child-guardian-hint {
+  margin: 0;
+  color: #365268;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.guardian-assign-inline {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.guardian-lookup-row,
+.guardian-candidate-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.guardian-lookup-row input,
+.guardian-candidate-picker select {
+  flex: 1 1 180px;
+  min-width: 0;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.86rem;
+}
+
+.guardian-confirmed-pill {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  background: #ecfdf5;
+  border: 1px solid #86efac;
+  color: #166534;
+  font-size: 0.84rem;
+}
+
+.guardian-lookup-empty {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #92400e;
+}
+
+.link-button {
+  border: 0;
+  background: transparent;
+  color: #1857b6;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
 }
 
 .modal-actions {

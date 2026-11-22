@@ -7,6 +7,10 @@ export interface PatientSummary {
   dateOfBirth: string;
   gender: string | null;
   phone: string;
+  hasUserAccount?: boolean;
+  hasActiveGuardian?: boolean;
+  isUnderFourteen?: boolean;
+  missingGuardianAccount?: boolean;
 }
 
 export interface PatientDetails extends PatientSummary {

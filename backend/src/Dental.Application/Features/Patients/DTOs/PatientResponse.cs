@@ -9,4 +9,8 @@ public sealed record PatientResponse(
     string Phone,
     string? Email,
     string? Address,
-    bool IsActive);
+    bool IsActive,
+    bool HasUserAccount = false,
+    bool HasActiveGuardian = false,
+    bool IsUnderFourteen = false,
+    bool MissingGuardianAccount = false);

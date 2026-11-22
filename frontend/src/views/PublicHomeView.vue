@@ -1,7 +1,7 @@
 <template>
   <div class="home">
     <!-- 1. Thanh điều hướng chính (1 hàng gọn gàng, 4 mục ngắn + 2 nút cố định không bao giờ bị che) -->
-    <header class="topbar">
+    <header v-if="!isLoggedInPatient" class="topbar" :data-menu-open="mobileMenuOpen">
       <div class="topbar-inner">
         <RouterLink class="brand" to="/" aria-label="Nha khoa Hoàng Gia - Trang chủ">
           <img src="/logo-ngang.svg" alt="" width="158" height="42" />
@@ -32,9 +32,35 @@
 
         <div class="nav-actions">
           <RouterLink class="login-link" to="/login">Đăng nhập</RouterLink>
-          <RouterLink class="button button-gold nav-book" to="/book-appointment">Đặt lịch khám</RouterLink>
+          <RouterLink class="button button-gold nav-book" :to="bookingTarget()">Đặt lịch khám</RouterLink>
+        </div>
+
+        <div class="mobile-header-controls">
+          <RouterLink class="button button-gold mobile-quick-book" :to="bookingTarget()">Đặt lịch</RouterLink>
+          <button
+            type="button"
+            class="mobile-menu-toggle"
+            aria-controls="home-mobile-nav"
+            :aria-expanded="mobileMenuOpen"
+            :aria-label="mobileMenuOpen ? 'Đóng menu' : 'Mở menu'"
+            @click="mobileMenuOpen = !mobileMenuOpen"
+          >
+            <span aria-hidden="true">{{ mobileMenuOpen ? '✕' : '☰' }}</span>
+          </button>
         </div>
       </div>
+
+      <nav v-show="mobileMenuOpen" id="home-mobile-nav" class="mobile-nav-drawer" aria-label="Menu điều hướng di động">
+        <a class="mobile-nav-link" href="#chuyen-khoa" @click.prevent="scrollToSection('chuyen-khoa')">Dịch vụ</a>
+        <a class="mobile-nav-link" href="#so-do-fdi" @click.prevent="scrollToSection('so-do-fdi')">Sơ đồ FDI</a>
+        <a class="mobile-nav-link" href="#minh-bach-chi-phi" @click.prevent="scrollToSection('minh-bach-chi-phi')">Bảng giá</a>
+        <a class="mobile-nav-link" href="#cach-dat-lich" @click.prevent="scrollToSection('cach-dat-lich')">Quy trình</a>
+        <a class="mobile-nav-link" href="#cau-hoi-thuong-gap" @click.prevent="scrollToSection('cau-hoi-thuong-gap')">Hỏi đáp</a>
+        <div class="mobile-nav-actions">
+          <RouterLink class="login-link mobile-drawer-btn" to="/login" @click="mobileMenuOpen = false">Đăng nhập</RouterLink>
+          <RouterLink class="button button-gold mobile-drawer-btn" :to="bookingTarget()" @click="mobileMenuOpen = false">Đặt lịch khám</RouterLink>
+        </div>
+      </nav>
     </header>
 
     <!-- 2. Khối Hero Thương hiệu Hoàng Gia (Phối màu Trắng Sứ & Xanh Lam Ngọc hài hòa) -->
@@ -47,7 +73,7 @@
             Chọn ngày và khung giờ phù hợp để gửi yêu cầu đặt lịch khám chỉ trong vài bước. Bạn không cần đăng nhập hay nhập mã OTP khi đặt lịch — mọi ca khám đều được theo dõi trên <strong>Sơ đồ răng giải phẫu FDI điện tử</strong>, kiểm soát an toàn sinh hiệu &amp; tiền sử dị ứng và minh bạch chi phí theo từng giai đoạn điều trị.
           </p>
           <div class="hero-actions">
-            <RouterLink class="button button-gold hero-btn-main" to="/book-appointment">
+            <RouterLink class="button button-gold hero-btn-main" :to="bookingTarget()">
               Đặt lịch khám ngay <span aria-hidden="true">→</span>
             </RouterLink>
             <a class="button button-outline" href="#so-do-fdi" @click.prevent="scrollToSection('so-do-fdi')">
@@ -146,7 +172,7 @@
               <strong>3. Hỗ trợ Hồ sơ Người giám hộ</strong>
               <span>Đặt lịch và xem sơ đồ 20 răng sữa cho các bé trong gia đình</span>
             </div>
-            <RouterLink class="button button-primary dock-cta" to="/book-appointment">
+            <RouterLink class="button button-primary dock-cta" :to="bookingTarget()">
               Chọn khung giờ &amp; Đặt lịch <span aria-hidden="true">→</span>
             </RouterLink>
           </div>
@@ -163,7 +189,7 @@
             <h2 id="specialties-heading">Giải pháp Nha khoa Chuyên sâu cho Mọi Nụ cười</h2>
             <p>Phân tầng rõ ràng giữa điều trị phục hình chuyên sâu, chỉnh nha dài hạn và chăm sóc răng miệng định kỳ trên Sơ đồ răng FDI.</p>
           </div>
-          <RouterLink class="button button-outline" to="/book-appointment">Đặt lịch tư vấn chuyên khoa →</RouterLink>
+          <RouterLink class="button button-outline" :to="bookingTarget()">Đặt lịch tư vấn chuyên khoa →</RouterLink>
         </div>
 
         <div class="bento-grid">
@@ -189,7 +215,7 @@
             </div>
             <div class="bento-foot">
               <span class="bento-highlight">Khóa đơn giá cố định (snapshot) ngay khi thống nhất phác đồ</span>
-              <RouterLink class="button button-primary button-sm" to="/book-appointment">Đặt lịch tư vấn Phục hình →</RouterLink>
+              <RouterLink class="button button-primary button-sm" :to="bookingTarget('Phục hình Răng sứ & Cấy ghép Trụ răng Titanium')">Đặt lịch tư vấn Phục hình →</RouterLink>
             </div>
           </article>
 
@@ -210,7 +236,7 @@
             </ul>
             <div class="bento-foot">
               <span class="bento-highlight">Thanh toán đợt đầu 30% – 40%</span>
-              <RouterLink class="specialty-cta" to="/book-appointment">Đặt lịch Chỉnh nha →</RouterLink>
+              <RouterLink class="specialty-cta" :to="bookingTarget('Chỉnh nha — Niềng răng Mắc cài & Khay trong suốt')">Đặt lịch Chỉnh nha →</RouterLink>
             </div>
           </article>
 
@@ -227,7 +253,7 @@
             </ul>
             <div class="bento-foot">
               <span class="specialty-note">{{ item.paymentMode }}</span>
-              <RouterLink class="specialty-cta" to="/book-appointment">Đặt lịch →</RouterLink>
+              <RouterLink class="specialty-cta" :to="bookingTarget(item.title)">Đặt lịch →</RouterLink>
             </div>
           </article>
 
@@ -239,7 +265,7 @@
                 <h3>Khám lập phác đồ Sơ đồ răng FDI · Lấy cao răng siêu âm · Tẩy trắng răng · Chụp X-quang kỹ thuật số</h3>
                 <p>Thực hiện nhanh gọn trong 15–45 phút: kiểm tra toàn diện 5 mặt răng (Ngoài, Trong, Gần, Xa, Nhai), làm sạch mảng bám dưới nướu êm ái và chụp phim kỹ thuật số liều tia thấp gắn trực tiếp vào hồ sơ răng.</p>
               </div>
-              <RouterLink class="button button-outline" to="/book-appointment">Đặt lịch khám định kỳ →</RouterLink>
+              <RouterLink class="button button-outline" :to="bookingTarget('Khám lập phác đồ Sơ đồ răng FDI & Chăm sóc định kỳ')">Đặt lịch khám định kỳ →</RouterLink>
             </div>
           </article>
         </div>
@@ -619,7 +645,7 @@
           <p>Thực hiện điều trị vô khuẩn, nhận đơn thuốc điện tử có mã QR và tra cứu lịch sử đợt trả trên Cổng bệnh nhân.</p>
         </article>
       </div>
-      <RouterLink class="guide-link" to="/book-appointment">Gửi yêu cầu đặt lịch <span aria-hidden="true">→</span></RouterLink>
+      <RouterLink class="guide-link" :to="bookingTarget()">Gửi yêu cầu đặt lịch <span aria-hidden="true">→</span></RouterLink>
     </section>
 
     <!-- 8. Câu hỏi thường gặp (Editorial Split 4 Cột + 8 Cột) -->
@@ -633,7 +659,7 @@
             <div class="faq-help-box">
               <strong>Bạn cần hỗ trợ chọn khung giờ khám?</strong>
               <p>Gửi yêu cầu đặt lịch trực tuyến, Lễ tân sẽ gọi lại tư vấn chi tiết cho bạn và gia đình.</p>
-              <RouterLink class="button button-primary button-sm" to="/book-appointment">Đặt lịch hẹn ngay →</RouterLink>
+              <RouterLink class="button button-primary button-sm" :to="bookingTarget()">Đặt lịch hẹn ngay →</RouterLink>
             </div>
           </div>
           <div class="bento-8 faq-grid">
@@ -659,7 +685,7 @@
             </div>
           </div>
           <div class="cta-buttons">
-            <RouterLink class="button button-gold" to="/book-appointment">Đặt lịch khám ngay <span aria-hidden="true">→</span></RouterLink>
+            <RouterLink class="button button-gold" :to="bookingTarget()">Đặt lịch khám ngay <span aria-hidden="true">→</span></RouterLink>
             <RouterLink class="button button-light" to="/login">Đăng nhập Cổng bệnh nhân</RouterLink>
           </div>
         </div>
@@ -682,7 +708,7 @@
         </div>
         <div class="footer-col">
           <h4>Dành cho khách hàng</h4>
-          <RouterLink to="/book-appointment">Đặt lịch khám trực tuyến</RouterLink>
+          <RouterLink :to="bookingTarget()">Đặt lịch khám trực tuyến</RouterLink>
           <RouterLink to="/login">Đăng nhập Cổng bệnh nhân</RouterLink>
           <RouterLink to="/forgot-password">Khôi phục mật khẩu</RouterLink>
         </div>
@@ -702,15 +728,31 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
+
+const authStore = useAuthStore();
+const isLoggedInPatient = computed(() => authStore.isAuthenticated && authStore.role === 'PATIENT');
+const mobileMenuOpen = ref(false);
+
+function bookingTarget(service?: string) {
+  if (isLoggedInPatient.value) {
+    return {
+      path: '/patient/appointments/mine',
+      query: service ? { tab: 'book', service } : { tab: 'book' }
+    };
+  }
+  return service ? { path: '/book-appointment', query: { service } } : '/book-appointment';
+}
 
 // Cuộn trượt mượt mà xuống các phân đoạn chức năng thay vì nhảy chuyển trang
 function scrollToSection(targetId: string) {
+  mobileMenuOpen.value = false;
   const el = document.getElementById(targetId);
   if (!el) return;
 
-  const header = document.querySelector('.topbar') as HTMLElement | null;
+  const header = document.querySelector('.topbar, .patient-topbar') as HTMLElement | null;
   const headerHeight = header ? header.offsetHeight : 70;
   const elementPosition = el.getBoundingClientRect().top;
   const offsetPosition = elementPosition + window.pageYOffset - headerHeight - 12;
@@ -725,13 +767,32 @@ function scrollToSection(targetId: string) {
   }
 }
 
+function handleHomeKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && mobileMenuOpen.value) {
+    mobileMenuOpen.value = false;
+  }
+}
+
+function handleHomeResize() {
+  if (window.innerWidth > 820 && mobileMenuOpen.value) {
+    mobileMenuOpen.value = false;
+  }
+}
+
 onMounted(() => {
+  document.addEventListener('keydown', handleHomeKeydown);
+  window.addEventListener('resize', handleHomeResize);
   if (window.location.hash) {
     const hash = window.location.hash.replace('#', '');
     setTimeout(() => {
       scrollToSection(hash);
     }, 150);
   }
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', handleHomeKeydown);
+  window.removeEventListener('resize', handleHomeResize);
 });
 
 // --- SƠ ĐỒ RĂNG GIẢI PHẪU FDI MẪU (32 RĂNG NGƯỜI LỚN & 20 RĂNG SỮA) ---
@@ -1015,8 +1076,8 @@ const faqs = [
 
 <style scoped>
 /* Bảng màu Sáng Trắng Sứ & Xanh Lam Ngọc hài hòa chuẩn Nha khoa Hoàng Gia */
-.home { min-height: 100vh; color: #18354c; background: #f8fbff; scroll-behavior: smooth; }
-.container { max-width: 1200px; margin: 0 auto; padding: 0 24px; box-sizing: border-box; }
+.home { min-height: 100vh; overflow-x: clip; max-width: 100%; color: #18354c; background: #f8fbff; scroll-behavior: smooth; }
+.container { max-width: 1200px; width: 100%; margin: 0 auto; padding: 0 24px; box-sizing: border-box; }
 
 /* Trượt xuống mượt mà và cách đỉnh bù trừ chiều cao sticky header */
 #chuyen-khoa, #so-do-fdi, #minh-bach-chi-phi, #cach-dat-lich, #cau-hoi-thuong-gap, .section-block, .guide {
@@ -1076,6 +1137,35 @@ const faqs = [
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
+}
+.mobile-header-controls {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.mobile-quick-book {
+  min-height: 36px;
+  padding: 0 11px;
+  font-size: .8rem;
+  border-radius: 9px;
+}
+.mobile-menu-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid #c9dceb;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #102e56;
+  font-size: 1.15rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mobile-nav-drawer {
+  display: none;
 }
 .login-link {
   color: #1857b6;
@@ -1331,6 +1421,8 @@ h1 span { color: #397bcc; }
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-width: 0;
+  box-sizing: border-box;
   transition: transform .18s ease, box-shadow .18s ease;
 }
 .bento-card:hover { transform: translateY(-2px); box-shadow: 0 14px 32px rgba(16, 46, 86, 0.08); }
@@ -1392,7 +1484,7 @@ h1 span { color: #397bcc; }
 }
 .dent-btn.active { background: #1857b6; color: #ffffff; box-shadow: 0 4px 12px rgba(24,87,182,.2); }
 
-.fdi-showcase-grid { display: grid; grid-template-columns: 1.32fr .68fr; gap: 20px; align-items: stretch; }
+.fdi-showcase-grid { display: grid; grid-template-columns: minmax(0, 1.32fr) minmax(0, .68fr); gap: 20px; align-items: stretch; }
 .fdi-sample-card, .safety-protocol-card {
   background: #ffffff;
   border: 1px solid #d5e6f7;
@@ -1402,6 +1494,9 @@ h1 span { color: #397bcc; }
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 .fdi-sample-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .fdi-sample-head strong { display: block; color: #102e56; font-size: .98rem; }
@@ -1665,32 +1760,82 @@ a:focus-visible, button:focus-visible { outline: 3px solid #c3881d; outline-offs
   .billing-sticky-card { position: static; }
   .dock-pillars { grid-template-columns: 1fr 1fr; }
   .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .fdi-showcase-grid, .footer-grid { grid-template-columns: 1fr; }
+  .fdi-showcase-grid, .footer-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (max-width: 820px) {
-  .topbar-inner { min-height: 62px; padding: 8px 14px; flex-wrap: wrap; gap: 8px; }
-  .brand img { width: 132px; }
-  .nav-actions { order: 2; }
-  .nav-center {
-    order: 3;
-    width: 100%;
-    justify-content: flex-start;
-    overflow-x: auto;
-    padding-top: 4px;
-    scrollbar-width: none;
+  .container { padding: 0 14px; }
+  .topbar-inner { min-height: 60px; padding: 8px 14px; gap: 8px; }
+  .brand img { width: 128px; }
+  .nav-center, .nav-actions { display: none; }
+  .mobile-header-controls { display: flex; }
+  .mobile-nav-drawer {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 14px 14px;
+    border-top: 1px solid #e4eef6;
+    background: #ffffff;
+    box-shadow: 0 10px 24px rgba(16, 46, 86, 0.08);
   }
-  .nav-center::-webkit-scrollbar { display: none; }
-  .nav-link { font-size: .8rem; padding: 6px 10px; background: #f1f5f9; }
-  .login-link { padding: 7px 12px; font-size: .8rem; }
-  .nav-book { min-height: 36px; padding: 0 12px; font-size: .8rem; }
-  .hero-inner { grid-template-columns: 1fr; gap: 18px; padding: 28px 16px 52px; }
+  .mobile-nav-link {
+    display: flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 0 12px;
+    border-radius: 10px;
+    background: #f4f8fd;
+    color: #102e56;
+    font-size: .9rem;
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .mobile-nav-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .mobile-drawer-btn {
+    width: 100%;
+    text-align: center;
+    box-sizing: border-box;
+    min-height: 40px;
+    padding: 8px 10px;
+  }
+  .hero-inner { grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 24px 14px 48px; }
+  .hero-actions .button { width: 100%; }
   .hero-metrics-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .hero-float-badge { position: static; margin-top: 8px; }
-  .hero-trust-badge { position: static; margin-top: 12px; }
-  .flagship-subgrid, .dock-pillars, .steps, .faq-grid, .footer-grid { grid-template-columns: 1fr; }
+  .hero-stage { min-height: auto; }
+  .hero-art { min-height: 230px; }
+  .hero-art:before { width: 224px; height: 224px; }
+  .art-orbit-outer { width: 214px; }
+  .art-orbit-inner { width: 176px; }
+  .art-medallion { width: 144px; }
+  .hero-float-badge { position: static; margin-top: 8px; width: 100%; box-sizing: border-box; }
+  .hero-trust-badge { position: static; margin-top: 12px; flex-wrap: wrap; justify-content: center; text-align: center; }
+  .hero-note { border-radius: 14px; flex-wrap: wrap; max-width: 100%; box-sizing: border-box; }
+  .booking-dock { padding: 16px; }
+  .bento-card, .fdi-sample-card, .safety-protocol-card { padding: 16px; }
+  .dentition-switch { width: 100%; flex-wrap: wrap; box-sizing: border-box; }
+  .dent-btn { flex: 1 1 100%; text-align: center; }
+  .flagship-subgrid, .dock-pillars, .steps, .faq-grid, .footer-grid { grid-template-columns: minmax(0, 1fr); }
   .selected-tooth-inspector { flex-direction: column; align-items: flex-start; }
-  .cta-box { padding: 24px 20px; }
+  .price-menu-head { flex-direction: column; align-items: flex-start; }
+  .price-row { flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px 4px; }
+  .price-dots { display: none; }
+  .price-right { text-align: left; }
+  .guide { padding: 48px 14px; }
+  .section-block { padding: 48px 0; }
+  .cta-box { padding: 22px 16px; }
   .cta-copy { flex-direction: column; align-items: flex-start; }
+  .cta-buttons { width: 100%; }
+  .cta-buttons .button { width: 100%; }
+}
+
+@media (max-width: 380px) {
+  .brand img { width: 112px; }
+  .mobile-quick-book { padding: 0 9px; font-size: .76rem; }
+  .mobile-nav-actions { grid-template-columns: minmax(0, 1fr); }
 }
 </style>

@@ -52,6 +52,18 @@ public sealed class BookingIntentValidator:AbstractValidator<BookingIntent>
         RuleFor(x=>x.DentistId).Null().WithMessage("Khách không chọn nha sĩ khi đặt lịch; phòng khám sẽ điều phối khi tiếp đón.");
         RuleFor(x=>x.PatientId).GreaterThan(0).When(x=>x.PatientId.HasValue);
         RuleFor(x=>x.ScheduleRevision).NotEmpty().Length(64).Matches("^[A-F0-9]{64}$");
+        RuleFor(x => x.Notes)
+            .Must(HasGuardianInfo)
+            .When(x => !x.PatientId.HasValue && PatientAccountAge.IsUnderMinimumAge(x.DateOfBirth, clock.Today))
+            .WithMessage("Bệnh nhân dưới 14 tuổi phải có thông tin người giám hộ trong ghi chú ([Giám hộ: Họ tên - Quan hệ]).");
+    }
+
+    private static bool HasGuardianInfo(string? notes)
+    {
+        if (string.IsNullOrWhiteSpace(notes))
+            return false;
+        var match = System.Text.RegularExpressions.Regex.Match(notes, @"\[Giám hộ:\s*([^\]]+)\]");
+        return match.Success && !string.IsNullOrWhiteSpace(match.Groups[1].Value);
     }
 }
 public sealed class BookingRequestService(IBookingRequestRepository repository,IBookingOtp otp,VietnamClock clock)

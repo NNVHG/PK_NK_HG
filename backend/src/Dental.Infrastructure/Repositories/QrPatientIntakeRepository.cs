@@ -43,6 +43,8 @@ public sealed class QrPatientIntakeRepository(DentalDbContext db, VietnamClock c
             if (await db.Patients.AnyAsync(p => p.CitizenIdHash == hash || p.CitizenIdHash == legacyHash, ct))
                 return Result<PatientResponse>.Failure(new("PAT_QR_EXISTS", "CCCD đã có hồ sơ. Quét lại để mở hồ sơ cũ; không tạo mới."));
             var input = request.Patient;
+            if (PatientAccountAge.IsUnderMinimumAge(input.DateOfBirth, clock.Today))
+                return Result<PatientResponse>.Failure(new("PAT_CHILD_NO_CITIZEN_ID", "Người dưới 14 tuổi không sử dụng CCCD; vui lòng tiếp nhận qua hồ sơ trẻ em và người giám hộ."));
             if (!input.ConfirmNotDuplicate)
             {
                 var shared = await db.Patients.AsNoTracking().Where(p => p.Phone == input.Phone).OrderBy(p => p.PatientId).Take(20).ToListAsync(ct);

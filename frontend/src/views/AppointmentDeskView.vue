@@ -75,6 +75,8 @@
             <div class="patient-info">
               <span class="patient-name">{{ row.patientName }}</span>
               <span class="patient-code">({{ row.patientCode }})</span>
+              <span v-if="row.isChildPatient" class="child-pill">👶 Trẻ &lt;14</span>
+              <span v-if="row.missingGuardianAccount" class="missing-account-pill">⚠️ Thiếu tài khoản</span>
             </div>
 
             <div class="time-meta">
@@ -248,7 +250,10 @@ input[type="date"], select { height: 44px; padding: 0.5rem 0.75rem; border: 1px 
 .badge-checkedin { background: #dcfce7; color: #15803d; }
 .badge-completed { background: #f3e8ff; color: #6b21a8; }
 .badge-cancelled { background: #f1f5f9; color: #475569; }
-.patient-info { display: flex; align-items: baseline; gap: 0.4rem; }
+.patient-info { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+.child-pill, .missing-account-pill { display: inline-flex; align-items: center; padding: 0.14rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+.child-pill { background: #dbeafe; color: #1e40af; }
+.missing-account-pill { background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; }
 .patient-name { font-weight: 700; color: #0f172a; font-size: 1.05rem; }
 .patient-code { font-size: 0.85rem; color: #64748b; }
 .time-meta { font-size: 0.85rem; color: #475569; display: flex; gap: 0.4rem; align-items: center; }

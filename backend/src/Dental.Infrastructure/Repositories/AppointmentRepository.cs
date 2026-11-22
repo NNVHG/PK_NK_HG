@@ -63,7 +63,18 @@ public sealed class AppointmentRepository : IAppointmentRepository
             .AsQueryable();
 
         if (ownerUserId.HasValue)
-            query = query.Where(a => a.Patient.UserId == ownerUserId.Value);
+            query = query.Where(a =>
+                a.Patient.UserId == ownerUserId.Value ||
+                _db.PatientGuardians.Any(g =>
+                    g.IsActive &&
+                    g.WardPatientId == a.PatientId &&
+                    g.WardPatient != null &&
+                    g.WardPatient.IsActive &&
+                    g.GuardianPatient != null &&
+                    g.GuardianPatient.IsActive &&
+                    g.GuardianPatient.UserId == ownerUserId.Value &&
+                    g.GuardianPatient.User != null &&
+                    g.GuardianPatient.User.IsActive));
 
         if (date.HasValue)
             query = query.Where(a => a.AppointmentDate == date.Value);

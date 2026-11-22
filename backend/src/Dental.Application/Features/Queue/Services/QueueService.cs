@@ -24,6 +24,7 @@ public sealed class QueueService
     private readonly IVisitChairCoordinator _visitChairs;
     private readonly IPasswordHasher? _passwordHasher;
     private readonly IKeyedIdentityHasher? _identityHasher;
+    private readonly IPatientGuardianRepository? _guardianRepository;
 
     public QueueService(
         IQueueRepository queueRepository,
@@ -36,7 +37,8 @@ public sealed class QueueService
         IAuditLogger auditLogger,
         VietnamClock vietnamClock,
         IInvoiceDraftGenerator invoiceDraft, IVisitChairCoordinator visitChairs, IPasswordHasher? passwordHasher = null,
-        IKeyedIdentityHasher? identityHasher = null)
+        IKeyedIdentityHasher? identityHasher = null,
+        IPatientGuardianRepository? guardianRepository = null)
     {
         _queueRepository = queueRepository;
         _appointmentRepository = appointmentRepository;
@@ -50,6 +52,7 @@ public sealed class QueueService
         _invoiceDraft = invoiceDraft; _visitChairs = visitChairs;
         _passwordHasher = passwordHasher;
         _identityHasher = identityHasher;
+        _guardianRepository = guardianRepository;
     }
 
     public async Task<Result<OutstandingDebtResponse>> GetOutstandingDebtAsync(int patientId, CancellationToken ct = default)
@@ -136,7 +139,7 @@ public sealed class QueueService
         var documentType = request.DocumentType ?? IdentityDocumentType.CitizenId;
         var hasIdentityDocumentInput = !string.IsNullOrWhiteSpace(request.CitizenId) ||
             request.DocumentType.HasValue || !string.IsNullOrWhiteSpace(request.NationalityCode);
-        var isChild = patient.DateOfBirth.AddYears(14) > today;
+        var isChild = PatientAccountAge.IsUnderMinimumAge(patient.DateOfBirth, today);
         if (isChild)
         {
             if (hasIdentityDocumentInput)
@@ -851,8 +854,9 @@ public sealed class QueueService
             ct);
 
         var locations = await LocationsAsync(items.Select(q => q.DentistId), ct);
+        var responseItems = await ToResponsesAsync(items, locations, ct);
         var page = PagedResult<QueueEntryResponse>.Create(
-            items.Select(q => ToResponse(q, LocationFor(q, locations))).ToList(),
+            responseItems,
             totalCount,
             request.Page,
             request.PageSize);
@@ -1101,11 +1105,46 @@ public sealed class QueueService
     private static QueueDentistLocation? LocationFor(QueueEntry entry, IReadOnlyDictionary<int, QueueDentistLocation> locations)
         => entry.DentistId is int id && locations.TryGetValue(id, out var location) ? location : null;
 
-    private async Task<QueueEntryResponse> ToResponseAsync(QueueEntry entry, CancellationToken ct)
-        => ToResponse(entry, LocationFor(entry, await LocationsAsync([entry.DentistId], ct)));
+    private async Task<List<QueueEntryResponse>> ToResponsesAsync(
+        IReadOnlyCollection<QueueEntry> entries,
+        IReadOnlyDictionary<int, QueueDentistLocation> locations,
+        CancellationToken ct)
+    {
+        if (entries.Count == 0)
+            return [];
 
-    private static QueueEntryResponse ToResponse(QueueEntry q, QueueDentistLocation? location)
-        => new(
+        var today = _vietnamClock.Today;
+        var childPatientIds = entries
+            .Where(q => q.Patient is not null && PatientAccountAge.IsUnderMinimumAge(q.Patient.DateOfBirth, today))
+            .Select(q => q.PatientId)
+            .Distinct()
+            .ToArray();
+
+        IReadOnlySet<int> activeGuardianWardIds = childPatientIds.Length > 0 && _guardianRepository is not null
+            ? await _guardianRepository.GetWardPatientIdsWithActiveGuardianAsync(childPatientIds, ct) ?? new HashSet<int>()
+            : new HashSet<int>();
+
+        return entries
+            .Select(q => ToResponse(q, LocationFor(q, locations), activeGuardianWardIds, today))
+            .ToList();
+    }
+
+    private async Task<QueueEntryResponse> ToResponseAsync(QueueEntry entry, CancellationToken ct)
+    {
+        var locations = await LocationsAsync([entry.DentistId], ct);
+        return (await ToResponsesAsync([entry], locations, ct))[0];
+    }
+
+    private static QueueEntryResponse ToResponse(
+        QueueEntry q,
+        QueueDentistLocation? location,
+        IReadOnlySet<int> activeGuardianWardIds,
+        DateOnly today)
+    {
+        DateOnly? patientDob = q.Patient?.DateOfBirth;
+        var isChild = patientDob.HasValue && PatientAccountAge.IsUnderMinimumAge(patientDob.Value, today);
+        var missingGuardianAccount = isChild && !activeGuardianWardIds.Contains(q.PatientId);
+        return new(
             q.QueueEntryId,
             q.PatientId,
             q.Patient?.PatientCode ?? string.Empty,
@@ -1128,8 +1167,12 @@ public sealed class QueueService
             location?.RoomName,
             q.Visit is { Status: VisitStatuses.InProgress, IsLocked: false } &&
                 q.Status is (QueueStatus.Waiting or QueueStatus.Calling or QueueStatus.InConsultation or QueueStatus.InImaging or QueueStatus.Paused),
-            q.Appointment?.IsEmergency ?? false
+            q.Appointment?.IsEmergency ?? false,
+            PatientDateOfBirth: patientDob,
+            IsChildPatient: isChild,
+            MissingGuardianAccount: missingGuardianAccount
         );
+    }
 
     private static QueueStatusHistoryResponse ToHistoryResponse(QueueStatusHistory h)
         => new(

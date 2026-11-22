@@ -45,11 +45,20 @@
           </div>
 
           <div v-if="currentProfile" class="profile-preview-box">
-            <span class="preview-icon">👤</span>
-            <div>
-              <span class="preview-label">Hồ sơ khám:</span>
-              <strong class="preview-name">{{ currentProfile.fullName }}</strong>
-              <span class="code-badge">{{ currentProfile.code }}</span>
+            <span class="preview-icon">{{ currentProfile.isWard || currentProfile.isChild ? '👶' : '👤' }}</span>
+            <div class="preview-content">
+              <div class="preview-meta-row">
+                <span class="preview-label">Hồ sơ khám:</span>
+                <strong class="preview-name">{{ currentProfile.fullName }}</strong>
+                <span class="code-badge">{{ currentProfile.code }}</span>
+                <span v-if="currentProfile.isWard" class="ward-child-badge">👶 Trẻ em (&lt; 14 tuổi) · Giám hộ: {{ currentProfile.relationship }}</span>
+                <span v-else-if="currentProfile.isChild" class="ward-child-badge">👶 Trẻ em (&lt; 14 tuổi)</span>
+              </div>
+              <div class="preview-details-grid">
+                <span>SĐT liên hệ: <strong>{{ currentProfile.phone || 'Chưa cập nhật' }}</strong></span>
+                <span>Ngày sinh: <strong>{{ currentProfile.dateOfBirth ? formatDate(currentProfile.dateOfBirth) : 'Chưa cập nhật' }}</strong></span>
+                <span>Giới tính: <strong>{{ formatGender(currentProfile.gender) }}</strong></span>
+              </div>
             </div>
           </div>
           <div v-else-if="!loadingProfiles" class="hint-box">
@@ -69,7 +78,7 @@
                 <span>Giờ mong muốn <b class="req">*</b></span>
                 <small v-if="slotDurationMinutes" class="label-hint">({{ slotDurationMinutes }} phút/ca)</small>
               </label>
-              <BookingTimeInput input-id="appointment-slot" v-model="slotTime" :slots="slots" :disabled="submitting || scheduleLoading" />
+              <BookingTimeInput input-id="appointment-slot" v-model="slotTime" :slots="slots" :selected-date="appointmentDate" hide-past-slots :disabled="submitting || scheduleLoading" />
             </div>
           </div>
 
@@ -133,7 +142,10 @@
           <h4>Lưu ý trước khi đến khám</h4>
         </div>
         <ul class="notice-list">
-          <li>Vui lòng mang theo <strong>CCCD / Hộ chiếu</strong> để nhân viên đối soát hồ sơ tại quầy.</li>
+          <li v-if="currentProfile?.isWard || currentProfile?.isChild">
+            Trẻ dưới 14 tuổi <strong>không cần CCCD riêng</strong>; người giám hộ vui lòng đi cùng và mang <strong>CCCD / Hộ chiếu</strong> để đối chiếu tại quầy.
+          </li>
+          <li v-else>Vui lòng mang theo <strong>CCCD / Hộ chiếu</strong> để nhân viên đối soát hồ sơ tại quầy.</li>
           <li>Đến trước giờ hẹn <strong>10–15 phút</strong> để đo sinh hiệu và kiểm tra tiền sử dị ứng thuốc.</li>
           <li>Bạn có thể tự đổi hoặc hủy lịch trực tuyến tối thiểu trước <strong>2 giờ</strong>.</li>
         </ul>
@@ -144,12 +156,16 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { useRoute } from 'vue-router';
 import axios from 'axios';
 import { appointmentsService, type AppointmentResponse } from '@/services/appointments';
 import { patientsService, type PatientSummary } from '@/services/patients';
 import { patientGuardiansService, type WardSummary } from '@/services/patientGuardians';
+import { isUnderFourteen } from '@/services/patientAge';
 import { useBookingSchedule } from '@/composables/useBookingSchedule';
 import BookingTimeInput from '@/components/BookingTimeInput.vue';
+
+const route = useRoute();
 
 const emit = defineEmits<{
   (e: 'success', appointment: AppointmentResponse): void;
@@ -175,18 +191,47 @@ const today = computed(() => {
 
 const currentProfile = computed(() => {
   if (patient.value && selectedPatientId.value === patient.value.patientId) {
-    return { fullName: patient.value.fullName, code: patient.value.patientCode };
+    return {
+      fullName: patient.value.fullName,
+      code: patient.value.patientCode,
+      phone: patient.value.phone,
+      dateOfBirth: patient.value.dateOfBirth,
+      gender: patient.value.gender,
+      isWard: false,
+      relationship: '',
+      isChild: isUnderFourteen(patient.value.dateOfBirth)
+    };
   }
   const ward = wards.value.find(w => w.wardPatientId === selectedPatientId.value);
   if (ward) {
-    return { fullName: ward.fullName, code: ward.wardPatientCode };
+    return {
+      fullName: ward.fullName,
+      code: ward.wardPatientCode,
+      phone: ward.phone || patient.value?.phone || '',
+      dateOfBirth: ward.dateOfBirth,
+      gender: ward.gender,
+      isWard: true,
+      relationship: ward.relationship,
+      isChild: true
+    };
   }
   return null;
 });
 
+function formatGender(gender: string | null): string {
+  if (gender === 'Male') return 'Nam';
+  if (gender === 'Female') return 'Nữ';
+  if (gender === 'Other') return 'Khác';
+  return 'Chưa cập nhật';
+}
+
 const { slots, revision: scheduleRevision, duration: slotDurationMinutes, loading: scheduleLoading, error: scheduleError, load: loadSchedule } = useBookingSchedule();
 
 onMounted(async () => {
+  const serviceParam = typeof route?.query?.service === 'string' ? route.query.service.trim() : '';
+  if (serviceParam && !notes.value) {
+    notes.value = `Tư vấn ${serviceParam}`.slice(0, 500);
+  }
   const ticket = version;
   try {
     const [pResult, wResult] = await Promise.allSettled([
@@ -387,6 +432,43 @@ onUnmounted(() => { version++; patient.value = null; wards.value = []; notes.val
   color: #0369a1;
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
+}
+
+.preview-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.preview-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.preview-details-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.9rem;
+  font-size: 0.8rem;
+  color: #475569;
+}
+
+.preview-details-grid strong {
+  color: #0f2d59;
+}
+
+.ward-child-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1e40af;
+  font-size: 0.75rem;
+  font-weight: 700;
 }
 
 .hint-box {

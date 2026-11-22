@@ -14,14 +14,18 @@ public sealed class PatientRepository : IPatientRepository
     public PatientRepository(DentalDbContext db) => _db = db;
 
     public Task<Patient?> GetByIdAsync(int patientId, CancellationToken ct = default)
-        => _db.Patients.FirstOrDefaultAsync(patient => patient.PatientId == patientId, ct);
+        => _db.Patients
+            .Include(patient => patient.User)
+            .FirstOrDefaultAsync(patient => patient.PatientId == patientId, ct);
 
     public Task<Patient?> FindByCitizenIdHashAsync(string citizenIdHash, int? exceptPatientId = null, CancellationToken ct = default)
         => _db.Patients.FirstOrDefaultAsync(patient => patient.CitizenIdHash == citizenIdHash &&
             (!exceptPatientId.HasValue || patient.PatientId != exceptPatientId.Value), ct);
 
     public Task<Patient?> GetByUserIdAsync(int userId, CancellationToken ct = default)
-        => _db.Patients.SingleOrDefaultAsync(patient => patient.UserId == userId, ct);
+        => _db.Patients
+            .Include(patient => patient.User)
+            .SingleOrDefaultAsync(patient => patient.UserId == userId, ct);
 
     public async Task<PagedResult<Patient>> SearchAsync(
         string? keyword,
@@ -29,7 +33,10 @@ public sealed class PatientRepository : IPatientRepository
         int pageSize,
         CancellationToken ct = default)
     {
-        var query = _db.Patients.AsNoTracking();
+        var query = _db.Patients
+            .AsNoTracking()
+            .Include(patient => patient.User)
+            .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(keyword))
         {
