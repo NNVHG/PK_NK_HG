@@ -19,6 +19,12 @@ artifacts/
 # User secrets & Local settings
 **/secrets.json
 **/appsettings.Development.json
+**/appsettings.Local.json
+**/appsettings.*.local.json
+*.pem
+*.key
+*.pfx
+*.p12
 
 # EF Core migrations snapshot tự động — commit bình thường (không ignore Migrations/)
 
@@ -26,6 +32,10 @@ artifacts/
 node_modules/
 dist/
 .vite/
+.env
+.env.*
+!.env.example
+!.env.*.example
 .env.local
 .env.*.local
 
