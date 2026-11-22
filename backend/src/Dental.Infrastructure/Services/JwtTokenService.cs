@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Dental.Application.Interfaces;
+using Dental.Domain.Constants;
 using Dental.Domain.Entities;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
@@ -9,12 +10,13 @@ using Microsoft.IdentityModel.Tokens;
 namespace Dental.Infrastructure.Services;
 
 /// <summary>
-/// Tạo JWT access token HS256, sống 30 phút.
+/// Tạo JWT access token HS256 theo vai trò.
 /// Secret key lấy từ user-secrets / biến môi trường (không nằm trong appsettings.json).
-/// DL-031: HS256, 30 phút, không refresh. DL-336: tự đổi mật khẩu không gia hạn JWT đã cấp.
+/// Mặc định giữ 30 phút nếu không cấu hình Jwt:StaffAccessTokenMinutes / Jwt:PatientAccessTokenMinutes.
 /// </summary>
 public sealed class JwtTokenService : ITokenService
 {
+    private const int DefaultAccessTokenMinutes = 30;
     private readonly IConfiguration _config;
 
     public JwtTokenService(IConfiguration config) => _config = config;
@@ -37,13 +39,25 @@ public sealed class JwtTokenService : ITokenService
             new Claim("token_version", user.TokenVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)),
         };
 
+        var lifetimeMinutes = ResolveLifetimeMinutes(user);
         var token = new JwtSecurityToken(
             issuer: _config["Jwt:Issuer"] ?? "DentalClinic",
             audience: _config["Jwt:Audience"] ?? "DentalClinicClient",
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(30),
+            expires: DateTime.UtcNow.AddMinutes(lifetimeMinutes),
             signingCredentials: creds);
 
         return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    private int ResolveLifetimeMinutes(User user)
+    {
+        var configKey = user.Role?.RoleCode == RoleCodes.Patient
+            ? "Jwt:PatientAccessTokenMinutes"
+            : "Jwt:StaffAccessTokenMinutes";
+
+        return int.TryParse(_config[configKey], out var minutes) && minutes > 0
+            ? minutes
+            : DefaultAccessTokenMinutes;
     }
 }

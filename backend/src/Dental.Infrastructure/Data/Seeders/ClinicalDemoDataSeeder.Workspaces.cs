@@ -59,8 +59,8 @@ public static partial class ClinicalDemoDataSeeder
         };
         var p3 = new Patient
         {
-            FullName = "Lê Hoàng Long", DateOfBirth = new DateOnly(2018, 8, 15), Gender = "Nam",
-            Phone = "0900000024", Address = "72 Đại Lộ Bình Dương, Thủ Dầu Một",
+            FullName = "Nguyễn Hoàng Long", DateOfBirth = new DateOnly(2018, 8, 15), Gender = "Nam",
+            Phone = "0900000005", Address = "45 Lê Lợi, TP. Thủ Dầu Một, Bình Dương",
             UserId = null, IsActive = true, CreatedAt = now.AddDays(-2),
         };
         var p4 = new Patient
@@ -87,6 +87,9 @@ public static partial class ClinicalDemoDataSeeder
             CitizenIdVersion = 1,
             UserId = null, IsActive = true, CreatedAt = now.AddDays(-1),
         };
+        u1.FullName = p1.FullName; u1.DateOfBirth = p1.DateOfBirth; u1.Gender = p1.Gender; u1.Email = p1.Email;
+        if (u2 is not null) { u2.FullName = p2.FullName; u2.DateOfBirth = p2.DateOfBirth; u2.Gender = p2.Gender; u2.Email = p2.Email; }
+        if (u3 is not null) { u3.FullName = p4.FullName; u3.DateOfBirth = p4.DateOfBirth; u3.Gender = p4.Gender; u3.Email = p4.Email; }
         db.Patients.AddRange(p1, p2, p3, p4, p5);
         await db.SaveChangesAsync(ct);
 

@@ -266,6 +266,8 @@ builder.Services.AddScoped<QueueAbsenceRequestValidator>();
 builder.Services.AddValidatorsFromAssemblyContaining<LoginRequestValidator>();
 
 // ===== 6. JWT Authentication =====
+builder.Configuration["Jwt:StaffAccessTokenMinutes"] ??= "1440";
+builder.Configuration["Jwt:PatientAccessTokenMinutes"] ??= "1440";
 var jwtSecret = builder.Configuration["Jwt:Secret"]
     ?? throw new InvalidOperationException(
         "Jwt:Secret chưa được cấu hình. Dùng 'dotnet user-secrets set Jwt:Secret <giá_trị>'");
@@ -405,6 +407,17 @@ using (var scope = app.Services.CreateScope())
         config,
         logger,
         isDevelopment: app.Environment.IsDevelopment());
+
+    if (app.Environment.IsDevelopment())
+    {
+        await PatientTestFixtureSeeder.SeedAsync(
+            db,
+            config,
+            scope.ServiceProvider.GetRequiredService<IKeyedIdentityHasher>(),
+            scope.ServiceProvider.GetRequiredService<Dental.Application.Features.MOD_IMG.IDentalImageStorage>(),
+            app.Environment.ContentRootPath,
+            logger);
+    }
 }
 
 app.Run();

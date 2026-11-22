@@ -269,6 +269,35 @@ public sealed class AuthService
             changedFields.Add(nameof(User.Gender));
         }
 
+        if (user.Role.RoleCode == RoleCodes.Patient && user.Patient is not null)
+        {
+            var patientChanged = false;
+            if (user.Patient.FullName != fullName)
+            {
+                user.Patient.FullName = fullName;
+                patientChanged = true;
+            }
+            if (user.Patient.Email != email)
+            {
+                user.Patient.Email = email;
+                patientChanged = true;
+            }
+            if (request.DateOfBirth.HasValue && user.Patient.DateOfBirth != request.DateOfBirth.Value)
+            {
+                user.Patient.DateOfBirth = request.DateOfBirth.Value;
+                patientChanged = true;
+            }
+            if (gender is not null && user.Patient.Gender != gender)
+            {
+                user.Patient.Gender = gender;
+                patientChanged = true;
+            }
+            if (patientChanged)
+            {
+                user.Patient.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
         if (changedFields.Count > 0)
         {
             user.UpdatedAt = DateTime.UtcNow;

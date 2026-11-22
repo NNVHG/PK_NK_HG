@@ -2,12 +2,14 @@ using Dental.Application.Common;
 using Dental.Application.Features.Auth.DTOs;
 using Dental.Application.Features.Auth.Services;
 using Dental.Application.Features.Auth.Validators;
+using Dental.Application.Features.MOD_MST.Services;
 using Dental.Application.Interfaces;
 using Dental.Api.RateLimiting;
 using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Dental.Api.Controllers;
 
@@ -186,13 +188,33 @@ public sealed class AuthController : ControllerBase
     [HttpPost("logout")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> Logout(CancellationToken ct)
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Logout(
+        CancellationToken ct,
+        [FromServices] StaffWorkspaceService? workspaceService = null)
     {
         var userId = _currentUser.UserId;
         if (userId is null)
             return Unauthorized(new { code = "AUTH_003", message = "Bạn chưa đăng nhập." });
 
         var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var resolvedWorkspaceService = workspaceService ?? HttpContext.RequestServices?.GetService<StaffWorkspaceService>();
+        if (resolvedWorkspaceService is not null)
+        {
+            try
+            {
+                await resolvedWorkspaceService.ReleaseOnLogoutAsync(userId.Value, ct);
+            }
+            catch (ConcurrentOperationException)
+            {
+                return Conflict(new
+                {
+                    code = StaffWorkspaceService.Changed.Code,
+                    message = "Phân công đang được cập nhật. Vui lòng thử đăng xuất lại."
+                });
+            }
+        }
+
         await _authService.LogoutAsync(userId.Value, ipAddress, ct);
 
         return Ok(new { message = "Đăng xuất thành công." });

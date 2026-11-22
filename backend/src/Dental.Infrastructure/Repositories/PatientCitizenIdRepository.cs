@@ -16,7 +16,9 @@ public sealed class PatientCitizenIdRepository(DentalDbContext db, IKeyedIdentit
     public async Task<Result<CitizenIdStatus>> ReadAsync(int patientId, int actorId, string role, CancellationToken ct)
     {
         if (!await ActiveActor(actorId, role, ct)) return Result<CitizenIdStatus>.Failure(Error.Forbidden);
-        var p = await db.Patients.AsNoTracking().Where(p => p.PatientId == patientId && (role != RoleCodes.Patient || p.UserId == actorId))
+        var p = await db.Patients.AsNoTracking().Where(p => p.PatientId == patientId &&
+                (role != RoleCodes.Patient || p.UserId == actorId ||
+                 db.PatientGuardians.Any(g => g.WardPatientId == p.PatientId && g.IsActive && g.GuardianPatient!.UserId == actorId)))
             .Select(p => new CitizenIdStatus(p.PatientId, p.CitizenIdMasked, p.CitizenIdVersion)).SingleOrDefaultAsync(ct);
         return p is null ? Result<CitizenIdStatus>.Failure(Error.NotFound) : Result<CitizenIdStatus>.Success(p);
     }

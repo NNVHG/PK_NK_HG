@@ -100,9 +100,9 @@ public static class DatabaseSeeder
             ("0900000013", "BS. CKI Lê Hoàng Gia",   RoleCodes.Dentist,      "BS. CKI"),
             ("0900000004", "Phụ tá Demo",             RoleCodes.Assistant,    null),
             ("0900000014", "Phụ tá Thu Hà",           RoleCodes.Assistant,    null),
-            ("0900000005", "Bệnh nhân Nguyễn Văn An", RoleCodes.Patient,      null),
-            ("0900000021", "Bệnh nhân Trần Thị Bích", RoleCodes.Patient,      null),
-            ("0900000023", "Bệnh nhân Phạm Đức Huy",  RoleCodes.Patient,      null),
+            ("0900000005", "Nguyễn Văn An",          RoleCodes.Patient,      null),
+            ("0900000021", "Trần Thị Bích",          RoleCodes.Patient,      null),
+            ("0900000023", "Phạm Đức Huy",           RoleCodes.Patient,      null),
         ];
 
         foreach (var (phone, name, roleCode, title) in demos)
