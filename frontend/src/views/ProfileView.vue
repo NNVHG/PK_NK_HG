@@ -135,12 +135,27 @@ const passwordMessage = ref('');
 
 const phone = computed(() => authStore.user?.phone ?? '');
 
+function cleanPatientFullName(name?: string | null): string {
+  const value = (name ?? '').trim();
+  if (authStore.role === 'PATIENT' && /^Bệnh nhân\s+/i.test(value)) {
+    return value.replace(/^Bệnh nhân\s+/i, '').trim();
+  }
+  return value;
+}
+
+function normalizeGender(value?: string | null): string {
+  if (value === 'Nam' || value === 'Male') return 'Male';
+  if (value === 'Nữ' || value === 'Female') return 'Female';
+  if (value === 'Khác' || value === 'Other') return 'Other';
+  return '';
+}
+
 onMounted(async () => {
   await authStore.fetchMe();
-  fullName.value = authStore.user?.fullName ?? '';
+  fullName.value = cleanPatientFullName(authStore.user?.fullName);
   email.value = authStore.user?.email ?? '';
   dateOfBirth.value = authStore.user?.dateOfBirth ?? '';
-  gender.value = authStore.user?.gender ?? '';
+  gender.value = normalizeGender(authStore.user?.gender);
   loadingProfile.value = false;
 });
 
@@ -179,10 +194,10 @@ async function handleUpdateProfile() {
       dateOfBirth: dateOfBirth.value || null,
       gender: gender.value || null
     });
-    fullName.value = updated.fullName;
+    fullName.value = cleanPatientFullName(updated.fullName);
     email.value = updated.email ?? '';
     dateOfBirth.value = updated.dateOfBirth ?? '';
-    gender.value = updated.gender ?? '';
+    gender.value = normalizeGender(updated.gender);
     profileMessage.value = 'Cập nhật hồ sơ thành công.';
   } catch (error: any) {
     profileError.value = backendError(error, 'Cập nhật hồ sơ thất bại. Vui lòng thử lại.');

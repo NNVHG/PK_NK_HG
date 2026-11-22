@@ -175,10 +175,17 @@ public sealed class AuthService
             ipAddress: ipAddress,
             ct: ct);
 
+        var resolvedLoginFullName = user.Role.RoleCode == RoleCodes.Patient &&
+            user.Patient is not null &&
+            !string.IsNullOrWhiteSpace(user.Patient.FullName) &&
+            user.FullName.StartsWith("Bệnh nhân ", StringComparison.OrdinalIgnoreCase)
+                ? user.Patient.FullName
+                : user.FullName;
+
         var response = new LoginResponse(
             AccessToken: token,
             UserId: user.UserId,
-            FullName: user.FullName,
+            FullName: resolvedLoginFullName,
             RoleCode: user.Role.RoleCode,
             RoleName: user.Role.RoleName
         );
@@ -194,13 +201,21 @@ public sealed class AuthService
         if (user is null)
             return Result<MeResponse>.Failure(Error.NotFound);
 
+        var isPatient = user.Role.RoleCode == RoleCodes.Patient;
+        var resolvedFullName = isPatient &&
+            user.Patient is not null &&
+            !string.IsNullOrWhiteSpace(user.Patient.FullName) &&
+            user.FullName.StartsWith("Bệnh nhân ", StringComparison.OrdinalIgnoreCase)
+                ? user.Patient.FullName
+                : user.FullName;
+
         var response = new MeResponse(
             UserId: user.UserId,
             Phone: user.Phone,
-            FullName: user.FullName,
-            Email: user.Email,
-            DateOfBirth: user.DateOfBirth,
-            Gender: user.Gender,
+            FullName: resolvedFullName,
+            Email: isPatient ? (user.Email ?? user.Patient?.Email) : user.Email,
+            DateOfBirth: isPatient ? (user.DateOfBirth ?? user.Patient?.DateOfBirth) : user.DateOfBirth,
+            Gender: isPatient ? (user.Gender ?? user.Patient?.Gender) : user.Gender,
             RoleCode: user.Role.RoleCode,
             RoleName: user.Role.RoleName,
             IsActive: user.IsActive,

@@ -41,6 +41,7 @@ public sealed class UserRepository : IUserRepository
     public async Task<User?> FindByIdAsync(int userId, CancellationToken ct = default)
         => await _db.Users
             .Include(u => u.Role)
+            .Include(u => u.Patient)
             .FirstOrDefaultAsync(u => u.UserId == userId, ct);
 
     public async Task<Role?> FindRoleByCodeAsync(string roleCode, CancellationToken ct = default)
