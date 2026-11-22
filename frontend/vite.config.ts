@@ -2,6 +2,14 @@ import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import { fileURLToPath, URL } from 'node:url';
 
+const devProxy = {
+  '/api': {
+    target: 'http://localhost:5000',
+    changeOrigin: true,
+    secure: false
+  }
+};
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [vue()],
@@ -12,12 +20,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:5000',
-        changeOrigin: true,
-        secure: false
-      }
-    }
+    proxy: devProxy
+  },
+  preview: {
+    proxy: devProxy
   }
 });
