@@ -1,7 +1,9 @@
 ﻿# Khởi chạy hệ thống phòng khám Hoàng Gia trên Windows.
 # Cần .NET SDK 10, Node.js 20+ và Docker Desktop đang chạy.
 param(
-    [switch]$SkipDocker
+    [switch]$SkipDocker,
+    [ValidateSet('Backend', 'Frontend', 'Docker')]
+    [string]$LoadSecretsOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -10,6 +12,91 @@ Set-Location -LiteralPath $PSScriptRoot
 function Stop-WithMessage([string]$Message) {
     Write-Host "`n[LỖI] $Message" -ForegroundColor Red
     exit 1
+}
+
+function Get-LocalSecretGroup([string]$Name) {
+    switch -Regex ($Name) {
+        '^POSTGRES_PASSWORD$' { return 'Docker' }
+        '^VIETTEL_TTS_(TOKEN|VOICE|SPEED)$' { return 'Frontend' }
+        '^(ConnectionStrings__Default|Jwt__Secret|IdentitySecurity__(HmacKey|CurrentVersion|Keys__[1-9][0-9]*)|Seed__(AdminPhone|AdminPassword|DemoUsers|DemoPassword|PatientTestFixtures)|Payment__Webhook(SecretKey|ActorUserId)|(PasswordRecovery|PatientActivation|GuestBooking)__Sms__(Enabled|AccountSid|AuthToken|From))$' { return 'Backend' }
+    }
+}
+
+function Read-LocalSecrets {
+    $path = Join-Path $PSScriptRoot 'secrets.json'
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        Stop-WithMessage 'Chưa có secrets.json. Sao chép secrets.example.json rồi điền cấu hình cục bộ theo README.md.'
+    }
+    try {
+        $config = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json -ErrorAction Stop
+    }
+    catch {
+        Stop-WithMessage 'secrets.json không phải JSON hợp lệ. Kiểm tra dấu ngoặc và dấu phẩy trong file.'
+    }
+    if ($config -isnot [PSCustomObject]) {
+        Stop-WithMessage 'secrets.json phải là một đối tượng JSON theo mẫu trong repo.'
+    }
+
+    $groups = @{ Backend = @{}; Frontend = @{}; Docker = @{} }
+    foreach ($entry in $config.PSObject.Properties) {
+        $group = Get-LocalSecretGroup $entry.Name
+        if (-not $group) {
+            Stop-WithMessage 'secrets.json có trường chưa được hỗ trợ. Dùng tên trường từ secrets.example.json.'
+        }
+        if ($null -eq $entry.Value) { continue }
+        if ($entry.Value -isnot [string] -and $entry.Value -isnot [bool] -and $entry.Value -isnot [ValueType]) {
+            Stop-WithMessage 'secrets.json chỉ nhận chuỗi, số hoặc giá trị đúng/sai cho mỗi trường.'
+        }
+        $value = [string]$entry.Value
+        if (-not [string]::IsNullOrWhiteSpace($value)) {
+            $groups[$group][$entry.Name] = $value
+        }
+    }
+    return $groups
+}
+
+function Test-BackendSecrets([hashtable]$Values) {
+    if (-not $Values.ContainsKey('ConnectionStrings__Default')) {
+        Stop-WithMessage 'Điền ConnectionStrings__Default cho PostgreSQL cục bộ trong secrets.json.'
+    }
+    if ([Text.Encoding]::UTF8.GetByteCount([string]$Values['Jwt__Secret']) -lt 32) {
+        Stop-WithMessage 'Điền Jwt__Secret với khóa ít nhất 32 byte trong secrets.json.'
+    }
+    $hasHmac = @($Values.Keys | Where-Object {
+        $_ -match '^IdentitySecurity__(HmacKey|Keys__[1-9][0-9]*)$' -and
+            [Text.Encoding]::UTF8.GetByteCount($Values[$_].Trim()) -ge 32
+    }).Count -gt 0
+    if (-not $hasHmac) {
+        Stop-WithMessage 'Điền IdentitySecurity__HmacKey hoặc khóa HMAC theo phiên bản với ít nhất 32 byte.'
+    }
+}
+
+function Set-LocalSecretEnvironment([hashtable]$Values) {
+    foreach ($key in $Values.Keys) {
+        [Environment]::SetEnvironmentVariable($key, $Values[$key], 'Process')
+    }
+}
+
+function Invoke-WithLocalSecrets([string]$Target, [hashtable]$Values, [scriptblock]$Action) {
+    $previous = @{}
+    try {
+        $environment = [Environment]::GetEnvironmentVariables('Process')
+        foreach ($key in $environment.Keys) {
+            $group = Get-LocalSecretGroup $key
+            if ($group -and $group -ne $Target) {
+                $previous[$key] = $environment[$key]
+                [Environment]::SetEnvironmentVariable($key, $null, 'Process')
+            }
+        }
+        foreach ($key in $Values.Keys) {
+            $previous[$key] = [Environment]::GetEnvironmentVariable($key, 'Process')
+        }
+        Set-LocalSecretEnvironment $Values
+        & $Action
+    }
+    finally {
+        Set-LocalSecretEnvironment $previous
+    }
 }
 
 function Test-TcpPort([int]$Port) {
@@ -42,12 +129,21 @@ function Wait-HttpEndpoint([string]$Url, [string]$Name, [int]$TimeoutSeconds = 1
     return $false
 }
 
+$localSecrets = Read-LocalSecrets
+if ($LoadSecretsOnly) {
+    if ($LoadSecretsOnly -eq 'Backend') { Test-BackendSecrets $localSecrets.Backend }
+    Set-LocalSecretEnvironment $localSecrets[$LoadSecretsOnly]
+    Write-Host "Đã nạp cấu hình $LoadSecretsOnly từ secrets.json vào phiên PowerShell hiện tại." -ForegroundColor Green
+    return
+}
+Test-BackendSecrets $localSecrets.Backend
+
 Write-Host '======================================================' -ForegroundColor Cyan
 Write-Host '  KHỞI CHẠY PHÒNG KHÁM NHA KHOA HOÀNG GIA' -ForegroundColor Cyan
 Write-Host '======================================================' -ForegroundColor Cyan
 
 # 1. Kiểm tra công cụ và phiên bản tối thiểu.
-Write-Host "`n[1/5] Kiểm tra công cụ..." -ForegroundColor Yellow
+Write-Host "`n[1/6] Kiểm tra công cụ..." -ForegroundColor Yellow
 $dotnetCommand = Get-Command dotnet -ErrorAction SilentlyContinue
 if (-not $dotnetCommand) {
     Stop-WithMessage 'Chưa cài .NET SDK 10. Tải tại https://dotnet.microsoft.com/download/dotnet/10.0 rồi mở PowerShell mới.'
@@ -76,27 +172,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host '  NuGet package đã sẵn sàng.' -ForegroundColor Green
 
-# 2. Tạo cấu hình Development từ mẫu nếu chưa có; không ghi đè cấu hình sẵn có.
-Write-Host "`n[3/6] Kiểm tra cấu hình Development..." -ForegroundColor Yellow
-$apiDirectory = Join-Path $PSScriptRoot 'backend/src/Dental.Api'
-$devConfigPath = Join-Path $apiDirectory 'appsettings.Development.json'
-$exampleConfigPath = Join-Path $apiDirectory 'appsettings.Development.example.json'
-if (-not (Test-Path -LiteralPath $devConfigPath)) {
-    if (-not (Test-Path -LiteralPath $exampleConfigPath)) {
-        Stop-WithMessage "Không tìm thấy file cấu hình mẫu: $exampleConfigPath"
-    }
-    Copy-Item -LiteralPath $exampleConfigPath -Destination $devConfigPath
-    Write-Host '  Đã tạo cấu hình Development mẫu. File này chỉ dùng cục bộ và không được commit.' -ForegroundColor Green
-}
-else {
-    Write-Host '  Giữ nguyên cấu hình Development đang có.' -ForegroundColor Green
-}
-try {
-    $null = Get-Content -LiteralPath $devConfigPath -Raw | ConvertFrom-Json
-}
-catch {
-    Stop-WithMessage "File appsettings.Development.json không phải JSON hợp lệ: $($_.Exception.Message)"
-}
+Write-Host "`n[3/6] Đã kiểm tra cấu hình trong secrets.json." -ForegroundColor Green
 
 # 3. Khởi động PostgreSQL và đợi database sẵn sàng.
 Write-Host "`n[4/6] Kiểm tra PostgreSQL..." -ForegroundColor Yellow
@@ -108,8 +184,12 @@ if (-not $SkipDocker) {
     if ($LASTEXITCODE -ne 0) {
         Stop-WithMessage 'Docker Engine chưa sẵn sàng. Mở Docker Desktop, chờ trạng thái Engine running rồi chạy lại.'
     }
-    & docker compose up -d postgres
-    if ($LASTEXITCODE -ne 0) {
+    $started = Invoke-WithLocalSecrets 'Docker' $localSecrets.Docker {
+        # Chuyển log ra host để giá trị trả về chỉ báo mã thoát.
+        & docker compose up -d postgres | Out-Host
+        return $LASTEXITCODE -eq 0
+    }
+    if (-not $started) {
         Stop-WithMessage 'Không khởi động được PostgreSQL bằng Docker Compose. Kiểm tra cửa sổ Docker Desktop và cổng 5432.'
     }
 
@@ -158,18 +238,22 @@ if (-not $shellPath) {
 }
 
 if (-not (Test-TcpPort -Port 5000)) {
-    Start-Process -FilePath $shellPath -WorkingDirectory $PSScriptRoot -ArgumentList @(
-        '-NoExit', '-ExecutionPolicy', 'Bypass', '-Command', 'dotnet run --project .\backend\src\Dental.Api'
-    ) | Out-Null
+    Invoke-WithLocalSecrets 'Backend' $localSecrets.Backend {
+        Start-Process -FilePath $shellPath -WorkingDirectory $PSScriptRoot -ArgumentList @(
+            '-NoProfile', '-NoExit', '-ExecutionPolicy', 'Bypass', '-Command', 'dotnet run --project .\backend\src\Dental.Api'
+        ) | Out-Null
+    }
 }
 else {
     Write-Host '  Cổng 5000 đã có dịch vụ; dùng dịch vụ đang chạy.' -ForegroundColor Gray
 }
 
 if (-not (Test-TcpPort -Port 5173)) {
-    Start-Process -FilePath $shellPath -WorkingDirectory $frontendDirectory -ArgumentList @(
-        '-NoExit', '-ExecutionPolicy', 'Bypass', '-Command', 'npm.cmd run dev -- --strictPort'
-    ) | Out-Null
+    Invoke-WithLocalSecrets 'Frontend' $localSecrets.Frontend {
+        Start-Process -FilePath $shellPath -WorkingDirectory $frontendDirectory -ArgumentList @(
+            '-NoProfile', '-NoExit', '-ExecutionPolicy', 'Bypass', '-Command', 'npm.cmd run dev -- --strictPort'
+        ) | Out-Null
+    }
 }
 else {
     Write-Host '  Cổng 5173 đã có dịch vụ; dùng dịch vụ đang chạy.' -ForegroundColor Gray

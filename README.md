@@ -101,6 +101,7 @@ PK_NK_HG/
 │   ├── package.json                      # Khai báo thư viện Frontend
 │   └── vite.config.ts                    # Cấu hình cổng 5173 và proxy /api -> cổng 5000
 ├── docker-compose.yml                    # Cấu hình container PostgreSQL 16 (dental_db, cổng 5432)
+├── secrets.example.json                  # Mẫu cấu hình trống có thể đưa lên Git
 └── start-dev.ps1                         # Kịch bản khởi chạy tự động toàn hệ thống trên Windows
 ```
 
@@ -139,15 +140,29 @@ Set-Location <đường-dẫn-tới-thư-mục-PK_NK_HG>
 git pull
 ```
 
-Không cần tải riêng các thư mục `backend` hoặc `frontend`; hãy giữ nguyên cấu trúc repo. Không commit `appsettings.Development.json`, dữ liệu database, file upload hoặc thông tin thật.
+Giữ nguyên cấu trúc thư mục của repo. Git bỏ qua `secrets.json`, cấu hình Development riêng và thư mục tải ảnh.
 
-### Bước 2: Khởi động hệ thống
-Lệnh này chạy tại thư mục gốc `PK_NK_HG`. Nếu Windows chặn script, dùng lệnh dưới đây; không cần đổi Execution Policy toàn máy.
+### Bước 2: Tạo cấu hình cục bộ
+
+Chỉ [secrets.example.json](secrets.example.json) được đưa lên Git. Các ô trong file mẫu để trống. Từ thư mục gốc, tạo bản riêng rồi mở để điền:
+
+```powershell
+if (-not (Test-Path -LiteralPath .\secrets.json)) {
+    Copy-Item -LiteralPath .\secrets.example.json -Destination .\secrets.json
+}
+notepad .\secrets.json
+```
+
+Điền chuỗi kết nối, khóa JWT và khóa HMAC. Xem [các trường cấu hình và cách tạo khóa](#61-tệp-bí-mật-cục-bộ) ở mục 6.1. Cơ sở dữ liệu có sẵn phải dùng lại khóa HMAC cũ để dữ liệu định danh vẫn đối soát được.
+
+### Bước 3: Khởi động hệ thống
+
+Chạy ở thư mục gốc `PK_NK_HG`:
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start-dev.ps1
 ```
 
-Script kiểm tra .NET SDK 10 và Node.js, tạo cấu hình Development mẫu nếu chưa có, khởi động PostgreSQL 16 bằng Docker Compose, đợi database sẵn sàng, cài frontend bằng `npm ci` theo `package-lock.json` nếu cần, rồi mở cửa sổ riêng cho API và web. Backend khôi phục NuGet package khi chạy lần đầu. Khi API khởi động, ứng dụng tự áp dụng các EF Core migration hiện có và chạy seeder Development theo cấu hình.
+Script đọc `secrets.json` và cấp đúng nhóm biến môi trường cho API, Vite và Docker Compose. Sau khi kiểm tra công cụ và khôi phục NuGet, script chờ PostgreSQL sẵn sàng, cài frontend bằng `npm ci` nếu cần rồi mở hai cửa sổ API và web. API áp dụng các migration EF Core còn thiếu và nạp dữ liệu Development theo cấu hình.
 
 Script không xóa database hoặc Docker volume hiện có. Đóng cửa sổ API/web để dừng ứng dụng; PostgreSQL vẫn chạy trong Docker.
 
@@ -155,7 +170,7 @@ Lần chạy đầu cần Internet để Git clone, tải NuGet package và npm 
 
 Luồng demo chính: khách đặt lịch công khai hoặc PATIENT đặt lịch trong portal → Lễ tân đối soát và xác nhận tiếp đón tại quầy → hàng đợi chung → Nha sĩ chọn phòng, xem cảnh báo an toàn, khám và cập nhật FDI → kê đơn/kết thúc khám → thu ngân xử lý hóa đơn. Sau đăng nhập, Nha sĩ chọn phòng và Phụ tá chọn nha sĩ hỗ trợ hoặc xác nhận làm việc độc lập. Đặt lịch công khai không tạo lượt chờ; gọi số không tự bắt đầu khám. Với trẻ dưới 14 tuổi không nhập CCCD trẻ; liên kết người giám hộ chỉ sau khi nhân viên xác minh trực tiếp. Menu không thay thế phân quyền backend.
 
-### Bước 3: Mở trình duyệt và trải nghiệm
+### Bước 4: Mở trình duyệt và trải nghiệm
 - **Giao diện ứng dụng (Frontend):** `http://localhost:5173`
 - **Tài liệu API (Swagger UI):** `http://localhost:5000/swagger`
 
@@ -165,22 +180,22 @@ Nếu cửa sổ API báo lỗi khởi động, hãy xử lý lỗi ở cửa s�
 
 ## 5. Cơ sở dữ liệu demo và tài khoản thử nghiệm
 
-Khi chạy ở môi trường `Development` với cấu hình mẫu (`Seed:DemoUsers = true`), hệ thống nạp dữ liệu tổng hợp phục vụ demo, như danh mục, tài khoản theo vai trò và một số kịch bản lịch hẹn/khám/hóa đơn. Đây là dữ liệu phát triển cục bộ; không dùng trong môi trường thực tế. Dữ liệu seed có thể thay đổi theo mã nguồn nên không dựa vào số lượng bản ghi cố định.
+Để nạp dữ liệu demo trên cơ sở dữ liệu cục bộ, điền `Seed__DemoUsers` là `true`. Điền `Seed__DemoPassword` cho các tài khoản demo và `Seed__AdminPhone` cùng `Seed__AdminPassword` cho Admin ban đầu. Nếu dùng bộ tài khoản của Gia, lấy hai mật khẩu trong bản `secrets.json` riêng. Seeder tạo dữ liệu tổng hợp cho lịch hẹn, khám và hóa đơn. Thay đổi mật khẩu trong tệp cấu hình không đổi mật khẩu của tài khoản đã tồn tại.
 
 ### 5.1. Bảng tài khoản thử nghiệm 5 vai trò
-> **Lưu ý bảo mật:** Toàn bộ số điện thoại, CCCD, mật khẩu và khóa cấu hình dưới đây **chỉ dùng cho mục đích thử nghiệm cục bộ (Demo/Development)**, tuyệt đối không dùng cho môi trường thực tế.
+> SĐT và CCCD bên dưới là dữ liệu mẫu dùng để chạy thử. Mật khẩu đọc từ `secrets.json` của bạn.
 
 Tại màn hình đăng nhập (`http://localhost:5173/login`), giữ tùy chọn mặc định **`SĐT / CCCD`** và đăng nhập bằng một trong các tài khoản sau:
 
 | Vai trò | Mã vai trò | Tài khoản đăng nhập (SĐT / CCCD) | Mật khẩu thử nghiệm | Chức năng trải nghiệm chính |
 |---|---|---|---|---|
-| **Quản trị viên (Admin)** | `ADMIN` | `0900000001` | `AdminPassword@123` | Quản lý danh mục hệ thống, nhân sự, cấu hình, nhập/xuất kho, xem báo cáo doanh thu và nhật ký thao tác (Audit Log). |
-| **Lễ tân / Thu ngân** | `RECEPTIONIST` | `0900000002` | `DemoPassword@123` | Đặt lịch tại quầy, quét QR CCCD tiếp đón khách, quản lý hàng đợi, lập hóa đơn nháp, thu tiền mặt/chuyển khoản. |
-| **Nha sĩ** | `DENTIST` | `0900000003` | `DemoPassword@123` | Mở ca khám, xem cảnh báo an toàn, tương tác sơ đồ răng FDI 32/20 răng, chỉ định dịch vụ, kê đơn thuốc, chốt hồ sơ. |
-| **Phụ tá** | `ASSISTANT` | `0900000004` | `DemoPassword@123` | Quản lý trạng thái phòng/ghế nha, gọi số dẫn bệnh nhân, tải ảnh X-quang, lập phiếu nhập và xác nhận tiêu hao vật tư ca khám. |
-| **Bệnh nhân** | `PATIENT` | `074088001234` *(CCCD)* | `DemoPassword@123` | Xem hồ sơ khám răng cá nhân, lịch sử sơ đồ răng FDI, đơn thuốc điện tử, hóa đơn/công nợ và đặt lịch khám. |
+| **Quản trị viên (Admin)** | `ADMIN` | Giá trị `Seed__AdminPhone` | `Seed__AdminPassword` | Quản lý danh mục, nhân sự, cấu hình, kho, doanh thu và nhật ký thao tác. |
+| **Lễ tân / Thu ngân** | `RECEPTIONIST` | `0900000002` | `Seed__DemoPassword` | Đặt lịch tại quầy, quét QR CCCD, tiếp đón, quản lý hàng đợi và thu tiền. |
+| **Nha sĩ** | `DENTIST` | `0900000003` | `Seed__DemoPassword` | Chọn phòng, mở ca khám, xem cảnh báo an toàn, cập nhật FDI, kê đơn và chốt hồ sơ. |
+| **Phụ tá** | `ASSISTANT` | `0900000004` | `Seed__DemoPassword` | Chọn Nha sĩ hỗ trợ, gọi số theo quyền, tải ảnh và xác nhận nhập hoặc tiêu hao vật tư. |
+| **Bệnh nhân** | `PATIENT` | `074088001234` *(CCCD mẫu)* | `Seed__DemoPassword` | Xem hồ sơ, đơn thuốc, hóa đơn và đặt lịch. Người giám hộ xem được hồ sơ trẻ đã liên kết và còn hiệu lực. |
 
-*(Ngoài ra còn có các tài khoản nhân sự/bệnh nhân phụ trong dữ liệu mẫu dùng chung mật khẩu `DemoPassword@123`: Lễ tân 2 `0900000012`, Nha sĩ 2 `0900000013`, Phụ tá 2 `0900000014`, Bệnh nhân 2 CCCD `074095005678`, Bệnh nhân 3 CCCD `074082009012`).*
+Tài khoản mẫu bổ sung cũng dùng mật khẩu `Seed__DemoPassword`. Lễ tân 2 `0900000012`, Nha sĩ 2 `0900000013`, Phụ tá 2 `0900000014`, Bệnh nhân 2 CCCD `074095005678` và Bệnh nhân 3 CCCD `074082009012`.
 
 ### 5.2. Dữ liệu QR CCCD
 Chỉ dùng QR/CCCD tổng hợp dành cho demo hoặc dữ liệu do bạn tự tạo. Không đưa CCCD thật vào README, issue, log, URL hoặc commit. Khi đối soát, dữ liệu QR được gửi trong request body đến backend; không đặt CCCD trên URL.
@@ -189,46 +204,79 @@ Chỉ dùng QR/CCCD tổng hợp dành cho demo hoặc dữ liệu do bạn tự
 
 ## 6. Chạy thủ công từng bước và cấu hình tùy chọn
 
-Nếu bạn không muốn dùng kịch bản tự động `start-dev.ps1` hoặc muốn chạy trên máy cài **PostgreSQL 16 trực tiếp (không dùng Docker)**, hãy thực hiện tuần tự các bước sau từ thư mục gốc `PK_NK_HG`:
+### 6.1. Tệp bí mật cục bộ
 
-### Bước 1: Chuẩn bị tệp cấu hình Development
-Chỉ tạo file này nếu chưa có; lệnh không dùng `-Force` để tránh ghi đè cấu hình local.
+Điền vào `secrets.json` ở thư mục gốc. Các tên có dấu `__` là tên biến môi trường của ASP.NET Core.
+
+| Trường | Giá trị cần điền |
+|---|---|
+| `ConnectionStrings__Default` | Chuỗi kết nối PostgreSQL cục bộ. Ví dụ cấu trúc `Host=localhost;Port=5432;Database=dental_clinic;Username=postgres;Password=<mật khẩu cục bộ>`. |
+| `POSTGRES_PASSWORD` | Khi dùng Docker Compose, điền mật khẩu của cơ sở dữ liệu Docker và dùng cùng giá trị trong chuỗi kết nối. Với volume có sẵn, dùng mật khẩu đã tạo trước đó. |
+| `Jwt__Secret`, `IdentitySecurity__HmacKey` | Hai khóa độc lập có ít nhất 32 byte. Với bộ khóa HMAC theo phiên bản, thêm `IdentitySecurity__Keys__1`, `IdentitySecurity__Keys__2` theo phiên bản cần giữ và đặt `IdentitySecurity__CurrentVersion`. |
+| `Seed__AdminPhone`, `Seed__AdminPassword`, `Seed__DemoUsers`, `Seed__DemoPassword` | Mật khẩu do bạn đặt cho tài khoản thử. Bật `Seed__DemoUsers` để nạp dữ liệu tổng hợp. `Seed__PatientTestFixtures` dành cho bộ fixture cục bộ có sẵn. |
+| `PasswordRecovery__Sms__*`, `PatientActivation__Sms__*`, `GuestBooking__Sms__*` | Cấu hình SMS nếu dùng. Chỉ đặt `Enabled` thành `true` khi có thông tin gửi hợp lệ. Đặt lịch công khai theo luồng hiện hành không yêu cầu OTP. |
+| `Payment__WebhookSecretKey`, `Payment__WebhookActorUserId` | Tùy chọn khi dùng webhook ngân hàng. Có thể để trống khi xác nhận chuyển khoản thủ công. |
+| `VIETTEL_TTS_TOKEN`, `VIETTEL_TTS_VOICE`, `VIETTEL_TTS_SPEED` | Tùy chọn cho Vite đọc thông báo TV qua Viettel AI. Token chỉ được cấp cho tiến trình Vite. Khi bật, nội dung lời gọi được gửi tới dịch vụ Viettel. |
+
+Nếu đang chuyển từ `backend/src/Dental.Api/appsettings.Development.json` và `frontend/.env.local`, chép các giá trị đang dùng sang `secrets.json`. Những ô có giá trị trong tệp trung tâm ghi đè cấu hình cùng tên. Ô trống không ghi đè cấu hình cũ. Để tắt SMS đang bật trong cấu hình cũ, điền rõ `Enabled` là `false`. Đóng và chạy lại API/Vite sau khi đổi cấu hình.
+
+Nếu cài mới và chưa có khóa, đoạn lệnh sau chỉ sinh các khóa còn trống và ghi thẳng vào tệp riêng:
+
 ```powershell
-Copy-Item backend/src/Dental.Api/appsettings.Development.example.json backend/src/Dental.Api/appsettings.Development.json
+$local = Get-Content -LiteralPath .\secrets.json -Raw -Encoding UTF8 | ConvertFrom-Json
+$rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+try {
+    foreach ($name in @('Jwt__Secret', 'IdentitySecurity__HmacKey')) {
+        if ([string]::IsNullOrWhiteSpace($local.$name)) {
+            $bytes = New-Object byte[] 48
+            $rng.GetBytes($bytes)
+            $local.$name = [Convert]::ToBase64String($bytes)
+        }
+    }
+}
+finally { $rng.Dispose() }
+$local | ConvertTo-Json | Set-Content -LiteralPath .\secrets.json -Encoding UTF8
 ```
 
-### Bước 2: Khởi động PostgreSQL 16
-- **Nếu dùng Docker:**
-  ```powershell
-  docker compose up -d postgres
-  docker exec dental_db pg_isready -U postgres -d dental_clinic
-  ```
-- **Nếu dùng PostgreSQL 16 cài trực tiếp trên máy (không dùng Docker):**
-  Tạo cơ sở dữ liệu trống tên `dental_clinic` bằng `psql` (hoặc pgAdmin), sau đó sửa `Username`/`Password` trong file Development cho khớp máy của bạn. Không sửa file `.example.json` và không commit `appsettings.Development.json`:
-  ```powershell
-  psql -U postgres -h localhost -p 5432 -c "CREATE DATABASE dental_clinic;"
-  ```
-  Có thể dùng script để mở API và web nhưng bỏ qua Docker:
-  ```powershell
-  .\start-dev.ps1 -SkipDocker
-  ```
-  Hoặc tiếp tục chạy thủ công ở các bước bên dưới.
+Kiểm tra trước khi đưa mã lên Git:
 
-### Bước 3: Chạy Backend API (PowerShell 1 – thư mục gốc)
-Ở Development, backend tự áp dụng các migration còn thiếu và nạp dữ liệu mẫu theo cấu hình:
 ```powershell
+git check-ignore -v -- secrets.json
+git diff --cached --name-only
+```
+
+Tệp được chia sẻ là `secrets.example.json` với các ô trống. Mẫu Development cũ ở thư mục API cũng để trống các trường bí mật. Giữ `secrets.json` và bản sao lưu ở nơi riêng.
+
+### 6.2. Chạy từng dịch vụ
+
+Chạy lệnh nạp cấu hình trong **cùng cửa sổ PowerShell** với lệnh dịch vụ sau đó, từ thư mục gốc. Nếu PowerShell chặn chạy script, bật cho phiên đó bằng `Set-ExecutionPolicy -Scope Process Bypass`.
+
+**PostgreSQL trong Docker**:
+
+```powershell
+.\start-dev.ps1 -LoadSecretsOnly Docker
+docker compose up -d postgres
+docker exec dental_db pg_isready -U postgres -d dental_clinic
+```
+
+Nếu đã cài PostgreSQL 16 trực tiếp, tạo cơ sở dữ liệu cục bộ bằng pgAdmin hoặc `psql` và cập nhật chuỗi kết nối. Có thể dùng `.\start-dev.ps1 -SkipDocker` khi PostgreSQL đang chạy tại cổng 5432 hoặc tiếp tục chạy từng dịch vụ bên dưới.
+
+**API**, trong một cửa sổ mới:
+
+```powershell
+.\start-dev.ps1 -LoadSecretsOnly Backend
 dotnet run --project backend/src/Dental.Api
 ```
 
-### Bước 4: Cài package và chạy Frontend (PowerShell 2 – thư mục gốc)
+**Frontend**, trong một cửa sổ mới:
+
 ```powershell
+.\start-dev.ps1 -LoadSecretsOnly Frontend
 npm.cmd --prefix frontend ci
 npm.cmd --prefix frontend run dev -- --strictPort
 ```
 
-### Cấu hình tùy chọn (Mặc định tắt)
-- **SMS OTP (`PasswordRecovery:Sms:Enabled` và `PatientActivation:Sms:Enabled`):** Mặc định đặt `false` trong cấu hình mẫu. Khi tắt, luồng khôi phục mật khẩu/kích hoạt ở môi trường `Development` hoạt động ở chế độ mô phỏng nội bộ mà không cần tài khoản nhà mạng.
-- **Webhook ngân hàng:** Mặc định tắt; thu ngân xác nhận giao dịch chuyển khoản thủ công tại quầy sau khi đối chiếu tham chiếu giao dịch.
+Để xem bản build, chạy `npm.cmd --prefix frontend run build` rồi `npm.cmd --prefix frontend run preview` trong cửa sổ frontend đã nạp cấu hình. Khi không cấu hình SMS, màn hình khôi phục mật khẩu và kích hoạt có thể hiển thị OTP thử trong Development. Thu ngân có thể xác nhận chuyển khoản thủ công khi không cấu hình webhook.
 
 ---
 
@@ -250,7 +298,7 @@ npm.cmd --prefix frontend run build
 | Triệu chứng / Thông báo lỗi | Nguyên nhân | Cách khắc phục |
 |---|---|---|
 | PowerShell báo `...cannot be loaded because running scripts is disabled on this system` | Chính sách `ExecutionPolicy` mặc định của Windows chặn chạy file `.ps1`. | Chạy bằng lệnh: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start-dev.ps1`. |
-| Backend báo thiếu khóa HMAC hoặc lỗi đăng nhập PostgreSQL | File Development bị thiếu, cấu hình sai hoặc không khớp PostgreSQL đang chạy. | Chạy lại `start-dev.ps1` để tạo file mẫu nếu file chưa có. Nếu đã có file, kiểm tra `ConnectionStrings:Default` và đối chiếu username/password với Docker Compose hoặc PostgreSQL cục bộ. Không ghi thông tin kết nối thật vào Git. |
+| Backend báo thiếu khóa JWT/HMAC hoặc lỗi đăng nhập PostgreSQL | Thiếu trường trong `secrets.json` hoặc dùng sai mật khẩu cơ sở dữ liệu. | Kiểm tra các trường bắt buộc ở mục 6.1. Đối với volume hiện có, xác nhận chuỗi kết nối dùng mật khẩu đã tạo cho volume đó. Khởi động lại dịch vụ sau khi cập nhật. |
 | Lỗi `error during connect... dockerDesktopLinuxEngine` khi chạy `docker compose up -d` | Ứng dụng **Docker Desktop** chưa được mở hoặc chưa khởi động xong. | Mở ứng dụng Docker Desktop trên Windows, đợi biểu tượng góc dưới bên trái báo *Engine running* rồi chạy lại. |
 | Lỗi báo cổng `5000`, `5173` hoặc `5432` đã được sử dụng (`Address already in use`) | Đã có một cửa sổ Backend/Frontend hoặc dịch vụ PostgreSQL khác đang chiếm cổng. | Đóng cửa sổ PowerShell đang chạy phiên cũ, hoặc kiểm tra tiến trình chiếm cổng bằng `Get-NetTCPConnection -LocalPort 5000,5173,5432`. |
 | Muốn xóa database demo | Docker volume `pgdata` giữ dữ liệu qua các lần chạy. | **Thao tác này xóa vĩnh viễn database cục bộ.** Chỉ khi chắc chắn không cần dữ liệu hiện tại: dừng backend, chạy `docker compose down -v`, rồi chạy lại `start-dev.ps1`. Không chạy nếu cần giữ dữ liệu. |
@@ -260,7 +308,7 @@ npm.cmd --prefix frontend run build
 ## 8. Lưu ý triển khai thực tế (Production)
 
 Kho mã nguồn này được cấu hình tối ưu cho mục đích chạy thử nghiệm và đánh giá đồ án tốt nghiệp. Hiện chưa kèm kịch bản triển khai máy chủ Production tự động; nếu triển khai thực tế cần thực hiện tối thiểu các bước sau:
-1. **Thay toàn bộ khóa và mật khẩu:** Tạo khóa ngẫu nhiên tối thiểu 32 byte cho `Jwt:Secret` và `IdentitySecurity:HmacKey` qua biến môi trường hoặc trình quản lý bí mật; đổi mật khẩu PostgreSQL và mật khẩu tài khoản `ADMIN`.
+1. **Cấp bí mật riêng cho môi trường triển khai:** Dùng biến môi trường hoặc trình quản lý bí mật cho JWT, HMAC, PostgreSQL và các nhà cung cấp. `secrets.json` và `start-dev.ps1` dành cho máy phát triển. Với dữ liệu định danh đã tồn tại, giữ các phiên bản HMAC cần dùng để đối soát.
 2. **Tắt nạp dữ liệu thử nghiệm:** Đặt `ASPNETCORE_ENVIRONMENT=Production` và `Seed:DemoUsers=false`.
 3. **Bảo mật đường truyền & Lưu trữ:** Bật chứng chỉ HTTPS (TLS) qua Reverse Proxy (Nginx/IIS), cấu hình sao lưu định kỳ cơ sở dữ liệu PostgreSQL và thư mục lưu ảnh X-quang (`uploads/`).
 
