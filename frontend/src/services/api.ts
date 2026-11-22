@@ -28,7 +28,8 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const requestAuthorization = error.config?.headers?.Authorization;
+    if (error.response?.status === 401 && accessToken && requestAuthorization === `Bearer ${accessToken}`) {
       setAccessToken(null);
       window.dispatchEvent(new Event('auth:expired'));
       unauthorizedHandler?.();

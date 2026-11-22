@@ -8,12 +8,23 @@ import './assets/modern-dental-theme.css';
 const app = createApp(App);
 const pinia = createPinia();
 
-setUnauthorizedHandler(() => {
+let redirectingToLogin = false;
+
+function redirectToLoginOnExpiry() {
+  if (redirectingToLogin) return;
   const currentRoute = router.currentRoute.value;
-  if (currentRoute.path !== '/login') {
-    void router.push({ name: 'login', query: { redirect: currentRoute.fullPath } });
-  }
-});
+  if (currentRoute.path === '/login') return;
+  redirectingToLogin = true;
+  const query = currentRoute.fullPath && currentRoute.fullPath !== '/login'
+    ? { redirect: currentRoute.fullPath }
+    : undefined;
+  void router.push({ name: 'login', query }).finally(() => {
+    redirectingToLogin = false;
+  });
+}
+
+setUnauthorizedHandler(redirectToLoginOnExpiry);
+window.addEventListener('auth:expired', redirectToLoginOnExpiry);
 
 app.use(pinia);
 app.use(router);

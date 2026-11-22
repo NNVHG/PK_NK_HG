@@ -333,9 +333,13 @@
       }"
       tabindex="-1"
     >
-      <div :key="route.path" class="page-transition-stage">
-        <router-view />
-      </div>
+      <router-view v-slot="{ Component }">
+        <Transition name="page-route" mode="out-in">
+          <div v-if="Component" :key="route.path" class="page-transition-stage">
+            <component :is="Component" />
+          </div>
+        </Transition>
+      </router-view>
     </main>
 
     <!-- ==================== 3. THANH BÊN PHẢI: DÀNH RIÊNG CHO CÁC ACTOR KHÁC ==================== -->
@@ -564,8 +568,25 @@ const workspaceError = ref('');
 const selectedWorkspaceId = ref<number | null>(null);
 const logoutInProgress = ref(false);
 const logoutError = ref('');
+const WORKSPACE_PROMPTED_TOKEN_KEY = 'dental_workspace_prompted_token';
+function readPromptedWorkspaceToken(): string | null {
+  try {
+    return typeof window !== 'undefined' && window.sessionStorage
+      ? window.sessionStorage.getItem(WORKSPACE_PROMPTED_TOKEN_KEY)
+      : null;
+  } catch {
+    return null;
+  }
+}
+function persistPromptedWorkspaceToken(value: string | null) {
+  try {
+    if (typeof window === 'undefined' || !window.sessionStorage) return;
+    if (value) window.sessionStorage.setItem(WORKSPACE_PROMPTED_TOKEN_KEY, value);
+    else window.sessionStorage.removeItem(WORKSPACE_PROMPTED_TOKEN_KEY);
+  } catch {}
+}
 let workspaceRequest = 0;
-let promptedWorkspaceToken: string | null = null;
+let promptedWorkspaceToken: string | null = readPromptedWorkspaceToken();
 let assistantWorkspaceTimer: ReturnType<typeof setInterval> | undefined;
 let refreshingAssistantWorkspace = false;
 
@@ -782,14 +803,19 @@ watch(() => [authStore.token, authStore.role, authStore.user?.userId, isPortalRo
   if (!authStore.isAuthenticated) {
     menuOpen.value = false;
     promptedWorkspaceToken = null;
+    persistPromptedWorkspaceToken(null);
   } else if (isWorkspaceRole.value && isPortalRoute.value) {
     const promptAtLogin = promptedWorkspaceToken !== authStore.token;
     promptedWorkspaceToken = authStore.token;
+    persistPromptedWorkspaceToken(authStore.token);
     void loadWorkspace(false, promptAtLogin);
   }
 }, { immediate: true });
 
 onMounted(() => {
+  if (authStore.isAuthenticated) {
+    void authStore.fetchMe();
+  }
   document.addEventListener('keydown', onKeydown);
   window.addEventListener('resize', onResize);
   window.addEventListener(WORKSPACE_UPDATED_EVENT, onWorkspaceUpdatedEvent);
@@ -1363,12 +1389,29 @@ async function handleLogout() {
 }
 
 .page-transition-stage {
-  animation: vuePageEnter 0.36s cubic-bezier(0.22, 1, 0.36, 1) both;
+  min-width: 0;
 }
 
-@keyframes vuePageEnter {
-  0% { opacity: 0; transform: translate3d(0, 10px, 0); }
-  100% { opacity: 1; transform: translate3d(0, 0, 0); }
+.page-route-enter-active,
+.page-route-leave-active {
+  transition: opacity 0.22s ease, transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.page-route-enter-from {
+  opacity: 0;
+  transform: translate3d(0, 10px, 0);
+}
+
+.page-route-leave-to {
+  opacity: 0;
+  transform: translate3d(0, -6px, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-route-enter-active,
+  .page-route-leave-active {
+    transition: none;
+  }
 }
 
 /* ================= 3. THANH BÊN PHẢI (CHỨC NĂNG CÁC ACTOR KHÁC) ================= */
