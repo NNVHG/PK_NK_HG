@@ -7,6 +7,7 @@ using Dental.Application.Features.Auth.Services;
 using Dental.Application.Features.Auth.Validators;
 using Dental.Application.Features.MedicalHistory.Services;
 using Dental.Application.Features.MedicalHistory.Validators;
+using Dental.Application.Features.MOD_CHK;
 using Dental.Application.Features.Patients.Services;
 using Dental.Application.Features.Patients.Validators;
 using Dental.Application.Features.Staff.Services;
@@ -24,6 +25,7 @@ using Dental.Application.Features.Queue.Validators;
 
 using Dental.Infrastructure.Data;
 using Dental.Infrastructure.Data.Seeders;
+using Dental.Infrastructure.Features.MOD_CHK;
 using Dental.Infrastructure.Repositories;
 using Dental.Infrastructure.Services;
 using FluentValidation;
@@ -173,6 +175,10 @@ builder.Services.AddSingleton<IKeyedIdentityHasher, KeyedIdentityHasher>();
 builder.Services.AddSingleton<ILoginLockoutService, LoginLockoutService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<VietnamClock>();
+builder.Services.AddHttpClient(ViettelQueueVoice.ClientName)
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, MaxConnectionsPerServer = 4 })
+    .RemoveAllLoggers();
+builder.Services.AddSingleton<IQueueVoiceSynthesizer, ViettelQueueVoice>();
 
 // ===== 4. Application Services =====
 builder.Services.AddScoped<AuthService>();
@@ -299,6 +305,7 @@ builder.Services.AddAuthorization(opts => opts.AddApplicationPolicies());
 builder.Services.AddRateLimiter(options => { AuthRateLimitPolicies.Configure(options, builder.Configuration); BookingRequestRateLimits.Configure(options); PatientActivationRateLimits.Configure(options); StaffPhoneChangeRateLimits.Configure(options); PatientPhoneChangeRateLimits.Configure(options); });
 builder.Services.AddRateLimiter(PublicPrescriptionRateLimits.Configure);
 builder.Services.AddRateLimiter(DentalImageRateLimits.Configure);
+builder.Services.AddRateLimiter(QueueVoiceRateLimits.Configure);
 
 // ===== 8. CORS (chỉ cho phép frontend dev) =====
 builder.Services.AddCors(opts =>

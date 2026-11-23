@@ -43,6 +43,7 @@ public static class Policies
     public const string DentalChairView = "DentalChairView";
     public const string QueueSkip = "QueueSkip";
     public const string QueueCall = "QueueCall";
+    public const string QueueTvCall = "QueueTvCall";
     public const string QueueStatusUpdate = "QueueStatusUpdate";
     public const string QueueTransfer = "QueueTransfer";
     public const string ClinicalDiagnosisUpdate = "ClinicalDiagnosisUpdate";
@@ -75,6 +76,7 @@ public static class Policies
         opts.AddPolicy(ChairStatusManage, policy => policy.RequireRole(RoleCodes.Admin));
         opts.AddPolicy(QueueSkip, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Receptionist));
         opts.AddPolicy(QueueCall, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant));
+        opts.AddPolicy(QueueTvCall, policy => policy.RequireRole(RoleCodes.Dentist));
         opts.AddPolicy(InvoiceDiscountWrite, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Receptionist));
         opts.AddPolicy(AppointmentReschedule, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Receptionist, RoleCodes.Patient));
         opts.AddPolicy(InvoicePortalRead, policy => policy.RequireRole(RoleCodes.Patient));

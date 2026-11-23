@@ -11,6 +11,8 @@ namespace Dental.Application.Features.Queue.Services;
 
 public sealed class QueueService
 {
+    private static readonly TimeSpan PublicCallLifetime = TimeSpan.FromSeconds(15);
+
     private readonly IQueueRepository _queueRepository;
     private readonly IAppointmentRepository _appointmentRepository;
     private readonly IPatientRepository _patientRepository;
@@ -1047,7 +1049,6 @@ public sealed class QueueService
     private async Task<Result<QueueEntryResponse>> CallNextCoreAsync(
         int actorUserId, string actorRole, CallNextRequest request, string? ipAddress, CancellationToken ct)
     {
-
         int targetDentistId;
         if (actorRole == RoleCodes.Dentist)
         {
@@ -1090,40 +1091,87 @@ public sealed class QueueService
         if (chairReady.IsFailure) return Result<QueueEntryResponse>.Failure(chairReady.Error);
         nextEntry.Status = QueueStatus.Calling;
         nextEntry.DentistId = targetDentistId;
-        nextEntry.UpdatedAt = DateTime.UtcNow;
+        return await RecordInvitationAsync(nextEntry, QueueStatus.Waiting, actorUserId,
+            actorRole == RoleCodes.Dentist, ipAddress, ct);
+    }
 
-        var history = new QueueStatusHistory
+    public async Task<Result<QueueEntryResponse>> CallOnTvAsync(
+        int queueEntryId, int actorUserId, string actorRole, string? ipAddress, CancellationToken ct = default)
+    {
+        if (actorRole != RoleCodes.Dentist)
+            return Result<QueueEntryResponse>.Failure(Error.QueueTransitionForbidden);
+        if (queueEntryId <= 0 || actorUserId <= 0)
+            return Result<QueueEntryResponse>.Failure(Error.Validation);
+
+        try
         {
-            QueueEntryId = nextEntry.QueueEntryId,
-            FromStatus = QueueStatus.Waiting,
+            return await _unitOfWork.ExecuteSerializableTransactionAsync(async transactionCt =>
+            {
+                var actor = await _userRepository.FindByIdAsync(actorUserId, transactionCt);
+                if (actor is not { IsActive: true } || actor.Role?.RoleCode != RoleCodes.Dentist)
+                    return Result<QueueEntryResponse>.Failure(Error.QueueTransitionForbidden);
+
+                var entry = await _queueRepository.GetByIdAsync(queueEntryId, transactionCt);
+                if (entry is null)
+                    return Result<QueueEntryResponse>.Failure(Error.QueueEntryNotFound);
+                if (entry.DentistId != actorUserId)
+                    return Result<QueueEntryResponse>.Failure(Error.QueueTransitionForbidden);
+
+                var visit = entry.Visit;
+                if (entry.QueueDate != _vietnamClock.Today || entry.Status != QueueStatus.Calling ||
+                    visit is not { IsLocked: false, Status: VisitStatuses.Created or VisitStatuses.InProgress } ||
+                    (visit.DentistId.HasValue && visit.DentistId != actorUserId))
+                    return Result<QueueEntryResponse>.Failure(Error.QueueTvCallBlocked);
+
+                var chairReady = await _visitChairs.CheckReadyAsync(visit, actorUserId, transactionCt);
+                if (chairReady.IsFailure)
+                    return Result<QueueEntryResponse>.Failure(chairReady.Error);
+
+                return await RecordInvitationAsync(entry, QueueStatus.Calling, actorUserId, true, ipAddress, transactionCt);
+            }, ct);
+        }
+        catch (ConcurrentOperationException)
+        {
+            return Result<QueueEntryResponse>.Failure(Error.QueueConcurrent);
+        }
+    }
+
+    private async Task<Result<QueueEntryResponse>> RecordInvitationAsync(
+        QueueEntry entry, QueueStatus fromStatus, int actorUserId, bool publishesOnTv, string? ipAddress, CancellationToken ct)
+    {
+        var now = _vietnamClock.UtcNow;
+        entry.UpdatedAt = now;
+        await _queueRepository.AddStatusHistoryAsync(new QueueStatusHistory
+        {
+            QueueEntryId = entry.QueueEntryId,
+            FromStatus = fromStatus,
             ToStatus = QueueStatus.Calling,
             ChangedByUserId = actorUserId,
-            ChangedAt = DateTime.UtcNow,
-            Reason = "Mời vào phòng (Calling - DL-258)"
-        };
-
-        await _queueRepository.AddStatusHistoryAsync(history, ct);
+            ChangedAt = now,
+            Reason = publishesOnTv ? QueueStatusHistory.PublicInvitationReason : "Mời vào phòng (Calling - DL-258)"
+        }, ct);
         await _unitOfWork.SaveChangesAsync(ct);
 
         await _auditLogger.LogRequiredAsync(
             action: AuditActions.QueueStatusChanged,
             entityType: "QueueEntry",
-            entityId: nextEntry.QueueEntryId,
+            entityId: entry.QueueEntryId,
             userId: actorUserId,
             detail: JsonSerializer.Serialize(new
             {
-                action = "CallNext",
-                queueEntryId = nextEntry.QueueEntryId,
-                dentistId = targetDentistId,
-                queueNumber = nextEntry.QueueNumber,
-                fromStatus = (int)QueueStatus.Waiting,
+                action = fromStatus == QueueStatus.Calling ? "CallOnTv" : "CallNext",
+                queueEntryId = entry.QueueEntryId,
+                dentistId = entry.DentistId,
+                queueNumber = entry.QueueNumber,
+                publishesOnTv,
+                fromStatus = (int)fromStatus,
                 toStatus = (int)QueueStatus.Calling
             }),
             ipAddress: ipAddress,
             ct: ct);
 
-        var refreshed = await _queueRepository.GetByIdAsync(nextEntry.QueueEntryId, ct);
-        return Result<QueueEntryResponse>.Success(await ToResponseAsync(refreshed ?? nextEntry, ct));
+        var refreshed = await _queueRepository.GetByIdAsync(entry.QueueEntryId, ct);
+        return Result<QueueEntryResponse>.Success(await ToResponseAsync(refreshed ?? entry, ct));
     }
 
     private async Task<Dictionary<int, QueueDentistLocation>> LocationsAsync(IEnumerable<int?> dentistIds, CancellationToken ct)
@@ -1222,22 +1270,17 @@ public sealed class QueueService
 
     public async Task<Result<PublicQueueMonitorResponse>> GetPublicQueueDisplayAsync(CancellationToken ct = default)
     {
-        var today = _vietnamClock.Today;
-        var entries = await _queueRepository.GetPublicDisplayQueueAsync(today, ct);
-
-        var locations = await LocationsAsync(entries.Select(q => q.DentistId), ct);
-        // §1.6 & §6.2: TV phòng chờ chỉ phát active call khi Nha sĩ nhấn Gọi bệnh nhân (Calling);
-        // không công khai danh sách chờ (Waiting), không công khai các lượt khác.
-        var inConsultation = entries
-            .Where(q => q.Status == QueueStatus.Calling)
-            .OrderByDescending(q => q.UpdatedAt ?? q.CreatedAt)
-            .Take(5)
-            .Select(q => ToPublicResponse(q, LocationFor(q, locations)))
+        var now = _vietnamClock.UtcNow;
+        var today = DateOnly.FromDateTime(_vietnamClock.ToVietnamTime(now));
+        var calls = await _queueRepository.GetActivePublicCallsAsync(today, now - PublicCallLifetime, now, ct);
+        var locations = await LocationsAsync(calls.Select(call => call.QueueEntry.DentistId), ct);
+        var responseTime = _vietnamClock.UtcNow;
+        var activeCalls = calls
+            .Where(call => call.ChangedAt + PublicCallLifetime > responseTime)
+            .Select(call => ToPublicResponse(call, LocationFor(call.QueueEntry, locations)))
             .ToList();
 
-        var waiting = Array.Empty<PublicQueueItemResponse>();
-
-        return Result<PublicQueueMonitorResponse>.Success(new PublicQueueMonitorResponse(inConsultation, waiting));
+        return Result<PublicQueueMonitorResponse>.Success(new PublicQueueMonitorResponse(activeCalls, []));
     }
 
     public static string MaskPatientName(string? fullName)
@@ -1260,11 +1303,12 @@ public sealed class QueueService
         return $"{prefix}-{queueNumber:D3}";
     }
 
-    private static PublicQueueItemResponse ToPublicResponse(QueueEntry q, QueueDentistLocation? location)
+    private static PublicQueueItemResponse ToPublicResponse(QueueStatusHistory call, QueueDentistLocation? location)
         => new(
-            FormatQueueNumber(q.QueueNumber, q.IsPriority),
-            MaskPatientName(q.Patient?.FullName),
-            (int)q.Status,
+            FormatQueueNumber(call.QueueEntry.QueueNumber, call.QueueEntry.IsPriority),
+            MaskPatientName(call.QueueEntry.Patient?.FullName),
+            (int)call.ToStatus,
+            call.ChangedAt + PublicCallLifetime,
             location?.RoomName
         );
 

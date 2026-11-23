@@ -49,20 +49,12 @@ export interface PublicQueueItemResponse {
   maskedPatientName: string;
   status: number;
   roomName: string | null;
+  expiresAtUtc: string;
 }
 
 export interface PublicQueueMonitorResponse {
   inConsultation: PublicQueueItemResponse[];
   waiting: PublicQueueItemResponse[];
-}
-
-export function maskPublicQueueName(fullName: string | null | undefined): string {
-  const normalized = fullName?.trim().replace(/\s+/g, ' ') ?? '';
-  if (!normalized) return 'Bệnh nhân';
-  const withoutDemo = normalized.endsWith(' (DEMO)')
-    ? normalized.slice(0, -' (DEMO)'.length).trim()
-    : normalized;
-  return withoutDemo || 'Bệnh nhân';
 }
 
 export interface CallNextPayload {
@@ -120,6 +112,10 @@ export const queueService = {
     return response.data;
   },
 
+  async callOnTv(queueEntryId: number): Promise<QueueEntryResponse> {
+    return (await apiClient.post<QueueEntryResponse>(`/queue/${queueEntryId}/call-on-tv`)).data;
+  },
+
   async routeImaging(queueEntryId: number, newStatus: 1 | 5, reason: string | null): Promise<QueueEntryResponse> {
     const response = await apiClient.put<QueueEntryResponse>(`/queue/${queueEntryId}/status`, { newStatus, reason });
     return response.data;
@@ -157,8 +153,21 @@ export const queueService = {
     return response.data;
   },
 
-  async getPublicDisplay(): Promise<PublicQueueMonitorResponse> {
-    const response = await apiClient.get<PublicQueueMonitorResponse>('/queue/display');
+  async getPublicDisplay(signal: AbortSignal): Promise<PublicQueueMonitorResponse> {
+    const response = await apiClient.get<PublicQueueMonitorResponse>('/queue/display', { signal, timeout: 4000 });
+    return response.data;
+  },
+
+  async getPublicCallAudio(queueNumber: string, expiresAtUtc: string, signal: AbortSignal): Promise<ArrayBuffer> {
+    const response = await apiClient.get<ArrayBuffer>('/queue/display', {
+      params: { queueNumber, expiresAtUtc },
+      headers: { Accept: 'audio/mpeg' },
+      responseType: 'arraybuffer',
+      signal,
+      timeout: 4000,
+    });
+    const contentType = String(response.headers['content-type'] ?? '').split(';')[0]?.trim().toLowerCase();
+    if (contentType !== 'audio/mpeg' || !response.data.byteLength) throw new Error('Invalid queue audio');
     return response.data;
   },
 

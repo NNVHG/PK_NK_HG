@@ -1,5 +1,6 @@
 using Dental.Application.Common;
 using Dental.Application.Interfaces;
+using Dental.Domain.Constants;
 using Dental.Domain.Entities;
 using Dental.Domain.Enums;
 using Dental.Infrastructure.Data;
@@ -146,18 +147,27 @@ public sealed class QueueRepository : IQueueRepository
             .FirstOrDefaultAsync(ct);
     }
 
-    public async Task<IReadOnlyList<QueueEntry>> GetPublicDisplayQueueAsync(DateOnly date, CancellationToken ct = default)
-    {
-        return await _db.QueueEntries
+    public async Task<IReadOnlyList<QueueStatusHistory>> GetActivePublicCallsAsync(
+        DateOnly date, DateTime windowStartUtc, DateTime utcNow, CancellationToken ct = default)
+        => await _db.QueueStatusHistories
             .AsNoTracking()
-            .Include(q => q.Patient)
-            .Include(q => q.Dentist)
-            .Include(q => q.Appointment)
-            .Include(q => q.StatusHistories.Where(h => (h.FromStatus == QueueStatus.InImaging || h.FromStatus == QueueStatus.Skipped) && h.ToStatus == QueueStatus.Waiting))
-            .Where(q => q.QueueDate == date &&
-                        (q.Status == QueueStatus.InConsultation || q.Status == QueueStatus.Calling || q.Status == QueueStatus.Waiting))
+            .Where(call => call.QueueEntry.QueueDate == date && call.QueueEntry.Status == QueueStatus.Calling &&
+                call.ToStatus == QueueStatus.Calling &&
+                (call.FromStatus == QueueStatus.Waiting || call.FromStatus == QueueStatus.Calling) &&
+                call.Reason == QueueStatusHistory.PublicInvitationReason &&
+                call.ChangedAt > windowStartUtc && call.ChangedAt <= utcNow &&
+                call.ChangedByUser != null && call.ChangedByUser.IsActive &&
+                call.ChangedByUser.Role.RoleCode == RoleCodes.Dentist &&
+                call.ChangedByUserId == call.QueueEntry.DentistId &&
+                !call.QueueEntry.StatusHistories.Any(later =>
+                    later.ChangedAt > call.ChangedAt ||
+                    (later.ChangedAt == call.ChangedAt && later.QueueStatusHistoryId > call.QueueStatusHistoryId)))
+            .OrderByDescending(call => call.ChangedAt)
+            .ThenByDescending(call => call.QueueStatusHistoryId)
+            .Take(5)
+            .Include(call => call.QueueEntry)
+                .ThenInclude(entry => entry.Patient)
             .ToListAsync(ct);
-    }
 
     public async Task AddStatusHistoryAsync(QueueStatusHistory history, CancellationToken ct = default)
         => await _db.QueueStatusHistories.AddAsync(history, ct);

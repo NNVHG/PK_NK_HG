@@ -1,5 +1,8 @@
+using System.Globalization;
 using AppPolicies = Dental.Api.Policies.Policies;
+using Dental.Api.RateLimiting;
 using Dental.Application.Common;
+using Dental.Application.Features.MOD_CHK;
 using Dental.Application.Features.Queue.DTOs;
 using Dental.Application.Features.Queue.Services;
 using Dental.Application.Features.Queue.Validators;
@@ -7,6 +10,7 @@ using Dental.Application.Interfaces;
 using FluentValidation.Results;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Dental.Api.Controllers;
 
@@ -234,6 +238,24 @@ public sealed class QueueController : ControllerBase
         return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
     }
 
+    [HttpPost("{id:int}/call-on-tv")]
+    [Authorize(Policy = AppPolicies.QueueTvCall)]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
+    [ProducesResponseType(typeof(QueueEntryResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> CallOnTv(int id, CancellationToken ct)
+    {
+        if (id <= 0) return Failure(Error.Validation);
+        if (_currentUser.UserId is not int actorId) return Unauthorized();
+
+        var result = await _queueService.CallOnTvAsync(
+            id, actorId, _currentUser.RoleCode ?? string.Empty, HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
+        return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
+    }
+
     [HttpGet("call-dentists")]
     [Authorize(Policy = AppPolicies.QueueView)]
     [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
@@ -307,13 +329,44 @@ public sealed class QueueController : ControllerBase
     [HttpGet("display")]
     [HttpGet("public-monitor")]
     [AllowAnonymous]
+    [EnableRateLimiting(QueueVoiceRateLimits.Policy)]
     [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
     [ProducesResponseType(typeof(PublicQueueMonitorResponse), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetPublicDisplay(CancellationToken ct)
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<IActionResult> GetPublicDisplay(
+        [FromQuery(Name = QueueVoiceRateLimits.NumberQuery)] string? queueNumber,
+        [FromQuery(Name = QueueVoiceRateLimits.ExpiryQuery)] string? expiresAtUtc,
+        [FromServices] IQueueVoiceSynthesizer voice, [FromServices] VietnamClock clock, CancellationToken ct)
     {
-        var result = await _queueService.GetPublicQueueDisplayAsync(ct);
-        return Ok(result.Value);
+        if (!QueueVoiceRateLimits.RequestsVoice(Request))
+            return Ok((await _queueService.GetPublicQueueDisplayAsync(ct)).Value);
+
+        if (Request.Query[QueueVoiceRateLimits.NumberQuery].Count != 1 || Request.Query[QueueVoiceRateLimits.ExpiryQuery].Count != 1 ||
+            queueNumber is not { Length: >= 5 and <= 12 } || expiresAtUtc is not { Length: <= 40 } ||
+            !DateTimeOffset.TryParse(expiresAtUtc, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var expiry))
+            return BadRequest();
+
+        var call = await FindActiveCallAsync(queueNumber, expiry.UtcDateTime, ct);
+        if (call is null)
+            return NotFound();
+
+        var audio = await voice.SynthesizeAsync(call.MaskedPatientName, call.ExpiresAtUtc - clock.UtcNow, ct);
+        if (audio is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable);
+
+        // A call may be withdrawn while the provider prepares the clip.
+        if (await FindActiveCallAsync(queueNumber, expiry.UtcDateTime, ct) is null)
+            return NotFound();
+
+        return File(audio, "audio/mpeg");
     }
+
+    private async Task<PublicQueueItemResponse?> FindActiveCallAsync(string queueNumber, DateTime expiry, CancellationToken ct)
+        => (await _queueService.GetPublicQueueDisplayAsync(ct)).Value!.InConsultation
+            .FirstOrDefault(call => call.QueueNumberDisplay == queueNumber && call.ExpiresAtUtc == expiry);
 
     private IActionResult ToValidationProblem(ValidationResult validation)
         => BadRequest(new
@@ -329,7 +382,7 @@ public sealed class QueueController : ControllerBase
         {
             "GEN_001" or "CHK_001" or "CHK_008" or "APP_001" => StatusCodes.Status404NotFound,
             "GEN_002" or "CHK_004" => StatusCodes.Status403Forbidden,
-            "BIL_012" or "BIL_013" or "MST065" or "MST066" or "CHK_002" or "CHK_009" or "CHK_010" or "CHK_011" or "CHK_012" or "CHK_013" or "CHK_014" or "CHK_015" or "PAT_090" or "PAT_091" or "APP_008" => StatusCodes.Status409Conflict,
+            "BIL_012" or "BIL_013" or "MST065" or "MST066" or "CHK_002" or "CHK_009" or "CHK_010" or "CHK_011" or "CHK_012" or "CHK_013" or "CHK_014" or "CHK_015" or "CHK_016" or "PAT_090" or "PAT_091" or "APP_008" => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status400BadRequest,
         };
 

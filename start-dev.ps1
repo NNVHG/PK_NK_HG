@@ -17,7 +17,7 @@ function Stop-WithMessage([string]$Message) {
 function Get-LocalSecretGroup([string]$Name) {
     switch -Regex ($Name) {
         '^POSTGRES_PASSWORD$' { return 'Docker' }
-        '^VIETTEL_TTS_(TOKEN|VOICE|SPEED)$' { return 'Frontend' }
+        '^(VIETTEL_TTS_(TOKEN|VOICE|SPEED)|ViettelTts__(Token|Voice|Speed))$' { return 'Backend' }
         '^(ConnectionStrings__Default|Jwt__Secret|IdentitySecurity__(HmacKey|CurrentVersion|Keys__[1-9][0-9]*)|Seed__(AdminPhone|AdminPassword|DemoUsers|DemoPassword|PatientTestFixtures)|Payment__Webhook(SecretKey|ActorUserId)|(PasswordRecovery|PatientActivation|GuestBooking)__Sms__(Enabled|AccountSid|AuthToken|From))$' { return 'Backend' }
     }
 }
@@ -38,6 +38,11 @@ function Read-LocalSecrets {
     }
 
     $groups = @{ Backend = @{}; Frontend = @{}; Docker = @{} }
+    $viettelAliases = @{
+        'VIETTEL_TTS_TOKEN' = 'ViettelTts__Token'
+        'VIETTEL_TTS_VOICE' = 'ViettelTts__Voice'
+        'VIETTEL_TTS_SPEED' = 'ViettelTts__Speed'
+    }
     foreach ($entry in $config.PSObject.Properties) {
         $group = Get-LocalSecretGroup $entry.Name
         if (-not $group) {
@@ -49,7 +54,12 @@ function Read-LocalSecrets {
         }
         $value = [string]$entry.Value
         if (-not [string]::IsNullOrWhiteSpace($value)) {
-            $groups[$group][$entry.Name] = $value
+            $name = $entry.Name
+            if ($viettelAliases.ContainsKey($name)) {
+                $name = $viettelAliases[$name]
+                if (-not [string]::IsNullOrWhiteSpace([string]$config.PSObject.Properties[$name].Value)) { continue }
+            }
+            $groups[$group][$name] = $value
         }
     }
     return $groups

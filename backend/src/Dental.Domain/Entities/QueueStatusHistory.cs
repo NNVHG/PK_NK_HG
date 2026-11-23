@@ -7,6 +7,8 @@ namespace Dental.Domain.Entities;
 /// </summary>
 public sealed class QueueStatusHistory
 {
+    public const string PublicInvitationReason = "Nha sĩ gọi bệnh nhân trên TV";
+
     public int QueueStatusHistoryId { get; set; }
     public int QueueEntryId { get; set; }
     public QueueStatus? FromStatus { get; set; }

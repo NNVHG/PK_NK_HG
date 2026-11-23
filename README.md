@@ -180,7 +180,7 @@ Nếu cửa sổ API báo lỗi khởi động, hãy xử lý lỗi ở cửa s�
 
 ## 5. Cơ sở dữ liệu demo và tài khoản thử nghiệm
 
-Để nạp dữ liệu demo trên cơ sở dữ liệu cục bộ, điền `Seed__DemoUsers` là `true`. Điền `Seed__DemoPassword` cho các tài khoản demo và `Seed__AdminPhone` cùng `Seed__AdminPassword` cho Admin ban đầu. Nếu dùng bộ tài khoản của Gia, lấy hai mật khẩu trong bản `secrets.json` riêng. Seeder tạo dữ liệu tổng hợp cho lịch hẹn, khám và hóa đơn. Thay đổi mật khẩu trong tệp cấu hình không đổi mật khẩu của tài khoản đã tồn tại.
+Để nạp dữ liệu demo trên cơ sở dữ liệu cục bộ, điền `Seed__DemoUsers` là `true` và chọn `Seed__DemoPassword`. Điền `Seed__AdminPhone` và `Seed__AdminPassword` để tạo Admin ban đầu khi chưa có. Seeder tạo dữ liệu tổng hợp cho lịch hẹn, khám và hóa đơn. Thay đổi mật khẩu trong tệp cấu hình không đổi mật khẩu của tài khoản đã tồn tại.
 
 ### 5.1. Bảng tài khoản thử nghiệm 5 vai trò
 > SĐT và CCCD bên dưới là dữ liệu mẫu dùng để chạy thử. Mật khẩu đọc từ `secrets.json` của bạn.
@@ -216,7 +216,10 @@ Chỉ dùng QR/CCCD tổng hợp dành cho demo hoặc dữ liệu do bạn tự
 | `Seed__AdminPhone`, `Seed__AdminPassword`, `Seed__DemoUsers`, `Seed__DemoPassword` | Mật khẩu do bạn đặt cho tài khoản thử. Bật `Seed__DemoUsers` để nạp dữ liệu tổng hợp. `Seed__PatientTestFixtures` dành cho bộ fixture cục bộ có sẵn. |
 | `PasswordRecovery__Sms__*`, `PatientActivation__Sms__*`, `GuestBooking__Sms__*` | Cấu hình SMS nếu dùng. Chỉ đặt `Enabled` thành `true` khi có thông tin gửi hợp lệ. Đặt lịch công khai theo luồng hiện hành không yêu cầu OTP. |
 | `Payment__WebhookSecretKey`, `Payment__WebhookActorUserId` | Tùy chọn khi dùng webhook ngân hàng. Có thể để trống khi xác nhận chuyển khoản thủ công. |
-| `VIETTEL_TTS_TOKEN`, `VIETTEL_TTS_VOICE`, `VIETTEL_TTS_SPEED` | Tùy chọn cho Vite đọc thông báo TV qua Viettel AI. Token chỉ được cấp cho tiến trình Vite. Khi bật, nội dung lời gọi được gửi tới dịch vụ Viettel. |
+
+| `ViettelTts__Token`, `ViettelTts__Voice`, `ViettelTts__Speed` | Cấu hình backend cho Viettel AI Text to Speech. Giọng mặc định `hcm-diemmy`, tốc độ `0.95`. Token lưu trong `secrets.json` cục bộ hoặc hệ thống bí mật của máy chủ. `start-dev.ps1` cũng nhận các tên `VIETTEL_TTS_*` cũ trong `secrets.json`. |
+
+Mở `/queue/display` và bật âm thanh để nhận lời mời từ Nha sĩ. Backend gửi câu đọc tên công khai tới Viettel AI và trả MP3 khi lời mời còn hiệu lực. Nếu token hết hạn, hết hạn mức hoặc dịch vụ gặp lỗi, TV phát tiếng **Bing Bong** và vẫn hiện số, tên và phòng. **Nghe thử chuông** phát tại thiết bị. [Tài liệu API Viettel AI](https://viettelai.vn/en/tai-lieu)
 
 Nếu đang chuyển từ `backend/src/Dental.Api/appsettings.Development.json` và `frontend/.env.local`, chép các giá trị đang dùng sang `secrets.json`. Những ô có giá trị trong tệp trung tâm ghi đè cấu hình cùng tên. Ô trống không ghi đè cấu hình cũ. Để tắt SMS đang bật trong cấu hình cũ, điền rõ `Enabled` là `false`. Đóng và chạy lại API/Vite sau khi đổi cấu hình.
 
@@ -245,7 +248,7 @@ git check-ignore -v -- secrets.json
 git diff --cached --name-only
 ```
 
-Tệp được chia sẻ là `secrets.example.json` với các ô trống. Mẫu Development cũ ở thư mục API cũng để trống các trường bí mật. Giữ `secrets.json` và bản sao lưu ở nơi riêng.
+Tệp được chia sẻ là `secrets.example.json` với các ô trống. Giữ `secrets.json` và bản sao lưu ở nơi riêng.
 
 ### 6.2. Chạy từng dịch vụ
 
@@ -271,12 +274,11 @@ dotnet run --project backend/src/Dental.Api
 **Frontend**, trong một cửa sổ mới:
 
 ```powershell
-.\start-dev.ps1 -LoadSecretsOnly Frontend
 npm.cmd --prefix frontend ci
 npm.cmd --prefix frontend run dev -- --strictPort
 ```
 
-Để xem bản build, chạy `npm.cmd --prefix frontend run build` rồi `npm.cmd --prefix frontend run preview` trong cửa sổ frontend đã nạp cấu hình. Khi không cấu hình SMS, màn hình khôi phục mật khẩu và kích hoạt có thể hiển thị OTP thử trong Development. Thu ngân có thể xác nhận chuyển khoản thủ công khi không cấu hình webhook.
+Để xem bản build, chạy `npm.cmd --prefix frontend run build` rồi `npm.cmd --prefix frontend run preview`. Khi không cấu hình SMS, màn hình khôi phục mật khẩu và kích hoạt có thể hiển thị OTP thử trong Development. Thu ngân có thể xác nhận chuyển khoản thủ công khi không cấu hình webhook.
 
 ---
 

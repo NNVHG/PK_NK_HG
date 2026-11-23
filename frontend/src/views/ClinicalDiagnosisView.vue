@@ -114,12 +114,12 @@
               </button>
               <button
                 type="button"
-                v-if="selected.status === 6"
+                v-if="canCallOnTv"
                 class="btn btn-outline-sm"
-                :disabled="busy || tvCalling"
+                :disabled="busy || needsReview"
                 @click="triggerTvRecall"
               >
-                {{ tvCalling ? `Đang gọi trên TV (${tvCallRemainingSeconds}s)…` : 'Gọi lại trên TV' }}
+                {{ tvCalling ? 'Đang gửi lời mời…' : 'Gọi lại trên TV' }}
               </button>
               <button type="button" class="btn btn-outline-sm" :disabled="busy" @click="reloadVisit">
                 {{ dirty ? 'Hủy sửa và tải lại' : 'Tải lại hồ sơ' }}
@@ -186,7 +186,7 @@ import DiagnosisAutocomplete from '@/components/DiagnosisAutocomplete.vue';
 import SafetyAlertBanner from '@/components/SafetyAlertBanner.vue';
 
 import { useAuthStore } from '@/stores/auth';
-import { queueService, maskPublicQueueName, type QueueEntryResponse } from '@/services/queue';
+import { queueService, type QueueEntryResponse } from '@/services/queue';
 import { visitsService } from '@/services/visits';
 import { appointmentsService, type BookingDentist } from '@/services/appointments';
 import { patientsService, type VisitDetails, type VitalSignRecord } from '@/services/patients';
@@ -205,11 +205,9 @@ const page = ref(1);
 const totalPages = ref(1);
 const loadingQueue = ref(false);
 const loadingVisit = ref(false);
-const TV_CALL_DURATION_SECONDS = 15;
 const starting = ref(false);
 const saving = ref(false);
 const tvCalling = ref(false);
-const tvCallRemainingSeconds = ref(0);
 const tvCalledMsg = ref('');
 const queueError = ref('');
 const visitError = ref('');
@@ -217,9 +215,10 @@ const actionError = ref('');
 const successMessage = ref('');
 const needsReview = ref(false), dentists = ref<BookingDentist[]>([]), startDentistId = ref(0), dentistsLoading = ref(false), dentistError = ref('');
 let life = 0, queueVersion = 0, visitVersion = 0, dentistVersion = 0, preferredVersion = 0;
-let tvCallTimer: ReturnType<typeof setInterval> | null = null;
 const targetDentistId = computed(() => auth.role === 'DENTIST' ? auth.user?.userId : startDentistId.value);
-const busy = computed(() => loadingQueue.value || loadingVisit.value || starting.value || saving.value);
+const busy = computed(() => loadingQueue.value || loadingVisit.value || starting.value || saving.value || tvCalling.value);
+const canCallOnTv = computed(() => auth.role === 'DENTIST' && selected.value?.status === 6 &&
+  selected.value.dentistId === auth.user?.userId && Boolean(selected.value.visitId));
 const canEdit = computed(() => !needsReview.value && !visit.value?.isLocked && ['InProgress', 'Correcting'].includes(visit.value?.status ?? '')
   && (auth.role === 'ADMIN' || (auth.role === 'DENTIST' && visit.value?.dentistId === auth.user?.userId)));
 const canStart = computed(() => !needsReview.value && !visit.value?.isLocked && ['Created', 'InProgress'].includes(visit.value?.status ?? '')
@@ -249,19 +248,14 @@ async function loadDentists() {
   } catch { if (ticket === dentistVersion) { startDentistId.value = 0; dentistError.value = 'Không tải được nha sĩ hoạt động. Tải lại trước khi bắt đầu khám.'; } }
   finally { if (ticket === dentistVersion) dentistsLoading.value = false; }
 }
-function clearTvCallTimer() {
-  if (tvCallTimer !== null) {
-    clearInterval(tvCallTimer);
-    tvCallTimer = null;
-  }
+function clearTvCallStatus() {
   tvCalling.value = false;
-  tvCallRemainingSeconds.value = 0;
   tvCalledMsg.value = '';
 }
 
 async function loadQueue(targetPage = 1) {
   if (busy.value || dirty.value || !Number.isInteger(targetPage) || targetPage < 1 || targetPage > 1_000_000) return;
-  clearTvCallTimer();
+  clearTvCallStatus();
   const ticket = ++queueVersion; entries.value = []; selected.value = null; visit.value = null; diagnosis.value = ''; clinicalNotes.value = ''; startDentistId.value = 0;
   loadingQueue.value = true;
   queueError.value = '';
@@ -319,7 +313,7 @@ async function openInitialVisit() {
 async function selectEntry(entry: QueueEntryResponse) {
   if (busy.value || dirty.value) return;
   preferredVersion++;
-  clearTvCallTimer();
+  clearTvCallStatus();
   selected.value = entry; startDentistId.value = entry.dentistId ?? 0;
   needsReview.value = false;
   const request = reloadVisit();
@@ -367,7 +361,7 @@ async function startConsultation() {
   try {
     const updated = await queueService.startConsultation(selected.value.queueEntryId, Number(targetDentistId.value));
     if (ticket !== life) return;
-    clearTvCallTimer();
+    clearTvCallStatus();
     needsReview.value = true;
     entries.value = entries.value.map(entry => entry.queueEntryId === updated.queueEntryId ? updated : entry);
     selected.value = updated;
@@ -403,34 +397,24 @@ async function saveDiagnosis() {
   } finally { if (ticket === life) saving.value = false; }
 }
 
-function triggerTvRecall() {
-  if (!selected.value || selected.value.status !== 6 || tvCalling.value) return;
-  clearTvCallTimer();
+async function triggerTvRecall() {
+  const entry = selected.value;
+  if (!entry || !canCallOnTv.value || busy.value || needsReview.value) return;
+  const ticket = life;
+  clearTvCallStatus();
+  actionError.value = '';
   tvCalling.value = true;
-  tvCallRemainingSeconds.value = TV_CALL_DURATION_SECONDS;
-
-  const payload = {
-    queueNumberDisplay: `A-${String(selected.value.queueNumber).padStart(3, '0')}`,
-    maskedPatientName: maskPublicQueueName(selected.value.patientName),
-    roomName: selected.value.roomName || null,
-    status: selected.value.status
-  };
-
   try {
-    const channel = new BroadcastChannel('dental_tv_call_channel');
-    channel.postMessage(payload);
-    channel.close();
-  } catch {}
-
-  tvCalledMsg.value = `Đã phát tín hiệu gọi TV cho số ${payload.queueNumberDisplay} (${tvCallRemainingSeconds.value}s)`;
-  tvCallTimer = setInterval(() => {
-    tvCallRemainingSeconds.value--;
-    if (tvCallRemainingSeconds.value <= 0) {
-      clearTvCallTimer();
-      return;
-    }
-    tvCalledMsg.value = `Đã phát tín hiệu gọi TV cho số ${payload.queueNumberDisplay} (${tvCallRemainingSeconds.value}s)`;
-  }, 1000);
+    const result = await queueService.callOnTv(entry.queueEntryId);
+    if (ticket !== life) return;
+    if (result.queueEntryId !== entry.queueEntryId || result.visitId !== entry.visitId ||
+      result.status !== 6 || result.dentistId !== auth.user?.userId) throw new Error('Unexpected invitation');
+    tvCalledMsg.value = 'Đã gửi lời mời tới TV phòng chờ.';
+  } catch (error) {
+    if (ticket === life) actionError.value = errorMessage(error, 'Không thể gửi lời mời tới TV. Tải lại hồ sơ và thử lại.');
+  } finally {
+    if (ticket === life) tvCalling.value = false;
+  }
 }
 
 onMounted(async () => {
@@ -440,7 +424,7 @@ onMounted(async () => {
 });
 onBeforeRouteUpdate(() => !dirty.value && !busy.value);
 watch(() => [route.query.queueEntryId, route.query.visitId], () => void openInitialVisit());
-onUnmounted(() => { life++; queueVersion++; visitVersion++; dentistVersion++; preferredVersion++; clearTvCallTimer(); entries.value = []; selected.value = null; visit.value = null; diagnosis.value = ''; clinicalNotes.value = ''; dentists.value = []; startDentistId.value = 0; dentistError.value = ''; actionError.value = ''; successMessage.value = ''; queueError.value = ''; visitError.value = ''; });
+onUnmounted(() => { life++; queueVersion++; visitVersion++; dentistVersion++; preferredVersion++; clearTvCallStatus(); entries.value = []; selected.value = null; visit.value = null; diagnosis.value = ''; clinicalNotes.value = ''; dentists.value = []; startDentistId.value = 0; dentistError.value = ''; actionError.value = ''; successMessage.value = ''; queueError.value = ''; visitError.value = ''; });
 </script>
 
 <style scoped>

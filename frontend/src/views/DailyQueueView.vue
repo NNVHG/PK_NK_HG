@@ -87,7 +87,10 @@
         </div>
         <p v-if="row.notes" class="care-note"><strong>Ghi chú cần lưu ý</strong>{{ row.notes }}</p>
         <div class="queue-card-actions">
-          <button v-if="row.status === 6" type="button" class="btn-recall-tv" @click="emitTvCall(row)">Đọc lại trên TV</button>
+          <button v-if="canCallOnTv(row)" type="button" class="btn-recall-tv"
+            :disabled="loading || writing || needsReview" @click="handleCallOnTv(row)">
+            {{ callingOnTv ? 'Đang gửi lời mời…' : 'Gọi lại trên TV' }}
+          </button>
           <RouterLink v-if="row.visitId && [2, 6].includes(row.status) && (authStore.role === 'ADMIN' ||
             authStore.role === 'DENTIST' && row.dentistId === authStore.user?.userId)" :to="clinicalLocation(row)">Mở hồ sơ lâm sàng</RouterLink>
           <template v-if="authStore.role === 'ASSISTANT' && row.visitId && [1, 2, 5, 6].includes(row.status)">
@@ -222,7 +225,7 @@
 import { computed, onMounted, onUnmounted, ref, watch, type ComponentPublicInstance } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
-import { queueService, maskPublicQueueName, type QueueEntryResponse, type CallingDentist } from '@/services/queue';
+import { queueService, type QueueEntryResponse, type CallingDentist } from '@/services/queue';
 import { WORKSPACE_UPDATED_EVENT, workspacesService } from '@/services/workspaces';
 const router = useRouter();
 const linkedEntry = ref<QueueEntryResponse | null>(null), linkedEntryLoading = ref(false), linkedEntryError = ref('');
@@ -255,6 +258,7 @@ function locationLabel(item: { roomName?: string | null; chairNumber?: string | 
   return item.roomName || 'Chưa nhận phòng';
 }
 const loading = ref(false), callingNext = ref(false), error = ref(''), actionMsg = ref(''), updatedAt = ref('');
+const callingOnTv = ref(false);
 const authStore = useAuthStore(), canCallNext = computed(() => ['ADMIN', 'DENTIST', 'ASSISTANT'].includes(authStore.role));
 const canTransferQueue = computed(() => ['ADMIN', 'RECEPTIONIST', 'DENTIST'].includes(authStore.role));
 const needsCallingDentist = computed(() => ['ADMIN', 'ASSISTANT'].includes(authStore.role));
@@ -268,7 +272,7 @@ const pauseRow = ref<QueueEntryResponse | null>(null), pauseReason = ref(''), pa
 const resumeRow = ref<QueueEntryResponse | null>(null), resumeDentistId = ref(0), resumeReason = ref(''), resumeConfirmed = ref(false), resuming = ref(false);
 const transferRow = ref<QueueEntryResponse | null>(null), transferDentistId = ref(0), transferReason = ref(''), transferConfirmed = ref(false), transferring = ref(false);
 const cleanupOpen = ref(false), cleanupConfirmed = ref(false), cleaningUp = ref(false);
-const writing = computed(() => callingNext.value || cancelling.value || routingImaging.value || changingAbsence.value || pausing.value || resuming.value || transferring.value || cleaningUp.value);
+const writing = computed(() => callingNext.value || callingOnTv.value || cancelling.value || routingImaging.value || changingAbsence.value || pausing.value || resuming.value || transferring.value || cleaningUp.value);
 const dentists = ref<CallingDentist[]>([]), callDentistId = ref(0), dentistsLoading = ref(false), dentistError = ref(''), needsReview = ref(false);
 const transferTargets = computed(() => dentists.value.filter(dentist => dentist.dentistId !== transferRow.value?.dentistId));
 let version = 0, life = 0, dentistVersion = 0;
@@ -331,20 +335,28 @@ async function load(targetPage = 1) {
   } catch { if (ticket === version) error.value = 'Không thể tải hàng đợi. Vui lòng tải lại.'; }
   finally { if (ticket === version) loading.value = false; }
 }
-function emitTvCall(entry: QueueEntryResponse) {
-  if (entry.status !== 6) return;
-  const payload = {
-    queueNumberDisplay: numberLabel(entry.queueNumber),
-    maskedPatientName: maskPublicQueueName(entry.patientName),
-    roomName: entry.roomName || null,
-    status: entry.status
-  };
+function canCallOnTv(entry: QueueEntryResponse) {
+  return authStore.role === 'DENTIST' && entry.status === 6 &&
+    entry.dentistId === authStore.user?.userId && Boolean(entry.visitId);
+}
+async function handleCallOnTv(entry: QueueEntryResponse) {
+  if (loading.value || writing.value || needsReview.value || !canCallOnTv(entry)) return;
+  const ticket = life;
+  callingOnTv.value = true;
+  error.value = '';
+  actionMsg.value = '';
   try {
-    const ch = new BroadcastChannel('dental_tv_call_channel');
-    ch.postMessage(payload);
-    ch.close();
-  } catch {}
-  actionMsg.value = `Đã phát tín hiệu gọi số ${numberLabel(entry.queueNumber)} - ${entry.patientName} lên màn hình TV.`;
+    const result = await queueService.callOnTv(entry.queueEntryId);
+    if (ticket !== life) return;
+    if (result.queueEntryId !== entry.queueEntryId || !canCallOnTv(result)) throw new Error('Unexpected invitation');
+    actionMsg.value = `Đã gửi lời mời số ${numberLabel(result.queueNumber)} tới TV phòng chờ.`;
+  } catch (err: unknown) {
+    if (ticket !== life) return;
+    const failure = err as { response?: { data?: { message?: string } } };
+    error.value = failure.response?.data?.message || 'Không thể gửi lời mời tới TV. Tải lại hàng đợi và thử lại.';
+  } finally {
+    if (ticket === life) callingOnTv.value = false;
+  }
 }
 
 async function handleCallNext() {
@@ -356,8 +368,8 @@ async function handleCallNext() {
     const entry = await queueService.callNext(needsCallingDentist.value ? { dentistId: callDentistId.value } : undefined);
     if (ticket !== life) return;
     if (entry.status !== 6) throw new Error('Unexpected invitation status');
-    emitTvCall(entry);
-    actionMsg.value = `Đã mời số ${numberLabel(entry.queueNumber)} - ${entry.patientName} ${locationLabel(entry)}; đã gửi thông báo TV.`;
+    const room = entry.roomName ? ` vào ${entry.roomName}` : '';
+    actionMsg.value = `Đã mời số ${numberLabel(entry.queueNumber)} - ${entry.patientName}${room}.`;
     if (await openDentistVisit(entry)) return;
     needsReview.value = true;
     await load(page.value);

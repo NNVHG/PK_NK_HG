@@ -26,16 +26,16 @@
           type="button"
           class="sound-toggle"
           :disabled="isPlayingAudio || !!activeCall"
-          @click="previewVoice"
+          @click="previewBell"
         >
-          Nghe thử giọng
+          Nghe thử chuông
         </button>
         <div class="clock">{{ currentTime }}</div>
-        <small v-if="soundEnabled && (playbackBlocked || viettelTtsExpiredOrUnavailable)" class="sound-status" role="status">
+        <small v-if="soundEnabled && (playbackBlocked || voiceUnavailable)" class="sound-status" role="status">
           {{
             playbackBlocked
-              ? 'Trình duyệt đang chặn tự phát âm thanh. Bấm Mở khóa loa TV để bật tiếng đọc mời bệnh nhân.'
-              : 'Dịch vụ đọc tên đang gián đoạn. TV dùng lời mời tiếng Việt có sẵn khi tải được tệp âm thanh.'
+              ? 'Trình duyệt đang chặn tự phát âm thanh. Bấm Mở khóa loa TV để bật âm thanh.'
+              : 'Giọng đọc Viettel AI hiện không khả dụng. Xem số thứ tự và phòng khi nghe chuông.'
           }}
         </small>
       </div>
@@ -69,7 +69,7 @@
         <div class="welcome-tag">HỆ THỐNG Y TẾ NHA KHOA KỸ THUẬT CAO</div>
         <h2 class="welcome-heading">Chào Mừng Quý Khách Đến Khám & Chăm Sóc Răng Miệng</h2>
         <p class="welcome-desc">
-          Vui lòng thư giãn tại sảnh tiếp đón. Loa sẽ đọc tên người bệnh và màn hình hiển thị số thứ tự cùng phòng khi Nha sĩ gọi.
+          Vui lòng chờ tại sảnh tiếp đón. Khi Nha sĩ gọi, màn hình sẽ hiển thị tên, số thứ tự và phòng.
         </p>
       </div>
 
@@ -86,7 +86,7 @@
           <div class="tip-icon">📢</div>
           <div class="tip-content">
             <h3>Lắng nghe gọi tên & số thứ tự</h3>
-            <p>Hệ thống phát âm thanh chuông báo, đọc tên và hiển thị số thứ tự cùng phòng trong 15 giây sau khi được gọi.</p>
+            <p>Khi nghe đọc tên hoặc nghe chuông, vui lòng xem số thứ tự và phòng trên màn hình.</p>
           </div>
         </div>
 
@@ -130,544 +130,313 @@ import { queueService, type PublicQueueItemResponse } from '@/services/queue';
 const SOUND_STORAGE_KEY = 'dental.tv.sound';
 const CALL_DURATION_SECONDS = 15;
 const CALL_TTL_MS = CALL_DURATION_SECONDS * 1000;
-const VIETTEL_CACHE_LIMIT = 20;
+const BELL_DURATION_MS = 1730;
 
-const inConsultation = ref<PublicQueueItemResponse[]>([]);
-const waiting = ref<PublicQueueItemResponse[]>([]);
+interface TimedCall {
+  key: string;
+  item: PublicQueueItemResponse;
+  deadline: number;
+}
+
 const error = ref('');
 const currentTime = ref('');
 const soundEnabled = ref(true);
 const playbackBlocked = ref(false);
-const viettelTtsExpiredOrUnavailable = ref(false);
+const voiceUnavailable = ref(false);
+const activeCall = ref<PublicQueueItemResponse | null>(null);
+const remainingCallSeconds = ref(0);
+const isPlayingAudio = ref(false);
 
-interface ActiveCallData {
-  queueNumberDisplay: string;
-  maskedPatientName: string;
-  roomName: string | null;
-  status: number;
-}
-
-interface AudioQueueItem {
-  text: string;
-  expiresAt: number;
-}
-
-const activeCall = ref<ActiveCallData | null>(null);
-const remainingCallSeconds = ref(CALL_DURATION_SECONDS);
-let callTimer: ReturnType<typeof setInterval> | null = null;
-let broadcastChannel: BroadcastChannel | null = null;
+const seenCalls = new Map<string, number>();
+const audioQueue: TimedCall[] = [];
+let currentCalls: TimedCall[] = [];
+let playingAudio: TimedCall | null = null;
+let audioContext: AudioContext | null = null;
+let cancelAudioStage: (() => void) | null = null;
+let displayTimer: ReturnType<typeof setInterval> | null = null;
+let clockTimer: ReturnType<typeof setInterval> | null = null;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+let publicRequest: AbortController | null = null;
+let initialSnapshotLoaded = false;
+let mounted = false;
 
 function formatCallPatientName(name: string | null | undefined): string {
-  const normalized = name?.trim().replace(/\s+/g, ' ') ?? '';
-  if (!normalized) return 'Bệnh nhân';
-  const withoutDemo = normalized.endsWith(' (DEMO)')
-    ? normalized.slice(0, -' (DEMO)'.length).trim()
-    : normalized;
-  return withoutDemo || 'Bệnh nhân';
+  const normalized = name?.normalize('NFC').trim().replace(/\s+/g, ' ').replace(/\s+\(DEMO\)$/i, '').trim();
+  return normalized || 'Bệnh nhân';
 }
 
-function triggerCallBanner(data: ActiveCallData) {
-  activeCall.value = {
-    ...data,
-    maskedPatientName: formatCallPatientName(data.maskedPatientName)
-  };
-  remainingCallSeconds.value = CALL_DURATION_SECONDS;
-  if (callTimer) clearInterval(callTimer);
-
-  callTimer = setInterval(() => {
-    remainingCallSeconds.value--;
-    if (remainingCallSeconds.value <= 0) {
-      if (callTimer) clearInterval(callTimer);
-      callTimer = null;
-      activeCall.value = null;
-    }
-  }, 1000);
-}
-
-function locationLabel(item: { roomName?: string | null }): string {
+function locationLabel(item: PublicQueueItemResponse): string {
   return item.roomName || 'Vui lòng hỏi quầy tiếp đón để được hướng dẫn';
 }
 
-function formatSpokenQueueNumber(queueNumberDisplay: string | null | undefined): string {
-  const normalized = queueNumberDisplay?.trim() ?? '';
-  if (!normalized) return '';
-  return normalized.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-function formatSpokenRoomClause(roomName: string | null | undefined): string {
-  const normalized = roomName?.trim().replace(/\s+/g, ' ') ?? '';
-  if (!normalized) return '';
-  if (/^phòng\s+số\s+/i.test(normalized)) {
-    const roomNumber = normalized.replace(/^phòng\s+số\s+/i, '').replace(/[-_]+/g, ' ').trim();
-    return roomNumber ? `vào phòng số ${roomNumber}` : '';
-  }
-  const directNumberMatch = normalized.match(/^phòng\s+(\d+[A-Za-z0-9]*)$/i);
-  if (directNumberMatch) {
-    return `vào phòng số ${directNumberMatch[1]}`;
-  }
-  const namedRoomNumberMatch = normalized.match(/^phòng\s+(.+?)\s+(\d+[A-Za-z0-9]*)$/i);
-  if (namedRoomNumberMatch) {
-    const prefix = namedRoomNumberMatch[1].replace(/\s+số$/i, '').trim();
-    return `vào phòng ${prefix} số ${namedRoomNumberMatch[2]}`;
-  }
-  if (/^phòng\b/i.test(normalized)) {
-    return `vào ${normalized}`;
-  }
-  return `vào phòng số ${normalized.replace(/[-_]+/g, ' ').trim()}`;
-}
-
-function buildCallAnnouncementText(
-  item: Pick<PublicQueueItemResponse, 'maskedPatientName'> & {
-    queueNumberDisplay?: string | null;
-    roomName?: string | null;
-  }
-): string {
-  // Chuẩn hóa họ tên NFC, giữ dấu tiếng Việt và bỏ các từ bị che ký tự '*' nếu có.
-  const rawName = formatCallPatientName(item.maskedPatientName)
-    .normalize('NFC')
-    .split(' ')
-    .filter(part => part && !part.includes('*'))
-    .join(' ');
-  const lowercaseName = rawName.toLocaleLowerCase('vi-VN');
-  const hasSpecificName = Boolean(rawName) && lowercaseName !== 'bệnh nhân';
-  const spokenName = hasSpecificName
-    ? (rawName === rawName.toLocaleUpperCase('vi-VN')
-        ? lowercaseName.replace(/(^|[\s-])\p{L}/gu, part => part.toLocaleUpperCase('vi-VN'))
-        : rawName)
-    : '';
-
-  const spokenNumber = formatSpokenQueueNumber(item.queueNumberDisplay);
-  const roomClause = formatSpokenRoomClause(item.roomName);
-
-  if (spokenNumber && hasSpecificName) {
-    const lead = `Mời bệnh nhân số ${spokenNumber}, ${spokenName}`;
-    return roomClause ? `${lead}, ${roomClause}.` : `${lead}.`;
-  }
-  if (spokenNumber) {
-    const lead = `Mời bệnh nhân số ${spokenNumber}`;
-    return roomClause ? `${lead}, ${roomClause}.` : `${lead}.`;
-  }
-  if (hasSpecificName) {
-    const lead = `Mời bệnh nhân ${spokenName}`;
-    return roomClause ? `${lead}, ${roomClause}.` : `${lead}.`;
-  }
-  return roomClause ? `Mời bệnh nhân ${roomClause}.` : 'Mời bệnh nhân.';
-}
-
-const audioQueue: AudioQueueItem[] = [];
-const isPlayingAudio = ref(false);
-const seenCallNumbers = new Set<string>();
-const viettelAudioCache = new Map<string, ArrayBuffer>();
-let pollTimer: ReturnType<typeof setInterval> | null = null;
-let clockTimer: ReturnType<typeof setInterval> | null = null;
-let audioCtx: AudioContext | null = null;
-let activeAudioSource: AudioBufferSourceNode | null = null;
-let fallbackVoice: AudioBuffer | null = null;
-let activeFetchController: AbortController | null = null;
-let speechTimer: ReturnType<typeof setTimeout> | null = null;
-let speechSessionId = 0;
-let initialSnapshotLoaded = false;
-
 function updateClock() {
-  const now = new Date();
   currentTime.value = new Intl.DateTimeFormat('vi-VN', {
     timeZone: 'Asia/Ho_Chi_Minh',
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit'
-  }).format(now);
+  }).format(new Date());
 }
 
-function getSessionStorage(): Storage | null {
+function saveSoundPreference() {
   try {
-    return typeof window !== 'undefined' && window.sessionStorage ? window.sessionStorage : null;
-  } catch {
-    return null;
-  }
-}
-
-function syncSoundPreference() {
-  const saved = getSessionStorage()?.getItem(SOUND_STORAGE_KEY);
-  soundEnabled.value = saved !== 'false';
-}
-
-function saveSoundPreference(enabled: boolean) {
-  const storage = getSessionStorage();
-  if (!storage) return;
-  try {
-    if (enabled) storage.removeItem(SOUND_STORAGE_KEY);
-    else storage.setItem(SOUND_STORAGE_KEY, 'false');
+    if (soundEnabled.value) window.sessionStorage.removeItem(SOUND_STORAGE_KEY);
+    else window.sessionStorage.setItem(SOUND_STORAGE_KEY, 'false');
   } catch {}
 }
 
 function ensureAudioContext(): AudioContext | null {
-  if (typeof window === 'undefined') return null;
-  if (!audioCtx || audioCtx.state === 'closed') {
+  if (!audioContext || audioContext.state === 'closed') {
     const AudioContextClass =
       window.AudioContext ||
       (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (AudioContextClass) audioCtx = new AudioContextClass();
+    if (AudioContextClass) audioContext = new AudioContextClass();
   }
-  return audioCtx;
+  return audioContext;
 }
 
-async function tryResumeAudioContext(): Promise<boolean> {
-  const ctx = ensureAudioContext();
-  if (!ctx) return true;
-  if (ctx.state === 'running') {
-    playbackBlocked.value = false;
-    return true;
-  }
-  try {
-    await ctx.resume();
-    const resumed = (ctx.state as AudioContextState) === 'running';
-    playbackBlocked.value = !resumed;
-    return resumed;
-  } catch {
+async function unlockAudio() {
+  const context = ensureAudioContext();
+  if (context?.state !== 'running' && context) {
     playbackBlocked.value = true;
-    return false;
+    try {
+      await context.resume();
+    } catch {
+      return;
+    }
+    if (!mounted || !soundEnabled.value || (context.state as AudioContextState) !== 'running') return;
   }
+  playbackBlocked.value = false;
+  processAudioQueue();
 }
 
-function stopActiveSpeech() {
-  speechSessionId++;
-  if (speechTimer !== null) clearTimeout(speechTimer);
-  speechTimer = null;
-  if (activeFetchController) {
-    try {
-      activeFetchController.abort();
-    } catch {}
-    activeFetchController = null;
+function playTone(frequency: number, duration: number, delay: number) {
+  const context = ensureAudioContext();
+  if (!context || context.state !== 'running') return () => {};
+  const start = context.currentTime + delay;
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  oscillator.frequency.setValueAtTime(frequency, start);
+  gain.gain.setValueAtTime(0.3, start);
+  gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+  oscillator.connect(gain);
+  gain.connect(context.destination);
+  function disconnect() {
+    oscillator.onended = null;
+    oscillator.disconnect();
+    gain.disconnect();
   }
-  if (activeAudioSource) {
-    try {
-      activeAudioSource.stop();
-      activeAudioSource.disconnect();
-    } catch {}
-    activeAudioSource = null;
-  }
-  isPlayingAudio.value = false;
-}
-
-function playTone(freq: number, duration: number, delay: number) {
-  const ctx = ensureAudioContext();
-  if (!ctx || ctx.state === 'suspended') return;
-
-  const now = ctx.currentTime + delay;
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-
-  osc.type = 'sine';
-  osc.frequency.setValueAtTime(freq, now);
-
-  gain.gain.setValueAtTime(0.3, now);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-
-  osc.connect(gain);
-  gain.connect(ctx.destination);
-
-  osc.start(now);
-  osc.stop(now + duration);
+  oscillator.onended = disconnect;
+  oscillator.start(start);
+  oscillator.stop(start + duration);
+  return disconnect;
 }
 
 function playDingDong() {
-  playTone(800, 0.25, 0);
-  playTone(600, 0.45, 0.25);
+  const stop = [playTone(800, 0.25, 0), playTone(600, 0.45, 0.25)];
+  return () => stop.forEach(disconnect => disconnect());
 }
 
-function playBingBongAttention() {
-  // Chuông Bing-Bong 2 hồi vang rõ giúp khách hàng chú ý màn hình TV khi Viettel AI hết hạn/gián đoạn.
-  playTone(880, 0.28, 0);
-  playTone(659.25, 0.48, 0.28);
-  playTone(880, 0.28, 0.9);
-  playTone(659.25, 0.55, 1.18);
+function playAttentionBell(onComplete: () => void) {
+  const stop = [
+    playTone(880, 0.28, 0), playTone(659.25, 0.48, 0.28),
+    playTone(880, 0.28, 0.9), playTone(659.25, 0.55, 1.18),
+  ];
+  const completion = setTimeout(onComplete, BELL_DURATION_MS);
+  cancelAudioStage = () => {
+    clearTimeout(completion);
+    stop.forEach(disconnect => disconnect());
+  };
 }
 
-function setCachedViettelAudio(text: string, data: ArrayBuffer) {
-  if (viettelAudioCache.size >= VIETTEL_CACHE_LIMIT) {
-    const oldestKey = viettelAudioCache.keys().next().value;
-    if (oldestKey !== undefined) viettelAudioCache.delete(oldestKey);
+function syncCallBanner(now = Date.now()) {
+  const playingCall = playingAudio;
+  const selected = playingCall && playingCall.deadline > now
+    ? playingCall
+    : currentCalls.find(call => call.deadline > now);
+  activeCall.value = selected?.item ?? null;
+  remainingCallSeconds.value = selected ? Math.ceil((selected.deadline - now) / 1000) : 0;
+}
+
+function stopActiveAudio() {
+  playingAudio = null;
+  isPlayingAudio.value = false;
+  cancelAudioStage?.();
+  cancelAudioStage = null;
+}
+
+function canPlay(item: TimedCall, now = Date.now()) {
+  return item.deadline > now && currentCalls.some(call => call.key === item.key);
+}
+
+function refreshCalls(now = Date.now()) {
+  currentCalls = currentCalls.filter(call => call.deadline > now);
+  for (const [key, deadline] of seenCalls) {
+    if (deadline <= now) seenCalls.delete(key);
   }
-  viettelAudioCache.set(text, data.slice(0));
-}
-
-function isAudioPayloadBuffer(audioBytes: ArrayBuffer, contentType: string): boolean {
-  if (!(audioBytes instanceof ArrayBuffer) || audioBytes.byteLength <= 256) return false;
-  if (contentType.includes('json')) return false;
-  const view = new Uint8Array(audioBytes, 0, Math.min(16, audioBytes.byteLength));
-  for (let i = 0; i < view.length; i++) {
-    const ch = view[i];
-    if (ch === 0x20 || ch === 0x09 || ch === 0x0a || ch === 0x0d) continue;
-    return ch !== 0x7b; // '{' biểu thị JSON lỗi thay vì luồng MP3/WAV
+  for (let i = audioQueue.length - 1; i >= 0; i--) {
+    if (!canPlay(audioQueue[i], now)) audioQueue.splice(i, 1);
   }
-  return false;
-}
-
-async function requestViettelTtsAudio(text: string): Promise<ArrayBuffer | null> {
-  const cached = viettelAudioCache.get(text);
-  if (cached) return cached.slice(0);
-  if (typeof fetch !== 'function') return null;
-
-  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  activeFetchController = controller;
-  const timeoutId = controller ? setTimeout(() => controller.abort(), 8000) : null;
-
-  try {
-    const response = await fetch('/tts-viettel', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        accept: '*/*'
-      },
-      body: JSON.stringify({ text }),
-      ...(controller ? { signal: controller.signal } : {})
-    });
-    if (timeoutId) clearTimeout(timeoutId);
-    if (activeFetchController === controller) activeFetchController = null;
-
-    if (!response || !response.ok) return null;
-    const contentType = (response.headers?.get?.('content-type') || '').toLowerCase();
-    const audioBytes = await response.arrayBuffer();
-    if (!isAudioPayloadBuffer(audioBytes, contentType)) return null;
-
-    setCachedViettelAudio(text, audioBytes);
-    return audioBytes.slice(0);
-  } catch {
-    if (timeoutId) clearTimeout(timeoutId);
-    if (activeFetchController === controller) activeFetchController = null;
-    return null;
-  }
-}
-
-async function getFallbackVoice(ctx: AudioContext): Promise<AudioBuffer | null> {
-  if (fallbackVoice) return fallbackVoice;
-  try {
-    const response = await fetch('/audio/tv-call-vi.mp3', { signal: AbortSignal.timeout(3000) });
-    if (!response.ok) return null;
-    fallbackVoice = await ctx.decodeAudioData(await response.arrayBuffer());
-    return fallbackVoice;
-  } catch {
-    return null;
-  }
-}
-
-function pruneExpiredAudioQueue(now = Date.now()) {
-  while (audioQueue.length > 0 && audioQueue[0].expiresAt <= now) {
-    audioQueue.shift();
-  }
+  if (playingAudio && !canPlay(playingAudio, now)) stopActiveAudio();
+  syncCallBanner(now);
+  processAudioQueue();
 }
 
 function processAudioQueue() {
-  pruneExpiredAudioQueue();
-  if (!active || isPlayingAudio.value || !soundEnabled.value || audioQueue.length === 0) return;
-
-  const ctx = ensureAudioContext();
-  if (ctx && ctx.state === 'suspended') {
-    void tryResumeAudioContext().then((resumed) => {
-      if (resumed && active && soundEnabled.value && !isPlayingAudio.value) {
-        processAudioQueue();
-      }
-    });
+  if (!mounted || !soundEnabled.value || playbackBlocked.value || isPlayingAudio.value) return;
+  const item = audioQueue.shift();
+  if (!item || !canPlay(item)) return;
+  const context = ensureAudioContext();
+  if (!context) {
+    voiceUnavailable.value = true;
+    return;
+  }
+  if (context.state !== 'running') {
+    audioQueue.unshift(item);
+    playbackBlocked.value = true;
     return;
   }
 
-  const item = audioQueue.shift();
-  if (!item) return;
-
+  voiceUnavailable.value = false;
   isPlayingAudio.value = true;
-  const sessionId = ++speechSessionId;
-  playDingDong();
-  let finished = false;
+  playingAudio = item;
+  syncCallBanner();
+  void playViettelCall(context, item);
+}
+
+async function playViettelCall(context: AudioContext, item: TimedCall) {
+  const request = new AbortController();
+  cancelAudioStage = () => request.abort();
+  function stillPlaying() {
+    return playingAudio === item && canPlay(item);
+  }
 
   function finish() {
-    if (finished || sessionId !== speechSessionId) return;
-    finished = true;
-    if (speechTimer !== null) clearTimeout(speechTimer);
-    speechTimer = setTimeout(() => {
-      if (sessionId !== speechSessionId) return;
-      speechTimer = null;
-      isPlayingAudio.value = false;
-      processAudioQueue();
-    }, 400);
+    if (playingAudio !== item) return;
+    stopActiveAudio();
+    syncCallBanner();
+    processAudioQueue();
   }
 
-  speechTimer = setTimeout(async () => {
-    if (!active || !soundEnabled.value || sessionId !== speechSessionId) return;
-    speechTimer = setTimeout(finish, 12_000);
+  try {
+    const audio = await queueService.getPublicCallAudio(item.item.queueNumberDisplay, item.item.expiresAtUtc, request.signal);
+    if (!stillPlaying()) return;
+    const buffer = await context.decodeAudioData(audio);
+    if (!stillPlaying()) return;
 
-    const audioBytes = await requestViettelTtsAudio(item.text);
-    if (!active || !soundEnabled.value || sessionId !== speechSessionId) return;
-
-    const currentCtx = ensureAudioContext();
-    if (currentCtx) {
-      const liveVoice = audioBytes ? await currentCtx.decodeAudioData(audioBytes).catch(() => null) : null;
-      const voice = liveVoice ?? await getFallbackVoice(currentCtx);
-      if (!active || !soundEnabled.value || sessionId !== speechSessionId || finished) return;
-      viettelTtsExpiredOrUnavailable.value = !liveVoice;
-      if (voice) {
-        const source = currentCtx.createBufferSource();
-        source.buffer = voice;
-        source.connect(currentCtx.destination);
-        activeAudioSource = source;
-        source.addEventListener(
-          'ended',
-          () => {
-            if (activeAudioSource === source) activeAudioSource = null;
-            finish();
-          },
-          { once: true }
-        );
-        source.start(0);
-        return;
-      }
-    }
-
-    // Giữ chuông báo nếu tệp giọng dự phòng cũng không phát được.
-    viettelTtsExpiredOrUnavailable.value = true;
-    playBingBongAttention();
-    if (speechTimer !== null) clearTimeout(speechTimer);
-    speechTimer = setTimeout(finish, 1800);
-  }, 850);
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    source.onended = finish;
+    source.connect(context.destination);
+    cancelAudioStage = () => {
+      source.onended = null;
+      source.disconnect();
+    };
+    source.start(context.currentTime + 0.76);
+    const stopChime = playDingDong();
+    cancelAudioStage = () => {
+      stopChime();
+      source.onended = null;
+      source.stop();
+      source.disconnect();
+    };
+  } catch {
+    if (!stillPlaying()) return;
+    cancelAudioStage?.();
+    voiceUnavailable.value = true;
+    playAttentionBell(finish);
+  }
 }
 
-function enqueueCallAudio(
-  item: Pick<PublicQueueItemResponse, 'maskedPatientName'> & {
-    queueNumberDisplay?: string | null;
-    roomName?: string | null;
-  }
-) {
-  if (audioQueue.length >= 3) {
-    audioQueue.shift();
-  }
-  audioQueue.push({
-    text: buildCallAnnouncementText(item),
-    expiresAt: Date.now() + CALL_TTL_MS
-  });
-  processAudioQueue();
-}
-
-function previewVoice() {
+function previewBell() {
   if (!soundEnabled.value || playbackBlocked.value || activeCall.value || isPlayingAudio.value) return;
-  audioQueue.push({
-    text: 'Mời bệnh nhân số A 001, Nguyễn Văn An, vào phòng số 1.',
-    expiresAt: Date.now() + CALL_TTL_MS
+  isPlayingAudio.value = true;
+  playAttentionBell(() => {
+    stopActiveAudio();
+    processAudioQueue();
   });
-  processAudioQueue();
 }
 
 function toggleSound() {
-  if (playbackBlocked.value) {
-    soundEnabled.value = true;
-    saveSoundPreference(true);
-    void tryResumeAudioContext().then((resumed) => {
-      if (resumed && active && soundEnabled.value) {
-        playDingDong();
-        processAudioQueue();
-      }
-    });
-    return;
-  }
-
-  soundEnabled.value = !soundEnabled.value;
-  saveSoundPreference(soundEnabled.value);
+  soundEnabled.value = playbackBlocked.value || !soundEnabled.value;
+  saveSoundPreference();
   if (soundEnabled.value) {
-    void tryResumeAudioContext().then((resumed) => {
-      if (resumed && active && soundEnabled.value) {
-        playDingDong();
-        processAudioQueue();
-      }
-    });
+    void unlockAudio();
   } else {
     audioQueue.length = 0;
-    stopActiveSpeech();
+    stopActiveAudio();
+    syncCallBanner();
   }
 }
 
-let active = true, requestVersion = 0;
+function applyPublicSnapshot(items: PublicQueueItemResponse[]) {
+  const now = Date.now();
+  const firstSnapshot = !initialSnapshotLoaded;
+  initialSnapshotLoaded = true;
+  currentCalls = [];
+  for (const item of items) {
+    const expiresAt = Date.parse(item.expiresAtUtc);
+    if (item.status !== 6 || !Number.isFinite(expiresAt) || expiresAt <= now) continue;
+
+    const key = item.queueNumberDisplay + '/' + item.expiresAtUtc;
+    const previousDeadline = seenCalls.get(key);
+    const deadline = previousDeadline ?? Math.min(expiresAt, now + CALL_TTL_MS);
+    if (deadline <= now) continue;
+
+    const call = { key, item, deadline };
+    currentCalls.push(call);
+    if (previousDeadline === undefined && soundEnabled.value && !firstSnapshot) {
+      audioQueue.push(call);
+    }
+    seenCalls.set(key, deadline);
+  }
+  currentCalls.sort((left, right) => Date.parse(right.item.expiresAtUtc) - Date.parse(left.item.expiresAtUtc));
+  audioQueue.sort((left, right) => left.deadline - right.deadline);
+  refreshCalls(now);
+}
+
 async function loadQueueData() {
-  if (!active) return;
-  const ticket = ++requestVersion;
+  if (!mounted || publicRequest) return;
+  const request = new AbortController();
+  publicRequest = request;
   try {
-    const data = await queueService.getPublicDisplay();
-    if (!active || ticket !== requestVersion) return;
+    const data = await queueService.getPublicDisplay(request.signal);
+    if (request.signal.aborted) return;
     error.value = '';
-
-    const isInitialSnapshot = !initialSnapshotLoaded;
-    initialSnapshotLoaded = true;
-
-    const currentCalls = data.inConsultation.filter(item => item.status === 6);
-    for (const item of currentCalls) {
-      if (!seenCallNumbers.has(item.queueNumberDisplay)) {
-        triggerCallBanner({
-          queueNumberDisplay: item.queueNumberDisplay,
-          maskedPatientName: item.maskedPatientName,
-          roomName: item.roomName,
-          status: item.status
-        });
-        if (soundEnabled.value && !isInitialSnapshot) {
-          enqueueCallAudio(item);
-        }
-      }
-    }
-    const currentCallNumbers = new Set(currentCalls.map(item => item.queueNumberDisplay));
-    for (const number of seenCallNumbers) {
-      if (!currentCallNumbers.has(number)) seenCallNumbers.delete(number);
-    }
-    for (const item of currentCalls) seenCallNumbers.add(item.queueNumberDisplay);
-
-    inConsultation.value = currentCalls;
-    waiting.value = [];
+    applyPublicSnapshot(data.inConsultation);
   } catch {
-    if (active && ticket === requestVersion) error.value = 'Mất kết nối máy chủ. Đang tự động kết nối lại...';
+    if (!request.signal.aborted) error.value = 'Mất kết nối máy chủ. Đang tự động kết nối lại...';
+  } finally {
+    if (publicRequest === request) publicRequest = null;
   }
-}
-
-function setupExternalListeners() {
-  try {
-    broadcastChannel = new BroadcastChannel('dental_tv_call_channel');
-    broadcastChannel.onmessage = (event) => {
-      if (event.data && typeof event.data === 'object' && event.data.status === 6 &&
-          typeof event.data.queueNumberDisplay === 'string' && typeof event.data.maskedPatientName === 'string') {
-        const item = event.data as ActiveCallData;
-        seenCallNumbers.add(item.queueNumberDisplay);
-        triggerCallBanner(item);
-        if (soundEnabled.value) {
-          enqueueCallAudio(item);
-        }
-      }
-    };
-  } catch {}
 }
 
 onMounted(() => {
+  mounted = true;
   updateClock();
   clockTimer = setInterval(updateClock, 1000);
-  syncSoundPreference();
-  if (soundEnabled.value) {
-    void tryResumeAudioContext();
-  }
-  setupExternalListeners();
+  displayTimer = setInterval(refreshCalls, 200);
+  try {
+    soundEnabled.value = window.sessionStorage.getItem(SOUND_STORAGE_KEY) !== 'false';
+  } catch {}
+  if (soundEnabled.value) void unlockAudio();
   void loadQueueData();
-  pollTimer = setInterval(loadQueueData, 3000);
+  pollTimer = setInterval(loadQueueData, 2000);
 });
 
 onUnmounted(() => {
-  active = false; requestVersion++; seenCallNumbers.clear(); soundEnabled.value = false;
-  if (clockTimer) clearInterval(clockTimer);
-  if (pollTimer) clearInterval(pollTimer);
-  if (callTimer) clearInterval(callTimer);
-  if (broadcastChannel) {
-    broadcastChannel.close();
-    broadcastChannel = null;
-  }
-  stopActiveSpeech();
+  mounted = false;
+  publicRequest?.abort();
+  if (clockTimer !== null) clearInterval(clockTimer);
+  if (displayTimer !== null) clearInterval(displayTimer);
+  if (pollTimer !== null) clearInterval(pollTimer);
+  stopActiveAudio();
+  currentCalls = [];
+  seenCalls.clear();
   audioQueue.length = 0;
-  viettelAudioCache.clear();
-  if (audioCtx && audioCtx.state !== 'closed') {
-    void audioCtx.close();
-  }
+  activeCall.value = null;
+  if (audioContext && audioContext.state !== 'closed') void audioContext.close().catch(() => {});
 });
-
 </script>
 
 <style scoped>
