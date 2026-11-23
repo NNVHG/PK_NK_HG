@@ -15,7 +15,7 @@
         <label for="image-tooth">Răng FDI (không bắt buộc)</label>
         <input id="image-tooth" ref="toothInput" v-model="toothText" inputmode="numeric" maxlength="2" :aria-invalid="validationTarget === 'tooth'" :aria-describedby="validationTarget === 'tooth' ? 'image-error' : undefined" placeholder="Ví dụ: 46" />
         <label for="image-visit">Lần khám</label>
-        <select id="image-visit" v-model="visitId"><option :value="null">Lưu riêng theo bệnh nhân</option><option v-for="visit in targets" :key="visit.visitId" :value="visit.visitId">#{{ visit.visitId }} · {{ visit.status === 'Correcting' ? 'Đính chính' : visit.status === 'Created' ? 'Chưa bắt đầu' : 'Đang khám' }}</option></select>
+        <select id="image-visit" v-model="visitId" :disabled="preferredVisitId != null"><option v-if="preferredVisitId == null" :value="null">Lưu riêng theo bệnh nhân</option><option v-for="visit in targets" :key="visit.visitId" :value="visit.visitId">#{{ visit.visitId }} · {{ visit.status === 'Correcting' ? 'Đính chính' : visit.status === 'Created' ? 'Chưa bắt đầu' : 'Đang khám' }}</option></select>
         <p v-if="targetError" role="alert">{{ targetError }}</p>
         <button type="button" :disabled="loadingTargets" @click="loadTargets">{{ loadingTargets ? 'Đang tải ca...' : 'Tải lại ca có thể gắn' }}</button>
         <button type="submit" :disabled="Boolean(preferredVisitId && (loadingTargets || visitId !== preferredVisitId))">{{ busy ? 'Đang lưu...' : 'Tải ảnh lên' }}</button>
@@ -127,7 +127,29 @@ async function attach(image: DentalImage) {
   catch (e) { if (current === generation) error.value = problem(e); }
   finally { if (current === generation) busy.value = false; }
 }
-watch(() => [props.patientId, props.toothNumber, auth.role, auth.user?.userId], () => { generation++; store.clear(); comparisonIds.value = []; viewerImages.value = []; file.value = null; notes.value = ''; toothText.value = ''; category.value = 'Intraoral'; validationTarget.value = ''; fileKey.value++; visitId.value = null; targets.value = []; attachTargets.value = {}; busy.value = false; loadingTargets.value = false; error.value = ''; success.value = ''; listError.value = ''; targetError.value = ''; void refresh(); void loadTargets(); }, { immediate: true });
+watch(() => [props.patientId, props.toothNumber, props.preferredVisitId, auth.role, auth.user?.userId], () => {
+  generation++;
+  store.clear();
+  comparisonIds.value = [];
+  viewerImages.value = [];
+  file.value = null;
+  notes.value = '';
+  toothText.value = '';
+  category.value = 'Intraoral';
+  validationTarget.value = '';
+  fileKey.value++;
+  visitId.value = null;
+  targets.value = [];
+  attachTargets.value = {};
+  busy.value = false;
+  loadingTargets.value = false;
+  error.value = '';
+  success.value = '';
+  listError.value = '';
+  targetError.value = '';
+  void refresh();
+  void loadTargets();
+}, { immediate: true });
 onUnmounted(() => { generation++; viewerImages.value = []; comparisonIds.value = []; file.value = null; notes.value = ''; toothText.value = ''; store.clear(); });
 </script>
 

@@ -22,7 +22,7 @@
             <span>{{ patient.phone || 'Chưa cập nhật' }}</span>
           </div>
         </div>
-        <button v-if="canCreateVisit" class="button button-primary" type="button" :disabled="creatingVisit || activeVisitLoading || Boolean(activeVisit)" @click="createVisit">
+        <button v-if="canCreateVisit" class="button button-primary" type="button" :disabled="creatingVisit || activeVisitLoading || hasVisitLink || Boolean(activeVisit)" @click="createVisit">
           {{ creatingVisit ? 'Đang tạo...' : activeVisit ? `Đang có lần khám mở #${activeVisit.visitId}` : '+ Tạo lần khám mới' }}
         </button>
       </header>
@@ -60,7 +60,8 @@
       </section>
 
       <section v-else-if="activeTab === 'images'" key="tab-images" class="panel content-panel">
-        <DentalImageAttachments :patient-id="patient.patientId" :preferred-visit-id="linkedVisitId" />
+        <p v-if="hasVisitLink && !linkedVisitId" class="notice error" role="alert">Liên kết lần khám không hợp lệ.</p>
+        <DentalImageAttachments v-else :patient-id="patient.patientId" :preferred-visit-id="linkedVisitId" />
       </section>
 
       <section v-else-if="activeTab === 'timeline'" key="tab-timeline" class="panel content-panel">
@@ -137,7 +138,7 @@
           <div><p class="eyebrow">BẢN CHỤP MỚI NHẤT</p><h2>Tiền sử &amp; dị ứng</h2></div>
           <button v-if="canWriteRecords" class="button button-quiet" type="button" :disabled="!activeVisit" @click="openMedicalHistoryForm">Cập nhật tiền sử</button>
         </header>
-        <p v-if="openVisitError" class="notice error" role="alert">{{ openVisitError }}</p>
+        <p v-if="clinicalContextError" class="notice error" role="alert">{{ clinicalContextError }}</p>
         <p v-else-if="canWriteRecords && !activeVisitLoading && !activeVisit" class="notice info" role="status">
           Cần tạo lần khám đang mở trước khi ghi tiền sử. Dùng nút “Tạo lần khám mới” ở đầu trang.
         </p>
@@ -190,7 +191,7 @@
           <div><p class="eyebrow">GHI NHẬN THEO LẦN KHÁM</p><h2>Sinh hiệu</h2></div>
           <button v-if="canWriteRecords" class="button button-quiet" type="button" :disabled="!activeVisit" @click="openVitalForm">Ghi sinh hiệu</button>
         </header>
-        <p v-if="openVisitError" class="notice error" role="alert">{{ openVisitError }}</p>
+        <p v-if="clinicalContextError" class="notice error" role="alert">{{ clinicalContextError }}</p>
         <p v-else-if="canWriteRecords && !activeVisitLoading && !activeVisit" class="notice info" role="status">
           Cần tạo lần khám đang mở trước khi ghi sinh hiệu. Dùng nút “Tạo lần khám mới” ở đầu trang.
         </p>
@@ -253,7 +254,7 @@
 
 <script setup lang="ts">
 import axios from 'axios';
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import SafetyAlertBanner from '@/components/SafetyAlertBanner.vue';
 import PatientPrescriptionHistory from '@/components/PatientPrescriptionHistory.vue';
@@ -288,6 +289,7 @@ const route = useRoute();
 const authStore = useAuthStore();
 const portalPrefix = computed(() => authStore.role === 'PATIENT' ? '/patient' : '/management');
 const patientId = Number(route.params.id);
+const hasVisitLink = computed(() => route.query.visitId !== undefined);
 const linkedVisitId = computed(() => {
   const value = typeof route.query.visitId === 'string' && /^\d+$/.test(route.query.visitId) ? Number(route.query.visitId) : 0;
   return Number.isSafeInteger(value) && value > 0 && value <= 2147483647 ? value : null;
@@ -297,8 +299,11 @@ const loadingPatient = ref(true);
 const pageError = ref('');
 const notFound = ref(false);
 const tabIds: TabId[] = ['info', 'timeline', 'history', 'vitals', 'prescriptions', 'images'];
-const queryTab = Array.isArray(route.query.tab) ? route.query.tab[0] : route.query.tab;
-const activeTab = ref<TabId>(tabIds.find(id => id === queryTab) ?? 'info');
+const requestedTab = computed(() => {
+  const tab = Array.isArray(route.query.tab) ? route.query.tab[0] : route.query.tab;
+  return tabIds.find(id => id === tab) ?? 'info';
+});
+const activeTab = ref<TabId>(requestedTab.value);
 const isPatientView = computed(() => authStore.role === 'PATIENT');
 const isChildPatient = computed(() => Boolean(patient.value?.dateOfBirth && isUnderFourteen(patient.value.dateOfBirth)));
 const tabs: Array<{ id: TabId; label: string }> = [
@@ -313,11 +318,17 @@ const successMessage = ref('');
 const visitError = ref('');
 const creatingVisit = ref(false);
 const openVisits = ref<VisitDetails[]>([]);
-const activeVisit = computed(() => linkedVisitId.value
+const activeVisit = computed(() => hasVisitLink.value
   ? openVisits.value.find(visit => visit.visitId === linkedVisitId.value) ?? null
   : openVisits.value[0] ?? null);
 const activeVisitLoading = ref(false);
 const openVisitError = ref('');
+const clinicalContextError = computed(() => {
+  if (openVisitError.value || !canWriteRecords.value || activeVisitLoading.value || !hasVisitLink.value || activeVisit.value) {
+    return openVisitError.value;
+  }
+  return 'Lần khám được liên kết đã đóng hoặc không thuộc hồ sơ này.';
+});
 const timeline = ref<PatientTimelineItem[]>([]);
 const timelinePage = ref<PagedResult<PatientTimelineItem>>(emptyPage());
 const timelineLoading = ref(false);
@@ -350,6 +361,12 @@ const duplicateError = ref('');
 const duplicates = ref<PatientDuplicateInfo[]>([]);
 const pendingPayload = ref<PatientPayload | null>(null);
 let nextMedicalHistoryRowId = 0;
+
+watch([requestedTab, () => route.query.visitId], ([tab]) => {
+  activeTab.value = tab;
+  medicalHistoryFormVisible.value = false;
+  vitalFormVisible.value = false;
+});
 
 const postTreatmentNotesMap = ref<Record<number, PostTreatmentNote[]>>({});
 const postTreatmentLoadingMap = ref<Record<number, boolean>>({});
@@ -553,14 +570,13 @@ async function loadOpenVisits() {
   try {
     const result = await patientsService.getVisits(patientId, 1, 100);
     openVisits.value = result.items.filter(visit => !visit.isLocked && (visit.status === 'Created' || visit.status === 'InProgress'));
-    if (linkedVisitId.value && !activeVisit.value) openVisitError.value = 'Lần khám được liên kết đã đóng hoặc không thuộc hồ sơ này.';
   } catch (error: unknown) {
     openVisitError.value = apiError(error, 'Không tải được trạng thái lần khám đang mở. Vui lòng thử lại.');
   } finally { activeVisitLoading.value = false; }
 }
 
 async function createVisit() {
-  if (creatingVisit.value) return;
+  if (creatingVisit.value || hasVisitLink.value) return;
   creatingVisit.value = true;
   visitError.value = '';
   successMessage.value = '';

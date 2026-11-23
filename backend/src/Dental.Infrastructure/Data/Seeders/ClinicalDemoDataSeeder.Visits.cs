@@ -192,6 +192,31 @@ public static partial class ClinicalDemoDataSeeder
             ]
         };
         db.QueueEntries.AddRange(q1, q2, q3, q4, q5);
+
+        // Giữ lượt trẻ em trong hàng đợi chung. Ca khác đã điều phối để thử Phụ tá gọi cho Nha sĩ 2.
+        if (dentist2.UserId != dentist1.UserId && chair2 is { IsActive: true, Status: DentalChairStatus.Available })
+        {
+            var checkInTime = q5.CheckInTime.AddMinutes(5);
+            db.QueueEntries.Add(new QueueEntry
+            {
+                PatientId = p4.PatientId, DentistId = dentist2.UserId, QueueDate = today,
+                QueueNumber = q5.QueueNumber + 1, CheckInTime = checkInTime, CreatedAt = checkInTime,
+                Status = QueueStatus.Waiting, Notes = "Lượt demo đã điều phối cho nha sĩ hỗ trợ.",
+                Visit = new Visit
+                {
+                    PatientId = p4.PatientId, Status = VisitStatuses.Created,
+                    CreatedByUserId = receptionist1.UserId, CreatedAt = checkInTime,
+                },
+                StatusHistories =
+                [
+                    new QueueStatusHistory
+                    {
+                        ToStatus = QueueStatus.Waiting, ChangedByUserId = receptionist1.UserId,
+                        ChangedAt = checkInTime, Reason = "Tiếp đón và điều phối lượt demo",
+                    },
+                ],
+            });
+        }
         await db.SaveChangesAsync(ct);
 
         return (appt1, appt2, v1, v2, v3, v4);
