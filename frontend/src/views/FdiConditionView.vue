@@ -137,6 +137,7 @@ const { rows } = storeToRefs(fdiStore);
 const selection = ref<SelectedToothSurface[]>([]);
 const latestConditions = ref<Awaited<ReturnType<typeof fdiService.latestForPatient>>>([]);
 const dentition = ref<DentitionType>('adult');
+let dentitionVisitId = 0;
 const code = ref<ConditionCode>('CARIES');
 const note = ref('');
 const editingId = ref<number | null>(null);
@@ -228,6 +229,12 @@ async function load() {
   try {
     const [details, conditions] = await Promise.all([visitsService.getById(visitId.value), fdiService.get(visitId.value)]);
     if (version !== loadVersion) return;
+    if (dentitionVisitId !== details.visitId) {
+      const mode = await visitsService.getDefaultDentition(details).catch(() => 'adult' as const);
+      if (version !== loadVersion) return;
+      dentition.value = mode;
+      dentitionVisitId = details.visitId;
+    }
     visit.value = details; fdiStore.replace(conditions);
     if (!(await refreshLatestConditions(details.patientId, version, visitId.value)) && version === loadVersion)
       error.value = 'Không tải được trạng thái răng mới nhất để tô màu sơ đồ.';

@@ -72,6 +72,14 @@ public static partial class ClinicalDemoDataSeeder
             ]
         };
         db.Prescriptions.AddRange(rx1, rx2);
+        foreach (var date in new[] { today, today.AddDays(-2) })
+        {
+            var counter = await db.PrescriptionNumberCounters.FindAsync([date], ct);
+            if (counter is null)
+                db.PrescriptionNumberCounters.Add(new PrescriptionNumberCounter { PrescriptionDate = date, LastNumber = 1 });
+            else
+                counter.LastNumber = Math.Max(counter.LastNumber, 1);
+        }
         await db.SaveChangesAsync(ct);
 
         var presetFix50 = await db.DiscountPresets.FirstOrDefaultAsync(p => p.Code == "FIX50", ct);

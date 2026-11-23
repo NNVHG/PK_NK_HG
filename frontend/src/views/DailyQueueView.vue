@@ -9,6 +9,16 @@
       <router-link to="/queue/display" target="_blank" class="tv-link">Mở màn hình phòng chờ <span aria-hidden="true">↗</span></router-link>
     </header>
 
+    <section v-if="linkedEntryId" class="queue-link-panel" aria-label="Lượt mở từ quầy">
+      <p v-if="linkedEntryLoading" role="status">Đang tải lượt được chọn…</p>
+      <p v-else-if="linkedEntryError" class="notice notice-error" role="alert">{{ linkedEntryError }}</p>
+      <template v-else-if="linkedEntry">
+        <strong>{{ numberLabel(linkedEntry.queueNumber) }} · {{ linkedEntry.patientName }}</strong>
+        <span>{{ linkedEntry.statusText }} · {{ linkedEntry.queueDate }}</span>
+        <a :href="'#queue-entry-' + linkedEntry.queueEntryId" v-if="rows.some(row => row.queueEntryId === linkedEntry?.queueEntryId)">Đến lượt trong danh sách</a>
+      </template>
+    </section>
+
     <section class="toolbar" aria-label="Điều khiển hàng đợi">
       <div class="field-group">
         <label for="status">Lọc theo trạng thái</label>
@@ -19,6 +29,13 @@
       </div>
       <button class="button-secondary" :disabled="loading || writing" @click="load(page)">{{ loading ? 'Đang tải…' : 'Tải lại' }}</button>
       <template v-if="needsCallingDentist">
+        <div v-if="teamDentistId" class="field-group">
+          <label for="queue-team">Phạm vi hàng đợi</label>
+          <select id="queue-team" v-model="showTeamOnly" :disabled="writing" @change="load(1)">
+            <option :value="true">Nhóm tôi hỗ trợ</option>
+            <option :value="false">Tất cả</option>
+          </select>
+        </div>
         <div class="field-group field-dentist">
           <label for="call-dentist">Nha sĩ gọi khám</label>
           <select id="call-dentist" v-model.number="callDentistId" :disabled="writing || dentistsLoading">
@@ -50,7 +67,7 @@
     </div>
 
     <ol class="entries" aria-label="Danh sách hàng đợi hôm nay">
-      <li v-for="row in rows" :key="row.queueEntryId" class="queue-entry" :class="{ priority: row.isPriority }">
+      <li v-for="row in rows" :id="'queue-entry-' + row.queueEntryId" :key="row.queueEntryId" class="queue-entry" :class="{ priority: row.isPriority }">
         <div class="queue-entry-header">
           <span class="queue-ticket">{{ numberLabel(row.queueNumber) }}</span>
           <div class="queue-patient">
@@ -71,7 +88,12 @@
         <p v-if="row.notes" class="care-note"><strong>Ghi chú cần lưu ý</strong>{{ row.notes }}</p>
         <div class="queue-card-actions">
           <button v-if="row.status === 6" type="button" class="btn-recall-tv" @click="emitTvCall(row)">Đọc lại trên TV</button>
-          <RouterLink v-if="row.status === 6 && ['ADMIN', 'DENTIST'].includes(authStore.role)" to="/management/clinical/diagnosis">Mở hồ sơ lâm sàng</RouterLink>
+          <RouterLink v-if="row.visitId && [2, 6].includes(row.status) && (authStore.role === 'ADMIN' ||
+            authStore.role === 'DENTIST' && row.dentistId === authStore.user?.userId)" :to="clinicalLocation(row)">Mở hồ sơ lâm sàng</RouterLink>
+          <template v-if="authStore.role === 'ASSISTANT' && row.visitId && [1, 2, 5, 6].includes(row.status)">
+            <RouterLink :to="patientLocation(row, 'vitals')">Sinh hiệu</RouterLink>
+            <RouterLink :to="patientLocation(row, 'images')">Ảnh hồ sơ</RouterLink>
+          </template>
           <button v-if="canCancelWaiting && row.status === 1 && row.canCancelConsultation !== true" :disabled="loading || writing || imagingRow !== null || absenceRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openCancellation(row)">Hủy lượt chờ</button>
           <button v-if="canCancelClinical(row)" class="action-danger" :disabled="loading || writing || imagingRow !== null || absenceRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openCancellation(row, true)">Hủy ca đang khám</button>
           <button v-if="canRouteImaging(row)" :disabled="loading || writing || cancelRow !== null || absenceRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openImaging(row)">{{ row.status === 2 ? 'Chỉ định chụp ảnh' : 'Hoàn tất chụp → chờ nha sĩ' }}</button>
@@ -197,9 +219,37 @@
   </main>
 </template>
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, type ComponentPublicInstance } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch, type ComponentPublicInstance } from 'vue';
+import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { queueService, maskPublicQueueName, type QueueEntryResponse, type CallingDentist } from '@/services/queue';
+import { WORKSPACE_UPDATED_EVENT, workspacesService } from '@/services/workspaces';
+const router = useRouter();
+const linkedEntry = ref<QueueEntryResponse | null>(null), linkedEntryLoading = ref(false), linkedEntryError = ref('');
+const linkedEntryId = computed(() => {
+  const raw = router.currentRoute?.value.query.queueEntryId;
+  const id = typeof raw === 'string' && /^\d+$/.test(raw) ? Number(raw) : 0;
+  return Number.isSafeInteger(id) && id > 0 && id <= 2147483647 ? id : null;
+});
+let linkedVersion = 0;
+
+async function loadLinkedEntry() {
+  const version = ++linkedVersion;
+  const id = linkedEntryId.value;
+  linkedEntry.value = null; linkedEntryError.value = ''; linkedEntryLoading.value = Boolean(id);
+  if (!id) return;
+  try {
+    const entry = await queueService.getEntry(id);
+    if (version !== linkedVersion) return;
+    if (entry.queueEntryId !== id) throw new Error('Queue entry mismatch');
+    linkedEntry.value = entry;
+  } catch {
+    if (version === linkedVersion) linkedEntryError.value = 'Không tải được lượt được chọn. Kiểm tra lại danh sách bên dưới.';
+  } finally {
+    if (version === linkedVersion) linkedEntryLoading.value = false;
+  }
+}
+watch(linkedEntryId, loadLinkedEntry, { immediate: true });
 const rows = ref<QueueEntryResponse[]>([]), status = ref(1), page = ref(1), total = ref(0), hasNext = ref(false);
 function locationLabel(item: { roomName?: string | null; chairNumber?: string | null }): string {
   return item.roomName || 'Chưa nhận phòng';
@@ -208,6 +258,7 @@ const loading = ref(false), callingNext = ref(false), error = ref(''), actionMsg
 const authStore = useAuthStore(), canCallNext = computed(() => ['ADMIN', 'DENTIST', 'ASSISTANT'].includes(authStore.role));
 const canTransferQueue = computed(() => ['ADMIN', 'RECEPTIONIST', 'DENTIST'].includes(authStore.role));
 const needsCallingDentist = computed(() => ['ADMIN', 'ASSISTANT'].includes(authStore.role));
+const teamDentistId = ref<number | null>(null), showTeamOnly = ref(false);
 const canCancelWaiting = computed(() => ['ADMIN', 'RECEPTIONIST'].includes(authStore.role));
 const cancelClinical = ref(false);
 const cancelRow = ref<QueueEntryResponse | null>(null), cancelReason = ref(''), cancelConfirmed = ref(false), cancelling = ref(false);
@@ -221,6 +272,34 @@ const writing = computed(() => callingNext.value || cancelling.value || routingI
 const dentists = ref<CallingDentist[]>([]), callDentistId = ref(0), dentistsLoading = ref(false), dentistError = ref(''), needsReview = ref(false);
 const transferTargets = computed(() => dentists.value.filter(dentist => dentist.dentistId !== transferRow.value?.dentistId));
 let version = 0, life = 0, dentistVersion = 0;
+function clinicalLocation(row: QueueEntryResponse) {
+  return { name: 'management-clinical-diagnosis', query: { queueEntryId: row.queueEntryId, visitId: row.visitId } };
+}
+async function openDentistVisit(row: QueueEntryResponse) {
+  if (authStore.role !== 'DENTIST' || !row.visitId || row.dentistId !== authStore.user?.userId) return false;
+  return !await router.push(clinicalLocation(row));
+}
+function patientLocation(row: QueueEntryResponse, tab: 'vitals' | 'images') {
+  return { name: 'management-patient-detail', params: { id: row.patientId }, query: { tab, visitId: row.visitId } };
+}
+async function loadAssistantWorkspace() {
+  if (authStore.role !== 'ASSISTANT' || !authStore.user) return;
+  const ticket = life;
+  const workspace = await workspacesService.get(authStore.user.userId).catch(() => null);
+  if (ticket !== life || !workspace || workspace.userId !== authStore.user?.userId) return;
+  const prior = teamDentistId.value;
+  teamDentistId.value = workspace.workingDentistId;
+  if (teamDentistId.value !== prior) {
+    showTeamOnly.value = Boolean(teamDentistId.value);
+    callDentistId.value = teamDentistId.value ?? 0;
+  }
+}
+async function refreshAssistantWorkspace() {
+  if (authStore.role !== 'ASSISTANT') return;
+  const ticket = life;
+  await loadAssistantWorkspace();
+  if (ticket === life) await Promise.all([load(), loadDentists()]);
+}
 async function loadDentists() {
   if (!(needsCallingDentist.value || transferRow.value !== null) || writing.value) return;
   transferConfirmed.value = false;
@@ -242,7 +321,9 @@ async function load(targetPage = 1) {
   closeCleanup();
   const ticket = ++version; loading.value = true; rows.value = []; error.value = ''; updatedAt.value = ''; total.value = 0; hasNext.value = false;
   try {
-    const result = await queueService.getToday(targetPage, status.value === 0 ? undefined : status.value);
+    const filter = status.value === 0 ? undefined : status.value;
+    const dentistId = showTeamOnly.value ? teamDentistId.value : null;
+    const result = dentistId ? await queueService.getToday(targetPage, filter, dentistId) : await queueService.getToday(targetPage, filter);
     if (ticket !== version) return;
     rows.value = result.items; page.value = result.page; total.value = result.totalCount; hasNext.value = result.hasNextPage;
     needsReview.value = false;
@@ -277,6 +358,7 @@ async function handleCallNext() {
     if (entry.status !== 6) throw new Error('Unexpected invitation status');
     emitTvCall(entry);
     actionMsg.value = `Đã mời số ${numberLabel(entry.queueNumber)} - ${entry.patientName} ${locationLabel(entry)}; đã gửi thông báo TV.`;
+    if (await openDentistVisit(entry)) return;
     needsReview.value = true;
     await load(page.value);
   } catch (err: unknown) {
@@ -401,7 +483,8 @@ async function handleResume() {
     const result = await queueService.resumeVisit(selected.queueEntryId, targetDentist, resumeReason.value.trim() || null);
     if (ticket !== life) return;
     actionMsg.value = `Đã tiếp tục ca ${numberLabel(result.queueNumber)} - ${result.patientName} tại ${locationLabel(result)}.`;
-    clearResume(); needsReview.value = true; resuming.value = false; await load(page.value);
+    clearResume(); needsReview.value = true; resuming.value = false;
+    if (!await openDentistVisit(result)) await load(page.value);
   } catch (err: unknown) {
     if (ticket !== life) return;
     const response = err as { response?: { data?: { message?: string } } };
@@ -506,10 +589,23 @@ async function handleCleanup() {
   } finally { if (ticket === life) cleaningUp.value = false; }
 }
 function numberLabel(value: number) { return `A-${String(value).padStart(3, '0')}`; }
-onMounted(() => Promise.all([load(), loadDentists()]));
-onUnmounted(() => { life++; version++; dentistVersion++; clearCancellation(); clearImaging(); clearAbsence(); clearTransfer(); cleanupOpen.value = false; cleanupConfirmed.value = false; rows.value = []; dentists.value = []; callDentistId.value = 0; dentistError.value = ''; actionMsg.value = ''; error.value = ''; needsReview.value = false; updatedAt.value = ''; total.value = 0; });
+onMounted(async () => {
+  const ticket = life;
+  if (authStore.role === 'ASSISTANT') globalThis.window?.addEventListener(WORKSPACE_UPDATED_EVENT, refreshAssistantWorkspace);
+  await loadAssistantWorkspace();
+  if (ticket === life) await Promise.all([load(), loadDentists()]);
+});
+onUnmounted(() => {
+  globalThis.window?.removeEventListener(WORKSPACE_UPDATED_EVENT, refreshAssistantWorkspace);
+  life++; version++; dentistVersion++; linkedVersion++;
+  clearCancellation(); clearImaging(); clearAbsence(); clearTransfer();
+  cleanupOpen.value = false; cleanupConfirmed.value = false; rows.value = []; dentists.value = [];
+  callDentistId.value = 0; dentistError.value = ''; actionMsg.value = ''; error.value = '';
+  needsReview.value = false; updatedAt.value = ''; total.value = 0;
+});
 </script>
 <style scoped>
+.queue-link-panel { display: flex; flex-wrap: wrap; gap: .5rem 1rem; padding: .85rem 1rem; border: 1px solid #cbd5e1; border-radius: .75rem; margin-block: 1rem; overflow-wrap: anywhere; }
 .page {
   --ink: #172b42;
   --muted: #66788a;

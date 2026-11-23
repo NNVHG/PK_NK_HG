@@ -67,6 +67,22 @@ public sealed class QueueService
         return Result<OutstandingDebtResponse>.Success(new(debt.TotalOutstandingDebt, debt.InvoiceCodes));
     }
 
+    public async Task<Result<OpenCheckInEntry[]>> GetOpenCheckInEntriesAsync(int[] patientIds, CancellationToken ct = default)
+    {
+        if (patientIds.Length is < 1 or > 100 || patientIds.Any(id => id <= 0))
+            return Result<OpenCheckInEntry[]>.Failure(Error.Validation);
+
+        var cutoff = QueueExpiryRules.LastExpiredDate(_vietnamClock.Now);
+        var entries = await _queueRepository.GetOpenQueueEntriesForPatientsAsync(patientIds.Distinct().ToArray(), ct);
+        var open = entries.Where(entry => !QueueExpiryRules.IsExpired(entry, cutoff))
+            .OrderByDescending(entry => entry.QueueDate)
+            .ThenByDescending(entry => entry.QueueEntryId)
+            .DistinctBy(entry => entry.PatientId)
+            .Select(entry => new OpenCheckInEntry(entry.PatientId, entry.QueueEntryId, entry.QueueNumber, entry.QueueDate))
+            .ToArray();
+        return Result<OpenCheckInEntry[]>.Success(open);
+    }
+
     public async Task<Result<QueueEntryResponse>> CheckInAsync(
         int actorUserId, CheckInRequest request, string? ipAddress, CancellationToken ct = default)
     {
@@ -437,6 +453,8 @@ public sealed class QueueService
                 if (actorRole == RoleCodes.Dentist && entry.DentistId != actorUserId)
                     return Result<QueueEntryResponse>.Failure(Error.QueueTransitionForbidden);
 
+                var previousChairId = entry.Visit.ChairId;
+                var previousRoomId = entry.Visit.RoomId;
                 var release = await _visitChairs.ReleaseAsync(entry.Visit, actorUserId, transactionCt);
                 if (release.IsFailure) return Result<QueueEntryResponse>.Failure(release.Error);
 
@@ -444,6 +462,8 @@ public sealed class QueueService
                 var previousStatus = entry.Status;
                 entry.Status = QueueStatus.Paused;
                 entry.UpdatedAt = now;
+                entry.Visit.ChairId = null;
+                entry.Visit.RoomId = null;
                 entry.Visit.UpdatedAt = now;
 
                 var reason = string.IsNullOrWhiteSpace(request.Reason) ? "Tạm dừng ca khám (§1.6)" : request.Reason.Trim();
@@ -465,6 +485,8 @@ public sealed class QueueService
                         visitId = entry.VisitId,
                         fromStatus = (int)previousStatus,
                         toStatus = (int)QueueStatus.Paused,
+                        previousChairId,
+                        previousRoomId,
                         reason
                     }), ipAddress, transactionCt);
 
@@ -516,8 +538,18 @@ public sealed class QueueService
                 if (await _queueRepository.HasCallingForDentistAsync(_vietnamClock.Today, targetDentistId.Value, transactionCt, entry.QueueEntryId))
                     return Result<QueueEntryResponse>.Failure(Error.QueueDentistAlreadyCalling);
 
+                // Các lượt tạm dừng từ phiên bản cũ có thể còn giữ vị trí đã nhả.
+                var previousChairId = entry.Visit.ChairId;
+                var previousRoomId = entry.Visit.RoomId;
+                entry.Visit.ChairId = null;
+                entry.Visit.RoomId = null;
                 var allocation = await _visitChairs.AcquireAsync(entry.Visit, targetDentistId.Value, actorUserId, transactionCt);
-                if (allocation.IsFailure) return Result<QueueEntryResponse>.Failure(allocation.Error);
+                if (allocation.IsFailure)
+                {
+                    entry.Visit.ChairId = previousChairId;
+                    entry.Visit.RoomId = previousRoomId;
+                    return Result<QueueEntryResponse>.Failure(allocation.Error);
+                }
 
                 var now = DateTime.UtcNow;
                 var previousStatus = entry.Status;
@@ -1103,7 +1135,7 @@ public sealed class QueueService
     }
 
     private static QueueDentistLocation? LocationFor(QueueEntry entry, IReadOnlyDictionary<int, QueueDentistLocation> locations)
-        => entry.DentistId is int id && locations.TryGetValue(id, out var location) ? location : null;
+        => entry.Status != QueueStatus.Paused && entry.DentistId is int id && locations.TryGetValue(id, out var location) ? location : null;
 
     private async Task<List<QueueEntryResponse>> ToResponsesAsync(
         IReadOnlyCollection<QueueEntry> entries,

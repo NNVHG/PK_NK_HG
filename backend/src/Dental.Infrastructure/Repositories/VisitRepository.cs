@@ -3,6 +3,7 @@ using Dental.Application.Features.Patients.DTOs;
 using Dental.Application.Interfaces;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
+using Dental.Domain.Enums;
 using Dental.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -30,22 +31,26 @@ public sealed class VisitRepository : IVisitRepository
             (v.Status == VisitStatuses.Created || v.Status == VisitStatuses.InProgress), ct);
 
     public Task<bool> HasActiveVisitForDentistAsync(int dentistId, CancellationToken ct = default, int? excludedVisitId = null)
-        => _db.Visits.AnyAsync(visit =>
+        => ActiveVisits().AnyAsync(visit =>
             visit.DentistId == dentistId &&
-            visit.Status == VisitStatuses.InProgress && (!excludedVisitId.HasValue || visit.VisitId != excludedVisitId.Value), ct);
+            (!excludedVisitId.HasValue || visit.VisitId != excludedVisitId.Value), ct);
 
     public Task<int?> GetActiveChairIdForDentistAsync(int dentistId, CancellationToken ct = default)
-        => _db.Visits.Where(visit => visit.DentistId == dentistId && visit.Status == VisitStatuses.InProgress)
+        => ActiveVisits().Where(visit => visit.DentistId == dentistId)
             .Select(visit => visit.ChairId).FirstOrDefaultAsync(ct);
 
     public async Task AddAsync(Visit visit, CancellationToken ct = default)
         => await _db.Visits.AddAsync(visit, ct);
 
     public Task<bool> HasActiveVisitForChairAsync(int chairId, int excludedVisitId, CancellationToken ct = default)
-        => _db.Visits.AnyAsync(v => v.ChairId == chairId && v.Status == VisitStatuses.InProgress && v.VisitId != excludedVisitId, ct);
+        => ActiveVisits().AnyAsync(v => v.ChairId == chairId && v.VisitId != excludedVisitId, ct);
 
     public Task<bool> HasActiveVisitForRoomAsync(int roomId, int excludedVisitId, CancellationToken ct = default)
-        => _db.Visits.AnyAsync(v => v.RoomId == roomId && v.Status == VisitStatuses.InProgress && v.VisitId != excludedVisitId, ct);
+        => ActiveVisits().AnyAsync(v => v.RoomId == roomId && v.VisitId != excludedVisitId, ct);
+
+    private IQueryable<Visit> ActiveVisits() => _db.Visits.Where(visit =>
+        visit.Status == VisitStatuses.InProgress &&
+        !_db.QueueEntries.Any(entry => entry.VisitId == visit.VisitId && entry.Status == QueueStatus.Paused));
 
     public async Task<PagedResult<Visit>> GetPatientVisitsAsync(
         int patientId,

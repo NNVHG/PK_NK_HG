@@ -35,7 +35,7 @@
           {{
             playbackBlocked
               ? 'Trình duyệt đang chặn tự phát âm thanh. Bấm Mở khóa loa TV để bật tiếng đọc mời bệnh nhân.'
-              : 'Dịch vụ đọc giọng Viettel AI tạm hết hạn hoặc gián đoạn — đang phát chuông Bing-Bong báo hiệu khách hàng chú ý màn hình.'
+              : 'Dịch vụ đọc tên đang gián đoạn. TV dùng lời mời tiếng Việt có sẵn khi tải được tệp âm thanh.'
           }}
         </small>
       </div>
@@ -262,6 +262,7 @@ let pollTimer: ReturnType<typeof setInterval> | null = null;
 let clockTimer: ReturnType<typeof setInterval> | null = null;
 let audioCtx: AudioContext | null = null;
 let activeAudioSource: AudioBufferSourceNode | null = null;
+let fallbackVoice: AudioBuffer | null = null;
 let activeFetchController: AbortController | null = null;
 let speechTimer: ReturnType<typeof setTimeout> | null = null;
 let speechSessionId = 0;
@@ -438,6 +439,18 @@ async function requestViettelTtsAudio(text: string): Promise<ArrayBuffer | null>
   }
 }
 
+async function getFallbackVoice(ctx: AudioContext): Promise<AudioBuffer | null> {
+  if (fallbackVoice) return fallbackVoice;
+  try {
+    const response = await fetch('/audio/tv-call-vi.mp3', { signal: AbortSignal.timeout(3000) });
+    if (!response.ok) return null;
+    fallbackVoice = await ctx.decodeAudioData(await response.arrayBuffer());
+    return fallbackVoice;
+  } catch {
+    return null;
+  }
+}
+
 function pruneExpiredAudioQueue(now = Date.now()) {
   while (audioQueue.length > 0 && audioQueue[0].expiresAt <= now) {
     audioQueue.shift();
@@ -486,14 +499,14 @@ function processAudioQueue() {
     if (!active || !soundEnabled.value || sessionId !== speechSessionId) return;
 
     const currentCtx = ensureAudioContext();
-    if (audioBytes && currentCtx) {
-      try {
-        const decoded = await currentCtx.decodeAudioData(audioBytes);
-        if (!active || !soundEnabled.value || sessionId !== speechSessionId) return;
-
-        viettelTtsExpiredOrUnavailable.value = false;
+    if (currentCtx) {
+      const liveVoice = audioBytes ? await currentCtx.decodeAudioData(audioBytes).catch(() => null) : null;
+      const voice = liveVoice ?? await getFallbackVoice(currentCtx);
+      if (!active || !soundEnabled.value || sessionId !== speechSessionId || finished) return;
+      viettelTtsExpiredOrUnavailable.value = !liveVoice;
+      if (voice) {
         const source = currentCtx.createBufferSource();
-        source.buffer = decoded;
+        source.buffer = voice;
         source.connect(currentCtx.destination);
         activeAudioSource = source;
         source.addEventListener(
@@ -506,12 +519,10 @@ function processAudioQueue() {
         );
         source.start(0);
         return;
-      } catch {
-        // Khi giải mã thất bại, chuyển sang phát chuông Bing-Bong báo hiệu.
       }
     }
 
-    // Viettel AI TTS hết hạn, hết lưu lượng hoặc gián đoạn -> phát chuông Bing-Bong để khách chú ý.
+    // Giữ chuông báo nếu tệp giọng dự phòng cũng không phát được.
     viettelTtsExpiredOrUnavailable.value = true;
     playBingBongAttention();
     if (speechTimer !== null) clearTimeout(speechTimer);

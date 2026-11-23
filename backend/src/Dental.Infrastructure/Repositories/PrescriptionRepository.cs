@@ -1,4 +1,5 @@
 using System.Data;
+using System.Globalization;
 using System.Text.Json;
 using Dental.Application.Common;
 using Dental.Application.Features.MOD_BIL.Services;
@@ -12,9 +13,11 @@ using Dental.Domain.Entities;
 using Dental.Domain.Enums;
 using Dental.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 namespace Dental.Infrastructure.Repositories;
-public sealed partial class PrescriptionRepository(DentalDbContext db, IInvoiceRepository invoices, VietnamClock clock) : IPrescriptionRepository
+public sealed partial class PrescriptionRepository(DentalDbContext db, IInvoiceRepository invoices, VietnamClock clock,
+    ILogger<PrescriptionRepository>? logger = null) : IPrescriptionRepository
 {
     private async Task<PrescriptionSnapshot?> LoadAsync(int visitId, bool tracking, CancellationToken ct, IEnumerable<int>? requested = null)
     {
@@ -94,23 +97,65 @@ public sealed partial class PrescriptionRepository(DentalDbContext db, IInvoiceR
     }
     public async Task<Result<PrescriptionResponse>> SaveAsync(int visitId, int actorId, bool creating, PrescriptionWriteRequest request, string? ip, CancellationToken ct)
     {
+        var today = clock.Today;
+        for (var attempt = 0; ; attempt++)
+        {
+            try { return await SaveOnceAsync(visitId, actorId, creating, request, ip, today, ct); }
+            catch (Exception error) when (IsConflict(error))
+            {
+                var cause = SaveConflictCause(error);
+                // Vào giao dịch mới và kiểm lại toàn bộ bản xem trước trước khi ghi lần nữa.
+                if (attempt == 0 && cause == "transaction_retry") continue;
+
+                logger?.LogWarning("Prescription save conflict ({Cause})", cause);
+                return Fail(cause switch
+                {
+                    "existing_prescription" => ExistingPrescription,
+                    "number_in_use" => new Error("RX_003", "Mã đơn hoặc hóa đơn đã được dùng. Tải lại, thử lưu và báo quản trị nếu lỗi lặp lại."),
+                    _ => Conflict
+                });
+            }
+        }
+    }
+
+    private async Task<Result<PrescriptionResponse>> SaveOnceAsync(int visitId, int actorId, bool creating,
+        PrescriptionWriteRequest request, string? ip, DateOnly today, CancellationToken ct)
+    {
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var committed = false;
-        var today = clock.Today;
         try
         {
             var s = await LoadAsync(visitId, true, ct, request.Items.Select(i => i.MedicineId));
             if (s is null || !await IsDoctorAsync(s, actorId, ct)) return Fail(Error.NotFound);
-            if (creating != (s.Prescription is null)) return Fail(Conflict);
+            if (creating != (s.Prescription is null))
+                return Fail(creating ? ExistingPrescription : new Error("RX_003", "Đơn hiện hành đã thay đổi hoặc đã bị hủy. Tải lại lịch sử đơn."));
             var plan = PrescriptionRules.Build(s, request, true);
             if (plan.IsFailure) return Fail(plan.Error);
             var rx = s.Prescription ?? new Prescription { VisitId = visitId, DoctorId = actorId, CreatedByUserId = actorId, CreatedAt = clock.UtcNow };
             if (creating)
             {
                 var counter = await db.PrescriptionNumberCounters.FindAsync([today], ct);
-                if (counter is null) { counter = new PrescriptionNumberCounter { PrescriptionDate = today }; db.PrescriptionNumberCounters.Add(counter); }
+                var prefix = $"RX-{today:yyyyMMdd}-";
+                var nextCode = $"{prefix}{(counter?.LastNumber ?? 0) + 1:D4}";
+                var counterNeedsSync = counter is null || await db.Prescriptions.AnyAsync(p => p.PrescriptionCode == nextCode, ct);
+                if (counter is null)
+                {
+                    counter = new PrescriptionNumberCounter { PrescriptionDate = today };
+                    db.PrescriptionNumberCounters.Add(counter);
+                }
+                if (counterNeedsSync)
+                {
+                    var existingCodes = await db.Prescriptions.Where(p => p.PrescriptionCode.StartsWith(prefix) &&
+                        p.PrescriptionCode.Length == prefix.Length + 4).Select(p => p.PrescriptionCode).ToListAsync(ct);
+                    foreach (var code in existingCodes)
+                    {
+                        if (int.TryParse(code.AsSpan(prefix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out var used))
+                            counter.LastNumber = Math.Max(counter.LastNumber, used);
+                    }
+                }
                 if (counter.LastNumber >= 9999) return Fail(new Error("RX_009", "Đã hết số đơn thuốc trong ngày."));
-                counter.LastNumber++; rx.PrescriptionCode = $"RX-{today:yyyyMMdd}-{counter.LastNumber:D4}";
+                counter.LastNumber++;
+                rx.PrescriptionCode = $"{prefix}{counter.LastNumber:D4}";
                 db.Prescriptions.Add(rx);
             }
             else { rx.Version++; rx.UpdatedAt = clock.UtcNow; }
@@ -157,11 +202,6 @@ public sealed partial class PrescriptionRepository(DentalDbContext db, IInvoiceR
             await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); committed = true;
             return Result<PrescriptionResponse>.Success(Map(rx, s.Medicines));
         }
-        catch (Exception error) when (IsConflict(error))
-        {
-            try { await tx.RollbackAsync(CancellationToken.None); } catch (InvalidOperationException) { }
-            return Fail(Conflict);
-        }
         finally { if (!committed) db.ChangeTracker.Clear(); }
     }
     private static PrescriptionResponse Map(Prescription p, IReadOnlyList<Medicine> medicines, bool includeOverrideReason = true)
@@ -176,7 +216,24 @@ public sealed partial class PrescriptionRepository(DentalDbContext db, IInvoiceR
     private static PrescriptionMedicine Medicine(Medicine m) => new(m.Id, m.Version, m.Code, m.Name, m.ActiveIngredient, m.Strength, m.Unit, m.UnitPrice, m.DefaultUsageInstruction);
     private static readonly Error Locked = new("RX_002", "Đơn đã khóa hoặc ca khám chưa cho phép kê đơn.");
     private static readonly Error Conflict = new("RX_003", "Có thay đổi đồng thời; tải lại đơn và kiểm tra lại trước khi lưu.");
+    private static readonly Error ExistingPrescription = new("RX_003", "Lần khám đã có đơn hiện hành. Tải lại để đối chiếu đơn đã lưu.");
     private static Result<PrescriptionResponse> Fail(Error error) => Result<PrescriptionResponse>.Failure(error);
+    private static string SaveConflictCause(Exception error)
+    {
+        for (Exception? current = error; current is not null; current = current.InnerException)
+        {
+            if (current is not PostgresException postgres) continue;
+            return (postgres.SqlState, postgres.ConstraintName) switch
+            {
+                ("40001" or "40P01", _) => "transaction_retry",
+                ("23505", "PK_PrescriptionNumberCounters" or "PK_InvoiceNumberCounters") => "transaction_retry",
+                ("23505", "IX_Prescriptions_VisitId") => "existing_prescription",
+                ("23505", "IX_Prescriptions_PrescriptionCode" or "IX_Invoices_InvoiceCode") => "number_in_use",
+                _ => "write_conflict"
+            };
+        }
+        return "write_conflict";
+    }
     private static bool IsConflict(Exception error)
     {
         for (Exception? e = error; e is not null; e = e.InnerException)

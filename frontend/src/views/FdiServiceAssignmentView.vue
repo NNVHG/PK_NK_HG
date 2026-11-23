@@ -33,7 +33,7 @@
           <label class="checkbox-label"><input v-model="general" type="checkbox" :disabled="busy" /> <span>Dịch vụ toàn hàm / tổng quát</span></label>
         </div>
         <div class="chart-wrapper-card">
-          <FdiDentalChart v-model="selection" :multiple="true" :readonly="busy || general" />
+          <FdiDentalChart v-model="selection" v-model:dentition-type="dentition" :multiple="true" :readonly="busy || general" />
         </div>
         <p v-if="!general" class="selected-teeth-hint">Răng được chỉ định: <strong>{{ selectedTeeth.join(', ') || 'Chưa chọn' }}</strong>. Mỗi răng tạo một dòng dịch vụ; mặt điều trị chọn bên dưới.</p>
         <div class="assignment-grid">
@@ -147,7 +147,7 @@ import { useRoute } from 'vue-router';
 import axios from 'axios';
 import FdiDentalChart from '@/components/fdi/FdiDentalChart.vue';
 import SafetyAlertBanner from '@/components/SafetyAlertBanner.vue';
-import { SURFACE_METADATA, ADULT_TEETH, CHILD_TEETH, type SelectedToothSurface } from '@/types/fdi';
+import { SURFACE_METADATA, ADULT_TEETH, CHILD_TEETH, type DentitionType, type SelectedToothSurface } from '@/types/fdi';
 import { visitsService } from '@/services/visits';
 import { visitServicesApi, type CatalogOption } from '@/services/visitServices';
 import type { VisitDetails } from '@/services/patients';
@@ -189,6 +189,8 @@ async function remove() {
   } finally { if (ticket === version) busy.value = false; }
 }
 const selection = ref<SelectedToothSurface[]>([]);
+const dentition = ref<DentitionType>('adult');
+let dentitionVisitId = 0;
 const general = ref(false);
 const surface = ref<string | null>(null);
 const quantity = ref(1);
@@ -240,6 +242,12 @@ async function load() {
   try {
     const [details, records] = await Promise.all([visitsService.getById(visitId.value), visitServicesApi.get(visitId.value)]);
     if (ticket !== version) return;
+    if (dentitionVisitId !== details.visitId) {
+      const mode = await visitsService.getDefaultDentition(details).catch(() => 'adult' as const);
+      if (ticket !== version) return;
+      dentition.value = mode;
+      dentitionVisitId = details.visitId;
+    }
     visit.value = details; store.replace(records);
     if (canEdit.value) await fetchCatalog(1, ticket);
   } catch (cause) { if (ticket === version) error.value = message(cause); }

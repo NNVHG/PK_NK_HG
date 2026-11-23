@@ -18,7 +18,7 @@
         <select id="image-visit" v-model="visitId"><option :value="null">Lưu riêng theo bệnh nhân</option><option v-for="visit in targets" :key="visit.visitId" :value="visit.visitId">#{{ visit.visitId }} · {{ visit.status === 'Correcting' ? 'Đính chính' : visit.status === 'Created' ? 'Chưa bắt đầu' : 'Đang khám' }}</option></select>
         <p v-if="targetError" role="alert">{{ targetError }}</p>
         <button type="button" :disabled="loadingTargets" @click="loadTargets">{{ loadingTargets ? 'Đang tải ca...' : 'Tải lại ca có thể gắn' }}</button>
-        <button type="submit">{{ busy ? 'Đang lưu...' : 'Tải ảnh lên' }}</button>
+        <button type="submit" :disabled="Boolean(preferredVisitId && (loadingTargets || visitId !== preferredVisitId))">{{ busy ? 'Đang lưu...' : 'Tải ảnh lên' }}</button>
       </fieldset>
     </form>
     <p v-if="error" id="image-error" role="alert" class="error">{{ error }}</p>
@@ -62,7 +62,7 @@ import DentalImageThumbnail from './DentalImageThumbnail.vue';
 import DentalImageViewer from './DentalImageViewer.vue';
 import DentalImageDeletion from './DentalImageDeletion.vue';
 import type { ImageMetadataContext } from '@/services/imageMetadata';
-const props = defineProps<{ patientId: number; toothNumber?: number | null }>();
+const props = defineProps<{ patientId: number; toothNumber?: number | null; preferredVisitId?: number | null }>();
 const auth = useAuthStore(), store = useDentalImagesStore();
 const canUpload = computed(() => ['ADMIN', 'DENTIST', 'ASSISTANT'].includes(auth.role));
 const canRead = computed(() => ['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(auth.role));
@@ -88,7 +88,14 @@ function selectFile(event: Event) { file.value = (event.target as HTMLInputEleme
 async function loadTargets() {
   if (!canUpload.value || loadingTargets.value) return;
   const current = generation; loadingTargets.value = true; targetError.value = '';
-  try { const result = await dentalImagesService.targets(props.patientId); if (current === generation) { targets.value = result; if (!result.some(x => x.visitId === visitId.value)) visitId.value = null; } }
+  try {
+    const result = await dentalImagesService.targets(props.patientId);
+    if (current !== generation) return;
+    targets.value = result;
+    const targetId = props.preferredVisitId ?? visitId.value;
+    visitId.value = result.some(x => x.visitId === targetId) ? targetId : null;
+    if (props.preferredVisitId && !visitId.value) targetError.value = 'Không thể gắn ảnh vào lần khám được liên kết.';
+  }
   catch (e) { if (current === generation) { targets.value = []; visitId.value = null; targetError.value = problem(e); } }
   finally { if (current === generation) loadingTargets.value = false; }
 }
@@ -98,6 +105,7 @@ function metadataUpdated(value:ImageMetadataContext) { if(value.patientId!==prop
 async function loadMore() { const current = generation; try { await store.load(props.patientId, true, props.toothNumber); } catch(e) { if(current === generation) listError.value = problem(e); } }
 async function upload() {
   if (busy.value || !canUpload.value) return;
+  if (props.preferredVisitId && (loadingTargets.value || visitId.value !== props.preferredVisitId)) return;
   error.value = imageFileError(file.value);
   validationTarget.value = error.value ? 'file' : '';
   if (!error.value && notes.value.length > 500) { error.value = 'Ghi chú ảnh tối đa 500 ký tự.'; validationTarget.value = 'notes'; }

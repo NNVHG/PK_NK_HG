@@ -89,6 +89,17 @@ public sealed class QueueController : ControllerBase
         return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
     }
 
+    [HttpGet("check-in/open-entries")]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
+    [Authorize(Policy = AppPolicies.QueueCheckIn)]
+    [ProducesResponseType(typeof(OpenCheckInEntry[]), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetOpenCheckInEntries([FromQuery] int[] patientIds, CancellationToken ct)
+    {
+        var result = await _queueService.GetOpenCheckInEntriesAsync(patientIds, ct);
+        return result.IsFailure ? Failure(result.Error) : Ok(result.Value);
+    }
+
     [HttpGet]
     [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
     [Authorize(Policy = AppPolicies.QueueView)]

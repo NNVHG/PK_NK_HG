@@ -1,3 +1,4 @@
+using Dental.Application.Common;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -32,7 +33,7 @@ public static partial class ClinicalDemoDataSeeder
         var adminId = adminUser?.UserId ?? dentist1.UserId;
 
         var now = DateTime.UtcNow;
-        var today = DateOnly.FromDateTime(now);
+        var today = DateOnly.FromDateTime(new VietnamClock(TimeProvider.System).ToVietnamTime(now));
 
         // 1. Phân công ghế và phòng khám (MOD_MST / MOD_ASS)
         await SeedWorkspacesAsync(db, dentist1, dentist2, assistant1, assistant2, adminId, now, ct);

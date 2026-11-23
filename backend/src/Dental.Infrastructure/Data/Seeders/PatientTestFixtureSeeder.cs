@@ -129,7 +129,6 @@ public static class PatientTestFixtureSeeder
 
             var rooms = await db.ClinicRooms.OrderBy(x => x.RoomCode).ToListAsync(ct);
             var room1 = rooms.FirstOrDefault(x => x.RoomCode == "G01");
-            var room2 = rooms.FirstOrDefault(x => x.RoomCode == "G02");
 
             var dueDate = localNow.TimeOfDay >= TimeSpan.FromHours(8) ? today : today.AddDays(-1);
             var dueIsToday = dueDate == today;
@@ -146,8 +145,8 @@ public static class PatientTestFixtureSeeder
                 UtcAt(fixtureDate, new(11, 0)), UtcAt(fixtureDate, new(11, 20)), room1?.Id, true, UtcAt(fixtureDate, new(11, 0)), "NK001", "Dữ liệu giả lập, không dùng để chẩn đoán.");
             var v105 = NewVisit(p105, dentist1, dentist1, VisitStatuses.Completed,
                 UtcAt(fixtureDate, new(9, 30)), UtcAt(fixtureDate, new(10, 30)), room1?.Id, true, UtcAt(fixtureDate, new(9, 30)), "NK006", "Dữ liệu giả lập, chỉ phục vụ cảnh báo trên giao diện.");
-            var v106 = NewVisit(p106, dentist2, dentist1, VisitStatuses.InProgress,
-                now.AddMinutes(-30), null, room2?.Id, false, now.AddHours(-1), "NK017", "Ca giả lập được tiếp nhận sau bàn giao.");
+            var v106 = NewVisit(p106, dentist1, dentist2, VisitStatuses.InProgress,
+                now.AddHours(-1), null, null, false, now.AddHours(-1), "NK017", "Ca giả lập đã được bàn giao và đang tạm dừng.");
             var v107 = NewVisit(p107, dentist1, dentist1, VisitStatuses.Completed,
                 UtcAt(today.AddDays(-1), new(14, 0)), UtcAt(today.AddDays(-1), new(14, 20)), room1?.Id, true, UtcAt(today.AddDays(-1), new(14, 0)), "NK002", "Dữ liệu giả lập.");
 
@@ -167,21 +166,18 @@ public static class PatientTestFixtureSeeder
                 dueIsToday ? [History(null, QueueStatus.Waiting, receptionist.UserId, UtcAt(dueDate, dueSlot), "Tiếp đón tại quầy")]
                     : [History(null, QueueStatus.Waiting, receptionist.UserId, UtcAt(dueDate, dueSlot), "Tiếp đón tại quầy"), History(QueueStatus.Waiting, QueueStatus.InConsultation, dentist1.UserId, UtcAt(dueDate, dueSlot).AddMinutes(5), "Bắt đầu khám"), History(QueueStatus.InConsultation, QueueStatus.Completed, dentist1.UserId, UtcAt(dueDate, dueSlot).AddMinutes(30), "Hoàn tất ca giả lập")]);
             var queueChild = NewQueue(p103, null, v103, today, nextTodayQueue++, QueueStatus.Waiting,
-            [
-                History(null, QueueStatus.Waiting, receptionist.UserId, now.AddMinutes(-20), "Tiếp đón tại quầy"),
-                History(QueueStatus.Waiting, QueueStatus.InImaging, dentist1.UserId, now.AddMinutes(-15), "Chuyển chụp theo chỉ định giả lập"),
-                History(QueueStatus.InImaging, QueueStatus.Waiting, assistant.UserId, now.AddMinutes(-5), "Hoàn tất chụp, quay lại hàng đợi"),
-            ]);
+            [History(null, QueueStatus.Waiting, receptionist.UserId, now.AddMinutes(-20), "Tiếp đón tại quầy")]);
             var queue101 = NewQueue(p101, appointments.Completed101, v101, fixtureDate, nextFixtureQueue++, QueueStatus.Completed,
             [History(null, QueueStatus.Waiting, receptionist.UserId, UtcAt(fixtureDate, new(7, 50)), "Tiếp đón"), History(QueueStatus.Waiting, QueueStatus.InConsultation, dentist1.UserId, UtcAt(fixtureDate, new(8, 0)), "Bắt đầu khám"), History(QueueStatus.InConsultation, QueueStatus.Completed, dentist1.UserId, UtcAt(fixtureDate, new(9, 0)), "Hoàn tất ca khám")]);
             var queue103 = NewQueue(p103, appointments.Completed103, v103Complete, fixtureDate, nextFixtureQueue++, QueueStatus.Completed,
             [History(null, QueueStatus.Waiting, receptionist.UserId, UtcAt(fixtureDate, new(10, 50)), "Tiếp đón"), History(QueueStatus.Waiting, QueueStatus.InConsultation, dentist1.UserId, UtcAt(fixtureDate, new(11, 0)), "Bắt đầu khám"), History(QueueStatus.InConsultation, QueueStatus.Completed, dentist1.UserId, UtcAt(fixtureDate, new(11, 20)), "Hoàn tất ca khám")]);
-            var queue106 = NewQueue(p106, null, v106, today, nextTodayQueue++, QueueStatus.InConsultation,
+            var queue106 = NewQueue(p106, null, v106, today, nextTodayQueue++, QueueStatus.Paused,
             [
                 History(null, QueueStatus.Waiting, receptionist.UserId, now.AddHours(-2), "Tiếp đón"),
                 History(QueueStatus.Waiting, QueueStatus.InConsultation, dentist1.UserId, now.AddHours(-1), "Bắt đầu khám"),
                 History(QueueStatus.InConsultation, QueueStatus.Paused, dentist1.UserId, now.AddMinutes(-45), "Tạm dừng để bàn giao ca"),
                 History(QueueStatus.Paused, QueueStatus.InConsultation, dentist2.UserId, now.AddMinutes(-30), "Nha sĩ tiếp nhận tiếp tục cùng Visit"),
+                History(QueueStatus.InConsultation, QueueStatus.Paused, dentist2.UserId, now.AddMinutes(-20), "Tạm dừng tại phòng tiếp nhận"),
             ]);
             var queue105 = NewQueue(p105, appointments.Completed105, v105, fixtureDate, nextFixtureQueue++, QueueStatus.Completed,
             [History(null, QueueStatus.Waiting, receptionist.UserId, UtcAt(fixtureDate, new(9, 20)), "Tiếp đón"), History(QueueStatus.Waiting, QueueStatus.InConsultation, dentist1.UserId, UtcAt(fixtureDate, new(9, 30)), "Bắt đầu khám"), History(QueueStatus.InConsultation, QueueStatus.Completed, dentist1.UserId, UtcAt(fixtureDate, new(10, 30)), "Hoàn tất ca khám")]);
@@ -563,6 +559,7 @@ public static class PatientTestFixtureSeeder
         List<QueueStatusHistory> histories) => new()
     {
         PatientId = patient.PatientId,
+        DentistId = visit.DentistId,
         AppointmentId = appointment?.AppointmentId,
         VisitId = visit.VisitId,
         QueueDate = date,

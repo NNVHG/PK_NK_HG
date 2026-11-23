@@ -279,6 +279,12 @@ function contentKey() { return JSON.stringify({ ...form, items: draft.value.map(
 function invalidate() { preview.value = null; previewKey.value = ''; confirmed.value = false; duplicateConfirmed.value = false; Object.keys(approvals).forEach(k => { delete approvals[Number(k)]; }); }
 function clear() { context.value = null; draft.value = []; medicines.value = []; Object.assign(form, { diagnosis: '', doctorAdvice: '', revisitDate: '' }); invalidate(); hasNext.value = false; loadedIdentity.value = ''; }
 function alive(ticket: number, actor: string) { return !disposed && ticket === generation && actor === identity(); }
+function prescriptionConflict(cause: unknown, fallback: string) {
+ const response = (cause as { response?: { data?: { code?: unknown; message?: unknown } } } | null)?.response?.data;
+ return response?.code === 'RX_003' && typeof response.message === 'string' && response.message.length <= 300
+  ? response.message
+  : fallback;
+}
 async function load() {
  if (disposed || busy.value || !visitId.value || !['ADMIN', 'DENTIST', 'RECEPTIONIST', 'ASSISTANT', 'PATIENT'].includes(auth.role)) return false;
  const ticket = ++generation, actor = identity(); searchVersion++; busy.value = true; error.value = ''; message.value = ''; clear();
@@ -341,7 +347,7 @@ async function previewOrder() {
   if (!alive(ticket, actor) || key !== contentKey()) return;
   if (!/^[A-Fa-f0-9]{64}$/.test(data.token) || !Array.isArray(data.allergyWarnings) || !Array.isArray(data.duplicateIngredients)) throw Error('Invalid preview');
   preview.value = data; previewKey.value = key; for (const warning of data.allergyWarnings) approvals[warning.medicineId] = { confirmed: false, reason: '' };
- } catch { if (alive(ticket, actor)) { error.value = 'Không xem trước được; có thể ca khám, giá, dị ứng hoặc hóa đơn vừa thay đổi. Tải lại để đối chiếu.'; needsReview.value = true; } }
+ } catch (cause) { if (alive(ticket, actor)) { error.value = prescriptionConflict(cause, 'Không xem trước được. Tải lại để đối chiếu thông tin ca và đơn thuốc.'); needsReview.value = true; } }
  finally { if (alive(ticket, actor)) busy.value = false; }
 }
 async function save() {
@@ -355,7 +361,7 @@ async function save() {
   if (data.visitId !== visitId.value || data.doctorId !== auth.user?.userId || data.version !== expectedVersion || !Number.isInteger(data.id) || data.id <= 0 || expectedId && data.id !== expectedId) throw Error('Invalid saved order');
   busy.value = false; const loaded = await load();
   if (!disposed && actor === identity()) message.value = loaded ? 'Đã lưu đơn và đồng bộ tiền thuốc vào hóa đơn chung.' : 'Đã lưu đơn nhưng chưa tải được bản đối chiếu. Vui lòng tải lại.';
- } catch { if (alive(ticket, actor)) { needsReview.value = true; confirmed.value = false; error.value = 'Chưa xác minh kết quả lưu. Tải lại hồ sơ để đối chiếu trước khi gửi tiếp.'; } }
+ } catch (cause) { if (alive(ticket, actor)) { needsReview.value = true; confirmed.value = false; error.value = prescriptionConflict(cause, 'Chưa xác minh kết quả lưu. Tải lại hồ sơ để đối chiếu trước khi gửi tiếp.'); } }
  finally { if (alive(ticket, actor)) busy.value = false; }
 }
 function money(value: string) { try { return BigInt(value).toLocaleString('vi-VN') + ' ₫'; } catch { return '—'; } }

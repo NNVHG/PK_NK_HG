@@ -1,5 +1,7 @@
 import { apiClient } from '@/services/api';
-import type { VisitDetails } from '@/services/patients';
+import { patientsService, type VisitDetails } from '@/services/patients';
+import { isUnderFourteen } from '@/services/patientAge';
+import type { DentitionType } from '@/types/fdi';
 
 export interface DiagnosisPayload {
   diagnosis: string;
@@ -26,6 +28,11 @@ export const visitsService = {
   async getById(visitId: number): Promise<VisitDetails> {
     const response = await apiClient.get<VisitDetails>(`/visits/${visitId}`);
     return response.data;
+  },
+  async getDefaultDentition(visit: VisitDetails): Promise<DentitionType> {
+    const { dateOfBirth } = await patientsService.getById(visit.patientId);
+    const visitDate = new Date(visit.startedAt ?? visit.createdAt).toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' });
+    return isUnderFourteen(dateOfBirth, visitDate) ? 'child' : 'adult';
   },
   async updateDiagnosis(visitId: number, payload: DiagnosisPayload): Promise<VisitDetails> {
     const response = await apiClient.put<VisitDetails>(`/visits/${visitId}/diagnosis`, payload);

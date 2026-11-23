@@ -42,6 +42,8 @@ export interface QueueEntryResponse {
   missingGuardianAccount?: boolean;
 }
 
+export type OpenCheckInEntry = Pick<QueueEntryResponse, 'patientId' | 'queueEntryId' | 'queueNumber' | 'queueDate'>;
+
 export interface PublicQueueItemResponse {
   queueNumberDisplay: string;
   maskedPatientName: string;
@@ -94,9 +96,9 @@ export const queueService = {
   async transferDentist(queueEntryId: number, payload: TransferDentistPayload): Promise<QueueEntryResponse> {
     return (await apiClient.post<QueueEntryResponse>(`/queue/${queueEntryId}/transfer`, payload)).data;
   },
-  async getToday(page = 1, status?: number): Promise<PagedResult<QueueEntryResponse>> {
+  async getToday(page = 1, status?: number, dentistId?: number): Promise<PagedResult<QueueEntryResponse>> {
     const response = await apiClient.get<PagedResult<QueueEntryResponse>>('/queue', {
-      params: { page, pageSize: 20, ...(status === undefined ? {} : { status }) }
+      params: { page, pageSize: 20, status, dentistId }
     });
     return response.data;
   },
@@ -163,6 +165,13 @@ export const queueService = {
   async checkIn(payload: CheckInPayload): Promise<QueueEntryResponse> {
     const response = await apiClient.post<QueueEntryResponse>('/queue/check-in', payload);
     return response.data;
+  },
+
+  async getOpenCheckInEntries(patientIds: number[]): Promise<OpenCheckInEntry[]> {
+    if (!patientIds.length) return [];
+    const params = new URLSearchParams();
+    for (const id of new Set(patientIds)) params.append('patientIds', String(id));
+    return (await apiClient.get<OpenCheckInEntry[]>('/queue/check-in/open-entries', { params })).data;
   },
 
   async getOutstandingDebt(patientId: number): Promise<OutstandingDebtResponse> {

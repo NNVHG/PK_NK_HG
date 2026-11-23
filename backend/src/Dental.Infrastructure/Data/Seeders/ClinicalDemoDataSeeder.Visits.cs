@@ -62,7 +62,7 @@ public static partial class ClinicalDemoDataSeeder
         var appt3 = new Appointment
         {
             PatientId = p3.PatientId, AppointmentDate = today,
-            SlotTime = new TimeOnly(14, 0), SlotDurationMinutes = 30, Status = AppointmentStatuses.Scheduled,
+            SlotTime = new TimeOnly(14, 0), SlotDurationMinutes = 30, Status = AppointmentStatuses.CheckedIn,
             Notes = "Khám răng trẻ em (răng sữa lung lay)", CreatedByUserId = receptionist1.UserId, CreatedAt = now.AddDays(-1),
         };
         var appt4 = new Appointment
@@ -125,7 +125,13 @@ public static partial class ClinicalDemoDataSeeder
             ClinicalNotes = "Đã khám sơ bộ, tạm dừng để bàn giao sang nha sĩ ca chiều tiếp tục.",
             IsLocked = false, CreatedByUserId = dentist1.UserId, CreatedAt = now.Date.AddHours(9).AddMinutes(50),
         };
-        db.Visits.AddRange(v1, v2, v3, v4);
+        var v5 = new Visit
+        {
+            PatientId = p3.PatientId, Status = VisitStatuses.Created,
+            CreatedByUserId = receptionist1.UserId, CreatedAt = now.Date.AddHours(10).AddMinutes(10),
+        };
+        if (chair1 is not null) chair1.Status = DentalChairStatus.Occupied;
+        db.Visits.AddRange(v1, v2, v3, v4, v5);
         await db.SaveChangesAsync(ct);
 
         var q1 = new QueueEntry
@@ -177,7 +183,7 @@ public static partial class ClinicalDemoDataSeeder
         };
         var q5 = new QueueEntry
         {
-            PatientId = p3.PatientId, AppointmentId = null, DentistId = null, VisitId = null,
+            PatientId = p3.PatientId, AppointmentId = appt3.AppointmentId, DentistId = null, VisitId = v5.VisitId,
             QueueDate = today, QueueNumber = 4, IsPriority = false, CheckInTime = now.Date.AddHours(10).AddMinutes(10),
             Status = QueueStatus.Waiting, Notes = "Khách đang chờ gọi số vào phòng khám", CreatedAt = now.Date.AddHours(10).AddMinutes(10),
             StatusHistories =

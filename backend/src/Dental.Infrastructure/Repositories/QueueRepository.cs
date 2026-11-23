@@ -63,17 +63,15 @@ public sealed class QueueRepository : IQueueRepository
     }
 
     public async Task<IReadOnlyList<QueueEntry>> GetOpenQueueEntriesForPatientAsync(int patientId, CancellationToken ct = default)
-    {
-        return await _db.QueueEntries
-            .Include(q => q.Visit)
-            .Where(q => q.PatientId == patientId &&
-                        (q.Status == QueueStatus.Waiting ||
-                         q.Status == QueueStatus.Calling ||
-                         q.Status == QueueStatus.Skipped ||
-                         q.Status == QueueStatus.InConsultation ||
-                         q.Status == QueueStatus.InImaging))
-            .ToListAsync(ct);
-    }
+        => await OpenEntries().Where(q => q.PatientId == patientId).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<QueueEntry>> GetOpenQueueEntriesForPatientsAsync(int[] patientIds, CancellationToken ct = default)
+        => await OpenEntries().AsNoTracking().Where(q => patientIds.Contains(q.PatientId)).ToListAsync(ct);
+
+    private IQueryable<QueueEntry> OpenEntries() => _db.QueueEntries.Include(q => q.Visit)
+        .Where(q => q.Status == QueueStatus.Waiting || q.Status == QueueStatus.Calling ||
+                    q.Status == QueueStatus.Skipped || q.Status == QueueStatus.InConsultation ||
+                    q.Status == QueueStatus.InImaging || q.Status == QueueStatus.Paused);
 
     public async Task<(IReadOnlyList<QueueEntry> Items, int TotalCount)> GetTodayQueueAsync(
         DateOnly date,

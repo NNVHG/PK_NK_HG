@@ -415,11 +415,15 @@
             </div>
 
             <p v-if="checkInError" class="error-banner" role="alert">{{ checkInError }}</p>
+            <RouterLink v-if="existingEntry" class="app-btn app-btn--primary" :to="openQueueLocation(existingEntry.queueEntryId)">
+              Mở lượt A-{{ String(existingEntry.queueNumber).padStart(3, '0') }}
+            </RouterLink>
 
             <button
               type="button"
               class="app-btn app-btn--primary app-btn--lg checkin-submit-btn"
-              :disabled="checkingIn || loadingAppointments || appointmentLookupFailed || debtLoading || guardianLoading || guardianLookupFailed || guardianLinkSaving"
+              v-if="!existingEntry"
+              :disabled="checkingIn || loadingExistingEntry || loadingAppointments || appointmentLookupFailed || debtLoading || guardianLoading || guardianLookupFailed || guardianLinkSaving"
               @click="submitCheckIn"
             >
               <span v-if="checkingIn" class="spin-icon">⏳</span>
@@ -501,7 +505,10 @@
                     </div>
                     <span>Mã: {{ row.patientCode }}</span>
                   </div>
+                  <RouterLink v-if="openDeskEntries[row.patientId]" class="app-btn app-btn--secondary app-btn--sm"
+                    :to="openQueueLocation(openDeskEntries[row.patientId]!.queueEntryId)">Mở lượt chờ</RouterLink>
                   <button
+                    v-else
                     type="button"
                     class="app-btn app-btn--medical app-btn--sm"
                     :disabled="checkingIn || selecting"
@@ -553,7 +560,7 @@
                     </div>
                     <span>{{ row.patientCode }} · {{ row.statusText }}</span>
                   </div>
-                  <span class="app-badge app-badge--info">Đang chờ</span>
+                  <RouterLink class="app-btn app-btn--secondary app-btn--sm" :to="openQueueLocation(row.queueEntryId)">Mở lượt chờ</RouterLink>
                 </div>
               </div>
             </template>
@@ -592,7 +599,7 @@ import { validateCheckIn, checkInProblem, type CheckInErrors } from '@/services/
 import { appointmentsService, type AppointmentResponse } from '@/services/appointments';
 import { patientsService, type PatientSummary } from '@/services/patients';
 import { patientGuardiansService, type PatientGuardianSummary } from '@/services/patientGuardians';
-import { queueService, type OutstandingDebtResponse, type QueueEntryResponse } from '@/services/queue';
+import { queueService, type OpenCheckInEntry, type OutstandingDebtResponse, type QueueEntryResponse } from '@/services/queue';
 import { isUnderFourteen } from '@/services/patientAge';
 
 const GUARDIAN_RELATIONSHIP_OPTIONS = ['Bố/Mẹ', 'Cha', 'Mẹ', 'Ông/Bà', 'Người giám hộ hợp pháp', 'Khác'];
@@ -643,6 +650,9 @@ let debtRequestSequence = 0;
 
 const searchPage = ref(1), searchTotal = ref(0), searchNext = ref(false);
 const deskRows = ref<AppointmentResponse[]>([]), deskPage = ref(1), deskTotal = ref(0), deskNext = ref(false);
+const openDeskEntries = ref<Partial<Record<number, OpenCheckInEntry>>>({});
+const existingEntry = ref<OpenCheckInEntry | null>(null);
+const loadingExistingEntry = ref(false);
 const deskLoading = ref(false), deskError = ref('');
 const waitingRows = ref<QueueEntryResponse[]>([]), waitingPage = ref(1), waitingTotal = ref(0), waitingNext = ref(false);
 const waitingLoading = ref(false), waitingError = ref(''), selecting = ref(false);
@@ -651,16 +661,32 @@ let selectionOwnerSequence = 0;
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 let disposed = false;
 
+function openQueueLocation(queueEntryId: number) {
+  return { name: 'management-daily-queue', query: { queueEntryId } };
+}
+
+async function loadExistingEntry(patientId: number, owner = selectionOwnerSequence) {
+  loadingExistingEntry.value = true;
+  const entries = await queueService.getOpenCheckInEntries([patientId]).catch(() => []);
+  if (owner === selectionOwnerSequence && !disposed && selectedPatient.value?.patientId === patientId) {
+    existingEntry.value = entries.find(entry => entry.patientId === patientId) ?? null;
+    loadingExistingEntry.value = false;
+  }
+}
+
 const isCameraScannerOpen = ref(false);
 let qrScanGeneration = 0;
 
 async function loadDesk(page = 1) {
   if (!canCheckIn.value || disposed || page < 1) return;
   const sequence = ++deskSequence;
-  deskLoading.value = true; deskError.value = ''; deskRows.value = []; deskTotal.value = 0; deskNext.value = false; deskPage.value = page;
+  deskLoading.value = true; deskError.value = ''; deskRows.value = []; openDeskEntries.value = {}; deskTotal.value = 0; deskNext.value = false; deskPage.value = page;
   try {
     const result = await appointmentsService.getForDesk(todayLocal(), page, 'Scheduled');
     if (sequence !== deskSequence || disposed) return;
+    const entries = await queueService.getOpenCheckInEntries(result.items.map(row => row.patientId)).catch(() => []);
+    if (sequence !== deskSequence || disposed) return;
+    openDeskEntries.value = Object.fromEntries(entries.map(entry => [entry.patientId, entry]));
     deskRows.value = result.items; deskTotal.value = result.totalCount; deskNext.value = result.hasNextPage;
   } catch { if (sequence === deskSequence) deskError.value = 'Không tải được lịch hẹn hôm nay.'; }
   finally { if (sequence === deskSequence) deskLoading.value = false; }
@@ -704,6 +730,8 @@ function clearSelection() {
   resetGuardianAccountSearch();
   appointments.value = []; appointmentId.value = null; loadingAppointments.value = false; appointmentLookupFailed.value = false;
   outstandingDebt.value = null; debtLoading.value = false; debtLookupFailed.value = false; fieldErrors.value = {}; checkInError.value = ''; ticket.value = null;
+  existingEntry.value = null;
+  loadingExistingEntry.value = false;
 }
 async function searchPatients(page = 1) {
   clearTimeout(searchTimer);
@@ -818,6 +846,7 @@ async function selectPatient(patient: PatientSummary, scannedCitizenId = '', par
     scannedCitizenId = '';
   }
   selectedPatient.value = patient;
+  existingEntry.value = null;
   citizenId.value = scannedCitizenId;
   documentType.value = 'citizenId';
   nationalityCode.value = '';
@@ -826,7 +855,7 @@ async function selectPatient(patient: PatientSummary, scannedCitizenId = '', par
   linkedGuardian.value = null; guardianLookupFailed.value = false;
   resetGuardianAccountSearch();
   checkInPhone.value = scannedCitizenId || isUnderFourteen(patient.dateOfBirth) ? patient.phone : '';
-  await Promise.all([loadAppointments(patient), loadOutstandingDebt(patient), loadActiveGuardian(patient)]);
+  await Promise.all([loadAppointments(patient), loadOutstandingDebt(patient), loadActiveGuardian(patient), loadExistingEntry(patient.patientId)]);
   if (owner !== selectionOwnerSequence || selectedPatient.value?.patientId !== patient.patientId || disposed) return;
   if (isUnderFourteen(patient.dateOfBirth) && !linkedGuardian.value && !guardianFullName.value) {
     const targetAppointment = appointments.value.find(a => a.appointmentId === appointmentId.value) ?? appointments.value[0];
@@ -994,7 +1023,7 @@ function onDocumentTypeChanged() {
 }
 
 async function submitCheckIn() {
-  if (!canCheckIn.value || !selectedPatient.value || checkingIn.value || guardianLinkSaving.value || loadingAppointments.value || appointmentLookupFailed.value || debtLoading.value) return;
+  if (!canCheckIn.value || !selectedPatient.value || existingEntry.value || loadingExistingEntry.value || checkingIn.value || guardianLinkSaving.value || loadingAppointments.value || appointmentLookupFailed.value || debtLoading.value) return;
   if (guardianLoading.value || guardianLookupFailed.value) return;
   fieldErrors.value = validateCheckIn(citizenId.value, checkInPhone.value, notes.value, documentType.value,
     nationalityCode.value, isChild.value, guardianFullName.value, guardianRelationship.value, guardianVerifiedAtCounter.value);
@@ -1024,6 +1053,9 @@ async function submitCheckIn() {
     const problem = checkInProblem(response);
     fieldErrors.value = problem.fields;
     checkInError.value = problem.message;
+    if (response?.code === 'CHK_002' && selectedPatient.value) {
+      await Promise.all([loadExistingEntry(selectedPatient.value.patientId), refreshToday()]);
+    }
   } finally {
     checkingIn.value = false;
   }

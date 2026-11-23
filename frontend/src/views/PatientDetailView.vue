@@ -60,7 +60,7 @@
       </section>
 
       <section v-else-if="activeTab === 'images'" key="tab-images" class="panel content-panel">
-        <DentalImageAttachments :patient-id="patient.patientId" />
+        <DentalImageAttachments :patient-id="patient.patientId" :preferred-visit-id="linkedVisitId" />
       </section>
 
       <section v-else-if="activeTab === 'timeline'" key="tab-timeline" class="panel content-panel">
@@ -288,6 +288,10 @@ const route = useRoute();
 const authStore = useAuthStore();
 const portalPrefix = computed(() => authStore.role === 'PATIENT' ? '/patient' : '/management');
 const patientId = Number(route.params.id);
+const linkedVisitId = computed(() => {
+  const value = typeof route.query.visitId === 'string' && /^\d+$/.test(route.query.visitId) ? Number(route.query.visitId) : 0;
+  return Number.isSafeInteger(value) && value > 0 && value <= 2147483647 ? value : null;
+});
 const patient = ref<PatientDetails | null>(null);
 const loadingPatient = ref(true);
 const pageError = ref('');
@@ -309,7 +313,9 @@ const successMessage = ref('');
 const visitError = ref('');
 const creatingVisit = ref(false);
 const openVisits = ref<VisitDetails[]>([]);
-const activeVisit = computed(() => openVisits.value[0] ?? null);
+const activeVisit = computed(() => linkedVisitId.value
+  ? openVisits.value.find(visit => visit.visitId === linkedVisitId.value) ?? null
+  : openVisits.value[0] ?? null);
 const activeVisitLoading = ref(false);
 const openVisitError = ref('');
 const timeline = ref<PatientTimelineItem[]>([]);
@@ -546,7 +552,8 @@ async function loadOpenVisits() {
   openVisitError.value = '';
   try {
     const result = await patientsService.getVisits(patientId, 1, 100);
-    openVisits.value = result.items.filter(visit => visit.status === 'Created' || visit.status === 'InProgress');
+    openVisits.value = result.items.filter(visit => !visit.isLocked && (visit.status === 'Created' || visit.status === 'InProgress'));
+    if (linkedVisitId.value && !activeVisit.value) openVisitError.value = 'Lần khám được liên kết đã đóng hoặc không thuộc hồ sơ này.';
   } catch (error: unknown) {
     openVisitError.value = apiError(error, 'Không tải được trạng thái lần khám đang mở. Vui lòng thử lại.');
   } finally { activeVisitLoading.value = false; }
@@ -667,8 +674,8 @@ function validateVitalForm(): string | null {
   return null;
 }
 
-function parseOptionalNumber(value: string): number | null {
-  if (!value.trim()) return null;
+function parseOptionalNumber(value: string | number): number | null {
+  if (typeof value === 'string' && !value.trim()) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
@@ -682,10 +689,10 @@ async function saveVitalSigns() {
   savingVitalSigns.value = true;
   try {
     await patientsService.recordVitalSigns(visitId, {
-      systolicBp: nullableNumber(vitalForm.systolicBp),
-      diastolicBp: nullableNumber(vitalForm.diastolicBp),
-      pulseBpm: nullableNumber(vitalForm.pulseBpm),
-      temperatureC: nullableNumber(vitalForm.temperatureC),
+      systolicBp: parseOptionalNumber(vitalForm.systolicBp),
+      diastolicBp: parseOptionalNumber(vitalForm.diastolicBp),
+      pulseBpm: parseOptionalNumber(vitalForm.pulseBpm),
+      temperatureC: parseOptionalNumber(vitalForm.temperatureC),
       note: vitalForm.note.trim() || null
     });
     vitalFormVisible.value = false;
@@ -694,10 +701,6 @@ async function saveVitalSigns() {
   } catch (error: unknown) {
     vitalFormError.value = apiError(error, 'Không lưu được sinh hiệu. Vui lòng thử lại.');
   } finally { savingVitalSigns.value = false; }
-}
-
-function nullableNumber(value: string): number | null {
-  return value.trim() ? Number(value) : null;
 }
 
 function openEditForm() {

@@ -12,6 +12,7 @@ public interface IQueueRepository
     Task<QueueEntry?> GetByIdAsync(int queueEntryId, CancellationToken ct = default);
     Task<int> GetNextQueueNumberAsync(DateOnly date, CancellationToken ct = default);
     Task<IReadOnlyList<QueueEntry>> GetOpenQueueEntriesForPatientAsync(int patientId, CancellationToken ct = default);
+    Task<IReadOnlyList<QueueEntry>> GetOpenQueueEntriesForPatientsAsync(int[] patientIds, CancellationToken ct = default);
     Task<(IReadOnlyList<QueueEntry> Items, int TotalCount)> GetTodayQueueAsync(
         DateOnly date,
         QueueStatus? status,

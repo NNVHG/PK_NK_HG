@@ -45,6 +45,7 @@
       <section class="panel detail-panel" aria-label="Hồ sơ khám lâm sàng">
         <div v-if="!selected" class="empty-selection-placeholder">
           <h2>Hồ sơ lâm sàng</h2>
+          <p v-if="actionError" class="alert-box alert-error" role="alert">{{ actionError }}</p>
           <p>Chọn một bệnh nhân trong danh sách lượt khám hôm nay.</p>
         </div>
 
@@ -71,6 +72,15 @@
           </div>
 
           <SafetyAlertBanner v-if="selected.patientId" :patient-id="selected.patientId" :refresh-key="visit?.visitId ?? selected.queueEntryId" />
+          <div v-if="visit && [1, 6].includes(selected.status)" class="pre-exam-vitals">
+            <strong>Sinh hiệu lần khám</strong>
+            <span v-if="vitalSignsError" role="status">{{ vitalSignsError }}</span>
+            <span v-else-if="vitals">
+              Huyết áp {{ vitals.systolicBp ?? '—' }}/{{ vitals.diastolicBp ?? '—' }} mmHg ·
+              Mạch {{ vitals.pulseBpm ?? '—' }} lần/phút · Nhiệt độ {{ vitals.temperatureC ?? '—' }} °C
+            </span>
+            <span v-else>Chưa có số đo ở lần khám này.</span>
+          </div>
 
           <template v-if="visit">
             <div v-if="visit.status === 'Correcting'" class="alert-box alert-warning">
@@ -169,7 +179,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { onBeforeRouteUpdate, useRoute } from 'vue-router';
 import axios from 'axios';
 import DiagnosisAutocomplete from '@/components/DiagnosisAutocomplete.vue';
 import SafetyAlertBanner from '@/components/SafetyAlertBanner.vue';
@@ -178,12 +189,15 @@ import { useAuthStore } from '@/stores/auth';
 import { queueService, maskPublicQueueName, type QueueEntryResponse } from '@/services/queue';
 import { visitsService } from '@/services/visits';
 import { appointmentsService, type BookingDentist } from '@/services/appointments';
-import type { VisitDetails } from '@/services/patients';
+import { patientsService, type VisitDetails, type VitalSignRecord } from '@/services/patients';
 
 const auth = useAuthStore();
+const route = useRoute();
 const entries = ref<QueueEntryResponse[]>([]);
 const selected = ref<QueueEntryResponse | null>(null);
 const visit = ref<VisitDetails | null>(null);
+const vitals = ref<VitalSignRecord | null>(null);
+const vitalSignsError = ref('');
 const patientHeading = ref<HTMLHeadingElement | null>(null);
 const diagnosis = ref('');
 const clinicalNotes = ref('');
@@ -202,7 +216,7 @@ const visitError = ref('');
 const actionError = ref('');
 const successMessage = ref('');
 const needsReview = ref(false), dentists = ref<BookingDentist[]>([]), startDentistId = ref(0), dentistsLoading = ref(false), dentistError = ref('');
-let life = 0, queueVersion = 0, visitVersion = 0, dentistVersion = 0;
+let life = 0, queueVersion = 0, visitVersion = 0, dentistVersion = 0, preferredVersion = 0;
 let tvCallTimer: ReturnType<typeof setInterval> | null = null;
 const targetDentistId = computed(() => auth.role === 'DENTIST' ? auth.user?.userId : startDentistId.value);
 const busy = computed(() => loadingQueue.value || loadingVisit.value || starting.value || saving.value);
@@ -267,8 +281,44 @@ async function loadQueue(targetPage = 1) {
   } finally { if (ticket === queueVersion) loadingQueue.value = false; }
 }
 
+function queryId(value: unknown): number | null {
+  if (typeof value !== 'string' || !/^\d+$/.test(value)) return null;
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 && id <= 2147483647 ? id : null;
+}
+
+async function openInitialVisit() {
+  const ticket = ++preferredVersion;
+  const entryId = queryId(route.query.queueEntryId);
+  const visitId = queryId(route.query.visitId);
+  try {
+    let entry: QueueEntryResponse | undefined;
+    if (route.query.queueEntryId !== undefined || route.query.visitId !== undefined) {
+      if (!entryId || !visitId) throw new Error('Invalid visit link');
+      const linked = await queueService.getEntry(entryId);
+      const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh', dateStyle: 'short' }).format(new Date());
+      if (linked.visitId !== visitId || linked.queueDate !== today ||
+        (auth.role === 'DENTIST' && linked.dentistId !== auth.user?.userId)) throw new Error('Invalid visit link');
+      entry = linked;
+    } else if (auth.role === 'DENTIST' && auth.user) {
+      const [calling, inProgress] = await Promise.all([
+        queueService.getToday(1, 6, auth.user.userId),
+        queueService.getToday(1, 2, auth.user.userId)
+      ]);
+      entry = calling.totalCount === 1 ? calling.items[0] : inProgress.totalCount === 1 ? inProgress.items[0] : undefined;
+    }
+    if (ticket !== preferredVersion || !entry?.visitId || busy.value || dirty.value) return;
+    if (!entries.value.some(row => row.queueEntryId === entry.queueEntryId)) entries.value = [entry, ...entries.value];
+    await selectEntry(entry);
+  } catch {
+    if (ticket === preferredVersion && (route.query.queueEntryId !== undefined || route.query.visitId !== undefined))
+      actionError.value = 'Không mở được lượt được liên kết. Chọn lượt khám trong danh sách.';
+  }
+}
+
 async function selectEntry(entry: QueueEntryResponse) {
   if (busy.value || dirty.value) return;
+  preferredVersion++;
   clearTvCallTimer();
   selected.value = entry; startDentistId.value = entry.dentistId ?? 0;
   needsReview.value = false;
@@ -285,18 +335,24 @@ async function reloadVisit() {
   actionError.value = '';
   successMessage.value = '';
   visit.value = null;
+  vitals.value = null;
+  vitalSignsError.value = '';
   try {
-    const [result, currentEntry] = await Promise.all([
-      visitsService.getById(selected.value.visitId), queueService.getEntry(selected.value.queueEntryId)
+    const entry = selected.value;
+    const [result, currentEntry, recentVitals] = await Promise.all([
+      visitsService.getById(entry.visitId!), queueService.getEntry(entry.queueEntryId),
+      [1, 6].includes(entry.status) ? patientsService.getVitalSigns(entry.patientId, 1, 20).catch(() => null) : null
     ]);
     if (ticket !== visitVersion) return;
-    if (currentEntry.visitId !== result.visitId) throw new Error('Visit mismatch');
+    if (currentEntry.visitId !== result.visitId || currentEntry.patientId !== result.patientId) throw new Error('Visit mismatch');
     selected.value = currentEntry;
     entries.value = entries.value.map(entry => entry.queueEntryId === currentEntry.queueEntryId ? currentEntry : entry);
     if (currentEntry.dentistId !== null) startDentistId.value = currentEntry.dentistId;
     needsReview.value = false; visit.value = result;
     diagnosis.value = result.diagnosis ?? '';
     clinicalNotes.value = result.clinicalNotes ?? '';
+    vitals.value = recentVitals?.items.find(record => record.visitId === result.visitId) ?? null;
+    if (!recentVitals && [1, 6].includes(currentEntry.status)) vitalSignsError.value = 'Không tải được sinh hiệu. Có thể tải lại hồ sơ để kiểm tra.';
   } catch (error) {
     if (ticket !== visitVersion) return; needsReview.value = true;
     visitError.value = errorMessage(error, 'Không tải được hồ sơ khám. Vui lòng thử lại.');
@@ -377,11 +433,18 @@ function triggerTvRecall() {
   }, 1000);
 }
 
-onMounted(() => Promise.all([loadQueue(), loadDentists()]));
-onUnmounted(() => { life++; queueVersion++; visitVersion++; dentistVersion++; clearTvCallTimer(); entries.value = []; selected.value = null; visit.value = null; diagnosis.value = ''; clinicalNotes.value = ''; dentists.value = []; startDentistId.value = 0; dentistError.value = ''; actionError.value = ''; successMessage.value = ''; queueError.value = ''; visitError.value = ''; });
+onMounted(async () => {
+  const ticket = life;
+  await Promise.all([loadQueue(), loadDentists()]);
+  if (ticket === life) await openInitialVisit();
+});
+onBeforeRouteUpdate(() => !dirty.value && !busy.value);
+watch(() => [route.query.queueEntryId, route.query.visitId], () => void openInitialVisit());
+onUnmounted(() => { life++; queueVersion++; visitVersion++; dentistVersion++; preferredVersion++; clearTvCallTimer(); entries.value = []; selected.value = null; visit.value = null; diagnosis.value = ''; clinicalNotes.value = ''; dentists.value = []; startDentistId.value = 0; dentistError.value = ''; actionError.value = ''; successMessage.value = ''; queueError.value = ''; visitError.value = ''; });
 </script>
 
 <style scoped>
+.pre-exam-vitals { display: grid; gap: .25rem; margin-top: .8rem; overflow-wrap: anywhere; }
 .clinical-page { container-type: inline-size; color: #172b42; }
 .clinical-heading { margin-bottom: 1.2rem; }
 .clinical-heading h1 { margin: 0; font-size: clamp(1.45rem, 3vw, 2.1rem); line-height: 1.2; }
