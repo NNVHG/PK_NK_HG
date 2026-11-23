@@ -1,13 +1,19 @@
 <template>
   <main class="assignment-page">
     <div class="breadcrumb-bar">
-      <RouterLink :to="`${portalPrefix}/clinical/visits/${visitId}/fdi`" class="back-link">← Sơ đồ và tình trạng răng</RouterLink>
+      <RouterLink :to="clinicalBackLocation" class="back-link primary-back">{{ clinicalBackLabel }}</RouterLink>
+      <template v-if="!busy && visitId > 0">
+        <RouterLink :to="{ path: `${portalPrefix}/clinical/visits/${visitId}/fdi`, query: visitNavQuery }" class="quick-nav-pill">Sơ đồ răng FDI</RouterLink>
+        <RouterLink :to="{ path: `${portalPrefix}/clinical/visits/${visitId}/prescription`, query: visitNavQuery }" class="quick-nav-pill">Đơn thuốc</RouterLink>
+        <RouterLink v-if="['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(auth.role)" :to="{ path: `${portalPrefix}/clinical/visits/${visitId}/images`, query: visitNavQuery }" class="quick-nav-pill">Ảnh khám</RouterLink>
+        <RouterLink v-if="['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(auth.role)" :to="{ path: `${portalPrefix}/clinical/visits/${visitId}/invoice-draft`, query: visitNavQuery }" class="quick-nav-pill alt">Hóa đơn nháp</RouterLink>
+      </template>
       <span class="breadcrumb-current">Lâm sàng › Chỉ định dịch vụ theo răng</span>
     </div>
 
     <div v-if="visit?.status === 'Correcting'" class="correcting-alert">
       <span>Đang đính chính hồ sơ ngoài ca khám.</span>
-      <RouterLink :to="`${portalPrefix}/clinical/visits/${visitId}/invoice-draft`">Trở lại để hoàn tất và khóa đính chính</RouterLink>
+      <RouterLink :to="{ path: `${portalPrefix}/clinical/visits/${visitId}/invoice-draft`, query: visitNavQuery }">Trở lại để hoàn tất và khóa đính chính</RouterLink>
     </div>
 
     <div class="page-header-row">
@@ -16,7 +22,7 @@
         <p v-if="visit" class="page-subtitle">Bệnh nhân #{{ visit.patientId }} · Trạng thái: <strong>{{ visit.status }}</strong></p>
       </div>
       <div class="header-actions">
-        <RouterLink v-if="!busy && ['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(auth.role)" :to="`${portalPrefix}/clinical/visits/${visitId}/invoice-draft`" class="btn-secondary">Hoàn tất khám / Xem hóa đơn nháp →</RouterLink>
+        <RouterLink v-if="!busy && ['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(auth.role)" :to="{ path: `${portalPrefix}/clinical/visits/${visitId}/invoice-draft`, query: visitNavQuery }" class="btn-secondary">Hoàn tất khám / Xem hóa đơn nháp →</RouterLink>
         <button type="button" class="btn-refresh" :disabled="busy" @click="load">Tải lại hồ sơ</button>
       </div>
     </div>
@@ -33,7 +39,7 @@
           <label class="checkbox-label"><input v-model="general" type="checkbox" :disabled="busy" /> <span>Dịch vụ toàn hàm / tổng quát</span></label>
         </div>
         <div class="chart-wrapper-card">
-          <FdiDentalChart v-model="selection" v-model:dentition-type="dentition" :multiple="true" :readonly="busy || general" />
+          <FdiDentalChart v-model="selection" v-model:dentition-type="dentition" :locked-dentition="patientDentition" :multiple="true" :readonly="busy || general" />
         </div>
         <p v-if="!general" class="selected-teeth-hint">Răng được chỉ định: <strong>{{ selectedTeeth.join(', ') || 'Chưa chọn' }}</strong>. Mỗi răng tạo một dòng dịch vụ; mặt điều trị chọn bên dưới.</p>
         <div class="assignment-grid">
@@ -161,6 +167,25 @@ const isStaff = computed(() => ['ADMIN', 'RECEPTIONIST', 'DENTIST', 'ASSISTANT']
 const store = useVisitServicesStore();
 const { rows } = storeToRefs(store);
 const visitId = computed(() => Number(route.params.visitId));
+const queueEntryIdParam = computed(() => {
+  const raw = route.query?.queueEntryId;
+  return typeof raw === 'string' && /^\d+$/.test(raw) ? raw : null;
+});
+const visitNavQuery = computed(() => queueEntryIdParam.value ? { queueEntryId: queueEntryIdParam.value } : undefined);
+const clinicalBackLocation = computed(() => {
+  if (['ADMIN', 'DENTIST'].includes(auth.role)) {
+    return queueEntryIdParam.value && Number.isInteger(visitId.value) && visitId.value > 0
+      ? { path: '/management/clinical/diagnosis', query: { queueEntryId: queueEntryIdParam.value, visitId: String(visitId.value) } }
+      : '/management/clinical/diagnosis';
+  }
+  if (auth.role === 'PATIENT') return '/patient/my-record';
+  return '/management/queue/today';
+});
+const clinicalBackLabel = computed(() => {
+  if (['ADMIN', 'DENTIST'].includes(auth.role)) return '← Quay lại khám bệnh';
+  if (auth.role === 'PATIENT') return '← Hồ sơ của tôi';
+  return '← Hàng đợi hôm nay';
+});
 const visit = ref<VisitDetails | null>(null);
 const busy = ref(false);
 const error = ref('');
@@ -190,6 +215,7 @@ async function remove() {
 }
 const selection = ref<SelectedToothSurface[]>([]);
 const dentition = ref<DentitionType>('adult');
+const patientDentition = ref<'adult' | 'child' | null>(null);
 let dentitionVisitId = 0;
 const general = ref(false);
 const surface = ref<string | null>(null);
@@ -245,7 +271,9 @@ async function load() {
     if (dentitionVisitId !== details.visitId) {
       const mode = await visitsService.getDefaultDentition(details).catch(() => 'adult' as const);
       if (ticket !== version) return;
-      dentition.value = mode;
+      const resolvedDentition: 'adult' | 'child' = mode === 'child' ? 'child' : 'adult';
+      dentition.value = resolvedDentition;
+      patientDentition.value = resolvedDentition;
       dentitionVisitId = details.visitId;
     }
     visit.value = details; store.replace(records);
@@ -289,9 +317,10 @@ onUnmounted(() => { version++; store.reset(); visit.value = null; catalog.value 
 .breadcrumb-bar {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.6rem;
   font-size: 0.85rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
 }
 
 .back-link {
@@ -300,9 +329,32 @@ onUnmounted(() => { version++; store.reset(); visit.value = null; catalog.value 
   font-weight: 600;
   display: inline-flex;
   align-items: center;
-  min-height: 44px;
+  min-height: 36px;
+  padding: 0.3rem 0.7rem;
+  border-radius: 6px;
 }
-.back-link:hover { text-decoration: underline; }
+.back-link.primary-back {
+  background: #176864;
+  color: #ffffff;
+}
+.back-link:hover { filter: brightness(0.95); text-decoration: none; }
+.quick-nav-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0.3rem 0.65rem;
+  border-radius: 6px;
+  background: #e0f2fe;
+  color: #0284c7;
+  font-weight: 600;
+  text-decoration: none;
+}
+.quick-nav-pill.alt {
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+.quick-nav-pill:hover { filter: brightness(0.95); text-decoration: none; }
 
 .breadcrumb-current {
   color: #64748b;

@@ -3,7 +3,7 @@ import type { LatestToothCondition } from '@/types/fdi';
 
 export const FDI_CONDITIONS = {
   CARIES: 'Sâu răng', RESTORED: 'Đã trám', MISSING: 'Mất răng', CROWN: 'Mão răng',
-  PULPITIS: 'Viêm tủy', IMPLANT: 'Implant', CALCULUS: 'Vôi răng', NORMAL: 'Bình thường',
+  PULPITIS: 'Viêm tủy', IMPLANT: 'Cấy ghép trụ răng', CALCULUS: 'Vôi răng', NORMAL: 'Bình thường',
   GINGIVITIS: 'Viêm nướu', PERIODONTITIS: 'Viêm nha chu', IMPACTED: 'Răng mọc lệch/ngầm'
 } as const;
 export type ConditionCode = keyof typeof FDI_CONDITIONS;

@@ -1,120 +1,43 @@
 <template>
   <main class="clinical-page">
-    <header class="clinical-heading">
-      <h1>Khám bệnh &amp; chẩn đoán lâm sàng</h1>
-      <p>Chọn lượt khám để kiểm tra cảnh báo an toàn và ghi chẩn đoán.</p>
+    <header class="clinical-topbar">
+      <div class="topbar-left">
+        <RouterLink to="/management/queue/today" class="back-queue-link">← Hàng đợi hôm nay</RouterLink>
+        <h1>Khám bệnh &amp; chẩn đoán lâm sàng</h1>
+      </div>
     </header>
 
-    <div class="clinical-layout">
-      <section class="panel queue-panel" aria-label="Lượt khám hôm nay">
-        <div class="panel-header">
-          <h2>Lượt khám hôm nay</h2>
-          <button type="button" class="btn btn-outline-sm" :disabled="busy || dirty" @click="loadQueue(page)">Làm mới</button>
-        </div>
-        <div v-if="loadingQueue" class="loading-state-sm" role="status">Đang tải lượt khám…</div>
-        <div v-if="queueError" class="alert-box alert-error" role="alert">{{ queueError }}</div>
-        <p v-if="!loadingQueue && !queueError && !entries.length" class="empty-text">Chưa có lượt khám được tiếp đón hôm nay.</p>
+    <section class="panel detail-panel" aria-label="Hồ sơ khám lâm sàng">
+      <div v-if="!selected" class="empty-selection-placeholder">
+        <h2>Chưa có ca khám đang mở</h2>
+        <p v-if="actionError" class="alert-box alert-error" role="alert">{{ actionError }}</p>
+        <p>Chọn hoặc gọi số bệnh nhân từ <strong>Hàng đợi hôm nay</strong> để bắt đầu khám.</p>
+        <RouterLink to="/management/queue/today" class="btn btn-primary go-queue-btn">Đi tới Hàng đợi hôm nay để gọi số →</RouterLink>
+      </div>
 
-        <div class="queue-list">
-          <button
-            v-for="entry in entries"
-            :key="entry.queueEntryId"
-            type="button"
-            class="queue-item-card"
-            :class="{ selected: selected?.queueEntryId === entry.queueEntryId }"
-            :aria-pressed="selected?.queueEntryId === entry.queueEntryId"
-            :disabled="busy || dirty || !entry.visitId || Boolean(queueError)"
-            @click="selectEntry(entry)"
-          >
-            <div class="item-top">
-              <span class="queue-num">STT #{{ entry.queueNumber }}</span>
-              <span class="queue-status-tag" :data-status="entry.status">{{ entry.statusText }}</span>
+      <template v-else>
+        <header class="patient-header">
+          <div class="patient-identity">
+            <h2 ref="patientHeading" tabindex="-1">{{ selected.patientName }}</h2>
+            <div class="patient-submeta">
+              <span>{{ selected.patientCode }}</span>
+              <span>Lượt số {{ selected.queueNumber }}</span>
+              <span>Lần khám #{{ selected.visitId }}</span>
+              <span v-if="selected.roomName && visit?.status !== 'Correcting'">{{ selected.roomName }}</span>
             </div>
-            <div class="patient-name">{{ entry.patientName }}</div>
-            <div class="patient-meta">{{ entry.patientCode }}<template v-if="entry.dentistName"> · {{ entry.dentistName }}</template></div>
-          </button>
-        </div>
+          </div>
 
-        <nav class="pagination-bar" aria-label="Phân trang lượt khám">
-          <button type="button" class="btn btn-outline-sm" :disabled="busy || dirty || page <= 1" @click="loadQueue(page - 1)">← Trước</button>
-          <span class="page-info">Trang <strong>{{ page }}</strong> / {{ Math.max(totalPages, 1) }}</span>
-          <button type="button" class="btn btn-outline-sm" :disabled="busy || dirty || page >= totalPages" @click="loadQueue(page + 1)">Sau →</button>
-        </nav>
-      </section>
-
-      <section class="panel detail-panel" aria-label="Hồ sơ khám lâm sàng">
-        <div v-if="!selected" class="empty-selection-placeholder">
-          <h2>Hồ sơ lâm sàng</h2>
-          <p v-if="actionError" class="alert-box alert-error" role="alert">{{ actionError }}</p>
-          <p>Chọn một bệnh nhân trong danh sách lượt khám hôm nay.</p>
-        </div>
-
-        <template v-else>
-          <header class="patient-header">
-            <div>
-              <h2 ref="patientHeading" tabindex="-1">{{ selected.patientName }}</h2>
-              <div class="patient-submeta">
-                <span>{{ selected.patientCode }}</span>
-                <span>Lượt số {{ selected.queueNumber }}</span>
-                <span>Lần khám #{{ selected.visitId }}</span>
-                <span v-if="selected.roomName && visit?.status !== 'Correcting'">{{ selected.roomName }}</span>
-              </div>
-            </div>
+          <div class="patient-header-right">
             <span class="queue-status-tag" :data-status="selected.status">
               {{ visitStatusLabel || selected.statusText }}
             </span>
-          </header>
-
-          <div v-if="loadingVisit" class="loading-state-sm" role="status">Đang tải chi tiết lần khám…</div>
-          <div v-if="visitError" class="alert-box alert-error" role="alert">
-            {{ visitError }}
-            <button type="button" class="btn btn-outline-sm" :disabled="busy" @click="reloadVisit">Thử tải lại</button>
-          </div>
-
-          <SafetyAlertBanner v-if="selected.patientId" :patient-id="selected.patientId" :refresh-key="visit?.visitId ?? selected.queueEntryId" />
-          <div v-if="visit && [1, 6].includes(selected.status)" class="pre-exam-vitals">
-            <strong>Sinh hiệu lần khám</strong>
-            <span v-if="vitalSignsError" role="status">{{ vitalSignsError }}</span>
-            <span v-else-if="vitals">
-              Huyết áp {{ vitals.systolicBp ?? '—' }}/{{ vitals.diastolicBp ?? '—' }} mmHg ·
-              Mạch {{ vitals.pulseBpm ?? '—' }} lần/phút · Nhiệt độ {{ vitals.temperatureC ?? '—' }} °C
-            </span>
-            <span v-else>Chưa có số đo ở lần khám này.</span>
-          </div>
-
-          <template v-if="visit">
-            <div v-if="visit.status === 'Correcting'" class="alert-box alert-warning">
-              ⚠️ Đang ở chế độ đính chính hồ sơ sau ca khám.
-              <RouterLink :to="`/management/clinical/visits/${visit.visitId}/invoice-draft`" class="link-inline">
-                Hoàn tất và chốt hồ sơ →
-              </RouterLink>
-            </div>
-
-            <div v-if="auth.role === 'ADMIN' && [1, 6].includes(selected.status) && !visit.isLocked" class="admin-assign-box">
-              <label for="start-dentist">Chỉ định nha sĩ thực hiện ca:</label>
-              <div class="assign-controls">
-                <select id="start-dentist" v-model.number="startDentistId" :disabled="busy || dentistsLoading">
-                  <option :value="0">-- Chọn nha sĩ phụ trách --</option>
-                  <option v-for="dentist in dentists" :key="dentist.dentistId" :value="dentist.dentistId">
-                    {{ dentist.dentistName }} · #{{ dentist.dentistId }}
-                  </option>
-                </select>
-                <button type="button" class="btn btn-outline-sm" :disabled="busy || dentistsLoading" @click="loadDentists">Tải lại nha sĩ</button>
-              </div>
-              <p v-if="dentistError" class="alert-box alert-error" role="alert">⚠️ {{ dentistError }}</p>
-            </div>
-
-            <div v-if="needsReview" class="alert-box alert-warning" role="alert">
-              Tải lại hồ sơ để đối chiếu trạng thái trước khi tiếp tục.
-            </div>
-
-            <div class="visit-actions">
+            <div v-if="visit" class="visit-actions">
               <button v-if="canStart" type="button" class="btn btn-primary" :disabled="busy" @click="startConsultation">
-                {{ starting ? 'Đang bắt đầu…' : 'Bắt đầu khám' }}
+                {{ starting ? 'Đang bắt đầu…' : '▶ Bắt đầu khám' }}
               </button>
               <button
-                type="button"
                 v-if="canCallOnTv"
+                type="button"
                 class="btn btn-outline-sm"
                 :disabled="busy || needsReview"
                 @click="triggerTvRecall"
@@ -122,59 +45,191 @@
                 {{ tvCalling ? 'Đang gửi lời mời…' : 'Gọi lại trên TV' }}
               </button>
               <button type="button" class="btn btn-outline-sm" :disabled="busy" @click="reloadVisit">
-                {{ dirty ? 'Hủy sửa và tải lại' : 'Tải lại hồ sơ' }}
+                {{ dirty ? 'Hủy sửa & tải lại' : 'Tải lại' }}
               </button>
-              <span v-if="tvCalledMsg" class="tv-called-status" role="status">{{ tvCalledMsg }}</span>
+            </div>
+          </div>
+        </header>
+
+        <div v-if="tvCalledMsg" class="tv-called-banner" role="status">{{ tvCalledMsg }}</div>
+        <div v-if="loadingVisit" class="loading-state-sm" role="status">Đang tải chi tiết lần khám…</div>
+        <div v-if="visitError" class="alert-box alert-error" role="alert">
+          {{ visitError }}
+          <button type="button" class="btn btn-outline-sm" :disabled="busy" @click="reloadVisit">Thử tải lại</button>
+        </div>
+        <div v-if="actionError" class="alert-box alert-error" role="alert">{{ actionError }}</div>
+        <div v-if="successMessage" class="alert-box alert-success" role="status">{{ successMessage }}</div>
+
+        <template v-if="visit">
+          <div v-if="visit.status === 'Correcting'" class="alert-box alert-warning">
+            <span>⚠️ Đang ở chế độ đính chính hồ sơ sau ca khám.</span>
+            <RouterLink :to="{ path: `/management/clinical/visits/${visit.visitId}/invoice-draft`, query: visitNavQuery }" class="link-inline">
+              Hoàn tất và chốt hồ sơ →
+            </RouterLink>
+          </div>
+          <div v-if="needsReview" class="alert-box alert-warning" role="alert">
+            Tải lại hồ sơ để đối chiếu trạng thái trước khi tiếp tục.
+          </div>
+
+          <!-- TRẠNG THÁI TIỀN KHÁM (Chờ / Đang gọi số) -->
+          <div v-if="[1, 6].includes(selected.status) && !canEdit" class="pre-exam-grid">
+            <SafetyAlertBanner v-if="selected.patientId" :patient-id="selected.patientId" :refresh-key="visit?.visitId ?? selected.queueEntryId" />
+
+            <div class="pre-exam-card">
+              <h3>Sinh hiệu tiền khám</h3>
+              <p v-if="vitalSignsError" class="muted-note" role="status">{{ vitalSignsError }}</p>
+              <div v-else-if="vitals" class="vitals-grid">
+                <div class="vital-tile">
+                  <span class="vital-label">Huyết áp</span>
+                  <strong>{{ vitals.systolicBp ?? '—' }}/{{ vitals.diastolicBp ?? '—' }}</strong>
+                  <span class="vital-unit">mmHg</span>
+                </div>
+                <div class="vital-tile">
+                  <span class="vital-label">Mạch</span>
+                  <strong>{{ vitals.pulseBpm ?? '—' }}</strong>
+                  <span class="vital-unit">lần/phút</span>
+                </div>
+                <div class="vital-tile">
+                  <span class="vital-label">Nhiệt độ</span>
+                  <strong>{{ vitals.temperatureC ?? '—' }}</strong>
+                  <span class="vital-unit">°C</span>
+                </div>
+              </div>
+              <p v-else class="muted-note">Chưa có số đo sinh hiệu ở lần khám này.</p>
+
+              <div v-if="auth.role === 'ADMIN' && !visit.isLocked" class="admin-assign-box">
+                <label for="start-dentist">Chỉ định nha sĩ thực hiện ca:</label>
+                <div class="assign-controls">
+                  <select id="start-dentist" v-model.number="startDentistId" :disabled="busy || dentistsLoading">
+                    <option :value="0">-- Chọn nha sĩ phụ trách --</option>
+                    <option v-for="dentist in dentists" :key="dentist.dentistId" :value="dentist.dentistId">
+                      {{ dentist.dentistName }} · #{{ dentist.dentistId }}
+                    </option>
+                  </select>
+                  <button type="button" class="btn btn-outline-sm" :disabled="busy || dentistsLoading" @click="loadDentists">Tải lại nha sĩ</button>
+                </div>
+                <p v-if="dentistError" class="alert-box alert-error" role="alert">⚠️ {{ dentistError }}</p>
+              </div>
+
+              <p class="pre-exam-hint">Kiểm tra dị ứng, huyết áp và bấm <strong>▶ Bắt đầu khám</strong> ở góc trên bên phải để mở khu chẩn đoán &amp; sơ đồ răng FDI.</p>
+            </div>
+          </div>
+
+          <!-- TRẠNG THÁI ĐANG KHÁM / ĐÍNH CHÍNH: Cockpit 2 cột trực quan -->
+          <div v-else-if="canEdit" class="clinical-cockpit">
+            <div class="clinical-main-col">
+              <form class="diagnosis-form" @submit.prevent="saveDiagnosis">
+                <div class="form-head">
+                  <h3>Chẩn đoán &amp; ghi chú lâm sàng</h3>
+                  <span v-if="dirty" class="dirty-badge">Chưa lưu</span>
+                </div>
+
+                <div class="form-group">
+                  <label for="diagnosis">Chẩn đoán bệnh lý chính <span class="required">*</span></label>
+                  <DiagnosisAutocomplete :key="visit.visitId" v-model="diagnosis" :disabled="busy" />
+                  <div class="char-count">{{ diagnosis.length }}/1000 ký tự</div>
+                </div>
+
+                <div class="form-group">
+                  <label for="clinical-notes">Ghi chú diễn tiến lâm sàng &amp; dặn dò</label>
+                  <textarea id="clinical-notes" v-model="clinicalNotes" :disabled="busy" maxlength="2000" rows="4" placeholder="Ghi chú lâm sàng, triệu chứng cụ thể, dặn dò chăm sóc sau thủ thuật..."></textarea>
+                  <div class="char-count">{{ clinicalNotes.length }}/2000 ký tự</div>
+                </div>
+
+                <div class="diagnosis-footer">
+                  <div class="diagnosis-actions">
+                    <button type="submit" class="btn btn-primary btn-save" :disabled="busy">
+                      {{ saving ? 'Đang lưu…' : 'Lưu chẩn đoán' }}
+                    </button>
+                    <button v-if="dirty" type="button" class="btn btn-outline-sm" :disabled="busy" @click="reloadVisit">
+                      Hủy sửa
+                    </button>
+                  </div>
+                  <span v-if="dirty" class="unsaved-hint">Lưu chẩn đoán hoặc hủy sửa trước khi chuyển bước khác.</span>
+                </div>
+              </form>
             </div>
 
-            <form v-if="canEdit" class="diagnosis-form" @submit.prevent="saveDiagnosis">
-              <h3>Ghi chẩn đoán</h3>
-              <div class="form-group">
-                <label for="diagnosis">Chẩn đoán bệnh lý chính <span class="required">*</span></label>
-                <DiagnosisAutocomplete :key="visit.visitId" v-model="diagnosis" :disabled="busy" />
-                <div class="char-count">{{ diagnosis.length }}/1000 ký tự</div>
+            <aside class="clinical-side-col" aria-label="An toàn và thao tác nhanh trong ca khám">
+              <SafetyAlertBanner v-if="selected.patientId" :patient-id="selected.patientId" :refresh-key="visit?.visitId ?? selected.queueEntryId" />
+
+              <div class="side-card vitals-card">
+                <h3>Sinh hiệu lần khám</h3>
+                <p v-if="vitalSignsError" class="muted-note" role="status">{{ vitalSignsError }}</p>
+                <div v-else-if="vitals" class="vitals-grid compact">
+                  <div class="vital-tile">
+                    <span class="vital-label">Huyết áp</span>
+                    <strong>{{ vitals.systolicBp ?? '—' }}/{{ vitals.diastolicBp ?? '—' }}</strong>
+                    <span class="vital-unit">mmHg</span>
+                  </div>
+                  <div class="vital-tile">
+                    <span class="vital-label">Mạch</span>
+                    <strong>{{ vitals.pulseBpm ?? '—' }}</strong>
+                    <span class="vital-unit">l/ph</span>
+                  </div>
+                  <div class="vital-tile">
+                    <span class="vital-label">Nhiệt độ</span>
+                    <strong>{{ vitals.temperatureC ?? '—' }}</strong>
+                    <span class="vital-unit">°C</span>
+                  </div>
+                </div>
+                <p v-else class="muted-note">Chưa có số đo sinh hiệu ở lần khám này.</p>
               </div>
 
-              <div class="form-group">
-                <label for="clinical-notes">Ghi chú diễn tiến lâm sàng & dặn dò</label>
-                <textarea id="clinical-notes" v-model="clinicalNotes" :disabled="busy" maxlength="2000" rows="5" placeholder="Ghi chú lâm sàng, triệu chứng cụ thể, dặn dò chăm sóc sau thủ thuật..."></textarea>
-                <div class="char-count">{{ clinicalNotes.length }}/2000 ký tự</div>
+              <div class="side-card care-links-panel">
+                <h3>Thao tác chuyên môn (1 chạm)</h3>
+                <p v-if="dirty || busy" class="muted-note">Lưu chẩn đoán hoặc hủy sửa để mở các bước tiếp theo.</p>
+                <nav v-else class="care-links" aria-label="Nghiệp vụ cùng lần khám">
+                  <div class="care-links-grid">
+                    <RouterLink :to="{ path: `/management/clinical/visits/${visit.visitId}/fdi`, query: visitNavQuery }" class="care-tile care-tile-wide">Sơ đồ răng FDI &amp; Chỉ định dịch vụ</RouterLink>
+                    <RouterLink :to="{ path: `/management/clinical/visits/${visit.visitId}/prescription`, query: visitNavQuery }" class="care-tile">Kê đơn thuốc</RouterLink>
+                    <RouterLink :to="{ path: `/management/clinical/visits/${visit.visitId}/images`, query: visitNavQuery }" class="care-tile">Ảnh khám</RouterLink>
+                  </div>
+                  <RouterLink :to="{ path: `/management/clinical/visits/${visit.visitId}/invoice-draft`, query: visitNavQuery }" class="care-finish-btn">
+                    Hoàn tất khám &amp; Hóa đơn nháp →
+                  </RouterLink>
+                </nav>
               </div>
+            </aside>
+          </div>
 
-              <div v-if="dirty" class="alert-box alert-warning">
-                Lưu chẩn đoán hoặc hủy sửa trước khi chuyển lượt khám.
-              </div>
-
-              <button type="submit" class="btn btn-primary btn-save" :disabled="busy">
-                {{ saving ? 'Đang lưu…' : 'Lưu chẩn đoán' }}
-              </button>
-            </form>
-
-            <div v-else class="read-only-diagnosis">
-              <h3>Chẩn đoán và ghi chú</h3>
-              <p class="hint-box">{{ visit.status === 'Created' ? 'Chẩn đoán được ghi sau khi bắt đầu khám.' : 'Hồ sơ hiện chỉ đọc.' }}</p>
-              <div class="record-group">
-                <span class="record-label">Chẩn đoán:</span>
-                <p class="record-val">{{ visit.diagnosis || 'Chưa ghi nhận chẩn đoán' }}</p>
-              </div>
-              <div class="record-group">
-                <span class="record-label">Ghi chú lâm sàng:</span>
-                <p class="record-val">{{ visit.clinicalNotes || 'Chưa có ghi chú' }}</p>
+          <!-- TRẠNG THÁI CHỈ ĐỌC (Đã khám xong / Đã khóa) -->
+          <div v-else class="clinical-cockpit">
+            <div class="clinical-main-col">
+              <div class="read-only-diagnosis">
+                <h3>Chẩn đoán và ghi chú</h3>
+                <p class="hint-box">{{ visit.status === 'Created' ? 'Chẩn đoán được ghi sau khi bắt đầu khám.' : 'Hồ sơ hiện chỉ đọc.' }}</p>
+                <div class="record-group">
+                  <span class="record-label">Chẩn đoán:</span>
+                  <p class="record-val">{{ visit.diagnosis || 'Chưa ghi nhận chẩn đoán' }}</p>
+                </div>
+                <div class="record-group">
+                  <span class="record-label">Ghi chú lâm sàng:</span>
+                  <p class="record-val">{{ visit.clinicalNotes || 'Chưa có ghi chú' }}</p>
+                </div>
               </div>
             </div>
-            <nav v-if="!dirty && !busy" class="care-links" aria-label="Nghiệp vụ cùng lần khám">
-              <RouterLink :to="`/management/clinical/visits/${visit.visitId}/fdi`">Sơ đồ răng</RouterLink>
-              <RouterLink :to="`/management/clinical/visits/${visit.visitId}/prescription`">Đơn thuốc</RouterLink>
-              <RouterLink :to="`/management/clinical/visits/${visit.visitId}/images`">Ảnh khám</RouterLink>
-              <RouterLink :to="`/management/clinical/visits/${visit.visitId}/invoice-draft`">Hóa đơn nháp</RouterLink>
-            </nav>
-          </template>
 
-          <div v-if="actionError" class="alert-box alert-error" role="alert">{{ actionError }}</div>
-          <div v-if="successMessage" class="alert-box alert-success" role="status">{{ successMessage }}</div>
+            <aside class="clinical-side-col">
+              <SafetyAlertBanner v-if="selected.patientId" :patient-id="selected.patientId" :refresh-key="visit?.visitId ?? selected.queueEntryId" />
+              <div v-if="!dirty && !busy" class="side-card care-links-panel">
+                <h3>Xem hồ sơ lần khám</h3>
+                <nav class="care-links" aria-label="Nghiệp vụ cùng lần khám">
+                  <div class="care-links-grid">
+                    <RouterLink :to="{ path: `/management/clinical/visits/${visit.visitId}/fdi`, query: visitNavQuery }" class="care-tile care-tile-wide">Sơ đồ răng FDI &amp; Chỉ định dịch vụ</RouterLink>
+                    <RouterLink :to="{ path: `/management/clinical/visits/${visit.visitId}/prescription`, query: visitNavQuery }" class="care-tile">Đơn thuốc</RouterLink>
+                    <RouterLink :to="{ path: `/management/clinical/visits/${visit.visitId}/images`, query: visitNavQuery }" class="care-tile">Ảnh khám</RouterLink>
+                  </div>
+                  <RouterLink :to="{ path: `/management/clinical/visits/${visit.visitId}/invoice-draft`, query: visitNavQuery }" class="care-finish-btn secondary">
+                    Hóa đơn nháp →
+                  </RouterLink>
+                </nav>
+              </div>
+            </aside>
+          </div>
         </template>
-      </section>
-    </div>
+      </template>
+    </section>
   </main>
 </template>
 
@@ -216,6 +271,7 @@ const successMessage = ref('');
 const needsReview = ref(false), dentists = ref<BookingDentist[]>([]), startDentistId = ref(0), dentistsLoading = ref(false), dentistError = ref('');
 let life = 0, queueVersion = 0, visitVersion = 0, dentistVersion = 0, preferredVersion = 0;
 const targetDentistId = computed(() => auth.role === 'DENTIST' ? auth.user?.userId : startDentistId.value);
+const visitNavQuery = computed(() => selected.value?.queueEntryId ? { queueEntryId: String(selected.value.queueEntryId) } : undefined);
 const busy = computed(() => loadingQueue.value || loadingVisit.value || starting.value || saving.value || tvCalling.value);
 const canCallOnTv = computed(() => auth.role === 'DENTIST' && selected.value?.status === 6 &&
   selected.value.dentistId === auth.user?.userId && Boolean(selected.value.visitId));
@@ -292,7 +348,7 @@ async function openInitialVisit() {
       const linked = await queueService.getEntry(entryId);
       const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh', dateStyle: 'short' }).format(new Date());
       if (linked.visitId !== visitId || linked.queueDate !== today ||
-        (auth.role === 'DENTIST' && linked.dentistId !== auth.user?.userId)) throw new Error('Invalid visit link');
+        (auth.role === 'DENTIST' && linked.dentistId !== null && linked.dentistId !== auth.user?.userId)) throw new Error('Invalid visit link');
       entry = linked;
     } else if (auth.role === 'DENTIST' && auth.user) {
       const [calling, inProgress] = await Promise.all([
@@ -306,7 +362,7 @@ async function openInitialVisit() {
     await selectEntry(entry);
   } catch {
     if (ticket === preferredVersion && (route.query.queueEntryId !== undefined || route.query.visitId !== undefined))
-      actionError.value = 'Không mở được lượt được liên kết. Chọn lượt khám trong danh sách.';
+      actionError.value = 'Không mở được lượt được liên kết. Quay lại Hàng đợi hôm nay để chọn lượt.';
   }
 }
 
@@ -335,7 +391,7 @@ async function reloadVisit() {
     const entry = selected.value;
     const [result, currentEntry, recentVitals] = await Promise.all([
       visitsService.getById(entry.visitId!), queueService.getEntry(entry.queueEntryId),
-      [1, 6].includes(entry.status) ? patientsService.getVitalSigns(entry.patientId, 1, 20).catch(() => null) : null
+      [1, 2, 6].includes(entry.status) ? patientsService.getVitalSigns(entry.patientId, 1, 20).catch(() => null) : null
     ]);
     if (ticket !== visitVersion) return;
     if (currentEntry.visitId !== result.visitId || currentEntry.patientId !== result.patientId) throw new Error('Visit mismatch');
@@ -346,7 +402,7 @@ async function reloadVisit() {
     diagnosis.value = result.diagnosis ?? '';
     clinicalNotes.value = result.clinicalNotes ?? '';
     vitals.value = recentVitals?.items.find(record => record.visitId === result.visitId) ?? null;
-    if (!recentVitals && [1, 6].includes(currentEntry.status)) vitalSignsError.value = 'Không tải được sinh hiệu. Có thể tải lại hồ sơ để kiểm tra.';
+    if (!recentVitals && [1, 2, 6].includes(currentEntry.status)) vitalSignsError.value = 'Không tải được sinh hiệu. Có thể tải lại hồ sơ để kiểm tra.';
   } catch (error) {
     if (ticket !== visitVersion) return; needsReview.value = true;
     visitError.value = errorMessage(error, 'Không tải được hồ sơ khám. Vui lòng thử lại.');
@@ -419,7 +475,7 @@ async function triggerTvRecall() {
 
 onMounted(async () => {
   const ticket = life;
-  await Promise.all([loadQueue(), loadDentists()]);
+  await loadDentists();
   if (ticket === life) await openInitialVisit();
 });
 onBeforeRouteUpdate(() => !dirty.value && !busy.value);
@@ -428,88 +484,143 @@ onUnmounted(() => { life++; queueVersion++; visitVersion++; dentistVersion++; pr
 </script>
 
 <style scoped>
-.pre-exam-vitals { display: grid; gap: .25rem; margin-top: .8rem; overflow-wrap: anywhere; }
-.clinical-page { container-type: inline-size; color: #172b42; }
-.clinical-heading { margin-bottom: 1.2rem; }
-.clinical-heading h1 { margin: 0; font-size: clamp(1.45rem, 3vw, 2.1rem); line-height: 1.2; }
-.clinical-heading p { margin: 0.45rem 0 0; color: #51647a; }
-.clinical-layout { display: grid; align-items: start; gap: 1rem; }
+.clinical-page {
+  container-type: inline-size;
+  max-width: 1320px;
+  margin: 0 auto;
+  color: #172b42;
+}
+.clinical-topbar { margin-bottom: 0.9rem; }
+.topbar-left { display: flex; flex-wrap: wrap; align-items: center; gap: 0.65rem 1.1rem; }
+.back-queue-link {
+  display: inline-flex; align-items: center; min-height: 36px; padding: 0.3rem 0.75rem;
+  border: 1px solid #c7d7e4; border-radius: 8px; background: #fff; color: #1e5273;
+  font-size: 0.86rem; font-weight: 700; text-decoration: none;
+}
+.back-queue-link:hover { background: #f4fafb; border-color: #87bdb9; }
+.clinical-topbar h1 { margin: 0; font-size: clamp(1.35rem, 2.5vw, 1.85rem); line-height: 1.2; color: #102e56; }
+
 .panel {
   min-width: 0;
-  padding: clamp(0.85rem, 2.5cqw, 1.3rem);
+  padding: clamp(0.95rem, 2.2cqw, 1.35rem);
   border: 1px solid #dbe5ed;
   border-radius: 14px;
   background: #fff;
+  box-shadow: 0 4px 16px rgba(16, 46, 86, 0.04);
 }
-.queue-panel, .detail-panel { display: grid; gap: 0.9rem; }
-.panel-header, .patient-header, .item-top, .pagination-bar, .visit-actions, .assign-controls {
-  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;
-}
+.detail-panel { display: grid; gap: 0.95rem; }
 .panel h2, .panel h3, .panel p { margin: 0; }
-.panel h2 { font-size: 1.15rem; }
-.panel h3 { font-size: 1.04rem; }
-.queue-list { display: grid; gap: 0.45rem; max-height: 52vh; overflow-y: auto; padding: 0.15rem; }
-.queue-item-card {
+.panel h2 { font-size: 1.25rem; }
+.panel h3 { font-size: 1.02rem; color: #102e56; }
+
+.empty-selection-placeholder {
   display: grid;
-  gap: 0.25rem;
-  width: 100%;
-  min-width: 0;
-  padding: 0.7rem;
-  border: 1px solid #dbe5ed;
-  border-inline-start: 3px solid transparent;
-  border-radius: 9px;
-  background: #f8fafc;
-  color: inherit;
-  text-align: start;
-  font: inherit;
-  cursor: pointer;
+  justify-items: center;
+  text-align: center;
+  gap: 0.75rem;
+  padding: 2.2rem 1rem;
 }
-.queue-item-card.selected { border-color: #75aca9; border-inline-start-color: #176d6a; background: #edf8f6; }
-.queue-item-card:not(:disabled):hover { border-color: #25827e; }
-.queue-item-card:disabled { cursor: not-allowed; }
-.queue-num { font-weight: 750; color: #235274; }
+.empty-selection-placeholder p { color: #51647a; font-size: 0.94rem; }
+.go-queue-btn { text-decoration: none; display: inline-flex; align-items: center; margin-top: 0.25rem; }
+
+.patient-header {
+  display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem 1rem;
+  padding-bottom: 0.85rem; border-bottom: 1px solid #e5edf2;
+}
+.patient-identity { min-width: 0; }
+.patient-header h2 { font-size: clamp(1.25rem, 2.8cqw, 1.55rem); color: #102e56; overflow-wrap: anywhere; }
+.patient-submeta { display: flex; flex-wrap: wrap; gap: 0.35rem 0.85rem; margin-top: 0.3rem; color: #51647a; font-size: 0.88rem; }
+.patient-header-right { display: flex; flex-wrap: wrap; align-items: center; gap: 0.55rem; }
+.visit-actions, .assign-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
+
 .queue-status-tag {
-  padding: 0.24rem 0.52rem; border-radius: 7px; background: #edf2f6; color: #3f5369; font-size: 0.78rem; font-weight: 650;
+  padding: 0.28rem 0.65rem; border-radius: 999px; background: #edf2f6; color: #3f5369; font-size: 0.8rem; font-weight: 700;
 }
 .queue-status-tag[data-status="2"], .queue-status-tag[data-status="6"] { background: #def2ef; color: #144f4d; }
 .queue-status-tag[data-status="1"], .queue-status-tag[data-status="7"] { background: #fff2d5; color: #76461a; }
-.patient-name { font-weight: 750; }
-.patient-name, .patient-header h2, .patient-meta, .record-val { overflow-wrap: anywhere; }
-.patient-meta, .patient-submeta, .page-info, .hint-box, .empty-text, .loading-state-sm, .empty-selection-placeholder p { color: #51647a; font-size: 0.88rem; }
-.patient-header { align-items: flex-start; padding-bottom: 0.8rem; border-bottom: 1px solid #e5edf2; }
-.patient-header h2 { font-size: clamp(1.22rem, 3cqw, 1.55rem); }
-.patient-submeta { display: flex; flex-wrap: wrap; gap: 0.38rem 0.75rem; margin-top: 0.35rem; }
-.empty-selection-placeholder { display: grid; gap: 0.4rem; }
-.visit-actions, .assign-controls { justify-content: flex-start; }
+
+.tv-called-banner {
+  padding: 0.5rem 0.8rem; border-radius: 8px; background: #e8f5f3; color: #0f5c59; font-size: 0.86rem; font-weight: 600;
+}
+.loading-state-sm, .hint-box, .muted-note { color: #51647a; font-size: 0.86rem; }
+
+.pre-exam-grid, .clinical-cockpit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+.clinical-main-col, .clinical-side-col { display: grid; gap: 0.85rem; min-width: 0; }
+
+.pre-exam-card, .side-card, .diagnosis-form, .read-only-diagnosis, .admin-assign-box {
+  display: grid; gap: 0.75rem; padding: 0.95rem; border: 1px solid #e1e9ef; border-radius: 12px; background: #fcfdff; min-width: 0;
+}
+.pre-exam-hint { font-size: 0.86rem; color: #3c5468; background: #f0f7fb; padding: 0.6rem 0.75rem; border-radius: 8px; }
+
+.vitals-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem; }
+.vital-tile {
+  display: grid; gap: 0.15rem; padding: 0.55rem 0.65rem;
+  border: 1px solid #d9e6f0; border-radius: 9px; background: #fff; text-align: center;
+}
+.vital-label { font-size: 0.74rem; color: #5b7184; font-weight: 650; }
+.vital-tile strong { font-size: 1.05rem; color: #102e56; line-height: 1.2; }
+.vital-unit { font-size: 0.72rem; color: #6c8091; }
+
+.form-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.dirty-badge { padding: 0.18rem 0.5rem; border-radius: 999px; background: #fff3db; color: #8a4a08; font-size: 0.75rem; font-weight: 700; }
+.form-group { display: grid; gap: 0.38rem; min-width: 0; }
+.form-group label, .admin-assign-box label, .record-label { font-weight: 650; font-size: 0.9rem; }
+.form-group textarea, .assign-controls select {
+  width: 100%; min-width: 0; padding: 0.58rem 0.7rem; border: 1px solid #b9cedd; border-radius: 8px; font: inherit; background: #fff;
+}
+.form-group textarea { resize: vertical; }
+.assign-controls select { flex: 1 1 12rem; }
+.char-count { color: #51647a; font-size: 0.78rem; text-align: end; }
+.required { color: #9f2e27; }
+.diagnosis-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.65rem; }
+.diagnosis-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.unsaved-hint { font-size: 0.82rem; color: #8a4a08; font-weight: 600; }
+
+.care-links { display: grid; gap: 0.55rem; }
+.care-links-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+.care-tile {
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  min-height: 44px; padding: 0.5rem 0.65rem;
+  border: 1px solid #cddce8; border-radius: 9px; background: #fff;
+  color: #18496a; font-size: 0.86rem; font-weight: 700; text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+.care-tile:hover { background: #eef7fb; border-color: #176864; color: #0f524f; transform: translateY(-1px); }
+.care-tile-wide { grid-column: 1 / -1; background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+.care-tile-wide:hover { background: #dbeafe; border-color: #1d4ed8; color: #1e3a8a; }
+.care-finish-btn {
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  min-height: 44px; padding: 0.55rem 0.85rem;
+  border-radius: 9px; background: #176864; border: 1px solid #176864;
+  color: #fff; font-size: 0.88rem; font-weight: 750; text-decoration: none;
+}
+.care-finish-btn:hover { background: #0f524f; border-color: #0f524f; }
+.care-finish-btn.secondary { background: #255c81; border-color: #255c81; }
+
 .btn {
-  border: 1px solid #bccddc; border-radius: 8px; padding: 0.52rem 0.7rem; min-height: 38px;
+  border: 1px solid #bccddc; border-radius: 8px; padding: 0.5rem 0.8rem; min-height: 40px;
   background: #fff; color: #254965; font: inherit; font-size: 0.88rem; font-weight: 700; cursor: pointer;
 }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
 .btn-primary { background: #176864; border-color: #176864; color: #fff; }
-.tv-called-status { color: #176864; font-size: 0.84rem; }
-.diagnosis-form, .read-only-diagnosis, .admin-assign-box {
-  display: grid; gap: 0.85rem; padding: 0.85rem; border: 1px solid #e1e9ef; border-radius: 10px; min-width: 0;
-}
-.diagnosis-form > button { justify-self: start; }
-.form-group { display: grid; gap: 0.4rem; min-width: 0; }
-.form-group label, .admin-assign-box label, .record-label { font-weight: 650; font-size: 0.9rem; }
-.form-group textarea, .assign-controls select {
-  width: 100%; min-width: 0; padding: 0.6rem 0.7rem; border: 1px solid #b9cedd; border-radius: 8px; font: inherit;
-}
-.form-group textarea { resize: vertical; }
-.assign-controls select { flex: 1 1 12rem; }
-.char-count { color: #51647a; font-size: 0.79rem; text-align: end; }
-.required { color: #9f2e27; }
-.record-val { white-space: pre-wrap; }
+.btn-primary:hover:not(:disabled) { background: #0f524f; border-color: #0f524f; }
+.record-val { white-space: pre-wrap; overflow-wrap: anywhere; }
 .alert-box { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; border-radius: 8px; padding: 0.65rem 0.8rem; }
 .alert-error { color: #8d2624; background: #fff0ed; }
 .alert-warning { color: #71401a; background: #fff3db; }
 .alert-success { color: #215732; background: #e8f6ed; }
-.link-inline, .care-links a { color: #1e5273; font-weight: 650; }
-.care-links { display: flex; flex-wrap: wrap; gap: 0.45rem; padding-top: 0.8rem; border-top: 1px solid #e5edf2; }
-.care-links a { padding: 0.42rem 0.65rem; border: 1px solid #d5e2eb; border-radius: 7px; font-size: 0.87rem; }
-@container (min-width: 730px) {
-  .clinical-layout { grid-template-columns: minmax(15rem, 1fr) minmax(0, 2.15fr); }
+.link-inline { color: #1e5273; font-weight: 650; }
+
+@container (min-width: 820px) {
+  .pre-exam-grid { grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); }
+  .clinical-cockpit { grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.95fr); }
+}
+@media (max-width: 480px) {
+  .vitals-grid, .care-links-grid { grid-template-columns: 1fr; }
 }
 </style>

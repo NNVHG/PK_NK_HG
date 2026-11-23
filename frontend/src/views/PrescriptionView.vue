@@ -2,20 +2,35 @@
  <main class="rx-page">
   <div class="page-header">
    <div class="header-nav">
-    <RouterLink to="/" class="nav-link">← Trang chủ</RouterLink>
+    <RouterLink :to="clinicalBackLocation" class="nav-link primary-back">{{ clinicalBackLabel }}</RouterLink>
+    <template v-if="!busy && visitId > 0">
+     <RouterLink
+      :to="{ path: `${portalPrefix}/clinical/visits/${visitId}/fdi`, query: visitNavQuery }"
+      class="nav-link"
+     >
+      🦷 Sơ đồ răng FDI &amp; Dịch vụ
+     </RouterLink>
+     <RouterLink
+      v-if="['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(auth.role)"
+      :to="{ path: `${portalPrefix}/clinical/visits/${visitId}/images`, query: visitNavQuery }"
+      class="nav-link"
+     >
+      🖼️ Ảnh khám
+     </RouterLink>
+     <RouterLink
+      v-if="['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(auth.role)"
+      :to="{ path: `${portalPrefix}/clinical/visits/${visitId}/invoice-draft`, query: visitNavQuery }"
+      class="nav-link alt"
+     >
+      💳 Đối chiếu hóa đơn viện phí
+     </RouterLink>
+    </template>
     <RouterLink
      v-if="context?.prescription && !context.prescription.isCancelled"
      :to="'/portal/prescriptions/' + context.prescription.prescriptionCode"
      class="nav-link alt"
     >
      🔍 Mở trang tra cứu đơn bằng CCCD
-    </RouterLink>
-    <RouterLink
-     v-if="!busy && ['ADMIN', 'DENTIST', 'RECEPTIONIST', 'PATIENT'].includes(auth.role)"
-     :to="`${portalPrefix}/clinical/visits/${visitId}/invoice-draft`"
-     class="nav-link"
-    >
-     💳 Đối chiếu hóa đơn viện phí
     </RouterLink>
    </div>
    <div class="header-main">
@@ -267,6 +282,25 @@ interface DraftLine { medicineId: number; medicineVersion: number; code: string;
 const route = useRoute(), auth = useAuthStore();
 const portalPrefix = computed(() => auth.role === 'PATIENT' ? '/patient' : '/management');
 const visitId = computed(() => { const text = String(route.params.visitId ?? ''); const id = Number(text); return /^\d+$/.test(text) && Number.isSafeInteger(id) && id > 0 && id <= 2147483647 ? id : 0; });
+const queueEntryIdParam = computed(() => {
+  const raw = route.query?.queueEntryId;
+  return typeof raw === 'string' && /^\d+$/.test(raw) ? raw : null;
+});
+const visitNavQuery = computed(() => queueEntryIdParam.value ? { queueEntryId: queueEntryIdParam.value } : undefined);
+const clinicalBackLocation = computed(() => {
+  if (['ADMIN', 'DENTIST'].includes(auth.role)) {
+    return queueEntryIdParam.value && visitId.value > 0
+      ? { path: '/management/clinical/diagnosis', query: { queueEntryId: queueEntryIdParam.value, visitId: String(visitId.value) } }
+      : '/management/clinical/diagnosis';
+  }
+  if (auth.role === 'PATIENT') return '/patient/my-record';
+  return '/management/queue/today';
+});
+const clinicalBackLabel = computed(() => {
+  if (['ADMIN', 'DENTIST'].includes(auth.role)) return '← Quay lại khám bệnh';
+  if (auth.role === 'PATIENT') return '← Hồ sơ của tôi';
+  return '← Hàng đợi hôm nay';
+});
 const context = ref<RxContext | null>(null), draft = ref<DraftLine[]>([]), medicines = ref<RxMedicine[]>([]), keyword = ref(''), medicinePage = ref(1), hasNext = ref(false);
 const busy = ref(false), error = ref(''), message = ref(''), needsReview = ref(false), preview = ref<RxPreview | null>(null), previewKey = ref(''), confirmed = ref(false), duplicateConfirmed = ref(false);
 const approvals = reactive<Record<number, { confirmed: boolean; reason: string }>>({});
@@ -402,6 +436,12 @@ onMounted(() => load()); onUnmounted(() => { disposed = true; generation++; sear
   border-radius: 6px;
   background: #e0f2fe;
   transition: all 0.15s ease-in-out;
+}
+
+.nav-link.primary-back {
+  background: #176864;
+  color: #ffffff;
+  border: 1px solid #176864;
 }
 
 .nav-link.alt {

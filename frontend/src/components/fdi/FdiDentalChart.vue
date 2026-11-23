@@ -7,7 +7,7 @@
         <!-- Nha sĩ chọn loại bộ răng (DL-018) -->
         <div class="dentition-selector" role="radiogroup" aria-label="Chọn loại bộ răng">
           <button
-            v-for="opt in dentitionOptions"
+            v-for="opt in visibleDentitionOptions"
             :key="opt.value"
             type="button"
             class="dentition-btn"
@@ -303,8 +303,10 @@ import FdiTooth from './FdiTooth.vue';
 interface Props {
   modelValue?: SelectedToothSurface[];
   dentitionType?: DentitionType;
+  lockedDentition?: 'adult' | 'child' | null;
   readonly?: boolean;
   multiple?: boolean;
+  multiSurface?: boolean;
   selectedTooth?: number | null;
   selectedSurface?: ToothSurface | null;
   latestConditions?: LatestToothCondition[];
@@ -313,8 +315,10 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   modelValue: () => [],
   dentitionType: 'adult',
+  lockedDentition: null,
   readonly: false,
   multiple: true,
+  multiSurface: false,
   selectedTooth: null,
   selectedSurface: null,
   latestConditions: () => []
@@ -330,14 +334,8 @@ const emit = defineEmits<{
   (e: 'surfaceClick', payload: { toothNumber: number; surface: ToothSurface }): void;
 }>();
 
-// Bộ răng do Nha sĩ lựa chọn (DL-018)
-const currentDentition = ref<DentitionType>(props.dentitionType);
-watch(
-  () => props.dentitionType,
-  (newVal) => {
-    currentDentition.value = newVal;
-  }
-);
+// Bộ răng do Nha sĩ lựa chọn (DL-018) hoặc tự khóa theo độ tuổi bệnh nhân
+const currentDentition = ref<DentitionType>(props.lockedDentition ?? props.dentitionType);
 
 const dentitionOptions: Array<{ value: DentitionType; label: string }> = [
   { value: 'adult', label: 'Người lớn (32 răng)' },
@@ -345,8 +343,45 @@ const dentitionOptions: Array<{ value: DentitionType; label: string }> = [
   { value: 'mixed', label: 'Hỗn hợp' }
 ];
 
+const visibleDentitionOptions = computed(() => {
+  if (props.lockedDentition === 'adult' || props.lockedDentition === 'child') {
+    return dentitionOptions.filter((opt) => opt.value === props.lockedDentition);
+  }
+  return dentitionOptions;
+});
+
+watch(
+  () => props.lockedDentition,
+  (locked) => {
+    if (locked === 'adult' || locked === 'child') {
+      currentDentition.value = locked;
+      if (props.dentitionType !== locked) {
+        emit('update:dentitionType', locked);
+      }
+    }
+  },
+  { immediate: true }
+);
+
+watch(
+  () => props.dentitionType,
+  (newVal) => {
+    if (props.lockedDentition === 'adult' || props.lockedDentition === 'child') {
+      currentDentition.value = props.lockedDentition;
+      if (newVal !== props.lockedDentition) {
+        emit('update:dentitionType', props.lockedDentition);
+      }
+      return;
+    }
+    currentDentition.value = newVal;
+  }
+);
+
 function setDentition(val: DentitionType) {
   if (props.readonly) return;
+  if ((props.lockedDentition === 'adult' || props.lockedDentition === 'child') && val !== props.lockedDentition) {
+    return;
+  }
   currentDentition.value = val;
   emit('update:dentitionType', val);
 }
@@ -420,7 +455,40 @@ function onSurfaceClick(toothNumber: number, surface: ToothSurface) {
   emit('select', { toothNumber, surface });
 
   if (!props.multiple) {
-    emit('update:modelValue', [{ toothNumber, surface }]);
+    if (!props.multiSurface) {
+      emit('update:modelValue', [{ toothNumber, surface }]);
+      return;
+    }
+
+    const sameTooth = props.modelValue.filter((item) => item.toothNumber === toothNumber);
+    if (!sameTooth.length) {
+      emit('update:modelValue', [{ toothNumber, surface }]);
+      return;
+    }
+
+    if (sameTooth.some((item) => !item.surface)) {
+      emit(
+        'update:modelValue',
+        ALL_SURFACES.filter((s) => s !== surface).map((s) => ({ toothNumber, surface: s }))
+      );
+      return;
+    }
+
+    const hasSurface = sameTooth.some((item) => item.surface === surface);
+    if (hasSurface) {
+      emit(
+        'update:modelValue',
+        sameTooth.filter((item) => item.surface !== surface)
+      );
+      return;
+    }
+
+    const next = [...sameTooth, { toothNumber, surface }];
+    const uniqueSurfaces = new Set(next.map((item) => item.surface).filter(Boolean));
+    emit(
+      'update:modelValue',
+      uniqueSurfaces.size >= ALL_SURFACES.length ? [{ toothNumber }] : next
+    );
     return;
   }
 
@@ -463,6 +531,10 @@ function onToothClick(toothNumber: number) {
   emit('select', { toothNumber });
 
   if (!props.multiple) {
+    if (props.multiSurface && isWholeToothSelected(toothNumber)) {
+      emit('update:modelValue', []);
+      return;
+    }
     emit('update:modelValue', [{ toothNumber }]);
     return;
   }
@@ -523,11 +595,11 @@ const selectionSummaryText = computed(() => {
 .fdi-chart-container {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
-  padding: 18px;
+  padding: 20px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
@@ -550,7 +622,7 @@ const selectionSummaryText = computed(() => {
 
 .chart-title {
   margin: 0;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
   color: #102e56;
 }
@@ -566,13 +638,13 @@ const selectionSummaryText = computed(() => {
 
 .dentition-btn {
   font-family: inherit;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: #18354c;
   background: transparent;
   border: none;
-  min-height: 36px;
-  padding: 6px 12px;
+  min-height: 40px;
+  padding: 7px 14px;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -614,13 +686,13 @@ const selectionSummaryText = computed(() => {
 
 .zoom-btn {
   font-family: inherit;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: #18354c;
   background: transparent;
   border: none;
-  min-height: 36px;
-  padding: 6px 12px;
+  min-height: 40px;
+  padding: 7px 13px;
   cursor: pointer;
   transition: background 0.15s ease;
   display: inline-flex;
@@ -638,16 +710,16 @@ const selectionSummaryText = computed(() => {
 }
 
 .zoom-btn.reset-btn {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   border-left: 1px solid #cbd5e1;
 }
 
 .zoom-text {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: #18354c;
-  min-width: 44px;
+  min-width: 48px;
   text-align: center;
   border-left: 1px solid #e2e8f0;
   border-right: 1px solid #e2e8f0;
@@ -656,14 +728,14 @@ const selectionSummaryText = computed(() => {
 
 .clear-btn {
   font-family: inherit;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: #b91c1c;
   background: #fef2f2;
   border: 1px solid #fecaca;
   border-radius: 8px;
-  min-height: 36px;
-  padding: 6px 12px;
+  min-height: 40px;
+  padding: 7px 14px;
   cursor: pointer;
   transition: all 0.15s ease;
   display: inline-flex;
@@ -679,7 +751,7 @@ const selectionSummaryText = computed(() => {
 .chart-viewport {
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 14px 12px;
+  padding: 16px 14px;
   background: #f8fbff;
   border-radius: 16px;
   border: 1px solid #e2edf7;
@@ -690,9 +762,9 @@ const selectionSummaryText = computed(() => {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
-  min-width: 760px;
+  min-width: 936px;
   width: 100%;
-  gap: 10px;
+  gap: 11px;
   transition: transform 0.2s ease;
 }
 
@@ -701,9 +773,9 @@ const selectionSummaryText = computed(() => {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  max-width: 740px;
+  max-width: 920px;
   padding: 2px 8px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: #526c80;
   letter-spacing: 0.03em;
@@ -723,7 +795,7 @@ const selectionSummaryText = computed(() => {
 }
 
 .arch-tag {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   color: #526c80;
   letter-spacing: 0.04em;
@@ -733,7 +805,7 @@ const selectionSummaryText = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 9px;
   width: 100%;
 }
 
@@ -744,12 +816,12 @@ const selectionSummaryText = computed(() => {
 .quadrant {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
 }
 
 .midline-divider {
   width: 2px;
-  height: 92px;
+  height: 102px;
   background-color: #cbd5e1;
   border-radius: 2px;
   margin: 0 4px;
@@ -761,7 +833,7 @@ const selectionSummaryText = computed(() => {
   justify-content: center;
   gap: 10px;
   width: 100%;
-  max-width: 740px;
+  max-width: 920px;
   margin: 6px 0;
 }
 
@@ -772,7 +844,7 @@ const selectionSummaryText = computed(() => {
 }
 
 .plane-text {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: #64748b;
   letter-spacing: 0.03em;
@@ -791,7 +863,7 @@ const selectionSummaryText = computed(() => {
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
-  font-size: 11px;
+  font-size: 12px;
   color: #475569;
 }
 
@@ -824,8 +896,8 @@ const selectionSummaryText = computed(() => {
 
 .swatch {
   display: inline-block;
-  width: 12px;
-  height: 12px;
+  width: 13px;
+  height: 13px;
   border-radius: 3px;
   border: 1px solid #94a3b8;
 }
@@ -853,8 +925,8 @@ const selectionSummaryText = computed(() => {
   background: #f4faff;
   border: 1px solid #d8ecfa;
   border-radius: 8px;
-  padding: 8px 12px;
-  font-size: 12px;
+  padding: 9px 13px;
+  font-size: 13px;
   color: #102e56;
 }
 

@@ -1,9 +1,20 @@
 <template>
   <main class="tooth-images">
     <div class="page-header">
-      <RouterLink v-if="visitId" :to="`${portalPrefix}/clinical/visits/${visitId}/fdi`" class="back-link">
-        ← Trở lại sơ đồ răng FDI
-      </RouterLink>
+      <div class="header-nav">
+        <RouterLink :to="clinicalBackLocation" class="nav-link primary-back">{{ clinicalBackLabel }}</RouterLink>
+        <template v-if="visitId > 0">
+          <RouterLink :to="{ path: `${portalPrefix}/clinical/visits/${visitId}/fdi`, query: visitNavQuery }" class="nav-link">
+            🦷 Sơ đồ răng FDI &amp; Dịch vụ
+          </RouterLink>
+          <RouterLink :to="{ path: `${portalPrefix}/clinical/visits/${visitId}/prescription`, query: visitNavQuery }" class="nav-link">
+            💊 Đơn thuốc
+          </RouterLink>
+          <RouterLink :to="{ path: `${portalPrefix}/clinical/visits/${visitId}/invoice-draft`, query: visitNavQuery }" class="nav-link alt">
+            💳 Hóa đơn nháp
+          </RouterLink>
+        </template>
+      </div>
       <div class="header-titles">
         <span class="eyebrow">HÌNH ẢNH LÂM SÀNG & X-QUANG</span>
         <h1>Tra cứu ảnh theo răng · Lần khám #{{ visitId }}</h1>
@@ -59,6 +70,22 @@ import DentalImageAttachments from '@/components/DentalImageAttachments.vue';
 const route=useRoute(),router=useRouter(),auth=useAuthStore();
 const portalPrefix=computed(()=>auth.role==='PATIENT'?'/patient':'/management');
 const visitId=computed(()=>Number(route.params.visitId)),visit=ref<ImageVisitContext|null>(null),appliedTooth=ref<number|null>(null),filterInput=ref('');
+const queueEntryIdParam=computed(()=>{const raw=route.query?.queueEntryId;return typeof raw==='string'&&/^\d+$/.test(raw)?raw:null;});
+const visitNavQuery=computed(()=>queueEntryIdParam.value?{queueEntryId:queueEntryIdParam.value}:undefined);
+const clinicalBackLocation=computed(()=>{
+  if(['ADMIN','DENTIST'].includes(auth.role)){
+    return queueEntryIdParam.value&&Number.isInteger(visitId.value)&&visitId.value>0
+      ?{path:'/management/clinical/diagnosis',query:{queueEntryId:queueEntryIdParam.value,visitId:String(visitId.value)}}
+      :'/management/clinical/diagnosis';
+  }
+  if(auth.role==='PATIENT')return '/patient/my-record';
+  return '/management/queue/today';
+});
+const clinicalBackLabel=computed(()=>{
+  if(['ADMIN','DENTIST'].includes(auth.role))return '← Quay lại khám bệnh';
+  if(auth.role==='PATIENT')return '← Hồ sơ của tôi';
+  return '← Hàng đợi hôm nay';
+});
 const loading=ref(false),error=ref(''),filterError=ref('');let generation=0,disposed=false;
 const identity=()=>`${route.params.visitId}/${JSON.stringify(route.query.toothNumber)}/${auth.role}/${auth.user?.userId}`;
 const allowed=computed(()=>['ADMIN','DENTIST','RECEPTIONIST','PATIENT'].includes(auth.role));
@@ -95,23 +122,40 @@ watch(identity,()=>void load(),{immediate:true});onUnmounted(()=>{disposed=true;
   margin-bottom: 1.5rem;
 }
 
-.back-link {
+.header-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-bottom: 0.75rem;
+}
+
+.nav-link {
   display: inline-flex;
   align-items: center;
   font-size: 0.9rem;
   font-weight: 600;
   color: #0284c7;
   text-decoration: none;
-  margin-bottom: 0.75rem;
-  padding: 0.35rem 0.6rem;
+  padding: 0.35rem 0.65rem;
   border-radius: 6px;
   background: #e0f2fe;
   transition: all 0.15s ease-in-out;
 }
 
-.back-link:hover {
-  background: #bae6fd;
-  color: #0369a1;
+.nav-link.primary-back {
+  background: #176864;
+  color: #ffffff;
+  border: 1px solid #176864;
+}
+
+.nav-link.alt {
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.nav-link:hover {
+  filter: brightness(0.95);
   text-decoration: none;
 }
 

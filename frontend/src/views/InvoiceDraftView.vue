@@ -2,10 +2,18 @@
   <main class="invoice-page">
     <div class="page-header">
       <div class="header-nav">
-        <RouterLink to="/" class="nav-link">← Trang chủ</RouterLink>
-        <RouterLink v-if="!busy && !discountBusy" :to="`${portalPrefix}/clinical/visits/${visitId}/prescription`" class="nav-link alt">
-          💊 Xem / kiểm tra đơn thuốc
-        </RouterLink>
+        <RouterLink :to="clinicalBackLocation" class="nav-link primary-back">{{ clinicalBackLabel }}</RouterLink>
+        <template v-if="!busy && !discountBusy && visitId > 0">
+          <RouterLink :to="{ path: `${portalPrefix}/clinical/visits/${visitId}/fdi`, query: visitNavQuery }" class="nav-link">
+            🦷 Sơ đồ răng FDI &amp; Dịch vụ
+          </RouterLink>
+          <RouterLink :to="{ path: `${portalPrefix}/clinical/visits/${visitId}/prescription`, query: visitNavQuery }" class="nav-link alt">
+            💊 Xem / kiểm tra đơn thuốc
+          </RouterLink>
+          <RouterLink :to="{ path: `${portalPrefix}/clinical/visits/${visitId}/images`, query: visitNavQuery }" class="nav-link">
+            🖼️ Ảnh khám
+          </RouterLink>
+        </template>
       </div>
       <div class="header-main">
         <div class="header-titles">
@@ -82,7 +90,7 @@
             <button class="btn btn-primary" :disabled="busy || discountBusy || !correctionDirty">
               Lưu đính chính chẩn đoán
             </button>
-            <RouterLink v-if="canCorrect && !busy && !correctionDirty" :to="`${portalPrefix}/clinical/visits/${visitId}/fdi`" class="btn btn-secondary">
+            <RouterLink v-if="canCorrect && !busy && !correctionDirty" :to="{ path: `${portalPrefix}/clinical/visits/${visitId}/fdi`, query: visitNavQuery }" class="btn btn-secondary">
               🦷 Đính chính tình trạng răng
             </RouterLink>
           </div>
@@ -95,7 +103,7 @@
       <section v-if="canComplete" class="action-card complete-card" aria-label="Hoàn tất ca khám">
         <div class="card-header">
           <h2>{{ isCorrection ? 'Hoàn tất đính chính hồ sơ' : 'Kết thúc ca khám & Lập hóa đơn' }}</h2>
-          <RouterLink v-if="!busy && !discountBusy" :to="`${portalPrefix}/clinical/visits/${visitId}/services`" class="btn-link">
+          <RouterLink v-if="!busy && !discountBusy" :to="{ path: `${portalPrefix}/clinical/visits/${visitId}/fdi`, query: { ...(visitNavQuery ?? {}), tab: 'services' } }" class="btn-link">
             Kiểm tra dịch vụ đã chỉ định →
           </RouterLink>
         </div>
@@ -292,6 +300,25 @@ const portalPrefix = computed(() => auth.role === 'PATIENT' ? '/patient' : '/man
 const store = useInvoiceDraftStore();
 const { invoice } = storeToRefs(store);
 const visitId = computed(() => Number(route.params.visitId));
+const queueEntryIdParam = computed(() => {
+  const raw = route.query?.queueEntryId;
+  return typeof raw === 'string' && /^\d+$/.test(raw) ? raw : null;
+});
+const visitNavQuery = computed(() => queueEntryIdParam.value ? { queueEntryId: queueEntryIdParam.value } : undefined);
+const clinicalBackLocation = computed(() => {
+  if (['ADMIN', 'DENTIST'].includes(auth.role)) {
+    return queueEntryIdParam.value && Number.isInteger(visitId.value) && visitId.value > 0
+      ? { path: '/management/clinical/diagnosis', query: { queueEntryId: queueEntryIdParam.value, visitId: String(visitId.value) } }
+      : '/management/clinical/diagnosis';
+  }
+  if (auth.role === 'PATIENT') return '/patient/invoices/mine';
+  return '/management/invoices';
+});
+const clinicalBackLabel = computed(() => {
+  if (['ADMIN', 'DENTIST'].includes(auth.role)) return '← Quay lại khám bệnh';
+  if (auth.role === 'PATIENT') return '← Hóa đơn của tôi';
+  return '← Danh sách hóa đơn';
+});
 const visit = ref<VisitDetails | null>(null);
 const busy = ref(false);
 const ready = ref(false);
@@ -464,6 +491,12 @@ onUnmounted(() => { version++; ready.value = false; store.replace(null); visit.v
   border-radius: 6px;
   background: #e0f2fe;
   transition: all 0.15s ease-in-out;
+}
+
+.nav-link.primary-back {
+  background: #176864;
+  color: #ffffff;
+  border: 1px solid #176864;
 }
 
 .nav-link.alt {

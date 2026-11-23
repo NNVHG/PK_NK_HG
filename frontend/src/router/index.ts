@@ -56,7 +56,7 @@ const router = createRouter({
     { path: '/patient/clinical/visits/:visitId/images', name: 'patient-portal-visit-images', component: () => import('@/views/ToothImageLookupView.vue'), meta: { requiresAuth: true, roles: ['PATIENT'] } },
     { path: '/patient/clinical/visits/:visitId/prescription', name: 'patient-portal-visit-prescription', component: () => import('@/views/PrescriptionView.vue'), meta: { requiresAuth: true, roles: ['PATIENT'] } },
     { path: '/patient/clinical/visits/:visitId/invoice-draft', name: 'patient-portal-invoice-draft', component: () => import('@/views/InvoiceDraftView.vue'), meta: { requiresAuth: true, roles: ['PATIENT'] } },
-    { path: '/patient/clinical/visits/:visitId/services', name: 'patient-portal-fdi-services', component: () => import('@/views/FdiServiceAssignmentView.vue'), meta: { requiresAuth: true, roles: ['PATIENT'] } },
+    { path: '/patient/clinical/visits/:visitId/services', name: 'patient-portal-fdi-services', redirect: (to) => ({ name: 'patient-portal-fdi-condition', params: { visitId: to.params.visitId }, query: { ...to.query, tab: 'services' } }), meta: { requiresAuth: true, roles: ['PATIENT'] } },
     { path: '/patient/clinical/visits/:visitId/fdi', name: 'patient-portal-fdi-condition', component: () => import('@/views/FdiConditionView.vue'), meta: { requiresAuth: true, roles: ['PATIENT'] } },
     { path: '/patient/patients/:id(\\d+)', name: 'patient-portal-patient-detail', component: () => import('@/views/PatientDetailView.vue'), meta: { requiresAuth: true, roles: ['PATIENT'] } },
     // ==================== KHU VỰC QUẢN LÝ / NHÂN VIÊN (/management/*) ====================
@@ -75,7 +75,7 @@ const router = createRouter({
     { path: '/management/clinical/visits/:visitId/images', name: 'management-tooth-images', component: () => import('@/views/ToothImageLookupView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'DENTIST', 'RECEPTIONIST'] } },
     { path: '/management/clinical/visits/:visitId/prescription', name: 'management-prescription', component: () => import('@/views/PrescriptionView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'DENTIST', 'RECEPTIONIST', 'ASSISTANT'] } },
     { path: '/management/clinical/visits/:visitId/invoice-draft', name: 'management-invoice-draft', component: () => import('@/views/InvoiceDraftView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'DENTIST', 'RECEPTIONIST'] } },
-    { path: '/management/clinical/visits/:visitId/services', name: 'management-fdi-services', component: () => import('@/views/FdiServiceAssignmentView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'DENTIST', 'RECEPTIONIST', 'ASSISTANT'] } },
+    { path: '/management/clinical/visits/:visitId/services', name: 'management-fdi-services', redirect: (to) => ({ name: 'management-fdi-condition', params: { visitId: to.params.visitId }, query: { ...to.query, tab: 'services' } }), meta: { requiresAuth: true, roles: ['ADMIN', 'DENTIST', 'RECEPTIONIST', 'ASSISTANT'] } },
     { path: '/management/clinical/visits/:visitId/fdi', name: 'management-fdi-condition', component: () => import('@/views/FdiConditionView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'DENTIST', 'RECEPTIONIST', 'ASSISTANT'] } },
     { path: '/management/staff/workspace', name: 'management-staff-workspace', component: () => import('@/views/StaffWorkspacesView.vue'), meta: { requiresAuth: true, roles: ['ADMIN', 'DENTIST', 'ASSISTANT'] } },
     { path: '/management/staff/chair-status', name: 'management-chair-status', redirect: '/management/admin/chairs' },
@@ -150,7 +150,7 @@ const router = createRouter({
     {
       path: '/clinical/visits/:visitId/services',
       name: 'fdi-service-assignment',
-      component: () => import('@/views/FdiServiceAssignmentView.vue'),
+      redirect: (to) => ({ name: 'fdi-condition', params: { visitId: to.params.visitId }, query: { ...to.query, tab: 'services' } }),
       meta: { requiresAuth: true, roles: ['ADMIN', 'DENTIST', 'RECEPTIONIST', 'ASSISTANT', 'PATIENT'] }
     },
     {

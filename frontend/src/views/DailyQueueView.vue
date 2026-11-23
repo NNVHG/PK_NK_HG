@@ -45,10 +45,24 @@
         <button class="button-secondary" :disabled="writing || dentistsLoading" @click="loadDentists">Tải nha sĩ</button>
       </template>
       <button v-if="canCallNext" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || absenceRow !== null || cleanupOpen || transferRow !== null || needsReview || (needsCallingDentist && (dentistsLoading || !callDentistId))" class="btn-call-next" @click="handleCallNext">
-        {{ callingNext ? 'Đang gọi…' : 'Gọi số tiếp theo' }}
+        {{ callingNext ? 'Đang gọi…' : (authStore.role === 'DENTIST' ? 'Gọi số & vào khám ngay' : 'Gọi số tiếp theo') }}
       </button>
       <button v-if="canCancelWaiting" class="button-warning" :disabled="loading || writing || cancelRow !== null || imagingRow !== null || absenceRow !== null || cleanupOpen || transferRow !== null || needsReview" @click="openCleanup">Dọn lượt quá hạn</button>
     </section>
+
+    <div class="status-chips" role="group" aria-label="Lọc nhanh trạng thái lượt khám">
+      <button
+        v-for="item in statusQuickFilters"
+        :key="item.value"
+        type="button"
+        class="status-chip"
+        :class="{ active: status === item.value }"
+        :disabled="loading || writing"
+        @click="selectStatus(item.value)"
+      >
+        {{ item.label }}
+      </button>
+    </div>
 
     <p v-if="canCallNext" class="workflow-hint"><strong>Lưu ý:</strong> Gọi số chỉ mời bệnh nhân vào phòng. Nha sĩ/Admin bắt đầu khám riêng tại hồ sơ lâm sàng.</p>
     <p v-if="authStore.role === 'ASSISTANT'" class="workflow-hint">Phụ tá chỉ gọi lượt đã được phân nha sĩ; lượt chưa phân cần Lễ tân/Admin đối chiếu.</p>
@@ -91,8 +105,11 @@
             :disabled="loading || writing || needsReview" @click="handleCallOnTv(row)">
             {{ callingOnTv ? 'Đang gửi lời mời…' : 'Gọi lại trên TV' }}
           </button>
-          <RouterLink v-if="row.visitId && [2, 6].includes(row.status) && (authStore.role === 'ADMIN' ||
-            authStore.role === 'DENTIST' && row.dentistId === authStore.user?.userId)" :to="clinicalLocation(row)">Mở hồ sơ lâm sàng</RouterLink>
+          <RouterLink
+            v-if="canOpenClinical(row)"
+            :to="clinicalLocation(row)"
+            :class="[2, 6].includes(row.status) ? 'btn-open-clinical' : 'btn-open-clinical-secondary'"
+          >{{ clinicalLinkLabel(row) }}</RouterLink>
           <template v-if="authStore.role === 'ASSISTANT' && row.visitId && [1, 2, 5, 6].includes(row.status)">
             <RouterLink :to="patientLocation(row, 'vitals')">Sinh hiệu</RouterLink>
             <RouterLink :to="patientLocation(row, 'images')">Ảnh hồ sơ</RouterLink>
@@ -254,6 +271,21 @@ async function loadLinkedEntry() {
 }
 watch(linkedEntryId, loadLinkedEntry, { immediate: true });
 const rows = ref<QueueEntryResponse[]>([]), status = ref(1), page = ref(1), total = ref(0), hasNext = ref(false);
+const statusQuickFilters = [
+  { value: 1, label: 'Đang chờ' },
+  { value: 6, label: 'Đang mời' },
+  { value: 2, label: 'Đang khám' },
+  { value: 8, label: 'Tạm dừng' },
+  { value: 5, label: 'Chụp ảnh' },
+  { value: 3, label: 'Khám xong' },
+  { value: 7, label: 'Vắng mặt' },
+  { value: 0, label: 'Tất cả' }
+] as const;
+function selectStatus(value: number) {
+  if (loading.value || writing.value) return;
+  status.value = value;
+  void load(1);
+}
 function locationLabel(item: { roomName?: string | null; chairNumber?: string | null }): string {
   return item.roomName || 'Chưa nhận phòng';
 }
@@ -278,6 +310,19 @@ const transferTargets = computed(() => dentists.value.filter(dentist => dentist.
 let version = 0, life = 0, dentistVersion = 0;
 function clinicalLocation(row: QueueEntryResponse) {
   return { name: 'management-clinical-diagnosis', query: { queueEntryId: row.queueEntryId, visitId: row.visitId } };
+}
+function canOpenClinical(row: QueueEntryResponse): boolean {
+  if (!row.visitId || row.status === 4) return false;
+  if (authStore.role === 'ADMIN') return true;
+  if (authStore.role !== 'DENTIST') return false;
+  if ([2, 6, 3].includes(row.status)) return row.dentistId === authStore.user?.userId;
+  if (row.status === 1) return row.dentistId === null || row.dentistId === authStore.user?.userId;
+  return false;
+}
+function clinicalLinkLabel(row: QueueEntryResponse): string {
+  if ([2, 6].includes(row.status)) return 'Vào khám ngay →';
+  if (row.status === 3) return 'Xem hồ sơ khám';
+  return 'Mở hồ sơ khám';
 }
 async function openDentistVisit(row: QueueEntryResponse) {
   if (authStore.role !== 'DENTIST' || !row.visitId || row.dentistId !== authStore.user?.userId) return false;
@@ -649,6 +694,10 @@ button:disabled { opacity: .56; cursor: not-allowed; }
 button:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid #64b5ad; outline-offset: 2px; }
 .btn-call-next { border-color: var(--teal); background: var(--teal); color: #fff; }
 .btn-call-next:hover:not(:disabled) { border-color: var(--teal-dark); background: var(--teal-dark); color: #fff; }
+.status-chips { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .75rem; }
+.status-chip { min-height: 36px; padding: .35rem .8rem; border: 1px solid #d4dfe7; border-radius: 999px; background: #fff; color: #3d566b; font-size: .82rem; font-weight: 700; cursor: pointer; }
+.status-chip:hover:not(:disabled) { border-color: #87bdb9; background: #f4fafb; }
+.status-chip.active { border-color: var(--teal); background: #e8f5f3; color: var(--teal-dark); }
 .button-secondary { background: #f8fafc; }
 .button-warning { color: #8a4a08; background: #fffaf0; border-color: #f0d39d; }
 .button-warning:hover:not(:disabled) { background: #fff3db; border-color: #e8bb67; }
@@ -691,6 +740,10 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visi
 .queue-card-actions button, .queue-card-actions a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: .5rem .75rem; border: 1px solid #d4dfe7; border-radius: 8px; color: #35526a; background: #fff; text-decoration: none; font-size: .82rem; font-weight: 700; line-height: 1.25; text-align: center; }
 .queue-card-actions a { color: #fff; border-color: #255c81; background: #255c81; }
 .queue-card-actions a:hover { background: #194766; }
+.queue-card-actions a.btn-open-clinical { color: #fff; border-color: var(--teal); background: var(--teal); }
+.queue-card-actions a.btn-open-clinical:hover { background: var(--teal-dark); border-color: var(--teal-dark); }
+.queue-card-actions a.btn-open-clinical-secondary { color: #1e5273; border-color: #b9d0e6; background: #f4faff; }
+.queue-card-actions a.btn-open-clinical-secondary:hover { background: #e1f0fc; border-color: #89b7df; }
 .queue-card-actions .btn-recall-tv { color: #72520f; border-color: #ead69a; background: #fff7dc; }
 .queue-card-actions .action-danger { color: #a13e3b; border-color: #e7c2bf; background: #fff8f7; }
 .empty-state { display: grid; justify-items: center; gap: .45rem; padding: 2rem 1rem; border: 1px dashed #c7d6df; border-radius: 14px; color: #5f7384; background: #fff; text-align: center; }

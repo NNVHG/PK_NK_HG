@@ -40,13 +40,38 @@
       @click="onToothNumberClick"
     >
       <svg class="t-anat-svg" viewBox="0 0 40 60" aria-hidden="true">
+        <defs>
+          <clipPath :id="crownClipId">
+            <path :d="anatPaths.crown" />
+          </clipPath>
+        </defs>
         <path :d="anatPaths.root" class="svg-root" />
+        <path v-if="hasImplantCondition" d="M16,8 L24,8 M15,13 L25,13 M16,18 L24,18 M17,23 L23,23 M20,5 L20,27" class="svg-implant" />
+        <path v-if="hasTreatmentCondition" d="M16,10 L18,42 M24,10 L22,42 M16,42 H24" class="svg-rct" />
         <path d="M6,29 Q20,32 34,29" class="svg-gum" />
         <path :d="anatPaths.crown" class="svg-crown" />
+        <g :clip-path="`url(#${crownClipId})`" class="svg-crown-surfaces">
+          <polygon
+            v-for="zone in anatSurfaceZones"
+            :key="'anat-top-' + zone.surface"
+            :points="zone.points"
+            :class="[
+              'anat-surface',
+              {
+                'is-selected': isSurfaceSelected(zone.surface),
+                'is-hovered': hoveredSurface === zone.surface,
+                'has-condition': toothConditionColor(conditionCodeFor(zone.surface)) !== undefined,
+                [`condition-${toothConditionColor(conditionCodeFor(zone.surface))}`]: toothConditionColor(conditionCodeFor(zone.surface)) !== undefined
+              }
+            ]"
+          />
+        </g>
         <path :d="anatPaths.groove" class="svg-groove" />
-        <circle v-if="dominantColor === 'caries'" cx="20" cy="43" r="4.5" class="svg-caries" />
-        <ellipse v-if="dominantColor === 'restored'" cx="20" cy="43" rx="5.5" ry="3.8" class="svg-filling" />
-        <path v-if="dominantColor === 'treatment'" d="M16,10 L18,42 M24,10 L22,42 M16,42 H24" class="svg-rct" />
+        <path
+          :d="anatPaths.crown"
+          class="svg-crown-outline"
+          :class="{ 'is-selected': isWholeToothSelected || selectedSurfaces.length > 0 }"
+        />
         <g v-if="missingTooth" class="missing-anat-mark">
           <line x1="9" y1="30" x2="31" y2="52" />
           <line x1="31" y1="30" x2="9" y2="52" />
@@ -81,6 +106,8 @@
           :aria-label="getSurfaceAriaLabel(surfacesByPos[pos])"
           :aria-pressed="readonly ? undefined : isSurfaceSelected(surfacesByPos[pos])"
           @click="onSurfaceClick(surfacesByPos[pos])"
+          @mouseenter="hoveredSurface = surfacesByPos[pos]"
+          @mouseleave="hoveredSurface = null"
           @keydown.enter.prevent="onSurfaceClick(surfacesByPos[pos])"
           @keydown.space.prevent="onSurfaceClick(surfacesByPos[pos])"
         >
@@ -116,14 +143,39 @@
       @click="onToothNumberClick"
     >
       <svg class="t-anat-svg" viewBox="0 0 40 60" aria-hidden="true">
+        <defs>
+          <clipPath :id="crownClipId">
+            <path :d="anatPaths.crown" />
+          </clipPath>
+        </defs>
         <g transform="translate(0,60) scale(1,-1)">
           <path :d="anatPaths.root" class="svg-root" />
+          <path v-if="hasImplantCondition" d="M16,8 L24,8 M15,13 L25,13 M16,18 L24,18 M17,23 L23,23 M20,5 L20,27" class="svg-implant" />
+          <path v-if="hasTreatmentCondition" d="M16,10 L18,42 M24,10 L22,42 M16,42 H24" class="svg-rct" />
           <path d="M6,29 Q20,32 34,29" class="svg-gum" />
           <path :d="anatPaths.crown" class="svg-crown" />
+          <g :clip-path="`url(#${crownClipId})`" class="svg-crown-surfaces">
+            <polygon
+              v-for="zone in anatSurfaceZones"
+              :key="'anat-bot-' + zone.surface"
+              :points="zone.points"
+              :class="[
+                'anat-surface',
+                {
+                  'is-selected': isSurfaceSelected(zone.surface),
+                  'is-hovered': hoveredSurface === zone.surface,
+                  'has-condition': toothConditionColor(conditionCodeFor(zone.surface)) !== undefined,
+                  [`condition-${toothConditionColor(conditionCodeFor(zone.surface))}`]: toothConditionColor(conditionCodeFor(zone.surface)) !== undefined
+                }
+              ]"
+            />
+          </g>
           <path :d="anatPaths.groove" class="svg-groove" />
-          <circle v-if="dominantColor === 'caries'" cx="20" cy="43" r="4.5" class="svg-caries" />
-          <ellipse v-if="dominantColor === 'restored'" cx="20" cy="43" rx="5.5" ry="3.8" class="svg-filling" />
-          <path v-if="dominantColor === 'treatment'" d="M16,10 L18,42 M24,10 L22,42 M16,42 H24" class="svg-rct" />
+          <path
+            :d="anatPaths.crown"
+            class="svg-crown-outline"
+            :class="{ 'is-selected': isWholeToothSelected || selectedSurfaces.length > 0 }"
+          />
           <g v-if="missingTooth" class="missing-anat-mark">
             <line x1="9" y1="30" x2="31" y2="52" />
             <line x1="31" y1="30" x2="9" y2="52" />
@@ -151,7 +203,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import {
   type ToothSurface,
   SURFACE_METADATA,
@@ -160,6 +212,8 @@ import {
   isUpperArch,
   toothConditionColor
 } from '@/types/fdi';
+
+let clipPathSeq = 0;
 
 type PositionKey = 'top' | 'bottom' | 'left' | 'right' | 'center';
 
@@ -183,7 +237,7 @@ const props = withDefaults(defineProps<Props>(), {
   missingTooth: false,
   isWholeToothSelected: false,
   readonly: false,
-  size: 46,
+  size: 50,
   showNumber: true,
   numberPosition: 'auto'
 });
@@ -192,6 +246,10 @@ const emit = defineEmits<{
   (e: 'surfaceClick', surface: ToothSurface): void;
   (e: 'toothClick', toothNumber: number): void;
 }>();
+
+const instanceSeq = ++clipPathSeq;
+const hoveredSurface = ref<ToothSurface | null>(null);
+const crownClipId = computed(() => `fdi-crown-clip-${instanceSeq}-${props.toothNumber}`);
 
 const toothInfo = computed(() => getToothInfo(props.toothNumber));
 
@@ -209,6 +267,14 @@ const surfacesByPos = computed<Record<PositionKey, ToothSurface>>(() => ({
   right: getSurfaceAtPosition(props.toothNumber, 'right'),
   center: getSurfaceAtPosition(props.toothNumber, 'center')
 }));
+
+const anatSurfaceZones = computed<Array<{ surface: ToothSurface; points: string }>>(() => [
+  { surface: 'buccal', points: '0,26 40,26 28,37 12,37' },
+  { surface: 'lingual', points: '12,47 28,47 40,59 0,59' },
+  { surface: surfacesByPos.value.left, points: '0,26 12,37 12,47 0,59' },
+  { surface: surfacesByPos.value.right, points: '40,26 40,59 28,47 28,37' },
+  { surface: 'occlusal', points: '12,37 28,37 28,47 12,47' }
+]);
 
 const polygonPoints: Record<PositionKey, string> = {
   top: '2,2 46,2 32,16 16,16',
@@ -254,7 +320,7 @@ const numberBtnAriaLabel = computed(() => {
   return `Răng ${props.toothNumber}: ${toothInfo.value.nameVi}. ${state}. Nhấn để chọn toàn bộ răng.`;
 });
 
-const surfaceSvgSize = computed(() => Math.min(props.size, 32));
+const surfaceSvgSize = computed(() => Math.min(props.size, 36));
 
 const anatPaths = computed(() => {
   const num = props.toothNumber;
@@ -307,6 +373,14 @@ const dominantColor = computed(() => {
   return undefined;
 });
 
+const hasTreatmentCondition = computed(() =>
+  Object.values(props.conditionBySurface).some((code) => toothConditionColor(code) === 'treatment')
+);
+
+const hasImplantCondition = computed(() =>
+  Object.values(props.conditionBySurface).some((code) => code === 'IMPLANT')
+);
+
 const toothStateClass = computed(() => {
   if (!dominantColor.value) return '';
   return `st-${dominantColor.value}`;
@@ -328,12 +402,12 @@ function onToothNumberClick() {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 3.5px;
   user-select: none;
-  width: 42px;
-  padding: 4px 2px;
+  width: 46px;
+  padding: 5px 2px;
   border: 1.5px solid #dce7f3;
-  border-radius: 10px;
+  border-radius: 11px;
   background: #ffffff;
   transition: transform 0.14s ease, border-color 0.14s ease, background-color 0.14s ease, box-shadow 0.14s ease;
 }
@@ -371,42 +445,54 @@ function onToothNumberClick() {
 }
 
 .t-anat-svg {
-  width: 30px;
-  height: 44px;
+  width: 33px;
+  height: 48px;
   display: block;
 }
 
 .svg-root { fill: #f6e7cb; stroke: #948368; stroke-width: 1.3; stroke-linejoin: round; }
 .svg-gum { fill: none; stroke: #f4a5ae; stroke-width: 2.2; stroke-linecap: round; opacity: 0.75; }
 .svg-crown { fill: #ffffff; stroke: #64748b; stroke-width: 1.4; stroke-linejoin: round; }
-.svg-groove { fill: none; stroke: #cbd5e1; stroke-width: 1.1; stroke-linecap: round; }
-.svg-caries { fill: #ef4444; stroke: #991b1b; stroke-width: 1; }
-.svg-filling { fill: #3b82f6; stroke: #1d4ed8; stroke-width: 1; }
-.svg-rct { fill: none; stroke: #8b5cf6; stroke-width: 2; stroke-linecap: round; }
+.svg-crown-outline { fill: none; stroke: #64748b; stroke-width: 1.4; stroke-linejoin: round; pointer-events: none; transition: stroke 0.15s ease, stroke-width 0.15s ease; }
+.svg-crown-outline.is-selected { stroke: #1857b6; stroke-width: 2; }
+.fdi-tooth.is-selected .t-anat-svg { filter: drop-shadow(0 2px 4px rgba(24, 87, 182, 0.22)); }
+.anat-surface { fill: transparent; stroke: rgba(148, 163, 184, 0.45); stroke-width: 0.7; transition: fill 0.15s ease, stroke 0.15s ease, stroke-width 0.15s ease; }
+.anat-surface.condition-healthy { fill: #dcfce7; fill-opacity: 0.72; stroke: #22c55e; }
+.anat-surface.condition-caries { fill: #ef4444; fill-opacity: 0.88; stroke: #b91c1c; }
+.anat-surface.condition-restored { fill: #2563eb; fill-opacity: 0.88; stroke: #1d4ed8; }
+.anat-surface.condition-missing { fill: #64748b; fill-opacity: 0.72; stroke: #334155; }
+.anat-surface.condition-treatment { fill: #f59e0b; fill-opacity: 0.88; stroke: #b45309; }
+.anat-surface.condition-prosthetic { fill: #8b5cf6; fill-opacity: 0.86; stroke: #6d28d9; }
+.anat-surface.is-hovered:not(.is-selected):not(.has-condition) { fill: rgba(59, 130, 246, 0.34); stroke: #1857b6; stroke-width: 1; }
+.anat-surface.is-selected:not(.has-condition) { fill: rgba(24, 87, 182, 0.84); stroke: #102e56; stroke-width: 1.3; }
+.anat-surface.has-condition.is-selected { stroke: #102e56; stroke-width: 2; }
+.svg-groove { fill: none; stroke: #94a3b8; stroke-width: 1; stroke-linecap: round; opacity: 0.75; pointer-events: none; }
+.svg-implant { fill: none; stroke: #64748b; stroke-width: 1.7; stroke-linecap: round; }
+.svg-rct { fill: none; stroke: #d97706; stroke-width: 2; stroke-linecap: round; }
 .missing-anat-mark { stroke: #475569; stroke-width: 2.4; stroke-linecap: round; }
 
-.st-prosthetic .svg-crown { fill: #ede9fe; stroke: #7c3aed; }
+.st-prosthetic .svg-crown { fill: #f3e8ff; stroke: #7c3aed; }
 .st-treatment .svg-crown { fill: #fef3c7; stroke: #d97706; }
 
 .tooth-surface-target-wrap {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 32px;
-  min-height: 32px;
+  min-width: 36px;
+  min-height: 36px;
 }
 
 .tooth-number-btn {
   font-family: inherit;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   color: #102e56;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 6px;
-  min-width: 30px;
-  min-height: 20px;
-  line-height: 18px;
+  min-width: 33px;
+  min-height: 22px;
+  line-height: 20px;
   padding: 0 3px;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -492,7 +578,7 @@ function onToothNumberClick() {
 
 .surface-code {
   font-family: inherit;
-  font-size: 8px;
+  font-size: 8.5px;
   font-weight: 700;
   fill: #64748b;
   text-anchor: middle;
