@@ -1676,12 +1676,14 @@ onMounted(() => {
 .header-titles h1 {
   font-size: 1.45rem;
   font-weight: 700;
+  color: #ffffff;
   margin: 0 0 0.35rem;
 }
 
 .header-titles .subtitle {
   font-size: 0.92rem;
-  opacity: 0.9;
+  color: rgba(255, 255, 255, 0.92);
+  opacity: 0.95;
   margin: 0;
 }
 
