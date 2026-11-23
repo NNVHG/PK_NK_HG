@@ -6,10 +6,40 @@
     <button v-if="!historyReady && !busy" @click="loadHistory">Tải lại lịch sử thu</button>
     <template v-if="canPay || pending">
       <label>Số tiền thu cho hóa đơn (VND)
-        <input v-model="amount" type="number" min="1" step="1" :disabled="busy || !!pending" />
+        <input
+          type="text"
+          inputmode="numeric"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          placeholder="VD: 5,000,000"
+          :value="amountDisplay"
+          :disabled="busy || !!pending"
+          @compositionstart="onAmountCompositionStart"
+          @compositionend="onAmountCompositionEnd"
+          @input="onAmountInput"
+          @keydown="onAmountKeydown"
+          @blur="onAmountBlur"
+        />
       </label>
       <label>Tiền khách đưa (VND)
-        <input v-model="tendered" type="number" min="1" step="1" :disabled="busy || !!pending" />
+        <input
+          type="text"
+          inputmode="numeric"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          placeholder="VD: 5,000,000"
+          :value="tenderedDisplay"
+          :disabled="busy || !!pending"
+          @compositionstart="onTenderedCompositionStart"
+          @compositionend="onTenderedCompositionEnd"
+          @input="onTenderedInput"
+          @keydown="onTenderedKeydown"
+          @blur="onTenderedBlur"
+        />
       </label>
       <p>Tiền thối: {{ money(change) }}</p>
       <p v-if="pending">Đang kiểm tra lần thu trước. Thử lại sẽ dùng cùng yêu cầu để tránh ghi nhận hai lần.</p>
@@ -51,6 +81,10 @@ const key = computed(() => `${auth.user?.userId}:${props.invoiceId}`);
 const pending = computed(() => store.pending[key.value]);
 const amount = ref<number | string>('');
 const tendered = ref<number | string>('');
+const amountDisplay = ref('');
+const tenderedDisplay = ref('');
+let amountComposing = false;
+let tenderedComposing = false;
 const confirmed = ref(false);
 const busy = ref(false);
 const error = ref('');
@@ -63,10 +97,110 @@ const valid = computed(() => canPay.value && Number.isSafeInteger(Number(amount.
   Number(amount.value) <= props.remainingAmount && Number.isSafeInteger(Number(tendered.value)) && Number(tendered.value) >= Number(amount.value));
 const change = computed(() => Math.max(0, Number(tendered.value) - Number(amount.value)));
 const money = (value: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
+function formatAmountInput(value: number | string): string {
+  if (value === '' || value === null || value === undefined) return '';
+  const digits = String(value).replace(/\D/g, '');
+  return digits ? digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '';
+}
+function handleAmountInput(
+  event: Event,
+  target: { value: number | string },
+  display: { value: string },
+  restoreSelection = true
+) {
+  const el = event.target as HTMLInputElement | null;
+  if (!el) return;
+  const rawVal = el.value;
+  const caret = el.selectionStart ?? rawVal.length;
+  const digitsBeforeCaret = rawVal.slice(0, caret).replace(/\D/g, '').length;
+  const rawDigits = rawVal.replace(/\D/g, '');
+  const normalizedDigits = rawDigits.replace(/^0+/, '');
+  if (!normalizedDigits) {
+    target.value = '';
+    display.value = '';
+    if (el.value !== '') el.value = '';
+    return;
+  }
+  const parsed = Number(normalizedDigits);
+  target.value = Number.isSafeInteger(parsed) ? parsed : normalizedDigits;
+  const formatted = normalizedDigits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  display.value = formatted;
+  if (el.value !== formatted) {
+    el.value = formatted;
+    if (restoreSelection && typeof el.setSelectionRange === 'function') {
+      const leadingZerosRemoved = rawDigits.length - normalizedDigits.length;
+      const adjustedDigits = Math.max(0, digitsBeforeCaret - leadingZerosRemoved);
+      let nextPos = 0;
+      let counted = 0;
+      while (nextPos < formatted.length && counted < adjustedDigits) {
+        if (/\d/.test(formatted[nextPos])) counted++;
+        nextPos++;
+      }
+      el.setSelectionRange(nextPos, nextPos);
+    }
+  }
+}
+function handleAmountKeydown(
+  event: KeyboardEvent,
+  target: { value: number | string },
+  display: { value: string },
+  isComposingFlag: boolean
+) {
+  if (isComposingFlag || event.isComposing || event.keyCode === 229) return;
+  if (event.key !== 'Backspace') return;
+  const el = event.target as HTMLInputElement | null;
+  if (!el) return;
+  const pos = el.selectionStart;
+  const end = el.selectionEnd;
+  if (pos === null || end === null || pos !== end || pos <= 1 || el.value[pos - 1] !== ',') return;
+  event.preventDefault();
+  el.value = el.value.slice(0, pos - 2) + el.value.slice(pos);
+  if (typeof el.setSelectionRange === 'function') {
+    el.setSelectionRange(pos - 2, pos - 2);
+  } else {
+    el.selectionStart = pos - 2;
+    el.selectionEnd = pos - 2;
+  }
+  handleAmountInput({ target: el } as unknown as Event, target, display, true);
+}
+function onAmountCompositionStart() { amountComposing = true; }
+function onAmountCompositionEnd(event: Event) {
+  amountComposing = false;
+  handleAmountInput(event, amount, amountDisplay, true);
+}
+function onAmountInput(event: Event) {
+  if (amountComposing || (event as InputEvent)?.isComposing) return;
+  handleAmountInput(event, amount, amountDisplay, true);
+}
+function onAmountKeydown(event: KeyboardEvent) {
+  handleAmountKeydown(event, amount, amountDisplay, amountComposing);
+}
+function onAmountBlur(event: Event) {
+  amountComposing = false;
+  handleAmountInput(event, amount, amountDisplay, false);
+}
+function onTenderedCompositionStart() { tenderedComposing = true; }
+function onTenderedCompositionEnd(event: Event) {
+  tenderedComposing = false;
+  handleAmountInput(event, tendered, tenderedDisplay, true);
+}
+function onTenderedInput(event: Event) {
+  if (tenderedComposing || (event as InputEvent)?.isComposing) return;
+  handleAmountInput(event, tendered, tenderedDisplay, true);
+}
+function onTenderedKeydown(event: KeyboardEvent) {
+  handleAmountKeydown(event, tendered, tenderedDisplay, tenderedComposing);
+}
+function onTenderedBlur(event: Event) {
+  tenderedComposing = false;
+  handleAmountInput(event, tendered, tenderedDisplay, false);
+}
 let version = 0;
 async function loadHistory() {
   const ticket = ++version; busy.value = true; historyReady.value = false; confirmed.value = false; error.value = ''; history.value = [];
   amount.value = pending.value?.amount ?? ''; tendered.value = pending.value?.amountTendered ?? '';
+  amountDisplay.value = formatAmountInput(amount.value); tenderedDisplay.value = formatAmountInput(tendered.value);
+  amountComposing = false; tenderedComposing = false;
   try {
     const rows = await cashPaymentsApi.history(props.invoiceId);
     if (ticket !== version) return;
@@ -123,6 +257,7 @@ h2 {
   color: #334155;
 }
 
+input[type=text],
 input[type=number] {
   padding: 0.65rem 0.85rem;
   min-height: 44px;
@@ -135,6 +270,7 @@ input[type=number] {
   box-sizing: border-box;
 }
 
+input[type=text]:focus,
 input[type=number]:focus {
   background: #fff;
   border-color: #0284c7;

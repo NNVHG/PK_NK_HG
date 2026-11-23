@@ -32,7 +32,24 @@
       <fieldset v-if="info.simulationEnabled" :disabled="expired">
         <legend>Mô phỏng trong môi trường phát triển</legend>
         <p>Thao tác này ghi khoản thu MÔ PHỎNG vào hóa đơn, không có tiền ngân hàng thực.</p>
-        <label>Số tiền mô phỏng (VND)<input v-model="amount" type="number" min="1" step="1" :disabled="busy || !!pending" /></label>
+        <label>Số tiền mô phỏng (VND)
+          <input
+            :value="amountDisplay"
+            type="text"
+            inputmode="numeric"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck="false"
+            placeholder="VD: 5,000,000"
+            :disabled="busy || !!pending"
+            @compositionstart="onAmountCompositionStart"
+            @compositionend="onAmountCompositionEnd"
+            @input="onAmountInput"
+            @keydown="onAmountKeydown"
+            @blur="onAmountBlur"
+          />
+        </label>
         <label><input v-model="confirmed" type="checkbox" :disabled="busy" /> Tôi xác nhận đây là dữ liệu mô phỏng</label>
         <button :disabled="busy || !confirmed || (!pending && !valid)" @click="simulate">{{ pending ? 'Kiểm tra / thử lại lần mô phỏng' : 'Mô phỏng thanh toán chuyển khoản thành công' }}</button>
       </fieldset>
@@ -56,7 +73,7 @@ const emit = defineEmits<{ paid: [payment: BankTransferResponse | null] }>();
 const auth = useAuthStore(); const store = useBankTransfersStore();
 const key = computed(() => `${auth.user?.userId}:${props.invoiceId}`);
 const pending = computed(() => store.pending[key.value]);
-const info = ref<BankTransferInfo | null>(null); const amount = ref<number | string>('');
+const info = ref<BankTransferInfo | null>(null); const amount = ref<number | string>(''); const amountDisplay = ref(''); let amountComposing = false;
 const dialog = ref<HTMLDialogElement | null>(null);
 const busy = ref(false); const confirmed = ref(false); const error = ref(''); const qrFailed = ref(false); const watching = ref(false);
 const remainingSeconds = ref(0); const expired = ref(false);
@@ -68,6 +85,75 @@ const qrDisplay = computed(() => MOD_BIL_bankQrDisplay(info.value?.qrUrl ?? null
 function handleQrImageError() { qrFailed.value = true; }
 const valid = computed(() => Number.isSafeInteger(Number(amount.value)) && Number(amount.value) > 0);
 const money = (value: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
+function formatAmountInput(value: number | string): string {
+  if (value === '' || value === null || value === undefined) return '';
+  const digits = String(value).replace(/\D/g, '');
+  return digits ? digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '';
+}
+function handleAmountInput(event: Event, restoreSelection = true) {
+  const el = event.target as HTMLInputElement | null;
+  if (!el) return;
+  const rawVal = el.value;
+  const caret = el.selectionStart ?? rawVal.length;
+  const digitsBeforeCaret = rawVal.slice(0, caret).replace(/\D/g, '').length;
+  const rawDigits = rawVal.replace(/\D/g, '');
+  const normalizedDigits = rawDigits.replace(/^0+/, '');
+  if (!normalizedDigits) {
+    amount.value = '';
+    amountDisplay.value = '';
+    if (el.value !== '') el.value = '';
+    return;
+  }
+  const parsed = Number(normalizedDigits);
+  amount.value = Number.isSafeInteger(parsed) ? parsed : normalizedDigits;
+  const formatted = normalizedDigits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  amountDisplay.value = formatted;
+  if (el.value !== formatted) {
+    el.value = formatted;
+    if (restoreSelection && typeof el.setSelectionRange === 'function') {
+      const leadingZerosRemoved = rawDigits.length - normalizedDigits.length;
+      const adjustedDigits = Math.max(0, digitsBeforeCaret - leadingZerosRemoved);
+      let nextPos = 0;
+      let counted = 0;
+      while (nextPos < formatted.length && counted < adjustedDigits) {
+        if (/\d/.test(formatted[nextPos])) counted++;
+        nextPos++;
+      }
+      el.setSelectionRange(nextPos, nextPos);
+    }
+  }
+}
+function onAmountCompositionStart() { amountComposing = true; }
+function onAmountCompositionEnd(event: Event) {
+  amountComposing = false;
+  handleAmountInput(event, true);
+}
+function onAmountInput(event: Event) {
+  if (amountComposing || (event as InputEvent)?.isComposing) return;
+  handleAmountInput(event, true);
+}
+function onAmountKeydown(event: KeyboardEvent) {
+  if (amountComposing || event.isComposing || event.keyCode === 229) return;
+  if (event.key !== 'Backspace') return;
+  const el = event.target as HTMLInputElement | null;
+  if (!el) return;
+  const pos = el.selectionStart;
+  const end = el.selectionEnd;
+  if (pos === null || end === null || pos !== end || pos <= 1 || el.value[pos - 1] !== ',') return;
+  event.preventDefault();
+  el.value = el.value.slice(0, pos - 2) + el.value.slice(pos);
+  if (typeof el.setSelectionRange === 'function') {
+    el.setSelectionRange(pos - 2, pos - 2);
+  } else {
+    el.selectionStart = pos - 2;
+    el.selectionEnd = pos - 2;
+  }
+  handleAmountInput({ target: el } as unknown as Event, true);
+}
+function onAmountBlur(event: Event) {
+  amountComposing = false;
+  handleAmountInput(event, false);
+}
 let version = 0; let timer: ReturnType<typeof setInterval> | undefined; let polling = false;
 let checkCurrent: (() => Promise<void>) | undefined;
 async function checkNow() { if (!qrSession.isActive()) return; if (watching.value && checkCurrent) await checkCurrent(); else await startWatching(); }
@@ -82,11 +168,11 @@ function retryQrImage() { if (qrSession.isActive()) qrFailed.value = false; }
 function stopWatching() { if (timer) clearInterval(timer); timer = undefined; watching.value = false; }
 async function load() {
   const ticket = ++version; qrSession.stop(); stopWatching(); expired.value = false; remainingSeconds.value = 0;
-  busy.value = true; confirmed.value = false; info.value = null; error.value = ''; qrFailed.value = false;
+  busy.value = true; confirmed.value = false; info.value = null; error.value = ''; qrFailed.value = false; amountComposing = false;
   try {
     const data = await bankTransfersApi.info(props.invoiceId);
     if (ticket !== version) return;
-    info.value = data; amount.value = pending.value?.amount ?? data.remainingAmount;
+    info.value = data; amount.value = pending.value?.amount ?? data.remainingAmount; amountDisplay.value = formatAmountInput(amount.value);
   } catch (cause) {
     if (ticket !== version) return;
     if (axios.isAxiosError(cause) && cause.response?.status === 409) { closeModal(); emit('paid', null); }

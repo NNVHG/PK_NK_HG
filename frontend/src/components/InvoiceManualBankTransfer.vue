@@ -11,8 +11,26 @@
     <p v-if="state && !payable && !pending">Hóa đơn không còn ở trạng thái có thể thu thêm.</p>
     <form v-if="state && (payable || pending)" @submit.prevent="receive">
       <label for="manual-bank-amount">Số tiền thực nhận (VND)</label>
-      <input id="manual-bank-amount" ref="amountInput" v-model="amount" name="bankAmount" type="number" inputmode="numeric"
-        min="1" max="9007199254740991" step="1" required :disabled="busy || !!pending" />
+      <input
+        id="manual-bank-amount"
+        ref="amountInput"
+        :value="amountDisplay"
+        name="bankAmount"
+        type="text"
+        inputmode="numeric"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+        placeholder="VD: 5,000,000"
+        required
+        :disabled="busy || !!pending"
+        @compositionstart="onAmountCompositionStart"
+        @compositionend="onAmountCompositionEnd"
+        @input="onAmountInput"
+        @keydown="onAmountKeydown"
+        @blur="onAmountBlur"
+      />
       <label for="manual-bank-reference">Mã giao dịch ngân hàng (6–20 ký tự)</label>
       <input id="manual-bank-reference" ref="referenceInput" v-model="reference" name="bankReference" type="text" autocomplete="off"
         minlength="6" maxlength="20" pattern="[A-Za-z0-9_-]{6,20}" required :disabled="busy || !!pending" aria-describedby="manual-bank-reference-help" />
@@ -37,7 +55,8 @@ const auth = useAuthStore(), store = useManualBankTransfersStore();
 const key = computed(() => `${auth.user?.userId}:${props.invoiceId}`);
 const pending = computed(() => store.pending[key.value]);
 const state = ref<Awaited<ReturnType<typeof bankTransfersApi.state>> | null>(null);
-const amount = ref<number | string>(''), reference = ref(''), confirmed = ref(false), busy = ref(false), error = ref('');
+const amount = ref<number | string>(''), amountDisplay = ref(''), reference = ref(''), confirmed = ref(false), busy = ref(false), error = ref('');
+let amountComposing = false;
 const amountInput = ref<HTMLInputElement | null>(null), referenceInput = ref<HTMLInputElement | null>(null);
 const canWrite = computed(() => ['ADMIN', 'RECEPTIONIST'].includes(auth.role));
 const payable = computed(() => !!state.value && [1, 2, 5].includes(state.value.status) && state.value.remainingAmount > 0);
@@ -45,16 +64,85 @@ const validAmount = computed(() => Number.isSafeInteger(Number(amount.value)) &&
 const validReference = computed(() => /^[A-Za-z0-9_-]{6,20}$/.test(reference.value));
 const excess = computed(() => Math.max(0, Number(amount.value) - (pending.value?.expectedRemainingAmount ?? state.value?.remainingAmount ?? 0)));
 const money = (v: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(v);
+function formatAmountInput(value: number | string): string {
+  if (value === '' || value === null || value === undefined) return '';
+  const digits = String(value).replace(/\D/g, '');
+  return digits ? digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '';
+}
+function handleAmountInput(event: Event, restoreSelection = true) {
+  const el = event.target as HTMLInputElement | null;
+  if (!el) return;
+  const rawVal = el.value;
+  const caret = el.selectionStart ?? rawVal.length;
+  const digitsBeforeCaret = rawVal.slice(0, caret).replace(/\D/g, '').length;
+  const rawDigits = rawVal.replace(/\D/g, '');
+  const normalizedDigits = rawDigits.replace(/^0+/, '');
+  if (!normalizedDigits) {
+    amount.value = '';
+    amountDisplay.value = '';
+    if (el.value !== '') el.value = '';
+    return;
+  }
+  const parsed = Number(normalizedDigits);
+  amount.value = Number.isSafeInteger(parsed) ? parsed : normalizedDigits;
+  const formatted = normalizedDigits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  amountDisplay.value = formatted;
+  if (el.value !== formatted) {
+    el.value = formatted;
+    if (restoreSelection && typeof el.setSelectionRange === 'function') {
+      const leadingZerosRemoved = rawDigits.length - normalizedDigits.length;
+      const adjustedDigits = Math.max(0, digitsBeforeCaret - leadingZerosRemoved);
+      let nextPos = 0;
+      let counted = 0;
+      while (nextPos < formatted.length && counted < adjustedDigits) {
+        if (/\d/.test(formatted[nextPos])) counted++;
+        nextPos++;
+      }
+      el.setSelectionRange(nextPos, nextPos);
+    }
+  }
+}
+function onAmountCompositionStart() { amountComposing = true; }
+function onAmountCompositionEnd(event: Event) {
+  amountComposing = false;
+  handleAmountInput(event, true);
+}
+function onAmountInput(event: Event) {
+  if (amountComposing || (event as InputEvent)?.isComposing) return;
+  handleAmountInput(event, true);
+}
+function onAmountKeydown(event: KeyboardEvent) {
+  if (amountComposing || event.isComposing || event.keyCode === 229) return;
+  if (event.key !== 'Backspace') return;
+  const el = event.target as HTMLInputElement | null;
+  if (!el) return;
+  const pos = el.selectionStart;
+  const end = el.selectionEnd;
+  if (pos === null || end === null || pos !== end || pos <= 1 || el.value[pos - 1] !== ',') return;
+  event.preventDefault();
+  el.value = el.value.slice(0, pos - 2) + el.value.slice(pos);
+  if (typeof el.setSelectionRange === 'function') {
+    el.setSelectionRange(pos - 2, pos - 2);
+  } else {
+    el.selectionStart = pos - 2;
+    el.selectionEnd = pos - 2;
+  }
+  handleAmountInput({ target: el } as unknown as Event, true);
+}
+function onAmountBlur(event: Event) {
+  amountComposing = false;
+  handleAmountInput(event, false);
+}
 let version = 0;
 
 async function load() {
-  const ticket = ++version; state.value = null; confirmed.value = false; error.value = ''; amount.value = ''; reference.value = '';
+  const ticket = ++version; state.value = null; confirmed.value = false; error.value = ''; amount.value = ''; amountDisplay.value = ''; amountComposing = false; reference.value = '';
   if (!canWrite.value) { busy.value = false; return; }
   busy.value = true;
   try {
     const data = await bankTransfersApi.state(props.invoiceId);
     if (ticket !== version) return;
-    state.value = data; amount.value = pending.value?.amount ?? data.remainingAmount; reference.value = pending.value?.transactionReference ?? '';
+    state.value = data; amount.value = pending.value?.amount ?? data.remainingAmount; amountDisplay.value = formatAmountInput(amount.value); reference.value = pending.value?.transactionReference ?? '';
   } catch { if (ticket === version) error.value = 'Không tải được số dư. Tải lại và đối chiếu trước khi xác nhận.'; }
   finally { if (ticket === version) busy.value = false; }
 }
