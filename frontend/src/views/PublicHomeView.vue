@@ -106,30 +106,32 @@
         </div>
 
         <div class="hero-stage">
-          <div class="hero-float-badge badge-top-left">
-            <div class="float-ic">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <div class="hero-canvas">
+            <div class="hero-float-badge badge-top-left">
+              <div class="float-ic">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              </div>
+              <div>
+                <strong>An toàn lâm sàng 3 lớp</strong>
+                <span>Tự động cảnh báo Dị ứng &amp; Huyết áp</span>
+              </div>
             </div>
-            <div>
-              <strong>An toàn lâm sàng 3 lớp</strong>
-              <span>Tự động cảnh báo Dị ứng &amp; Huyết áp</span>
-            </div>
-          </div>
 
-          <div class="hero-art" aria-hidden="true">
-            <div class="art-orbit art-orbit-outer"></div>
-            <div class="art-orbit art-orbit-inner"></div>
-            <div class="art-medallion"><img src="/logo-icon.svg" alt="" width="220" height="220" /></div>
-            <span class="art-sparkle sparkle-one">✦</span><span class="art-sparkle sparkle-two">✧</span>
-          </div>
-
-          <div class="hero-float-badge badge-bottom-right">
-            <div class="float-ic float-ic-green">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 4c2.5-1.5 5 0 5.5 1 .5-1 3-2.5 5.5-1 3 1.8 3.5 6 3 9.5-.7 4.5-2 9.5-3.5 9.5-1.2 0-2-3.5-3-5-.5-.8-1.5-.8-2 0-1 1.5-1.8 5-3 5-1.5 0-2.8-5-3.5-9.5-.5-3.5 0-7.7 3-9.5z"/></svg>
+            <div class="hero-art" aria-hidden="true">
+              <div class="art-orbit art-orbit-outer"></div>
+              <div class="art-orbit art-orbit-inner"></div>
+              <div class="art-medallion"><img src="/logo-icon.svg" alt="" width="220" height="220" /></div>
+              <span class="art-sparkle sparkle-one">✦</span><span class="art-sparkle sparkle-two">✧</span>
             </div>
-            <div>
-              <strong>Hồ sơ Sơ đồ Răng FDI</strong>
-              <span>Lưu lịch sử điều trị trọn đời</span>
+
+            <div class="hero-float-badge badge-bottom-right">
+              <div class="float-ic float-ic-green">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 4c2.5-1.5 5 0 5.5 1 .5-1 3-2.5 5.5-1 3 1.8 3.5 6 3 9.5-.7 4.5-2 9.5-3.5 9.5-1.2 0-2-3.5-3-5-.5-.8-1.5-.8-2 0-1 1.5-1.8 5-3 5-1.5 0-2.8-5-3.5-9.5-.5-3.5 0-7.7 3-9.5z"/></svg>
+              </div>
+              <div>
+                <strong>Hồ sơ Sơ đồ Răng FDI</strong>
+                <span>Lưu lịch sử điều trị trọn đời</span>
+              </div>
             </div>
           </div>
 
@@ -1272,7 +1274,20 @@ h1 span { color: #397bcc; }
 }
 .note-clock-ic { font-size: .95rem; }
 
-.hero-stage { position: relative; min-height: 340px; display: grid; place-items: center; }
+.hero-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+.hero-canvas {
+  position: relative;
+  width: 100%;
+  min-height: 320px;
+  display: grid;
+  place-items: center;
+}
 .hero-art { position: relative; width: 100%; min-height: 280px; display: grid; place-items: center; isolation: isolate; }
 .hero-art:before { content: ""; position: absolute; z-index: -2; width: 296px; height: 296px; border-radius: 50%; background: radial-gradient(circle, #d8ecfa 0%, rgba(216,236,250,.35) 70%, transparent 100%); }
 .art-orbit { position: absolute; border: 1.5px solid #a6d7ef; border-radius: 50%; aspect-ratio: 1; }
@@ -1305,26 +1320,30 @@ h1 span { color: #397bcc; }
 }
 .hero-float-badge strong { display: block; font-size: .8rem; color: #102e56; }
 .hero-float-badge span { display: block; font-size: .71rem; color: #526c80; }
-.badge-top-left { top: 4px; left: -10px; }
-.badge-bottom-right { bottom: 8px; right: -8px; }
+.badge-top-left { top: 0; left: -10px; }
+.badge-bottom-right { bottom: 4px; right: -8px; }
 .float-ic { width: 34px; height: 34px; border-radius: 9px; background: #eff8ff; border: 1px solid #d8ecfa; color: #1857b6; display: grid; place-items: center; flex-shrink: 0; }
 .float-ic svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; }
 .float-ic-green { background: #dcfce7; border-color: #bbf7d0; color: #15803d; }
 
 .hero-trust-badge {
-  position: absolute;
-  bottom: -6px;
+  position: relative;
   background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(12px);
   border: 1px solid #d0e4f7;
   border-radius: 999px;
-  padding: 6px 16px;
+  padding: 7px 16px;
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 6px 8px;
   font-size: .78rem;
   color: #244b70;
   box-shadow: 0 8px 24px rgba(16, 46, 86, 0.07);
+  text-align: center;
+  max-width: 100%;
+  box-sizing: border-box;
   z-index: 3;
 }
 .trust-stars { color: #f59e0b; font-size: .85rem; letter-spacing: 1px; }
@@ -1806,14 +1825,15 @@ a:focus-visible, button:focus-visible { outline: 3px solid #c3881d; outline-offs
   .hero-inner { grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 24px 14px 48px; }
   .hero-actions .button { width: 100%; }
   .hero-metrics-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .hero-stage { min-height: auto; }
+  .hero-stage { min-height: auto; gap: 10px; }
+  .hero-canvas { min-height: auto; display: flex; flex-direction: column; align-items: center; gap: 8px; }
   .hero-art { min-height: 230px; }
   .hero-art:before { width: 224px; height: 224px; }
   .art-orbit-outer { width: 214px; }
   .art-orbit-inner { width: 176px; }
   .art-medallion { width: 144px; }
-  .hero-float-badge { position: static; margin-top: 8px; width: 100%; box-sizing: border-box; }
-  .hero-trust-badge { position: static; margin-top: 12px; flex-wrap: wrap; justify-content: center; text-align: center; }
+  .hero-float-badge { position: static; margin-top: 0; width: 100%; box-sizing: border-box; }
+  .hero-trust-badge { position: static; margin-top: 4px; flex-wrap: wrap; justify-content: center; text-align: center; }
   .hero-note { border-radius: 14px; flex-wrap: wrap; max-width: 100%; box-sizing: border-box; }
   .booking-dock { padding: 16px; }
   .bento-card, .fdi-sample-card, .safety-protocol-card { padding: 16px; }
