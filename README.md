@@ -221,7 +221,7 @@ Chỉ dùng QR/CCCD tổng hợp dành cho demo hoặc dữ liệu do bạn tự
 
 | `ViettelTts__Token`, `ViettelTts__Voice`, `ViettelTts__Speed` | Cấu hình backend cho Viettel AI Text to Speech. Giọng mặc định `hcm-diemmy`, tốc độ `0.95`. Token lưu trong `secrets.json` cục bộ hoặc hệ thống bí mật của máy chủ. `start-dev.ps1` cũng nhận các tên `VIETTEL_TTS_*` cũ trong `secrets.json`. |
 
-Mở `/queue/display` và bật âm thanh để nhận lời mời từ Nha sĩ. Backend gửi câu đọc tên công khai tới Viettel AI và trả MP3 khi lời mời còn hiệu lực. Nếu token hết hạn, hết hạn mức hoặc dịch vụ gặp lỗi, TV phát tiếng **Bing Bong** và vẫn hiện số, tên và phòng. **Nghe thử chuông** phát tại thiết bị. [Tài liệu API Viettel AI](https://viettelai.vn/en/tai-lieu)
+Mở `/queue/display` và bật âm thanh để nhận lời mời từ Nha sĩ. Backend gửi câu đọc tên công khai tới Viettel AI và trả MP3 khi lời mời còn hiệu lực. Nếu token hết hạn, hết hạn mức hoặc dịch vụ gặp lỗi, TV phát tiếng **Bing Bong** và vẫn hiện số, tên và phòng. **Nghe thử chuông** phát tại thiết bị. Quản lý dịch vụ và token trong tài khoản Viettel AI. [Trang quản lý Viettel AI Text to Speech](https://viettelai.vn/dashboard/service/tts?tab=4) · [Tài liệu API Viettel AI](https://viettelai.vn/en/tai-lieu)
 
 Nếu đang chuyển từ `backend/src/Dental.Api/appsettings.Development.json` và `frontend/.env.local`, chép các giá trị đang dùng sang `secrets.json`. Những ô có giá trị trong tệp trung tâm ghi đè cấu hình cùng tên. Ô trống không ghi đè cấu hình cũ. Để tắt SMS đang bật trong cấu hình cũ, điền rõ `Enabled` là `false`. Đóng và chạy lại API/Vite sau khi đổi cấu hình.
 

@@ -35,15 +35,12 @@ public sealed class VisitRepository : IVisitRepository
             visit.DentistId == dentistId &&
             (!excludedVisitId.HasValue || visit.VisitId != excludedVisitId.Value), ct);
 
-    public Task<int?> GetActiveChairIdForDentistAsync(int dentistId, CancellationToken ct = default)
+    public Task<int?> GetActiveRoomIdForDentistAsync(int dentistId, CancellationToken ct = default)
         => ActiveVisits().Where(visit => visit.DentistId == dentistId)
-            .Select(visit => visit.ChairId).FirstOrDefaultAsync(ct);
+            .Select(visit => visit.RoomId).FirstOrDefaultAsync(ct);
 
     public async Task AddAsync(Visit visit, CancellationToken ct = default)
         => await _db.Visits.AddAsync(visit, ct);
-
-    public Task<bool> HasActiveVisitForChairAsync(int chairId, int excludedVisitId, CancellationToken ct = default)
-        => ActiveVisits().AnyAsync(v => v.ChairId == chairId && v.VisitId != excludedVisitId, ct);
 
     public Task<bool> HasActiveVisitForRoomAsync(int roomId, int excludedVisitId, CancellationToken ct = default)
         => ActiveVisits().AnyAsync(v => v.RoomId == roomId && v.VisitId != excludedVisitId, ct);

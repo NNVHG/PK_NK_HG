@@ -23,14 +23,14 @@ public sealed class SchedulingSettingsRepository(DentalDbContext db) : IScheduli
             if (!await Admin(actor, ct)) return Result<ScheduleSnapshot>.Failure(Error.Forbidden);
             var prior = await ClinicScheduleReader.ReadAsync(db, ct);
             if (prior.Revision != request.ExpectedRevision) return Result<ScheduleSnapshot>.Failure(Error.Conflict);
-            var values = new[] { request.WorkStartTime, request.LunchStartTime, request.LunchEndTime, request.WorkEndTime, request.SlotDurationMinutes.ToString(CultureInfo.InvariantCulture) };
+            var values = new[] { request.WorkStartTime, request.LunchStartTime, request.LunchEndTime, request.WorkEndTime };
             var before = await db.SystemConfigs.AsNoTracking().Where(x => ClinicScheduleReader.Keys.Contains(x.Key)).ToDictionaryAsync(x => x.Key, x => x.Value, ct);
             for (var i = 0; i < ClinicScheduleReader.Keys.Length; i++)
             {
                 var key = ClinicScheduleReader.Keys[i]; var row = await db.SystemConfigs.SingleOrDefaultAsync(x => x.Key == key, ct);
                 if (row is null) { row = new SystemConfig { Key = key }; db.SystemConfigs.Add(row); }
-                row.Value = values[i]; row.DataType = i == 4 ? "Number" : "String";
-                row.Description = i == 4 ? "Thời lượng slot đặt lịch (phút)" : "Giờ vận hành phòng khám theo DL174";
+                row.Value = values[i]; row.DataType = "String";
+                row.Description = "Giờ vận hành phòng khám theo DL174";
                 row.UpdatedAt = DateTime.UtcNow; row.UpdatedByUserId = actor;
             }
             db.AuditLogs.Add(new AuditLog { UserId = actor, Action = "MOD_MST_SCHEDULE_UPDATED", EntityType = "SystemConfig", CreatedAt = DateTime.UtcNow, IpAddress = ip,

@@ -544,7 +544,6 @@ public static class PatientTestFixtureSeeder
         StartedAt = started,
         EndedAt = ended,
         DentistId = dentist?.UserId,
-        ChairId = null,
         RoomId = roomId,
         CreatedByUserId = createdBy.UserId,
         Diagnosis = diagnosis,

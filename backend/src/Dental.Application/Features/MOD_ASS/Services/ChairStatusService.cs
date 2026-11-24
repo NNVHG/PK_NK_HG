@@ -47,7 +47,7 @@ public sealed class ChairStatusService(IChairStatusRepository chairs, IUnitOfWor
                 chair.Status = (DentalChairStatus)request.Status; chair.IsActive = active;
                 chair.Version++; chair.UpdatedAt = clock.UtcNow; chair.UpdatedByUserId = actorId;
                 await uow.SaveChangesAsync(transactionCt);
-                await audit.LogRequiredAsync("MOD_ASS_CHAIR_STATUS_CHANGED", "DentalChair", id, actorId,
+                await audit.LogRequiredAsync("MOD_ASS_CHAIR_STATUS_CHANGED", "ClinicRoom", id, actorId,
                     JsonSerializer.Serialize(new { previousStatus, status = request.Status, previousActive, isActive = active, version = chair.Version }), ct: transactionCt);
                 return Result<ChairStatusResponse>.Success(ChairStatusResponse.From(chair));
             }, ct);

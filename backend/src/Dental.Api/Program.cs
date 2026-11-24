@@ -140,8 +140,6 @@ builder.Services.AddScoped<IQrPatientIntakeRepository, QrPatientIntakeRepository
 builder.Services.AddScoped<Dental.Application.Features.MOD_PAT.QrPatientIntakeService>();
 builder.Services.AddScoped<IClinicPrintSettingsRepository, ClinicPrintSettingsRepository>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_MST.Services.ClinicPrintSettingsService>();
-builder.Services.AddScoped<IDoctorSignatureRepository, DoctorSignatureRepository>();
-builder.Services.AddScoped<Dental.Application.Features.MOD_AUTH.DoctorSignatureService>();
 builder.Services.AddScoped<IPublicPrescriptionRepository, PublicPrescriptionRepository>();
 builder.Services.AddScoped<Dental.Application.Features.MOD_RX.PublicPrescriptionService>();
 builder.Services.AddDataProtection();

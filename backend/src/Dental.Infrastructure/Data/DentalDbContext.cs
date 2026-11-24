@@ -13,7 +13,6 @@ public sealed class DentalDbContext : DbContext
     public DbSet<DentalImage> DentalImages => Set<DentalImage>();
     public DbSet<DentalImageClinicalAddendum> DentalImageClinicalAddenda => Set<DentalImageClinicalAddendum>();
     public DbSet<ClinicRoom> ClinicRooms => Set<ClinicRoom>();
-    public DbSet<DentalChair> DentalChairs => Set<DentalChair>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<User> Users => Set<User>();
     public DbSet<PatientPhoneChangeRequest> PatientPhoneChangeRequests => Set<PatientPhoneChangeRequest>();
@@ -56,7 +55,6 @@ public sealed class DentalDbContext : DbContext
     }
 
     public DbSet<Prescription> Prescriptions => Set<Prescription>();
-    public DbSet<DoctorSignature> DoctorSignatures => Set<DoctorSignature>();
     public DbSet<PrescriptionItem> PrescriptionItems => Set<PrescriptionItem>();
     public DbSet<PrescriptionNumberCounter> PrescriptionNumberCounters => Set<PrescriptionNumberCounter>();
     public DbSet<Medicine> Medicines => Set<Medicine>();
@@ -81,7 +79,6 @@ public sealed class DentalDbContext : DbContext
         modelBuilder.ApplyConfiguration(new DentalImageClinicalAddendumConfiguration());
         modelBuilder.ApplyConfiguration(new PrescriptionConfiguration());
         modelBuilder.ApplyConfiguration(new PrescriptionDispenseEventConfiguration());
-        modelBuilder.ApplyConfiguration(new DoctorSignatureConfiguration());
         modelBuilder.ApplyConfiguration(new PrescriptionItemConfiguration());
         modelBuilder.ApplyConfiguration(new PrescriptionNumberCounterConfiguration());
         modelBuilder.ApplyConfiguration(new MedicineConfiguration());
@@ -103,7 +100,6 @@ public sealed class DentalDbContext : DbContext
         modelBuilder.ApplyConfiguration(new BookingRequestConfiguration());
         modelBuilder.ApplyConfiguration(new StaffWorkspaceConfiguration());
         modelBuilder.ApplyConfiguration(new ClinicRoomConfiguration());
-        modelBuilder.ApplyConfiguration(new DentalChairConfiguration());
         modelBuilder.ApplyConfiguration(new RoleConfiguration());
         modelBuilder.ApplyConfiguration(new UserConfiguration());
         modelBuilder.ApplyConfiguration(new AuditLogConfiguration());
@@ -243,8 +239,6 @@ public sealed class DentalDbContext : DbContext
             throw new InvalidOperationException("Lịch sử hoàn tiền chỉ được nối thêm.");
         if (ChangeTracker.Entries<PrescriptionDispenseEvent>().Any(e => e.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("Lịch sử bàn giao thuốc chỉ được nối thêm.");
-        if (ChangeTracker.Entries<DoctorSignature>().Any(e => e.State is EntityState.Modified or EntityState.Deleted))
-            throw new InvalidOperationException("Phiên bản ảnh chữ ký chỉ thêm mới; không sửa hoặc xóa lịch sử.");
         if (ChangeTracker.Entries<NotificationLog>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("NotificationLog là nhật ký chỉ thêm mới — không được sửa hoặc xóa.");
         // DL-210 allows only a single increment of print metadata, never financial edits.

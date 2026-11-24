@@ -19,10 +19,6 @@ public sealed class ClinicRoomConfiguration : IEntityTypeConfiguration<ClinicRoo
         b.Property(x => x.Description).HasMaxLength(500);
         b.Property(x => x.Status).HasConversion<int>().IsRequired();
         b.Property(x => x.Version).IsConcurrencyToken();
-        b.HasIndex(x => x.LegacyChairId).IsUnique()
-            .HasFilter("\"LegacyChairId\" IS NOT NULL")
-            .HasDatabaseName("IX_ClinicRooms_LegacyChairId");
-        b.HasOne<DentalChair>().WithMany().HasForeignKey(x => x.LegacyChairId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<User>().WithMany().HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<User>().WithMany().HasForeignKey(x => x.UpdatedByUserId).OnDelete(DeleteBehavior.Restrict);
     }

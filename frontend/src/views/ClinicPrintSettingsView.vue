@@ -8,7 +8,7 @@
       </div>
       <div class="header-actions">
         <RouterLink to="/management/admin/staff" class="button button-secondary">
-          <span class="btn-icon">👨‍⚕️</span> Học vị & Chữ ký bác sĩ
+          <span class="btn-icon">👨‍⚕️</span> Học vị bác sĩ
         </RouterLink>
         <button class="button button-secondary" :disabled="busy || !allowed" @click="load">
           <span class="btn-icon">🔄</span> Tải lại thông tin

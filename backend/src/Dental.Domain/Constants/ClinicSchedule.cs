@@ -4,7 +4,8 @@ namespace Dental.Domain.Constants;
 /// <summary>MOD_MST: giờ vận hành DL174; lịch cũ giữ duration riêng theo DL316.</summary>
 public sealed record ClinicSchedule(TimeOnly WorkStart, TimeOnly LunchStart, TimeOnly LunchEnd, TimeOnly WorkEnd, int DurationMinutes)
 {
-    public static readonly ClinicSchedule Default = new(new(8, 0), new(12, 0), new(13, 30), new(20, 0), 30);
+    public const int FixedDurationMinutes = 30;
+    public static readonly ClinicSchedule Default = new(new(8, 0), new(12, 0), new(13, 30), new(20, 0), FixedDurationMinutes);
     public TimeOnly[] Slots()
     {
         var result = new List<TimeOnly>();
@@ -23,6 +24,8 @@ public sealed record ClinicSchedule(TimeOnly WorkStart, TimeOnly LunchStart, Tim
         return (time >= WorkStart && endTicks <= LunchStart.Ticks)
             || (time >= LunchEnd && endTicks <= WorkEnd.Ticks);
     }
+    public static bool TryParse(string? start, string? lunchStart, string? lunchEnd, string? end, out ClinicSchedule schedule)
+        => TryParse(start, lunchStart, lunchEnd, end, FixedDurationMinutes, out schedule);
     public static bool TryParse(string? start, string? lunchStart, string? lunchEnd, string? end, int duration, out ClinicSchedule schedule)
     {
         schedule = Default;

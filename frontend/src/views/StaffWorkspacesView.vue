@@ -10,7 +10,7 @@
 
     <section v-if="auth.role === 'ADMIN'" class="card admin-dispatch-card">
       <div class="card-header">
-        <h2>👥 Điều phối nhân sự (Admin)</h2>
+        <h2>👥 Tra cứu & gỡ liên kết vị trí (Admin)</h2>
       </div>
       <form class="search-form" @submit.prevent="loadTargets(1)">
         <div class="input-wrap">
@@ -100,7 +100,17 @@
       </div>
 
       <form class="workspace-form" @submit.prevent="save">
-        <div v-if="store.snapshot.isActive && store.snapshot.roleCode === 'DENTIST'" class="form-group">
+        <div v-if="auth.role === 'ADMIN'" class="admin-unlink-notice">
+          <p v-if="!store.snapshot.isActive || (store.snapshot.roleCode !== 'DENTIST' && store.snapshot.roleCode !== 'ASSISTANT')">
+            Tài khoản đã khóa hoặc không thuộc vai trò chọn phòng/nhóm. Admin chỉ có thể gỡ liên kết vị trí cũ trước khi gán người khác.
+          </p>
+          <p v-else>
+            Phòng điều trị do Nha sĩ tự chọn và nhóm hỗ trợ do Phụ tá tự chọn. Admin chỉ được gỡ liên kết hiện tại khi cần thiết.
+          </p>
+          <p v-if="!hasActiveLink" class="text-muted">Nhân sự hiện chưa có liên kết phòng hoặc nhóm nào để gỡ.</p>
+        </div>
+
+        <div v-else-if="store.snapshot.isActive && store.snapshot.roleCode === 'DENTIST'" class="form-group">
           <label for="chair-choice-select">Chọn phòng điều trị làm việc hôm nay</label>
           <select id="chair-choice-select" v-model.number="chairChoice" :disabled="saving || loading || needsReview || !store.snapshot.canChange" @change="markDirty">
             <option :value="0">❌ Bỏ chọn phòng làm việc hiện tại</option>
@@ -124,16 +134,16 @@
         </div>
 
         <div v-else class="text-muted">
-          Tài khoản đã khóa hoặc đã đổi vai trò. Admin chỉ có thể bỏ liên kết vị trí cũ trước khi gán người khác.
+          Tài khoản không khả dụng để thay đổi vị trí làm việc.
         </div>
 
         <label class="confirm-checkbox">
-          <input v-model="confirmed" type="checkbox" :disabled="saving || loading || needsReview || !store.snapshot.canChange" />
-          <span>Tôi đã kiểm tra đúng nhân sự và xác nhận vị trí/nhóm làm việc cho ngày hôm nay.</span>
+          <input v-model="confirmed" type="checkbox" :disabled="saving || loading || needsReview || !store.snapshot.canChange || (auth.role === 'ADMIN' && !hasActiveLink)" />
+          <span>{{ auth.role === 'ADMIN' ? 'Tôi xác nhận gỡ liên kết phòng hoặc nhóm hiện tại của nhân sự này.' : 'Tôi đã kiểm tra đúng nhân sự và xác nhận vị trí/nhóm làm việc cho ngày hôm nay.' }}</span>
         </label>
 
-        <button class="btn btn-primary btn-save" :disabled="saving || loading || needsReview || !confirmed || !store.snapshot.canChange">
-          {{ saving ? 'Đang lưu…' : 'Xác nhận cập nhật vị trí' }}
+        <button class="btn btn-primary btn-save" :disabled="saving || loading || needsReview || !confirmed || !store.snapshot.canChange || (auth.role === 'ADMIN' && !hasActiveLink)">
+          {{ auth.role === 'ADMIN' ? (saving ? 'Đang gỡ liên kết…' : 'Gỡ liên kết vị trí / nhóm hiện tại') : (saving ? 'Đang lưu…' : 'Xác nhận cập nhật vị trí') }}
         </button>
       </form>
     </section>
@@ -158,6 +168,7 @@ const targetId = ref(0), options = ref<WorkspaceOptions | null>(null), targets =
 const loading = ref(false), saving = ref(false), targetsLoading = ref(false), error = ref(''), targetError = ref(''), message = ref(''), needsReview = ref(false);
 const chairChoice = ref(0), dentistChoice = ref(0), confirmed = ref(false), dirty = ref(false);
 const selectedDentist = computed(() => options.value?.dentists.find(d => d.dentistId === dentistChoice.value));
+const hasActiveLink = computed(() => Boolean(store.snapshot?.chairId || store.snapshot?.workingDentistId));
 let life = 0, version = 0, targetVersion = 0, timer: ReturnType<typeof setInterval> | undefined;
 const permitted = () => ['ADMIN', 'DENTIST', 'ASSISTANT'].includes(auth.role);
 function canSelectChair(chair: WorkspaceChair, userId: number) {
@@ -192,7 +203,9 @@ async function save() {
   if (!permitted() || !snapshot || saving.value || loading.value || needsReview.value || !confirmed.value || !snapshot.canChange ||
       (auth.role !== 'ADMIN' && snapshot.userId !== auth.user?.userId) || !Number.isInteger(snapshot.version) || snapshot.version < 0) return;
   let chairId: number | null = null, dentistId: number | null = null;
-  if (snapshot.isActive && snapshot.roleCode === 'DENTIST') {
+  if (auth.role === 'ADMIN') {
+    if (!hasActiveLink.value) return;
+  } else if (snapshot.isActive && snapshot.roleCode === 'DENTIST') {
     if (!Number.isInteger(chairChoice.value) || chairChoice.value < 0) return;
     if (chairChoice.value) {
       const chair = options.value?.chairs.find(candidate => candidate.id === chairChoice.value);
@@ -212,7 +225,7 @@ async function save() {
       }
       dentistId = dentistChoice.value;
     }
-  } else if (auth.role !== 'ADMIN') return;
+  } else return;
   const ticket = life, principal = auth.user?.userId; saving.value = true; error.value = ''; message.value = '';
   try {
     const result = await workspacesService.change(snapshot.userId, { chairId, dentistId, expectedVersion: snapshot.version, confirmed: true });
@@ -298,6 +311,10 @@ onUnmounted(() => { life++; version++; targetVersion++; if (timer !== undefined)
 .form-group label { font-size: 0.9rem; font-weight: 600; color: #334155; }
 .form-group select { height: 44px; padding: 0.5rem 0.85rem; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; background: #fff; }
 .sync-preview { font-size: 0.85rem; color: #0284c7; margin: 0.25rem 0 0; }
+.admin-unlink-notice { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.85rem 1rem; color: #334155; font-size: 0.9rem; line-height: 1.5; }
+.admin-unlink-notice p { margin: 0; }
+.admin-unlink-notice p + p { margin-top: 0.35rem; }
+.text-muted { color: #64748b; }
 .confirm-checkbox { display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.875rem; color: #334155; cursor: pointer; }
 .confirm-checkbox input { margin-top: 2px; width: 18px; height: 18px; }
 .btn-save { width: 100%; height: 48px; font-size: 1rem; }

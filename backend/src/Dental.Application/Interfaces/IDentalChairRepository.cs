@@ -6,11 +6,12 @@ namespace Dental.Application.Interfaces;
 
 public interface IDentalChairRepository
 {
-    Task<IReadOnlyList<DentalChair>> GetAllAsync(CancellationToken ct = default);
-    Task<bool> IsAssignedAsync(int chairId, CancellationToken ct = default);
-    Task<bool> HasActiveVisitAsync(int chairId, int? roomId, CancellationToken ct = default);
-    Task<DentalChair?> FindAsync(int id, CancellationToken ct = default);
+    Task<IReadOnlyList<ClinicRoom>> GetAllAsync(CancellationToken ct = default);
+    Task<bool> IsAssignedAsync(int roomId, CancellationToken ct = default);
+    Task<bool> HasActiveVisitAsync(int roomId, CancellationToken ct = default);
+    Task<ClinicRoom?> FindAsync(int id, CancellationToken ct = default);
     Task<bool> NumberExistsAsync(string normalizedNumber, CancellationToken ct = default);
-    Task AddAsync(DentalChair chair, CancellationToken ct = default);
-    Task<PagedResult<DentalChair>> GetPageAsync(DentalChairQuery query, CancellationToken ct = default);
+    Task<bool> RoomNameExistsAsync(string normalizedRoomName, int? excludeId = null, CancellationToken ct = default);
+    Task AddAsync(ClinicRoom room, CancellationToken ct = default);
+    Task<PagedResult<ClinicRoom>> GetPageAsync(DentalChairQuery query, CancellationToken ct = default);
 }

@@ -39,13 +39,21 @@ public static class Phase1DemoSeeder
                 CitizenIdMasked = "********" + citizenId[^4..], CitizenIdVersion = 1, CreatedAt = now });
         }
 
-        var chair = await db.DentalChairs.SingleOrDefaultAsync(c => c.ChairNumber == "DEMO01");
-        if (chair is null)
+        var room = await db.ClinicRooms.SingleOrDefaultAsync(c => c.RoomCode == "DEMO01");
+        if (room is null)
         {
-            chair = new DentalChair { ChairNumber = "DEMO01", RoomName = "Phòng Demo",
-                Status = DentalChairStatus.Available, IsActive = true, CreatedByUserId = admin.UserId,
-                Version = 1, CreatedAt = now };
-            db.DentalChairs.Add(chair);
+            room = new ClinicRoom
+            {
+                RoomCode = "DEMO01",
+                RoomName = ClinicRoom.CleanDisplayRoomName("Phòng Demo"),
+                NormalizedRoomName = ClinicRoom.NormalizeRoomName("Phòng Demo"),
+                Status = DentalChairStatus.Available,
+                IsActive = true,
+                CreatedByUserId = admin.UserId,
+                Version = 1,
+                CreatedAt = now
+            };
+            db.ClinicRooms.Add(room);
         }
         if (!await db.DentalServices.AnyAsync(s => s.Code == "DEMO01"))
             db.DentalServices.Add(new DentalService { Code = "DEMO01", Name = "Dịch vụ minh họa Phase 1",
@@ -62,7 +70,7 @@ public static class Phase1DemoSeeder
             .OrderBy(p => p.PatientNumber).ToListAsync();
         var dentist = await db.Users.SingleOrDefaultAsync(u => u.IsActive && u.Role.RoleCode == RoleCodes.Dentist && u.Phone == "0900000003");
         var receptionist = await db.Users.SingleOrDefaultAsync(u => u.IsActive && u.Role.RoleCode == RoleCodes.Receptionist && u.Phone == "0900000002");
-        var chairId = await EnsureDemoDentistLocationAsync(db, chair, dentist, admin.UserId);
+        var roomId = await EnsureDemoDentistLocationAsync(db, room, dentist, admin.UserId);
 
         var appointmentStatuses = new[]
         {
@@ -90,16 +98,16 @@ public static class Phase1DemoSeeder
         if (visit is null)
         {
             visit = new Visit { PatientId = demoPatient.PatientId, Status = VisitStatuses.InProgress,
-                StartedAt = now.AddMinutes(-20), DentistId = dentist?.UserId, ChairId = chairId,
+                StartedAt = now.AddMinutes(-20), DentistId = dentist?.UserId, RoomId = roomId,
                 CreatedByUserId = admin.UserId, ClinicalNotes = "Ca minh họa đang được nha sĩ thăm khám.",
                 CreatedAt = now.AddMinutes(-20) };
             db.Visits.Add(visit);
-            if (chairId.HasValue)
+            if (roomId.HasValue)
             {
-                chair.Status = DentalChairStatus.Occupied;
-                chair.UpdatedByUserId = admin.UserId;
-                chair.UpdatedAt = now;
-                chair.Version++;
+                room.Status = DentalChairStatus.Occupied;
+                room.UpdatedByUserId = admin.UserId;
+                room.UpdatedAt = now;
+                room.Version++;
             }
             await db.SaveChangesAsync();
         }
@@ -166,18 +174,18 @@ public static class Phase1DemoSeeder
         await tx.CommitAsync();
     }
 
-    private static async Task<int?> EnsureDemoDentistLocationAsync(DentalDbContext db, DentalChair chair, User? dentist, int adminId)
+    private static async Task<int?> EnsureDemoDentistLocationAsync(DentalDbContext db, ClinicRoom room, User? dentist, int adminId)
     {
-        if (dentist is null || !chair.IsActive || chair.Status is DentalChairStatus.Maintenance or DentalChairStatus.Inactive) return null;
+        if (dentist is null || !room.IsActive || room.Status is DentalChairStatus.Maintenance or DentalChairStatus.Inactive) return null;
         var workspace = await db.StaffWorkspaces.SingleOrDefaultAsync(w => w.UserId == dentist.UserId);
-        if (workspace is not null) return workspace.ChairId;
-        if (await db.StaffWorkspaces.AnyAsync(w => w.ChairId == chair.Id) ||
-            await db.Visits.AnyAsync(v => v.ChairId == chair.Id && v.Status == VisitStatuses.InProgress)) return null;
+        if (workspace is not null) return workspace.RoomId;
+        if (await db.StaffWorkspaces.AnyAsync(w => w.RoomId == room.Id) ||
+            await db.Visits.AnyAsync(v => v.RoomId == room.Id && v.Status == VisitStatuses.InProgress)) return null;
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "SE Asia Standard Time"));
-        db.StaffWorkspaces.Add(new StaffWorkspace { UserId = dentist.UserId, ChairId = chair.Id, RoomId = chair.RoomId, WorkDate = today,
+        db.StaffWorkspaces.Add(new StaffWorkspace { UserId = dentist.UserId, RoomId = room.Id, WorkDate = today,
             DentistId = dentist.UserId, UpdatedByUserId = adminId, Version = 1, CreatedAt = DateTime.UtcNow });
         await db.SaveChangesAsync();
-        return chair.Id;
+        return room.Id;
     }
 
     private static string Hash(string citizenId)

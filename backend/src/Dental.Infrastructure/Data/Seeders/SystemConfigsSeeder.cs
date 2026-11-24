@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Dental.Infrastructure.Data.Seeders;
 
-/// <summary>MOD_MST / F_MST_06: seed cấu hình hệ thống ban đầu (DL-105, DL-233, DL-316).</summary>
+/// <summary>MOD_MST / F_MST_06: seed cấu hình hệ thống ban đầu (DL-105, DL-174, DL-379).</summary>
 public static class SystemConfigsSeeder
 {
     public static async Task SeedAsync(DentalDbContext db, CancellationToken ct = default)
@@ -14,16 +14,14 @@ public static class SystemConfigsSeeder
                 "Địa chỉ phòng khám hiển thị trên biên lai và phiếu in"),
             ("Clinic:Phone", "0274 3822 567",
                 "Số điện thoại hotline phòng khám"),
-            ("Appointment:SlotDurationMinutes", "30",
-                "Thời lượng mỗi khung giờ khám (phút)"),
-            ("Appointment:MaxAdvanceDays", "30",
-                "Số ngày tối đa cho phép đặt lịch trước"),
-            ("Appointment:OpeningTime", "08:00",
+            ("Clinic:WorkStartTime", "08:00",
                 "Giờ mở cửa tiếp nhận khám"),
-            ("Appointment:ClosingTime", "17:30",
+            ("Clinic:LunchStartTime", "12:00",
+                "Giờ bắt đầu nghỉ trưa"),
+            ("Clinic:LunchEndTime", "13:30",
+                "Giờ kết thúc nghỉ trưa"),
+            ("Clinic:WorkEndTime", "17:30",
                 "Giờ đóng cửa phòng khám"),
-            ("Appointment:MaxParallelSlots", "4",
-                "Số ca khám song song tối đa cùng một khung giờ"),
         ];
 
         foreach (var (key, value, desc) in defaults)

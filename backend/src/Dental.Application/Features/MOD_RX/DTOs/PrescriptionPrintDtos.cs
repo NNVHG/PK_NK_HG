@@ -4,4 +4,4 @@ public sealed record PrescriptionPrintLine(string MedicineName, string? Strength
 public sealed record PrescriptionPrintDocument(int PrescriptionId, int VisitId, int Version, string PrescriptionCode,
     string ClinicName, string ClinicAddress, string ClinicPhone, string PatientName, DateOnly DateOfBirth, string? Gender, string? PatientAddress, string PatientPhone,
     string Diagnosis, IReadOnlyList<PrescriptionPrintLine> Items, string? DoctorAdvice, DateOnly? RevisitDate, DateOnly PrescribedDate,
-    string DoctorName, string DoctorTitle, int SignatureVersion, string SignaturePngBase64, string RelativeLookupPath, string? ReceiverName, string? ReceiverPhone);
+    string DoctorName, string DoctorTitle, string RelativeLookupPath, string? ReceiverName, string? ReceiverPhone);

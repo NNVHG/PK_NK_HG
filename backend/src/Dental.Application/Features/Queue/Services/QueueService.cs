@@ -455,7 +455,6 @@ public sealed class QueueService
                 if (actorRole == RoleCodes.Dentist && entry.DentistId != actorUserId)
                     return Result<QueueEntryResponse>.Failure(Error.QueueTransitionForbidden);
 
-                var previousChairId = entry.Visit.ChairId;
                 var previousRoomId = entry.Visit.RoomId;
                 var release = await _visitChairs.ReleaseAsync(entry.Visit, actorUserId, transactionCt);
                 if (release.IsFailure) return Result<QueueEntryResponse>.Failure(release.Error);
@@ -464,7 +463,6 @@ public sealed class QueueService
                 var previousStatus = entry.Status;
                 entry.Status = QueueStatus.Paused;
                 entry.UpdatedAt = now;
-                entry.Visit.ChairId = null;
                 entry.Visit.RoomId = null;
                 entry.Visit.UpdatedAt = now;
 
@@ -487,7 +485,6 @@ public sealed class QueueService
                         visitId = entry.VisitId,
                         fromStatus = (int)previousStatus,
                         toStatus = (int)QueueStatus.Paused,
-                        previousChairId,
                         previousRoomId,
                         reason
                     }), ipAddress, transactionCt);
@@ -541,14 +538,11 @@ public sealed class QueueService
                     return Result<QueueEntryResponse>.Failure(Error.QueueDentistAlreadyCalling);
 
                 // Các lượt tạm dừng từ phiên bản cũ có thể còn giữ vị trí đã nhả.
-                var previousChairId = entry.Visit.ChairId;
                 var previousRoomId = entry.Visit.RoomId;
-                entry.Visit.ChairId = null;
                 entry.Visit.RoomId = null;
                 var allocation = await _visitChairs.AcquireAsync(entry.Visit, targetDentistId.Value, actorUserId, transactionCt);
                 if (allocation.IsFailure)
                 {
-                    entry.Visit.ChairId = previousChairId;
                     entry.Visit.RoomId = previousRoomId;
                     return Result<QueueEntryResponse>.Failure(allocation.Error);
                 }
@@ -587,7 +581,6 @@ public sealed class QueueService
                         toStatus = (int)QueueStatus.InConsultation,
                         previousDentistId,
                         newDentistId = targetDentistId,
-                        chairId = entry.Visit.ChairId,
                         roomId = entry.Visit.RoomId,
                         reason
                     }), ipAddress, transactionCt);
@@ -696,7 +689,7 @@ public sealed class QueueService
                 }, transactionCt);
                 await _unitOfWork.SaveChangesAsync(transactionCt);
                 await _auditLogger.LogRequiredAsync(AuditActions.QueueStatusChanged, "QueueEntry", entry.QueueEntryId, actorUserId,
-                    JsonSerializer.Serialize(new { action = "StartSelected", dentistId, visitId = entry.VisitId, chairId = entry.Visit.ChairId, roomId = entry.Visit.RoomId,
+                    JsonSerializer.Serialize(new { action = "StartSelected", dentistId, visitId = entry.VisitId, roomId = entry.Visit.RoomId,
                         fromStatus = (int)previousStatus, toStatus = (int)QueueStatus.InConsultation }), ipAddress, transactionCt);
                 var refreshed = await _queueRepository.GetByIdAsync(entry.QueueEntryId, transactionCt);
                 return Result<QueueEntryResponse>.Success(await ToResponseAsync(refreshed ?? entry, transactionCt));
@@ -857,7 +850,7 @@ public sealed class QueueService
             userId: actorUserId,
             detail: JsonSerializer.Serialize(new
             {
-                visitId = entry.VisitId, chairId = entry.Visit?.ChairId, fromStatus = (int?)history.FromStatus, toStatus = (int)targetStatus,
+                visitId = entry.VisitId, roomId = entry.Visit?.RoomId, fromStatus = (int?)history.FromStatus, toStatus = (int)targetStatus,
                 changedFields = new[]
                 {
                     nameof(QueueEntry.Status),
@@ -951,7 +944,7 @@ public sealed class QueueService
                     return Result<QueueEntryResponse>.Failure(Error.QueueTransferBlocked);
 
                 var unstartedWaiting = entry.Status == QueueStatus.Waiting &&
-                    visit.Status == VisitStatuses.Created && !visit.StartedAt.HasValue && !visit.ChairId.HasValue &&
+                    visit.Status == VisitStatuses.Created && !visit.StartedAt.HasValue && !visit.RoomId.HasValue &&
                     (!visit.DentistId.HasValue || visit.DentistId == entry.DentistId);
                 var activeVisit = visit.Status == VisitStatuses.InProgress && visit.StartedAt.HasValue &&
                     visit.DentistId == entry.DentistId && entry.Status is
@@ -969,7 +962,6 @@ public sealed class QueueService
                     return Result<QueueEntryResponse>.Failure(Error.Validation.Code, "Nha sĩ tiếp nhận không hợp lệ hoặc không hoạt động.");
 
                 var sourceDentistId = entry.DentistId.Value;
-                var sourceChairId = visit.ChairId;
                 var sourceRoomId = visit.RoomId;
                 if (activeVisit)
                 {
@@ -1007,8 +999,8 @@ public sealed class QueueService
                         visitId = entry.VisitId,
                         fromDentistId = sourceDentistId,
                         toDentistId = request.TargetDentistId,
-                        fromChairId = sourceChairId,
-                        toChairId = visit.ChairId, fromRoomId = sourceRoomId, toRoomId = visit.RoomId,
+                        fromRoomId = sourceRoomId,
+                        toRoomId = visit.RoomId,
                         status = (int)entry.Status,
                         reason
                     }), ipAddress, transactionCt);

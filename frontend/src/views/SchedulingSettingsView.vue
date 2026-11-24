@@ -3,24 +3,24 @@ import { onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { useSchedulingSettingsStore } from '@/stores/schedulingSettings';
 import { validSchedule } from '@/services/schedulingSettings';
 const store = useSchedulingSettingsStore();
-const form = reactive({ workStartTime: '', lunchStartTime: '', lunchEndTime: '', workEndTime: '', slotDurationMinutes: 0 }), confirmed = ref(false), error = ref('');
+const form = reactive({ workStartTime: '', lunchStartTime: '', lunchEndTime: '', workEndTime: '' }), confirmed = ref(false), error = ref('');
 const heading = ref<HTMLElement | null>(null);
-watch(() => store.current, value => { if (value) Object.assign(form, { workStartTime: value.workStartTime, lunchStartTime: value.lunchStartTime, lunchEndTime: value.lunchEndTime, workEndTime: value.workEndTime, slotDurationMinutes: value.slotDurationMinutes }); confirmed.value = false; }, { immediate: true });
+watch(() => store.current, value => { if (value) Object.assign(form, { workStartTime: value.workStartTime, lunchStartTime: value.lunchStartTime, lunchEndTime: value.lunchEndTime, workEndTime: value.workEndTime }); confirmed.value = false; }, { immediate: true });
 async function save() {
   error.value = '';
-  if (!store.current || !confirmed.value || !validSchedule({ ...form, expectedRevision: store.current.revision })) { error.value = 'Kiểm tra thứ tự giờ, thời lượng nguyên phút và xác nhận thay đổi.'; return; }
+  if (!store.current || !confirmed.value || !validSchedule({ ...form, expectedRevision: store.current.revision })) { error.value = 'Kiểm tra thứ tự giờ (tối thiểu 30 phút mỗi buổi) và xác nhận thay đổi.'; return; }
   await store.save({ ...form, expectedRevision: store.current.revision }); confirmed.value = false;
 }
 onMounted(() => { heading.value?.focus(); void store.load(); });
-onUnmounted(() => { confirmed.value = false; Object.assign(form, { workStartTime: '', lunchStartTime: '', lunchEndTime: '', workEndTime: '', slotDurationMinutes: 0 }); });
+onUnmounted(() => { confirmed.value = false; Object.assign(form, { workStartTime: '', lunchStartTime: '', lunchEndTime: '', workEndTime: '' }); });
 </script>
 <template>
   <main class="page-container">
     <div class="page-header">
       <div>
         <p class="eyebrow">CẤU HÌNH HỆ THỐNG</p>
-        <h1 ref="heading" tabindex="-1">Giờ làm việc & Khung giờ hẹn</h1>
-        <p class="subtitle">Thiết lập thời gian mở cửa, nghỉ trưa và phân bổ thời lượng slot phục vụ đặt lịch khám bệnh.</p>
+        <h1 ref="heading" tabindex="-1">Giờ làm việc phòng khám</h1>
+        <p class="subtitle">Thiết lập thời gian mở cửa, nghỉ trưa và đóng cửa phục vụ đặt lịch khám bệnh theo hai buổi Sáng / Chiều.</p>
       </div>
       <div class="header-actions">
         <RouterLink to="/management/admin/clinic-print-settings" class="button button-secondary">
@@ -51,7 +51,6 @@ onUnmounted(() => { confirmed.value = false; Object.assign(form, { workStartTime
     <div v-if="store.current" class="panel config-panel">
       <div class="panel-header">
         <h2 class="panel-title">Khung giờ hoạt động phòng khám (Múi giờ Asia/Ho_Chi_Minh)</h2>
-        <span class="count-badge">Slot: {{ form.slotDurationMinutes }} phút</span>
       </div>
 
       <div class="panel-body">
@@ -83,16 +82,10 @@ onUnmounted(() => { confirmed.value = false; Object.assign(form, { workStartTime
               </div>
 
               <div class="form-field form-field--wide">
-                <label>Thời lượng mỗi lượt khám / Slot hẹn (phút) <b>*</b></label>
-                <input v-model.number="form.slotDurationMinutes" type="number" min="1" max="1440" step="1" required placeholder="VD: 30" @input="confirmed = false" />
-                <span class="form-hint">Thời lượng slot phải nằm trọn trong một buổi (sáng hoặc chiều). Giới hạn tối đa 100 lịch hẹn đồng thời.</span>
-              </div>
-
-              <div class="form-field form-field--wide">
                 <div class="confirm-box">
                   <label class="checkbox-label text-warning">
                     <input v-model="confirmed" type="checkbox" required />
-                    <span>Tôi đã kiểm tra kỹ thứ tự khung giờ, thời lượng slot và xác nhận áp dụng cho hệ thống.</span>
+                    <span>Tôi đã kiểm tra kỹ thứ tự khung giờ làm việc và xác nhận áp dụng cho hệ thống.</span>
                   </label>
                 </div>
               </div>

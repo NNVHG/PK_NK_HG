@@ -6,7 +6,6 @@
         <p class="eyebrow">THÔNG TIN TÀI KHOẢN</p>
         <h1>Hồ sơ cá nhân</h1>
         <p class="subtitle">Quản lý thông tin cá nhân và bảo mật tài khoản.</p>
-        <RouterLink v-if="authStore.role === 'DENTIST' && authStore.user" :to="'/management/staff/signatures/' + authStore.user.userId">Quản lý ảnh chữ ký của tôi</RouterLink>
       </div>
     </header>
 

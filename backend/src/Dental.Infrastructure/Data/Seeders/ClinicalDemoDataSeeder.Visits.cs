@@ -86,13 +86,13 @@ public static partial class ClinicalDemoDataSeeder
         db.Appointments.AddRange(appt1, appt2, appt3, appt4, appt5, appt6);
         await db.SaveChangesAsync(ct);
 
-        var chairs = await db.DentalChairs.OrderBy(c => c.ChairNumber).ToListAsync(ct);
-        var chair1 = chairs.FirstOrDefault(c => c.ChairNumber == "G01");
-        var chair2 = chairs.FirstOrDefault(c => c.ChairNumber == "G02");
+        var rooms = await db.ClinicRooms.OrderBy(r => r.RoomCode).ToListAsync(ct);
+        var room1 = rooms.FirstOrDefault(r => r.RoomCode == "G01");
+        var room2 = rooms.FirstOrDefault(r => r.RoomCode == "G02");
 
         var v1 = new Visit
         {
-            PatientId = p1.PatientId, DentistId = dentist1.UserId, ChairId = chair1?.Id, RoomId = chair1?.RoomId,
+            PatientId = p1.PatientId, DentistId = dentist1.UserId, RoomId = room1?.Id,
             Status = VisitStatuses.Completed, StartedAt = now.Date.AddHours(8).AddMinutes(35), EndedAt = now.Date.AddHours(9).AddMinutes(15),
             Diagnosis = "Sâu ngà nông răng 36 mặt nhai; Viêm lợi mạn tính do vôi răng",
             ClinicalNotes = "Đã làm sạch xoang sâu R36, trám Composite thẩm mỹ xoang I. Cạo vôi răng siêu âm và đánh bóng 2 hàm hoàn tất.",
@@ -101,7 +101,7 @@ public static partial class ClinicalDemoDataSeeder
         };
         var v2 = new Visit
         {
-            PatientId = p2.PatientId, DentistId = dentist1.UserId, ChairId = chair1?.Id, RoomId = chair1?.RoomId,
+            PatientId = p2.PatientId, DentistId = dentist1.UserId, RoomId = room1?.Id,
             Status = VisitStatuses.InProgress, StartedAt = now.Date.AddHours(9).AddMinutes(25),
             Diagnosis = "Mẻ góc cắn răng 21 do chấn thương",
             ClinicalNotes = "Răng 21 mẻ góc cắn 1/3 thân răng, không lộ tủy, thử tủy dương tính. Đang tiến hành trám tái tạo Composite.",
@@ -109,17 +109,17 @@ public static partial class ClinicalDemoDataSeeder
         };
         var v3 = new Visit
         {
-            PatientId = p4.PatientId, DentistId = dentist2.UserId, ChairId = chair2?.Id, RoomId = chair2?.RoomId,
+            PatientId = p4.PatientId, DentistId = dentist2.UserId, RoomId = room2?.Id,
             Status = VisitStatuses.Completed, StartedAt = now.Date.AddDays(-2).AddHours(10).AddMinutes(5), EndedAt = now.Date.AddDays(-2).AddHours(10).AddMinutes(50),
             Diagnosis = "Viêm tủy không hồi phục răng 46",
             ClinicalNotes = "Đã mở tủy, làm sạch ống tủy và đặt thuốc băng tủy răng 46.",
             IsLocked = true, LockedAt = now.Date.AddDays(-2).AddHours(10).AddMinutes(50), LockedBy = dentist2.UserId,
             CreatedByUserId = dentist2.UserId, CreatedAt = now.Date.AddDays(-2).AddHours(10).AddMinutes(5),
         };
-        // Ca tạm dừng bàn giao (Paused -> nhả ChairId & RoomId để nha sĩ khác tiếp nhận)
+        // Ca tạm dừng bàn giao (Paused -> nhả RoomId để nha sĩ khác tiếp nhận)
         var v4 = new Visit
         {
-            PatientId = p5.PatientId, DentistId = dentist1.UserId, ChairId = null, RoomId = null,
+            PatientId = p5.PatientId, DentistId = dentist1.UserId, RoomId = null,
             Status = VisitStatuses.InProgress, StartedAt = now.Date.AddHours(9).AddMinutes(50),
             Diagnosis = "Đau khớp thái dương hàm nhẹ và kiểm tra răng 16",
             ClinicalNotes = "Đã khám sơ bộ, tạm dừng để bàn giao sang nha sĩ ca chiều tiếp tục.",
@@ -130,7 +130,7 @@ public static partial class ClinicalDemoDataSeeder
             PatientId = p3.PatientId, Status = VisitStatuses.Created,
             CreatedByUserId = receptionist1.UserId, CreatedAt = now.Date.AddHours(10).AddMinutes(10),
         };
-        if (chair1 is not null) chair1.Status = DentalChairStatus.Occupied;
+        if (room1 is not null) room1.Status = DentalChairStatus.Occupied;
         db.Visits.AddRange(v1, v2, v3, v4, v5);
         await db.SaveChangesAsync(ct);
 
@@ -194,7 +194,7 @@ public static partial class ClinicalDemoDataSeeder
         db.QueueEntries.AddRange(q1, q2, q3, q4, q5);
 
         // Giữ lượt trẻ em trong hàng đợi chung. Ca khác đã điều phối để thử Phụ tá gọi cho Nha sĩ 2.
-        if (dentist2.UserId != dentist1.UserId && chair2 is { IsActive: true, Status: DentalChairStatus.Available })
+        if (dentist2.UserId != dentist1.UserId && room2 is { IsActive: true, Status: DentalChairStatus.Available })
         {
             var checkInTime = q5.CheckInTime.AddMinutes(5);
             db.QueueEntries.Add(new QueueEntry

@@ -1,7 +1,6 @@
 using System.Data;
 using System.Text.Json;
 using Dental.Application.Common;
-using Dental.Application.Features.MOD_AUTH;
 using Dental.Application.Features.MOD_RX;
 using Dental.Application.Features.MOD_RX.DTOs;
 using Dental.Domain.Constants;
@@ -24,21 +23,19 @@ public sealed partial class PrescriptionRepository
             if (rx.Version != request.ExpectedVersion) return Result<PrescriptionPrintDocument>.Failure(Conflict);
             var patient = await db.Patients.AsNoTracking().SingleAsync(p => p.PatientId == visit.PatientId, ct);
             var doctor = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.UserId == rx.DoctorId, ct);
-            // DL-297: a new preparation always queries the latest saved image; no pinned signature on Prescription.
-            var signature = await db.DoctorSignatures.AsNoTracking().Where(s => s.DoctorId == rx.DoctorId).OrderByDescending(s => s.Version).FirstOrDefaultAsync(ct);
             var settings = await db.SystemConfigs.AsNoTracking().Where(s => s.Key == "Clinic:Address" || s.Key == "Clinic:Phone").ToDictionaryAsync(s => s.Key, s => s.Value, ct);
             var address = settings.GetValueOrDefault("Clinic:Address"); var phone = settings.GetValueOrDefault("Clinic:Phone");
-            if (doctor is null || string.IsNullOrWhiteSpace(doctor.AcademicTitle) || signature is null || !SignaturePng.Valid(signature.ImagePng) ||
-                string.IsNullOrWhiteSpace(address) || string.IsNullOrWhiteSpace(phone))
-                return Result<PrescriptionPrintDocument>.Failure(new("RX_PRINT_SETUP", "Admin cần khai báo địa chỉ, hotline, học hàm/học vị và ảnh chữ ký bác sĩ trước khi in."));
+            if (doctor is null || string.IsNullOrWhiteSpace(address) || string.IsNullOrWhiteSpace(phone))
+                return Result<PrescriptionPrintDocument>.Failure(new("RX_PRINT_SETUP", "Admin cần khai báo địa chỉ và hotline phòng khám trước khi in đơn thuốc."));
             if (!PublicPrescriptionService.ValidCode(rx.PrescriptionCode) || rx.Items.Count == 0) return Result<PrescriptionPrintDocument>.Failure(Error.Validation);
+            var doctorTitle = string.IsNullOrWhiteSpace(doctor.AcademicTitle) ? "BS." : doctor.AcademicTitle.Trim();
             var document = new PrescriptionPrintDocument(rx.Id, visitId, rx.Version, rx.PrescriptionCode, "Nha khoa Hoàng Gia", address, phone,
                 patient.FullName, patient.DateOfBirth, patient.Gender, patient.Address, patient.Phone, rx.Diagnosis,
                 rx.Items.OrderBy(i => i.Id).Select(i => new PrescriptionPrintLine(i.MedicineName, i.Strength, i.Unit, i.Quantity, i.UsageInstructions, i.TreatmentDays)).ToArray(),
-                rx.DoctorAdvice, rx.RevisitDate, DateOnly.FromDateTime(clock.ToVietnamTime(rx.CreatedAt)), doctor.FullName, doctor.AcademicTitle,
-                signature.Version, Convert.ToBase64String(signature.ImagePng), "/portal/prescriptions/" + rx.PrescriptionCode, rx.ReceiverName, rx.ReceiverPhone);
+                rx.DoctorAdvice, rx.RevisitDate, DateOnly.FromDateTime(clock.ToVietnamTime(rx.CreatedAt)), doctor.FullName, doctorTitle,
+                "/portal/prescriptions/" + rx.PrescriptionCode, rx.ReceiverName, rx.ReceiverPhone);
             db.AuditLogs.Add(new AuditLog { UserId = actorId, Action = "MOD_RX_PRINT_PREPARED", EntityType = "Prescription", EntityId = rx.Id,
-                CreatedAt = clock.UtcNow, IpAddress = ip, Detail = JsonSerializer.Serialize(new { rx.Version, signatureId = signature.Id, signatureVersion = signature.Version, sharedHistoryAccess = role == RoleCodes.Dentist && visit.DentistId != actorId, trigger = "print_preparation" }) });
+                CreatedAt = clock.UtcNow, IpAddress = ip, Detail = JsonSerializer.Serialize(new { rx.Version, sharedHistoryAccess = role == RoleCodes.Dentist && visit.DentistId != actorId, trigger = "print_preparation" }) });
             await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); committed = true;
             return Result<PrescriptionPrintDocument>.Success(document);
         }

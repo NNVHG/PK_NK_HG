@@ -4,8 +4,8 @@ using FluentValidation;
 namespace Dental.Application.Features.MOD_MST.Services;
 
 public sealed record ScheduleSnapshot(ClinicSchedule Schedule, string Revision, bool UsingFallback);
-public sealed record SchedulingSettingsRequest(string WorkStartTime, string LunchStartTime, string LunchEndTime, string WorkEndTime, int SlotDurationMinutes, string ExpectedRevision);
-public sealed record SchedulingSettingsDto(string WorkStartTime, string LunchStartTime, string LunchEndTime, string WorkEndTime, int SlotDurationMinutes, string Revision, bool UsingFallback);
+public sealed record SchedulingSettingsRequest(string WorkStartTime, string LunchStartTime, string LunchEndTime, string WorkEndTime, string ExpectedRevision);
+public sealed record SchedulingSettingsDto(string WorkStartTime, string LunchStartTime, string LunchEndTime, string WorkEndTime, string Revision, bool UsingFallback);
 public sealed record BookingScheduleDto(string[] Slots, int SlotDurationMinutes, string Revision);
 public interface ISchedulingSettingsRepository
 {
@@ -17,13 +17,13 @@ public sealed class SchedulingSettingsValidator : AbstractValidator<SchedulingSe
     public SchedulingSettingsValidator()
     {
         RuleFor(x => x.ExpectedRevision).NotEmpty().Matches("^[A-F0-9]{64}$").WithMessage("Cần tải lại phiên bản cấu hình.");
-        RuleFor(x => x).Must(x => ClinicSchedule.TryParse(x.WorkStartTime, x.LunchStartTime, x.LunchEndTime, x.WorkEndTime, x.SlotDurationMinutes, out _))
-            .WithMessage("Giờ phải theo HH:mm, mở cửa < nghỉ trưa < hết nghỉ < đóng cửa; thời lượng nguyên phút và có ít nhất một slot trọn trong buổi.");
+        RuleFor(x => x).Must(x => ClinicSchedule.TryParse(x.WorkStartTime, x.LunchStartTime, x.LunchEndTime, x.WorkEndTime, out _))
+            .WithMessage("Giờ phải theo HH:mm, mở cửa < nghỉ trưa < hết nghỉ < đóng cửa và có ít nhất một khung khám 30 phút trọn trong buổi.");
     }
 }
 public sealed class SchedulingSettingsService(ISchedulingSettingsRepository repository)
 {
-    public static SchedulingSettingsDto Dto(ScheduleSnapshot x) => new(x.Schedule.WorkStart.ToString("HH:mm"), x.Schedule.LunchStart.ToString("HH:mm"), x.Schedule.LunchEnd.ToString("HH:mm"), x.Schedule.WorkEnd.ToString("HH:mm"), x.Schedule.DurationMinutes, x.Revision, x.UsingFallback);
+    public static SchedulingSettingsDto Dto(ScheduleSnapshot x) => new(x.Schedule.WorkStart.ToString("HH:mm"), x.Schedule.LunchStart.ToString("HH:mm"), x.Schedule.LunchEnd.ToString("HH:mm"), x.Schedule.WorkEnd.ToString("HH:mm"), x.Revision, x.UsingFallback);
     public async Task<Result<SchedulingSettingsDto>> ReadAsync(int? actor, string? role, CancellationToken ct = default)
     {
         if (actor is not > 0) return Result<SchedulingSettingsDto>.Failure(Error.Unauthorized);

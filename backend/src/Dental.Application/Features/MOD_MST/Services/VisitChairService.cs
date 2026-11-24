@@ -18,7 +18,7 @@ public sealed class VisitChairService(IStaffWorkspaceRepository workspaces, IDen
 
     public async Task<Result> TransferAsync(Visit visit, int dentistId, int actorId, CancellationToken ct = default)
     {
-        if (visit.Status != VisitStatuses.InProgress || visit.ChairId is not int sourceChairId ||
+        if (visit.Status != VisitStatuses.InProgress || visit.RoomId is not int sourceRoomId ||
             dentistId <= 0 || actorId <= 0)
             return Result.Failure(Inconsistent);
 
@@ -29,34 +29,32 @@ public sealed class VisitChairService(IStaffWorkspaceRepository workspaces, IDen
             return Result.Failure(Error.DentistHasActiveVisit);
 
         var workspace = await workspaces.FindAsync(dentistId, ct);
-        var targetChair = workspace is { ChairId: int targetChairId } && workspace.WorkDate == clock.Today
-            ? await chairs.FindAsync(targetChairId, ct)
+        var targetRoom = workspace is { RoomId: int targetRoomId } && workspace.WorkDate == clock.Today
+            ? await chairs.FindAsync(targetRoomId, ct)
             : null;
-        if (targetChair is not { IsActive: true } ||
-            await visits.HasActiveVisitForChairAsync(targetChair.Id, visit.VisitId, ct) ||
-            (targetChair.RoomId.HasValue && await visits.HasActiveVisitForRoomAsync(targetChair.RoomId.Value, visit.VisitId, ct)))
+        if (targetRoom is not { IsActive: true } ||
+            await visits.HasActiveVisitForRoomAsync(targetRoom.Id, visit.VisitId, ct))
             return Result.Failure(Unavailable);
 
-        var sourceChair = await chairs.FindAsync(sourceChairId, ct);
-        if (sourceChair is not { IsActive: true, Status: DentalChairStatus.Occupied } ||
-            await visits.HasActiveVisitForChairAsync(sourceChairId, visit.VisitId, ct))
+        var sourceRoom = await chairs.FindAsync(sourceRoomId, ct);
+        if (sourceRoom is not { IsActive: true, Status: DentalChairStatus.Occupied } ||
+            await visits.HasActiveVisitForRoomAsync(sourceRoomId, visit.VisitId, ct))
             return Result.Failure(Inconsistent);
 
-        if (targetChair.Status != DentalChairStatus.Available)
+        if (targetRoom.Status != DentalChairStatus.Available)
             return Result.Failure(Unavailable);
 
         var now = clock.UtcNow;
-        sourceChair.Status = DentalChairStatus.Available;
-        sourceChair.Version++;
-        sourceChair.UpdatedAt = now;
-        sourceChair.UpdatedByUserId = actorId;
+        sourceRoom.Status = DentalChairStatus.Available;
+        sourceRoom.Version++;
+        sourceRoom.UpdatedAt = now;
+        sourceRoom.UpdatedByUserId = actorId;
 
-        targetChair.Status = DentalChairStatus.Occupied;
-        targetChair.Version++;
-        targetChair.UpdatedAt = now;
-        targetChair.UpdatedByUserId = actorId;
-        visit.ChairId = targetChair.Id;
-        visit.RoomId = targetChair.RoomId;
+        targetRoom.Status = DentalChairStatus.Occupied;
+        targetRoom.Version++;
+        targetRoom.UpdatedAt = now;
+        targetRoom.UpdatedByUserId = actorId;
+        visit.RoomId = targetRoom.Id;
         return Result.Success();
     }
 
@@ -67,29 +65,27 @@ public sealed class VisitChairService(IStaffWorkspaceRepository workspaces, IDen
         if (dentist is not { IsActive: true } || dentist.Role?.RoleCode != RoleCodes.Dentist) return Result.Failure(Unavailable);
         if (await visits.HasActiveVisitForDentistAsync(dentistId, ct, visit.VisitId)) return Result.Failure(Error.DentistHasActiveVisit);
         var workspace = await workspaces.FindAsync(dentistId, ct);
-        var chair = workspace is { ChairId: int id } && workspace.WorkDate == clock.Today ? await chairs.FindAsync(id, ct) : null;
-        if (chair is not { IsActive: true } ||
-            await visits.HasActiveVisitForChairAsync(chair.Id, visit.VisitId, ct) ||
-            (chair.RoomId.HasValue && await visits.HasActiveVisitForRoomAsync(chair.RoomId.Value, visit.VisitId, ct)))
+        var room = workspace is { RoomId: int id } && workspace.WorkDate == clock.Today ? await chairs.FindAsync(id, ct) : null;
+        if (room is not { IsActive: true } ||
+            await visits.HasActiveVisitForRoomAsync(room.Id, visit.VisitId, ct))
             return Result.Failure(Unavailable);
-        if (visit.Status == VisitStatuses.InProgress && visit.ChairId.HasValue)
-            return visit.ChairId == chair.Id && chair.Status == DentalChairStatus.Occupied ? Result.Success() : Result.Failure(Inconsistent);
-        if (chair.Status != DentalChairStatus.Available) return Result.Failure(Unavailable);
+        if (visit.Status == VisitStatuses.InProgress && visit.RoomId.HasValue)
+            return visit.RoomId == room.Id && room.Status == DentalChairStatus.Occupied ? Result.Success() : Result.Failure(Inconsistent);
+        if (room.Status != DentalChairStatus.Available) return Result.Failure(Unavailable);
         if (!allocate) return Result.Success();
-        visit.ChairId = chair.Id;
-        visit.RoomId = chair.RoomId;
-        chair.Status = DentalChairStatus.Occupied; chair.Version++; chair.UpdatedAt = clock.UtcNow; chair.UpdatedByUserId = actorId;
+        visit.RoomId = room.Id;
+        room.Status = DentalChairStatus.Occupied; room.Version++; room.UpdatedAt = clock.UtcNow; room.UpdatedByUserId = actorId;
         return Result.Success();
     }
     public async Task<Result> ReleaseAsync(Visit visit, int actorId, CancellationToken ct = default)
     {
-        // DL263 corrections never acquire/release the historical chair. Null is reserved for pre-allocation visits.
-        if (visit.Status == VisitStatuses.Correcting || visit.ChairId is not int chairId) return Result.Success();
+        // DL263 corrections never acquire/release the historical room. Null is reserved for pre-allocation visits.
+        if (visit.Status == VisitStatuses.Correcting || visit.RoomId is not int roomId) return Result.Success();
         if (visit.Status != VisitStatuses.InProgress) return Result.Failure(Inconsistent);
-        var chair = await chairs.FindAsync(chairId, ct);
-        if (chair is not { IsActive: true, Status: DentalChairStatus.Occupied } ||
-            await visits.HasActiveVisitForChairAsync(chairId, visit.VisitId, ct)) return Result.Failure(Inconsistent);
-        chair.Status = DentalChairStatus.Available; chair.Version++; chair.UpdatedAt = clock.UtcNow; chair.UpdatedByUserId = actorId;
+        var room = await chairs.FindAsync(roomId, ct);
+        if (room is not { IsActive: true, Status: DentalChairStatus.Occupied } ||
+            await visits.HasActiveVisitForRoomAsync(roomId, visit.VisitId, ct)) return Result.Failure(Inconsistent);
+        room.Status = DentalChairStatus.Available; room.Version++; room.UpdatedAt = clock.UtcNow; room.UpdatedByUserId = actorId;
         return Result.Success();
     }
 }

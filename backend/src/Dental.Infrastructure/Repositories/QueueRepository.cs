@@ -26,13 +26,13 @@ public sealed class QueueRepository : IQueueRepository
         var today = _clock.Today;
         return await (from workspace in _db.StaffWorkspaces.AsNoTracking()
                       join dentist in _db.Users on workspace.UserId equals dentist.UserId
-                      join chair in _db.DentalChairs on workspace.ChairId equals (int?)chair.Id
+                      join room in _db.ClinicRooms on workspace.RoomId equals (int?)room.Id
                       where dentistIds.Contains(workspace.UserId) && workspace.WorkDate == today &&
                           dentist.IsActive &&
-                          dentist.Role.RoleCode == Dental.Domain.Constants.RoleCodes.Dentist && chair.IsActive &&
-                          (chair.Status == DentalChairStatus.Available || chair.Status == DentalChairStatus.Occupied)
+                          dentist.Role.RoleCode == Dental.Domain.Constants.RoleCodes.Dentist && room.IsActive &&
+                          (room.Status == DentalChairStatus.Available || room.Status == DentalChairStatus.Occupied)
                       select new Dental.Application.Features.Queue.DTOs.QueueDentistLocation(
-                          workspace.UserId, chair.ChairNumber, chair.RoomName)).ToListAsync(ct);
+                          workspace.UserId, room.RoomCode, room.RoomName)).ToListAsync(ct);
     }
 
     public async Task<IReadOnlyList<QueueEntry>> GetExpiredUnstartedAsync(DateOnly lastExpiredDate, CancellationToken ct = default)

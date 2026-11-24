@@ -52,7 +52,6 @@ public static class Policies
     public const string InvoiceDraftView = "InvoiceDraftView";
     public const string InvoicePortalRead = "InvoicePortalRead";
     public const string CashPaymentWrite = "CashPaymentWrite";
-    public const string DoctorSignatureManage = "DoctorSignatureManage";
     public const string InvoiceDiscountWrite = "InvoiceDiscountWrite";
 
 
@@ -65,7 +64,6 @@ public static class Policies
         opts.AddPolicy(DentalImageUpload, p => p.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant));
         opts.AddPolicy(DentalImageManage, p => p.RequireRole(RoleCodes.Admin, RoleCodes.Dentist));
         opts.AddPolicy(DentalImageDelete, p => p.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant));
-        opts.AddPolicy(DoctorSignatureManage, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist));
         opts.AddPolicy(PrescriptionHandover, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Receptionist, RoleCodes.Assistant));
         opts.AddPolicy(PrescriptionWrite, policy => policy.RequireRole(RoleCodes.Dentist));
         opts.AddPolicy(WorkspaceManage, policy => policy.RequireRole(RoleCodes.Admin, RoleCodes.Dentist, RoleCodes.Assistant));

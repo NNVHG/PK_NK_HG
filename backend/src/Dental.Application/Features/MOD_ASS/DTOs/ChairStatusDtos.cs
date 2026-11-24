@@ -18,6 +18,6 @@ public sealed record ChairStatusResponse(int Id, string ChairNumber, string Room
         DentalChairStatus.Available => "Sẵn sàng", DentalChairStatus.Occupied => "Đang phục vụ",
         DentalChairStatus.Maintenance => "Bảo trì", DentalChairStatus.Inactive => "Ngừng sử dụng", _ => "Không xác định"
     };
-    public static ChairStatusResponse From(DentalChair chair) => new(chair.Id, chair.ChairNumber, chair.RoomName,
-        (int)chair.Status, Label(chair.Status), chair.IsActive, chair.Version, false, false);
+    public static ChairStatusResponse From(ClinicRoom room) => new(room.Id, room.RoomCode, room.RoomName,
+        (int)room.Status, Label(room.Status), room.IsActive, room.Version, false, false);
 }

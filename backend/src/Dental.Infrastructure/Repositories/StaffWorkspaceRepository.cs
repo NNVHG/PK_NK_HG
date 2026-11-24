@@ -23,14 +23,14 @@ public sealed class StaffWorkspaceRepository(DentalDbContext db) : IStaffWorkspa
         => ClaimsForRoom(chairId, exceptUserId).AnyAsync(ct);
 
     public async Task<bool> ReleaseStaleChairClaimsAsync(
-        int chairId,
+        int roomId,
         int exceptUserId,
         DateOnly workDate,
         int actorId,
         DateTime updatedAtUtc,
         CancellationToken ct = default)
     {
-        var stale = await ClaimsForRoom(chairId, exceptUserId)
+        var stale = await ClaimsForRoom(roomId, exceptUserId)
             .Where(x => x.WorkDate == null || x.WorkDate != workDate ||
                 !x.User.IsActive || x.User.Role.RoleCode != RoleCodes.Dentist)
             .ToListAsync(ct);
@@ -39,7 +39,6 @@ public sealed class StaffWorkspaceRepository(DentalDbContext db) : IStaffWorkspa
 
         foreach (var item in stale)
         {
-            item.ChairId = null;
             item.RoomId = null;
             item.WorkDate = null;
             item.Version++;
@@ -52,8 +51,6 @@ public sealed class StaffWorkspaceRepository(DentalDbContext db) : IStaffWorkspa
     public async Task AddAsync(StaffWorkspace workspace, CancellationToken ct = default)
         => await db.StaffWorkspaces.AddAsync(workspace, ct);
 
-    private IQueryable<StaffWorkspace> ClaimsForRoom(int chairId, int exceptUserId)
-        => db.StaffWorkspaces.Where(workspace => workspace.UserId != exceptUserId &&
-            (workspace.ChairId == chairId || (workspace.RoomId.HasValue &&
-                db.DentalChairs.Any(chair => chair.Id == chairId && chair.RoomId == workspace.RoomId))));
+    private IQueryable<StaffWorkspace> ClaimsForRoom(int roomId, int exceptUserId)
+        => db.StaffWorkspaces.Where(workspace => workspace.UserId != exceptUserId && workspace.RoomId == roomId);
 }

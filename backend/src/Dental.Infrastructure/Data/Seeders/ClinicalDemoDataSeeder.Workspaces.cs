@@ -12,13 +12,13 @@ public static partial class ClinicalDemoDataSeeder
     private static async Task SeedWorkspacesAsync(DentalDbContext db, User dentist1, User dentist2, User assistant1, User assistant2, int adminId, DateTime now, CancellationToken ct)
     {
         if (await db.StaffWorkspaces.AnyAsync(ct)) return;
-        var chairs = await db.DentalChairs.OrderBy(c => c.Id).ToListAsync(ct);
-        if (chairs.Count < 2) return;
+        var rooms = await db.ClinicRooms.OrderBy(r => r.Id).ToListAsync(ct);
+        if (rooms.Count < 2) return;
 
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(now, "SE Asia Standard Time"));
-        db.StaffWorkspaces.Add(new StaffWorkspace { UserId = dentist1.UserId, ChairId = chairs[0].Id, RoomId = chairs[0].RoomId, WorkDate = today, UpdatedByUserId = adminId, Version = 1, CreatedAt = now });
+        db.StaffWorkspaces.Add(new StaffWorkspace { UserId = dentist1.UserId, RoomId = rooms[0].Id, WorkDate = today, UpdatedByUserId = adminId, Version = 1, CreatedAt = now });
         if (dentist2.UserId != dentist1.UserId)
-            db.StaffWorkspaces.Add(new StaffWorkspace { UserId = dentist2.UserId, ChairId = chairs[1].Id, RoomId = chairs[1].RoomId, WorkDate = today, UpdatedByUserId = adminId, Version = 1, CreatedAt = now });
+            db.StaffWorkspaces.Add(new StaffWorkspace { UserId = dentist2.UserId, RoomId = rooms[1].Id, WorkDate = today, UpdatedByUserId = adminId, Version = 1, CreatedAt = now });
         db.StaffWorkspaces.Add(new StaffWorkspace { UserId = assistant1.UserId, DentistId = dentist1.UserId, UpdatedByUserId = adminId, Version = 1, CreatedAt = now });
         if (assistant2.UserId != assistant1.UserId)
             db.StaffWorkspaces.Add(new StaffWorkspace { UserId = assistant2.UserId, DentistId = dentist2.UserId, UpdatedByUserId = adminId, Version = 1, CreatedAt = now });

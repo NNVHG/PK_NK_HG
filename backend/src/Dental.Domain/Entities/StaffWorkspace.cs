@@ -2,11 +2,10 @@ using Dental.Domain.Common;
 
 namespace Dental.Domain.Entities;
 
-/// <summary>Daily staff assignment. An assistant confirms optional dentist support and follows the dentist's room.</summary>
+/// <summary>Lưu lựa chọn phòng điều trị trong ngày của Nha sĩ và liên kết đi theo Nha sĩ của Phụ tá (Admin chỉ được gỡ liên kết).</summary>
 public sealed class StaffWorkspace : BaseEntity
 {
     public int UserId { get; set; }
-    public int? ChairId { get; set; }
     public int? RoomId { get; set; }
     public DateOnly? WorkDate { get; set; }
     public int? DentistId { get; set; }
