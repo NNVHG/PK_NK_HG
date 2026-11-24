@@ -81,7 +81,7 @@
             <div class="time-meta">
               <span>📅 {{ row.appointmentDate }}</span>
               <span>•</span>
-              <span>⏰ <strong>{{ row.slotTime.slice(0, 5) }}</strong></span>
+              <span>🌤️ <strong>{{ formatSessionLabel(row.slotTime) }}</strong></span>
             </div>
 
             <div v-if="row.notes" class="care-note">
@@ -115,7 +115,7 @@
         <form class="cancel-form" @submit.prevent="cancel">
           <div class="meta-box">
             <div>Bệnh nhân: <strong>{{ selected.patientName }}</strong> ({{ selected.patientCode }})</div>
-            <div>Thời gian: <strong>{{ selected.appointmentDate }} lúc {{ selected.slotTime.slice(0, 5) }}</strong></div>
+            <div>Thời gian: <strong>{{ selected.appointmentDate }} · {{ formatSessionLabel(selected.slotTime) }}</strong></div>
           </div>
 
           <div class="form-group">
@@ -162,6 +162,10 @@ import axios from 'axios';
 import { appointmentsService, type AppointmentResponse } from '@/services/appointments';
 const date = ref(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()));
 const status = ref('Scheduled'), rows = ref<AppointmentResponse[]>([]), page = ref(1), total = ref(0), hasNext = ref(false);
+function formatSessionLabel(slot?: string | null): string {
+  if (!slot) return 'Chưa chọn buổi';
+  return slot.slice(0, 5) < '12:00' ? 'Buổi sáng' : 'Buổi chiều';
+}
 const selected = ref<AppointmentResponse | null>(null), reason = ref(''), confirmed = ref(false);
 const busy = ref(false), loading = ref(false), error = ref(''), success = ref('');
 const reasonLimit = computed(() => Math.max(0, 500 - (selected.value?.notes?.length ?? 0) - (selected.value?.notes ? 1 : 0) - '[Lý do hủy: ]'.length));

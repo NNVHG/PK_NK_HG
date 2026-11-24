@@ -22,7 +22,7 @@
         <div v-if="current" class="info-box">
           <div class="info-row">
             <span class="info-label">Lịch hiện tại:</span>
-            <span class="info-val">{{ formatDate(current.appointmentDate) }} lúc {{ current.slotTime.slice(0, 5) }}</span>
+            <span class="info-val">{{ formatDate(current.appointmentDate) }} · {{ formatSessionLabel(current.slotTime) }}</span>
           </div>
           <div class="info-row">
             <span class="info-label">Số lần đã đổi:</span>
@@ -47,13 +47,12 @@
           <div class="form-row">
             <div class="form-group">
               <label :for="'new-day-' + appointmentId" class="form-label">Ngày khám mới <b class="req">*</b></label>
-              <input :id="'new-day-' + appointmentId" v-model="day" type="date" :min="today" :disabled="busy" required class="form-input" />
+              <BookingDatePicker v-model="day" :input-id="'new-day-' + appointmentId" :min="today" :disabled="busy" required />
             </div>
 
             <div class="form-group">
               <label :for="'new-time-' + appointmentId" class="form-label">
-                Giờ mới <b class="req">*</b>
-                <small v-if="slotDurationMinutes" class="text-muted">({{ slotDurationMinutes }}p)</small>
+                Buổi khám mới <b class="req">*</b>
               </label>
               <BookingTimeInput :input-id="'new-time-' + appointmentId" v-model="time" :slots="slots" :selected-date="day" hide-past-slots :disabled="busy || scheduleLoading" @update:model-value="confirmed = false" />
             </div>
@@ -78,7 +77,7 @@
 
           <label class="checkbox-label">
             <input v-model="confirmed" type="checkbox" :disabled="busy" />
-            <span>{{ selfService ? 'Tôi xác nhận ngày, giờ mới cho hồ sơ này' : 'Đã đối chiếu ngày, giờ và yêu cầu với khách' }}</span>
+            <span>{{ selfService ? 'Tôi xác nhận ngày, buổi khám mới cho hồ sơ này' : 'Đã đối chiếu ngày, buổi khám và yêu cầu với khách' }}</span>
           </label>
 
           <div class="dialog-actions">
@@ -107,13 +106,14 @@ import axios from 'axios';
 import { appointmentsService, type AppointmentResponse, type SelfReschedulingEligibility } from '@/services/appointments';
 import { useBookingSchedule } from '@/composables/useBookingSchedule';
 import BookingTimeInput from '@/components/BookingTimeInput.vue';
+import BookingDatePicker from '@/components/BookingDatePicker.vue';
 const props = defineProps<{ appointmentId: number; patientName: string; selfService?: boolean }>();
 const emit = defineEmits<{ rescheduled: [] }>();
 const dialog = ref<HTMLDialogElement | null>(null), current = ref<AppointmentResponse | null>(null);
 const eligibility = ref<SelfReschedulingEligibility | null>(null);
 const reading = ref(false), busy = ref(false), confirmed = ref(false), day = ref(''), time = ref(''), reason = ref(''), error = ref('');
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-const { slots, revision: scheduleRevision, duration: slotDurationMinutes, loading: scheduleLoading, error: scheduleError, load: loadSchedule } = useBookingSchedule(false);
+const { slots, revision: scheduleRevision, loading: scheduleLoading, error: scheduleError, load: loadSchedule } = useBookingSchedule(false);
 watch(scheduleRevision, () => { confirmed.value = false; });
 let version = 0;
 async function readCurrent(ticket: number) {
@@ -161,6 +161,11 @@ function formatDate(value: string): string {
   return new Intl.DateTimeFormat('vi-VN').format(new Date(`${value}T00:00:00`));
 }
 
+function formatSessionLabel(slot?: string | null): string {
+  if (!slot) return 'Chưa chọn buổi';
+  return slot.slice(0, 5) < '12:00' ? 'Buổi sáng' : 'Buổi chiều';
+}
+
 onUnmounted(reset);
 </script>
 
@@ -201,7 +206,7 @@ onUnmounted(reset);
   position: fixed;
   inset: 0;
   margin: auto;
-  max-width: 540px;
+  max-width: 580px;
   width: calc(100% - 2rem);
   padding: 0;
   border: 1px solid #cbd5e1;
@@ -324,7 +329,7 @@ onUnmounted(reset);
 
 .form-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 0.85rem;
 }
 

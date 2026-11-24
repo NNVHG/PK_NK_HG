@@ -22,7 +22,7 @@
         <div class="info-box">
           <div class="info-row">
             <span class="info-label">Thời gian khám:</span>
-            <span class="info-val">{{ formatDate(date) }} lúc {{ time.slice(0, 5) }}</span>
+            <span class="info-val">{{ formatDate(date) }} · {{ formatSessionLabel(time) }}</span>
           </div>
         </div>
 
@@ -54,7 +54,7 @@
 
           <label class="checkbox-label">
             <input v-model="confirmed" type="checkbox" :disabled="busy" />
-            <span>Tôi đã kiểm tra hồ sơ, ngày và giờ; xác nhận muốn hủy lịch hẹn này</span>
+            <span>Tôi đã kiểm tra hồ sơ, ngày và buổi khám; xác nhận muốn hủy lịch hẹn này</span>
           </label>
 
           <div class="dialog-actions">
@@ -114,6 +114,11 @@ async function cancel() {
 }
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat('vi-VN').format(new Date(`${value}T00:00:00`));
+}
+
+function formatSessionLabel(slot?: string | null): string {
+  if (!slot) return 'Chưa chọn buổi';
+  return slot.slice(0, 5) < '12:00' ? 'Buổi sáng' : 'Buổi chiều';
 }
 
 onUnmounted(() => reset());

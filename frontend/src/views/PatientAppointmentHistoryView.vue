@@ -91,10 +91,10 @@
               </div>
 
               <div class="meta-item">
-                <span class="meta-icon">⏰</span>
+                <span class="meta-icon">🌤️</span>
                 <div>
-                  <span class="meta-title">Khung giờ</span>
-                  <span class="meta-data">{{ row.slotTime.slice(0, 5) }}</span>
+                  <span class="meta-title">Buổi khám</span>
+                  <span class="meta-data">{{ formatSessionLabel(row.slotTime) }}</span>
                 </div>
               </div>
 
@@ -174,7 +174,7 @@
           <div class="booking-modal-header">
             <div>
               <h2 id="booking-modal-title" class="booking-modal-title">📅 Đặt lịch khám mới</h2>
-              <p class="booking-modal-subtitle">Chọn ngày và khung giờ phù hợp để đặt lịch trực tuyến</p>
+              <p class="booking-modal-subtitle">Chọn ngày và buổi khám phù hợp để đặt lịch trực tuyến</p>
             </div>
             <button
               type="button"
@@ -278,9 +278,14 @@ function statusLabel(value: string) {
   } as Record<string, string>)[value] ?? value;
 }
 
+function formatSessionLabel(slot?: string | null): string {
+  if (!slot) return 'Chưa chọn buổi';
+  return slot.slice(0, 5) < '12:00' ? 'Buổi sáng' : 'Buổi chiều';
+}
+
 async function refresh() { await load(1); }
 async function rescheduled() {
-  notice.value = 'Đã đổi lịch thành công. Kiểm tra ngày, giờ mới trong danh sách.';
+  notice.value = 'Đã đổi lịch thành công. Kiểm tra ngày và buổi khám mới trong danh sách.';
   await load(page.value);
 }
 

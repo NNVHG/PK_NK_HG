@@ -28,9 +28,9 @@
             <span class="summary-meta">🎂 {{ context.dateOfBirth }} · 📞 {{ context.phone }}</span>
           </div>
           <div class="approval-summary-item">
-            <span class="summary-label">Khung giờ dự kiến</span>
-            <strong class="summary-slot">📅 {{ context.appointmentDate }} · ⏰ {{ context.slotTime.slice(0, 5) }}</strong>
-            <span class="summary-meta">Thời lượng {{ context.slotDurationMinutes }} phút</span>
+            <span class="summary-label">Buổi khám dự kiến</span>
+            <strong class="summary-slot">📅 {{ context.appointmentDate }} · 🌤️ {{ formatSessionLabel(context.slotTime) }}</strong>
+            <span class="summary-meta">Khám trong {{ context.slotTime.slice(0, 5) < '12:00' ? 'Buổi sáng (08:00 – 12:00)' : 'Buổi chiều (13:30 – 20:00)' }}</span>
           </div>
           <div v-if="isChildContext || parsedNotes.guardian" class="approval-summary-item approval-summary-item--full">
             <span class="summary-label">Thông tin giám hộ &amp; ghi chú</span>
@@ -133,6 +133,11 @@ function canSelectCandidate(p: { dateOfBirth?: string | null; canSelect: boolean
 function candidateDisabledLabel(p: { dateOfBirth?: string | null; canSelect: boolean }): string {
   if (canSelectCandidate(p)) return '';
   return isAgeGroupMismatch(p.dateOfBirth) ? ' · Khác nhóm tuổi (< 14 / ≥ 14)' : ' · Không đủ điều kiện';
+}
+
+function formatSessionLabel(slot?: string | null): string {
+  if (!slot) return 'Chưa chọn buổi';
+  return slot.slice(0, 5) < '12:00' ? 'Buổi sáng' : 'Buổi chiều';
 }
 
 function parseRequestNotes(notes?: string | null): { guardian: string | null; note: string | null } {

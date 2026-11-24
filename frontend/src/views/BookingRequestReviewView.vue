@@ -43,7 +43,7 @@
               <dt>Lịch hẹn</dt>
               <dd>
                 <time :datetime="row.appointmentDate">📅 {{ row.appointmentDate }}</time>
-                <span class="time-slot">⏰ <strong>{{ row.slotTime.slice(0, 5) }}</strong></span>
+                <span class="time-slot">🌤️ <strong>{{ formatSessionLabel(row.slotTime) }}</strong></span>
               </dd>
             </div>
             <div class="detail-item">
@@ -104,10 +104,10 @@
               Từ chối yêu cầu #YC-{{ selected.id }}
             </h2>
             <p v-if="approvingRow" class="review-modal-sub">
-              {{ approvingRow.fullName }} · 📅 {{ approvingRow.appointmentDate }} ⏰ {{ approvingRow.slotTime.slice(0, 5) }}
+              {{ approvingRow.fullName }} · 📅 {{ approvingRow.appointmentDate }} · 🌤️ {{ formatSessionLabel(approvingRow.slotTime) }}
             </p>
             <p v-else-if="selected" class="review-modal-sub">
-              {{ selected.fullName }} · 📅 {{ selected.appointmentDate }} ⏰ {{ selected.slotTime.slice(0, 5) }}
+              {{ selected.fullName }} · 📅 {{ selected.appointmentDate }} · 🌤️ {{ formatSessionLabel(selected.slotTime) }}
             </p>
           </div>
           <button
@@ -197,6 +197,10 @@ import{computed,onMounted,onUnmounted,ref,watch}from'vue';import{useAuthStore}fr
 import { isUnderFourteen } from '@/services/patientAge';
 import BookingRequestApproval from '@/components/BookingRequestApproval.vue';
 import type {BookingApprovalResult} from '@/services/bookingRequests';
+function formatSessionLabel(slot?: string | null): string {
+  if (!slot) return 'Chưa chọn buổi';
+  return slot.slice(0, 5) < '12:00' ? 'Buổi sáng' : 'Buổi chiều';
+}
 function isChildBirthDate(dateOfBirth?: string | null): boolean { return !!dateOfBirth && isUnderFourteen(dateOfBirth); }
 function parseRequestNotes(notes?: string | null): { guardian: string | null; note: string | null } {
   if (!notes) return { guardian: null, note: null };

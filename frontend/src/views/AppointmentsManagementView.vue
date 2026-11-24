@@ -150,7 +150,7 @@
                       <div class="detail-item">
                         <span class="detail-label">Lịch mong muốn:</span>
                         <span class="detail-val highlight-time">
-                          📅 {{ formatDate(req.appointmentDate) }} · ⏰ {{ req.slotTime.slice(0, 5) }} ({{ req.slotDurationMinutes }} phút)
+                          📅 {{ formatDate(req.appointmentDate) }} · 🌤️ {{ formatSessionLabel(req.slotTime) }}
                         </span>
                       </div>
                       <div class="detail-item">
@@ -274,7 +274,7 @@
               <table class="confirmed-table">
                 <thead>
                   <tr>
-                    <th>Giờ hẹn</th>
+                    <th>Buổi khám</th>
                     <th>Mã lịch</th>
                     <th>Bệnh nhân</th>
                     <th>Trạng thái</th>
@@ -285,7 +285,7 @@
                 <tbody>
                   <tr v-for="item in deskRows" :key="item.appointmentId">
                     <td class="cell-time">
-                      <strong>{{ item.slotTime.slice(0, 5) }}</strong>
+                      <strong>{{ formatSessionLabel(item.slotTime) }}</strong>
                       <span v-if="item.queueNumber" class="badge-queue">STT #{{ item.queueNumber }}</span>
                     </td>
                     <td>#{{ item.appointmentId }}</td>
@@ -640,29 +640,26 @@
                 <legend class="section-legend">2. Thời gian khám</legend>
 
                 <div class="form-grid">
-                  <div class="form-group">
+                  <div class="form-group grid-full">
                     <label for="modal-day">Ngày khám <span class="req">*</span></label>
-                    <input
-                      id="modal-day"
+                    <BookingDatePicker
                       v-model="form.appointmentDate"
-                      type="date"
+                      input-id="modal-day"
                       :min="todayDateStr"
                       :disabled="modalSubmitting"
                       required
                     />
                   </div>
-                  <div class="form-group">
-                    <label for="modal-slot">Khung giờ hẹn <span class="req">*</span></label>
-                    <select
-                      id="modal-slot"
+                  <div class="form-group grid-full">
+                    <label for="modal-slot">Buổi khám <span class="req">*</span></label>
+                    <BookingTimeInput
+                      input-id="modal-slot"
                       v-model="form.slot"
-                      :disabled="modalSubmitting || scheduleLoading || !slots.length"
-                      required
-                    >
-                      <option value="">-- Chọn khung giờ --</option>
-                      <option v-for="s in slots" :key="s" :value="s">{{ s }}</option>
-                    </select>
-                    <small v-if="scheduleLoading" class="form-hint">Đang tải khung giờ…</small>
+                      :slots="slots"
+                      :selected-date="form.appointmentDate"
+                      :disabled="modalSubmitting || scheduleLoading"
+                    />
+                    <small v-if="scheduleLoading" class="form-hint">Đang tải cấu hình buổi khám…</small>
                   </div>
                 </div>
 
@@ -744,7 +741,7 @@
             <div class="summary-main-row">
               <strong>{{ approvingRequest.fullName }}</strong>
               <span class="highlight-time">
-                📅 {{ formatDate(approvingRequest.appointmentDate) }} · ⏰ {{ approvingRequest.slotTime.slice(0, 5) }} ({{ approvingRequest.slotDurationMinutes }} phút)
+                📅 {{ formatDate(approvingRequest.appointmentDate) }} · 🌤️ {{ formatSessionLabel(approvingRequest.slotTime) }}
               </span>
             </div>
             <div class="summary-meta-row">
@@ -949,6 +946,8 @@ import { useBookingSchedule } from '@/composables/useBookingSchedule';
 import { isUnderFourteen } from '@/services/patientAge';
 import { capitalizeVietnameseName } from '@/utils/vietnameseName';
 import VietnameseDateOfBirthInput from '@/components/VietnameseDateOfBirthInput.vue';
+import BookingDatePicker from '@/components/BookingDatePicker.vue';
+import BookingTimeInput from '@/components/BookingTimeInput.vue';
 import BookingRequestApproval from '@/components/BookingRequestApproval.vue';
 import AppointmentRescheduling from '@/components/AppointmentRescheduling.vue';
 import CameraCccdScanner from '@/components/CameraCccdScanner.vue';
@@ -1005,6 +1004,11 @@ function formatDate(iso: string): string {
   const parts = iso.slice(0, 10).split('-');
   if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
   return iso;
+}
+
+function formatSessionLabel(slot?: string | null): string {
+  if (!slot) return 'Chưa chọn buổi';
+  return slot.slice(0, 5) < '12:00' ? 'Buổi sáng' : 'Buổi chiều';
 }
 
 function isChildBirthDate(dateOfBirth?: string | null): boolean {
@@ -1593,7 +1597,7 @@ async function submitBookingModal() {
     }
 
     // Thông báo thành công kèm số thứ tự (nếu ca hôm nay)
-    let successMessage = `Đặt lịch thành công cho bệnh nhân ${patientName} (Mã lịch #${appointment.appointmentId} lúc ${form.value.slot}). Lịch hẹn đã được duyệt và xác nhận!`;
+    let successMessage = `Đặt lịch thành công cho bệnh nhân ${patientName} (Mã lịch #${appointment.appointmentId} · ${formatSessionLabel(form.value.slot)}). Lịch hẹn đã được duyệt và xác nhận!`;
     if (appointment.queueNumber) {
       successMessage += ` Số thứ tự tiếp đón: #${appointment.queueNumber}.`;
     }

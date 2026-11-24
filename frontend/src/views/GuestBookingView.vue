@@ -70,51 +70,54 @@
                 <div class="section-divider"></div>
                 <div class="section-heading"><div><p class="card-kicker">Thời gian phù hợp</p><h3>Chọn lịch khám</h3></div></div>
                 <div class="field-grid">
-                  <label class="field"><span>Ngày khám <span class="required" aria-hidden="true">*</span></span><input v-model="form.appointmentDate" type="date" :min="catalog.today" required @input="confirmed = false" /></label>
-                  <label class="field">
-                    <span>Giờ mong muốn <span class="required" aria-hidden="true">*</span></span>
-                    <input v-model="form.slot" type="time" step="60" required @input="confirmed = false" />
-                    <span class="field-hint">Nhập giờ trong thời gian làm việc. Mỗi ca khám dự kiến {{ catalog.durationMinutes }} phút.</span>
-                  </label>
+                  <div class="field field-wide">
+                    <label for="guest-appointment-date" class="field-label">Ngày khám <span class="required" aria-hidden="true">*</span></label>
+                    <BookingDatePicker v-model="form.appointmentDate" input-id="guest-appointment-date" :min="catalog.today" :disabled="busy || !!retryBody" required @input="onDateInput" />
+                  </div>
 
                   <div class="field field-wide slot-field-wrap">
-                    <div class="slot-picker-box">
-                      <div v-if="morningSlots.length" class="slot-subgroup">
-                        <span class="slot-subgroup-title">Giờ gợi ý buổi sáng</span>
-                        <div class="slot-chips-row">
-                          <button
-                            v-for="s in morningSlots"
-                            :key="s"
-                            type="button"
-                            class="slot-chip"
-                            :class="{ selected: form.slot === s }"
-                            :aria-pressed="form.slot === s"
-                            @click="pickTime(s)"
-                          >
-                            {{ s }}
-                          </button>
-                        </div>
-                      </div>
-                      <div v-if="afternoonSlots.length" class="slot-subgroup">
-                        <span class="slot-subgroup-title">Giờ gợi ý buổi chiều và tối</span>
-                        <div class="slot-chips-row">
-                          <button
-                            v-for="s in afternoonSlots"
-                            :key="s"
-                            type="button"
-                            class="slot-chip"
-                            :class="{ selected: form.slot === s }"
-                            :aria-pressed="form.slot === s"
-                            @click="pickTime(s)"
-                          >
-                            {{ s }}
-                          </button>
-                        </div>
-                      </div>
-                      <p v-if="!morningSlots.length && !afternoonSlots.length" class="slot-empty-hint">
-                        Hôm nay đã qua các khung giờ gợi ý. Vui lòng chọn ngày khám khác.
-                      </p>
+                    <span class="field-label">Buổi khám <span class="required" aria-hidden="true">*</span></span>
+                    <div class="session-grid" role="radiogroup" aria-label="Chọn buổi khám">
+                      <button
+                        type="button"
+                        role="radio"
+                        class="session-card"
+                        :class="{ selected: selectedSession === 'morning' }"
+                        :aria-checked="selectedSession === 'morning'"
+                        :disabled="busy || !!retryBody || !morningSlots.length"
+                        @click="pickSession('morning')"
+                      >
+                        <span class="session-icon" aria-hidden="true">🌤️</span>
+                        <span class="session-info">
+                          <strong class="session-title">Buổi sáng</strong>
+                          <span class="session-window">{{ morningRangeLabel }}</span>
+                        </span>
+                        <span v-if="selectedSession === 'morning'" class="session-check" aria-hidden="true">✓</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        role="radio"
+                        class="session-card"
+                        :class="{ selected: selectedSession === 'afternoon' }"
+                        :aria-checked="selectedSession === 'afternoon'"
+                        :disabled="busy || !!retryBody || !afternoonSlots.length"
+                        @click="pickSession('afternoon')"
+                      >
+                        <span class="session-icon" aria-hidden="true">🌇</span>
+                        <span class="session-info">
+                          <strong class="session-title">Buổi chiều</strong>
+                          <span class="session-window">{{ afternoonRangeLabel }}</span>
+                        </span>
+                        <span v-if="selectedSession === 'afternoon'" class="session-check" aria-hidden="true">✓</span>
+                      </button>
                     </div>
+                    <p v-if="!morningSlots.length && !afternoonSlots.length" class="slot-empty-hint">
+                      Hôm nay đã qua các buổi tiếp nhận. Vui lòng chọn ngày khám khác.
+                    </p>
+                    <p v-else-if="!morningSlots.length" class="slot-empty-hint">
+                      Buổi sáng hôm nay đã hết giờ nhận lịch trực tuyến; vui lòng chọn Buổi chiều hoặc ngày khác.
+                    </p>
                   </div>
 
                   <label class="field field-wide"><span>Nội dung đặt lịch <span class="optional">(không bắt buộc)</span></span><textarea v-model="form.notes" maxlength="500" rows="3" placeholder="Bạn có thể ghi chú thêm cho phòng khám" /></label>
@@ -142,7 +145,7 @@
             <p>Kiểm tra lại trước khi gửi yêu cầu.</p>
             <dl>
               <div><dt>Ngày khám</dt><dd>{{form.appointmentDate ? form.appointmentDate.split('-').reverse().join('/') : 'Chưa chọn'}}</dd></div>
-              <div><dt>Giờ khám</dt><dd>{{form.slot || 'Chưa chọn'}}</dd></div>
+              <div><dt>Buổi khám</dt><dd>{{formatSessionLabel(form.slot)}}</dd></div>
               <div v-if="isChild"><dt>Đối tượng</dt><dd><span class="child-summary-tag">👶 Trẻ em (&lt; 14 tuổi)</span></dd></div>
               <div v-if="isChild"><dt>Người giám hộ</dt><dd>{{ guardianForm.fullName.trim() ? `${guardianForm.fullName.trim()} (${guardianForm.relationship})` : guardianForm.relationship }}</dd></div>
             </dl>
@@ -165,6 +168,7 @@ import {bookingRequestsService,type BookingCatalog,type BookingIntent,type Booki
 import {isUnderFourteen} from '@/services/patientAge';
 import {capitalizeVietnameseName} from '@/utils/vietnameseName';
 import VietnameseDateOfBirthInput from '@/components/VietnameseDateOfBirthInput.vue';
+import BookingDatePicker from '@/components/BookingDatePicker.vue';
 
 const preselectedService = typeof window !== 'undefined'
   ? new URLSearchParams(window.location.search).get('service')?.trim() || ''
@@ -191,6 +195,9 @@ const visibleSlots=computed(()=>{
 });
 const morningSlots=computed(()=>visibleSlots.value.filter(s=>s<'12:00'));
 const afternoonSlots=computed(()=>visibleSlots.value.filter(s=>s>='12:00'));
+const selectedSession=computed<'morning'|'afternoon'|''>(()=>!form.slot?'':form.slot.slice(0,5)<'12:00'?'morning':'afternoon');
+const morningRangeLabel=computed(()=>{const first=(catalog.value?.slots||[]).find(s=>s<'12:00');return first?`Từ ${first} – 12:00`:'08:00 – 12:00';});
+const afternoonRangeLabel=computed(()=>{const first=(catalog.value?.slots||[]).find(s=>s>='12:00');return first?`Từ ${first} – 20:00`:'13:30 – 20:00';});
 const busy=ref(false),confirmed=ref(false),error=ref(''),receipt=ref<BookingReceipt|null>(null),retryBody=ref<BookingSubmission|null>(null),lastSubmittedIsChild=ref(false);let snapshot:BookingIntent|null=null,generation=0,disposed=false;
 const identity=()=>`${auth.user?.userId}/${auth.role}`;
 function alive(ticket:number,owner:string){return !disposed&&ticket===generation&&owner===identity();}
@@ -198,9 +205,24 @@ function onGuestNameInput(){if(patientId.value===0)form.fullName=capitalizeVietn
 function onGuestNameBlur(){if(patientId.value===0)form.fullName=capitalizeVietnameseName(form.fullName,true);}
 function onGuardianNameInput(){guardianForm.fullName=capitalizeVietnameseName(guardianForm.fullName,false);}
 function onGuardianNameBlur(){guardianForm.fullName=capitalizeVietnameseName(guardianForm.fullName,true);}
-function pickTime(time: string) {
-  form.slot = time;
+function formatSessionLabel(slot?: string | null): string {
+  if (!slot) return 'Chưa chọn';
+  return slot.slice(0, 5) < '12:00' ? 'Buổi sáng' : 'Buổi chiều';
+}
+function pickSession(session: 'morning' | 'afternoon') {
+  const list = session === 'morning' ? morningSlots.value : afternoonSlots.value;
+  if (!list.length) return;
+  form.slot = list[0];
   confirmed.value = false;
+}
+function onDateInput() {
+  confirmed.value = false;
+  if (!form.slot) return;
+  const now = vietnamNow();
+  if (form.appointmentDate === now.date && form.slot <= now.time) {
+    const list = selectedSession.value === 'morning' ? morningSlots.value : afternoonSlots.value;
+    form.slot = list[0] ?? '';
+  }
 }
 function clear(){catalog.value=null;patient.value=null;patientId.value=0;Object.assign(form,{fullName:'',phone:'',dateOfBirth:'',gender:'',email:'',appointmentDate:'',slot:'',notes:''});guardianForm.fullName='';guardianForm.relationship='Bố/Mẹ';lastSubmittedIsChild.value=false;snapshot=null;retryBody.value=null;receipt.value=null;confirmed.value=false;error.value='';profilesError.value='';}
 async function readCatalog() {
@@ -284,13 +306,18 @@ watch(identity,()=>{generation++;busy.value=false;clear();if(!disposed)void load
 .booking-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(250px,320px);align-items:start;gap:24px}.form-card,.summary-card{background:#fff;border:1px solid #e0ebf4;border-radius:16px;box-shadow:0 4px 18px rgba(16,46,86,.05);min-width:0}.card-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:22px 26px;border-bottom:1px solid #edf2f7}.card-heading h2,.summary-card h2,.info-card h2{font-size:1.08rem;line-height:1.35;margin:0}.step-label{flex-shrink:0;border-radius:999px;background:#edf6fc;color:#1857b6;font-size:.75rem;font-weight:700;padding:6px 10px}.card-body{padding:24px 26px 28px}fieldset{min-width:0;margin:0;padding:0;border:0}fieldset:disabled{opacity:.72}.field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 20px}.field{display:flex;flex-direction:column;gap:8px;min-width:0;font-size:.9rem;font-weight:650;color:#18354c}.field-wide{grid-column:1/-1}.required{color:#b42318}.optional,.field-hint{font-weight:400;color:#536a7e}.field-hint{font-size:.78rem;line-height:1.4;margin-top:5px;color:#4a6378}
 .slot-field-wrap{display:flex;flex-direction:column;gap:8px}
 .field-label{font-size:.9rem;font-weight:650;color:#18354c}
-.slot-picker-box{background:#f8fbff;border:1px solid #d4e4f2;border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:14px}
-.slot-subgroup{display:flex;flex-direction:column;gap:8px}
-.slot-subgroup-title{font-size:.78rem;font-weight:750;color:#244b70;text-transform:uppercase;letter-spacing:.04em}
-.slot-chips-row{display:flex;flex-wrap:wrap;gap:8px}
-.slot-chip{padding:8px 14px;font-size:.88rem;font-weight:700;font-family:inherit;color:#18354c;background:#ffffff;border:1.5px solid #c8d9e7;border-radius:8px;cursor:pointer;transition:all .15s ease}
-.slot-chip:hover{border-color:#1857b6;background:#eff6ff;color:#1857b6}
-.slot-chip.selected{background:#1857b6;border-color:#1857b6;color:#ffffff;box-shadow:0 4px 10px rgba(24,87,182,.25);transform:translateY(-1px)}
+.session-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.session-card{display:flex;align-items:center;gap:12px;min-height:64px;padding:12px 14px;border:1.5px solid #c8d9e7;border-radius:12px;background:#f8fbff;color:#18354c;font:inherit;text-align:left;cursor:pointer;transition:all .15s ease}
+.session-card:hover:not(:disabled){border-color:#1857b6;background:#eff6ff;transform:translateY(-1px)}
+.session-card.selected{background:#1857b6;border-color:#1857b6;color:#fff;box-shadow:0 4px 12px rgba(24,87,182,.24)}
+.session-card:disabled{opacity:.48;cursor:not-allowed;background:#f1f5f9}
+.session-icon{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:10px;background:#fff;font-size:1.25rem;flex-shrink:0}
+.session-card.selected .session-icon{background:rgba(255,255,255,.18)}
+.session-info{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.session-title{font-size:.96rem;font-weight:800}
+.session-window{font-size:.78rem;font-weight:600;opacity:.85}
+.session-check{font-size:1rem;font-weight:900;flex-shrink:0}
+@media(max-width:520px){.session-grid{grid-template-columns:minmax(0,1fr)}}
 .field input,.field select,.field textarea{box-sizing:border-box;display:block;width:100%;min-width:0;min-height:46px;border:1px solid #c8d9e7;border-radius:9px;padding:10px 12px;background:#fff;color:#18354c;font:inherit;font-size:1rem}.field textarea{resize:vertical;line-height:1.5}.field input[readonly]{background:#f4f7fa;color:#445d72}.field input::placeholder,.field textarea::placeholder{color:#687e90}.section-divider{height:1px;background:#e9eff5;margin:26px 0}.section-heading{margin-bottom:18px}.section-heading h3{font-size:1rem;margin:0}.patient-notice,.loading-message{padding:12px 14px;background:#eef7fd;border-radius:9px;line-height:1.5;color:#214e72}.patient-notice{margin:0 0 20px;overflow-wrap:anywhere}.portal-inline-link{color:#1857b6;font-weight:700;text-decoration:underline}
 .receipt-child-note{margin:10px 0 12px;padding:10px 12px;border-radius:8px;background:#eef7ff;border:1px solid #bfdbfe;color:#1e40af;font-size:.88rem;line-height:1.5}
 .form-footer{border-top:1px solid #e9eff5;margin-top:26px;padding-top:22px}.consent{display:flex;align-items:flex-start;gap:10px;font-size:.9rem;line-height:1.5;color:#29465d}.consent input{width:18px;height:18px;margin:2px 0 0;flex:none;accent-color:#1857b6}.primary-button,.secondary-button{min-height:48px;border:0;border-radius:9px;padding:11px 20px;font:inherit;font-weight:750;cursor:pointer}.primary-button{margin-top:18px;background:var(--hg-primary,#1857b6);color:#fff}.secondary-button{background:#eaf3fb;color:#1857b6}.primary-button:hover:not(:disabled){background:#144c9e}.primary-button:disabled,.secondary-button:disabled{opacity:.55;cursor:not-allowed}.alert-message{color:#9b1c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:9px;padding:12px 14px;line-height:1.5}.status-message:empty{display:none}.status-visible{color:#145c38;background:#e9f8ef;border:1px solid #b8e7c9;border-radius:9px;padding:12px 14px;line-height:1.5}.receipt-card{padding-top:4px}.receipt-label{font-size:.85rem;color:#536a7e;margin-bottom:4px}.receipt-code{font-weight:700;overflow-wrap:anywhere;color:#102e56}

@@ -170,6 +170,8 @@ Lần chạy đầu cần Internet để Git clone, tải NuGet package và npm 
 
 Luồng demo chính: khách đặt lịch công khai hoặc PATIENT đặt lịch trong portal → Lễ tân đối soát và xác nhận tiếp đón tại quầy → hàng đợi chung → Nha sĩ chọn phòng, xem cảnh báo an toàn, khám và cập nhật FDI → kê đơn/kết thúc khám → thu ngân xử lý hóa đơn. Sau đăng nhập, Nha sĩ chọn phòng và Phụ tá chọn nha sĩ hỗ trợ hoặc xác nhận làm việc độc lập. Đặt lịch công khai không tạo lượt chờ; gọi số không tự bắt đầu khám. Với trẻ dưới 14 tuổi không nhập CCCD trẻ; liên kết người giám hộ chỉ sau khi nhân viên xác minh trực tiếp. Menu không thay thế phân quyền backend.
 
+Khi đặt hoặc đổi lịch, chọn ngày khám và **Buổi sáng** hoặc **Buổi chiều**. Giao diện chọn mốc giờ từ lịch cấu hình (DL-378). Máy chủ kiểm tra thời lượng, trùng lịch và công suất trước khi ghi.
+
 ### Bước 4: Mở trình duyệt và trải nghiệm
 - **Giao diện ứng dụng (Frontend):** `http://localhost:5173`
 - **Tài liệu API (Swagger UI):** `http://localhost:5000/swagger`

@@ -88,8 +88,8 @@
           </div>
 
           <div class="form-group">
-            <label for="slot">Giờ mong muốn <span class="required">*</span></label>
-            <BookingTimeInput input-id="slot" v-model="slot" :slots="slots" :disabled="busy || scheduleLoading" @update:model-value="bookingDetailsChanged" />
+            <label for="slot">Buổi khám <span class="required">*</span></label>
+            <BookingTimeInput input-id="slot" v-model="slot" :slots="slots" :selected-date="day" :disabled="busy || scheduleLoading" @update:model-value="bookingDetailsChanged" />
           </div>
         </div>
 
@@ -105,13 +105,13 @@
             aria-describedby="booking-note-hint"
           ></textarea>
           <p id="booking-note-hint" class="hint-text">
-            ℹ️ Ghi chú thông tin tình trạng để nhân viên tiếp đón đối chiếu; lịch hẹn vẫn áp dụng khung giờ đã chọn.
+            ℹ️ Ghi chú thông tin tình trạng để nhân viên tiếp đón đối chiếu; lịch hẹn vẫn áp dụng buổi khám đã chọn.
           </p>
         </div>
 
         <label class="confirm-checkbox">
           <input v-model="confirmed" type="checkbox" :disabled="busy" />
-          <span>Tôi đã kiểm tra kỹ thông tin hồ sơ bệnh nhân, ngày khám và khung giờ trước khi xác nhận.</span>
+          <span>Tôi đã kiểm tra kỹ thông tin hồ sơ bệnh nhân, ngày khám và buổi khám trước khi xác nhận.</span>
         </label>
 
         <button class="btn btn-primary btn-submit" :disabled="busy || searching || !confirmed">
@@ -122,7 +122,7 @@
 
     <div v-if="error" class="alert-box alert-error" role="alert">⚠️ {{ error }}</div>
     <div v-if="success" class="alert-box alert-success" role="status">
-      ✅ Đã đặt lịch thành công <strong>#{{ success.appointmentId }}</strong> cho bệnh nhân <strong>{{ success.patientName }}</strong> vào ngày {{ success.appointmentDate }} lúc {{ success.slotTime.slice(0, 5) }}.
+      ✅ Đã đặt lịch thành công <strong>#{{ success.appointmentId }}</strong> cho bệnh nhân <strong>{{ success.patientName }}</strong> vào ngày {{ success.appointmentDate }} ({{ formatSessionLabel(success.slotTime) }}).
       <span v-if="success.queueNumber"> Đã tự động tạo số chờ tiếp đón hôm nay: <strong>#{{ success.queueNumber }}</strong>.</span>
     </div>
     <CounterPatientPhoneRequest v-if="success" :key="success.appointmentId" :appointment-id="success.appointmentId" />
@@ -153,6 +153,10 @@ const day = ref(''), slot = ref(''), notes = ref(''), confirmed = ref(false);
 const searching = ref(false), searched = ref(false), busy = ref(false), error = ref(''), success = ref<AppointmentResponse | null>(null);
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const { slots, revision: scheduleRevision, duration: slotDurationMinutes, loading: scheduleLoading, error: scheduleError, load: loadSchedule } = useBookingSchedule();
+function formatSessionLabel(value?: string | null): string {
+  if (!value) return 'Chưa chọn buổi';
+  return value.slice(0, 5) < '12:00' ? 'Buổi sáng' : 'Buổi chiều';
+}
 watch(scheduleRevision, bookingDetailsChanged);
 let version = 0;
 async function search() {
@@ -261,7 +265,7 @@ onUnmounted(() => { version++; patients.value = []; selected.value = null; notes
 .patient-sub { font-size: 0.8rem; color: #64748b; margin-top: 0.25rem; }
 
 .booking-form { display: flex; flex-direction: column; gap: 1.25rem; }
-.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+.form-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
 .select-with-btn { display: flex; gap: 0.5rem; align-items: center; }
 .select-with-btn select { flex: 1; }
 select, input[type="date"] { height: 44px; padding: 0.5rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; background: #fff; box-sizing: border-box; }

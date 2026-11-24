@@ -21,7 +21,7 @@
             <span class="panel-icon">📅</span>
             <div>
               <h2 class="panel-title">Thông tin lịch hẹn</h2>
-              <p class="panel-subtitle">Điền thông tin và lựa chọn khung giờ phù hợp</p>
+              <p class="panel-subtitle">Điền thông tin và lựa chọn buổi khám phù hợp</p>
             </div>
           </div>
           <span class="step-badge">Trực tuyến</span>
@@ -37,7 +37,7 @@
             <span class="alert-icon">✅</span>
             <div>
               <strong>Đặt lịch thành công!</strong>
-              <p>Đã ghi nhận lịch hẹn cho <strong>{{ success.patientName }}</strong> vào <strong>{{ formatDate(success.appointmentDate) }}</strong> lúc <strong>{{ success.slotTime.slice(0, 5) }}</strong>.</p>
+              <p>Đã ghi nhận lịch hẹn cho <strong>{{ success.patientName }}</strong> vào <strong>{{ formatDate(success.appointmentDate) }}</strong> · <strong>{{ formatSessionLabel(success.slotTime) }}</strong>.</p>
             </div>
           </div>
 
@@ -75,21 +75,18 @@
               <span>Chưa tìm thấy hồ sơ cá nhân. Liên hệ Lễ tân tại phòng khám để đối soát thông tin.</span>
             </div>
 
-            <div class="fields-row">
-              <div class="form-group">
-                <label for="date" class="form-label">
-                  <span>Ngày khám <b class="req">*</b></span>
-                </label>
-                <input id="date" v-model="appointmentDate" type="date" :min="today" :disabled="submitting" required class="form-input" />
-              </div>
+            <div class="form-group">
+              <label for="date" class="form-label">
+                <span>Ngày khám <b class="req">*</b></span>
+              </label>
+              <BookingDatePicker v-model="appointmentDate" input-id="date" :min="today" :disabled="submitting" required />
+            </div>
 
-              <div class="form-group">
-                <label for="slot" class="form-label">
-                  <span>Giờ mong muốn <b class="req">*</b></span>
-                  <small v-if="slotDurationMinutes" class="label-hint">({{ slotDurationMinutes }} phút/ca)</small>
-                </label>
-                <BookingTimeInput input-id="slot" v-model="slotTime" :slots="slots" :selected-date="appointmentDate" hide-past-slots :disabled="submitting || scheduleLoading" />
-              </div>
+            <div class="form-group">
+              <label for="slot" class="form-label">
+                <span>Buổi khám <b class="req">*</b></span>
+              </label>
+              <BookingTimeInput input-id="slot" v-model="slotTime" :slots="slots" :selected-date="appointmentDate" hide-past-slots :disabled="submitting || scheduleLoading" />
             </div>
 
             <div v-if="scheduleError" class="schedule-error-wrap" role="alert">
@@ -140,8 +137,8 @@
               <span class="item-val">{{ appointmentDate ? formatDate(appointmentDate) : 'Chưa chọn ngày' }}</span>
             </div>
             <div class="summary-item">
-              <span class="item-label">Giờ khám</span>
-              <span class="item-val highlight">{{ slotTime || 'Chưa chọn giờ' }}</span>
+              <span class="item-label">Buổi khám</span>
+              <span class="item-val highlight">{{ formatSessionLabel(slotTime) }}</span>
             </div>
           </div>
         </div>
@@ -174,6 +171,7 @@ import { patientGuardiansService, type WardSummary } from '@/services/patientGua
 import { useBookingSchedule } from '@/composables/useBookingSchedule';
 import { isUnderFourteen } from '@/services/patientAge';
 import BookingTimeInput from '@/components/BookingTimeInput.vue';
+import BookingDatePicker from '@/components/BookingDatePicker.vue';
 
 const patient = ref<PatientSummary | null>(null);
 const wards = ref<WardSummary[]>([]);
@@ -228,7 +226,7 @@ function formatGender(gender: string | null): string {
   return 'Chưa cập nhật';
 }
 
-const { slots, revision: scheduleRevision, duration: slotDurationMinutes, loading: scheduleLoading, error: scheduleError, load: loadSchedule } = useBookingSchedule();
+const { slots, revision: scheduleRevision, loading: scheduleLoading, error: scheduleError, load: loadSchedule } = useBookingSchedule();
 
 onMounted(async () => {
   const ticket = version;
@@ -298,6 +296,11 @@ onUnmounted(() => { version++; patient.value = null; wards.value = []; notes.val
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat('vi-VN').format(new Date(`${value}T00:00:00`));
+}
+
+function formatSessionLabel(slot?: string | null): string {
+  if (!slot) return 'Chưa chọn buổi';
+  return slot.slice(0, 5) < '12:00' ? 'Buổi sáng' : 'Buổi chiều';
 }
 </script>
 
