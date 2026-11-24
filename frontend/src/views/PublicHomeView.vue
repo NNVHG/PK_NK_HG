@@ -665,9 +665,25 @@
             </div>
           </div>
           <div class="bento-8 faq-grid">
-            <article v-for="faq in faqs" :key="faq.q" class="faq-card">
-              <h3>{{ faq.q }}</h3>
-              <p>{{ faq.a }}</p>
+            <article
+              v-for="(faq, idx) in faqs"
+              :key="faq.q"
+              class="faq-card"
+              :class="{ 'is-open': openFaqIndex === idx }"
+            >
+              <button
+                type="button"
+                class="faq-trigger"
+                :aria-expanded="openFaqIndex === idx"
+                :aria-controls="'faq-ans-' + idx"
+                @click="toggleFaq(idx)"
+              >
+                <h3>{{ faq.q }}</h3>
+                <span class="faq-chevron" aria-hidden="true">{{ openFaqIndex === idx ? '−' : '+' }}</span>
+              </button>
+              <div v-show="openFaqIndex === idx" :id="'faq-ans-' + idx" class="faq-answer">
+                <p>{{ faq.a }}</p>
+              </div>
             </article>
           </div>
         </div>
@@ -1074,6 +1090,11 @@ const faqs = [
     a: 'Bạn có thể quét mã QR in trên phiếu đơn thuốc để tra cứu nhanh hoặc đăng nhập vào Cổng bệnh nhân để xem đầy đủ Sơ đồ răng FDI, hình ảnh X-quang và đơn thuốc của từng lần khám.'
   }
 ];
+
+const openFaqIndex = ref<number | null>(null);
+function toggleFaq(idx: number) {
+  openFaqIndex.value = openFaqIndex.value === idx ? null : idx;
+}
 </script>
 
 <style scoped>
@@ -1745,10 +1766,41 @@ h1 span { color: #397bcc; }
 .faq-help-box { background: #eff8ff; border: 1px solid #cde2f5; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 4px; }
 .faq-help-box strong { color: #102e56; font-size: .94rem; }
 .faq-help-box p { margin: 0; color: #4a6479; font-size: .82rem; line-height: 1.55; }
-.faq-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.faq-card { background: #f8fbff; border: 1px solid #e4eef6; border-radius: 16px; padding: 18px 20px; }
-.faq-card h3 { margin: 0 0 8px; font-size: .94rem; color: #102e56; line-height: 1.4; }
-.faq-card p { margin: 0; font-size: .83rem; color: #526c80; line-height: 1.58; }
+.faq-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.faq-card { background: #f8fbff; border: 1px solid #e4eef6; border-radius: 16px; transition: border-color .16s ease, box-shadow .16s ease; }
+.faq-card.is-open { border-color: #93c5fd; background: #ffffff; box-shadow: 0 8px 20px rgba(16, 46, 86, 0.06); }
+.faq-trigger {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.faq-trigger h3 { margin: 0; font-size: .94rem; color: #102e56; line-height: 1.4; }
+.faq-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #e6f1fc;
+  color: #1857b6;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1;
+}
+.faq-card.is-open .faq-chevron { background: #1857b6; color: #ffffff; }
+.faq-answer { padding: 0 20px 18px; }
+.faq-answer p { margin: 0; font-size: .83rem; color: #526c80; line-height: 1.58; }
 
 /* 9. CTA Banner */
 .cta-banner { padding: 24px 0 52px; }
@@ -1782,8 +1834,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid #c3881d; outline-offs
   .fdi-showcase-grid, .footer-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
-@media (max-width: 820px) {
-  .container { padding: 0 14px; }
+@media (max-width: 1040px) {
   .topbar-inner { min-height: 60px; padding: 8px 14px; gap: 8px; }
   .brand img { width: 128px; }
   .nav-center, .nav-actions { display: none; }
@@ -1822,6 +1873,10 @@ a:focus-visible, button:focus-visible { outline: 3px solid #c3881d; outline-offs
     min-height: 40px;
     padding: 8px 10px;
   }
+}
+
+@media (max-width: 820px) {
+  .container { padding: 0 14px; }
   .hero-inner { grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 24px 14px 48px; }
   .hero-actions .button { width: 100%; }
   .hero-metrics-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }

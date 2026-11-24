@@ -136,7 +136,7 @@
         </button>
       </div>
 
-      <div class="bdp-weekdays" aria-hidden="true">
+      <div class="bdp-weekdays">
         <span v-for="wd in CALENDAR_WEEKDAYS" :key="wd" class="bdp-weekday" :class="{ sun: wd === 'CN' }">{{ wd }}</span>
       </div>
 
@@ -659,7 +659,7 @@ onUnmounted(() => {
 
 .bdp-quick-strip {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(74px, 1fr));
   gap: 0.4rem;
 }
 
@@ -669,8 +669,10 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   gap: 0.15rem;
+  min-width: 0;
   min-height: 52px;
-  padding: 0.4rem 0.25rem;
+  padding: 0.4rem 0.2rem;
+  overflow: visible;
   border: 1.5px solid #dbe6f0;
   border-radius: 10px;
   background: #f8fbff;
@@ -680,7 +682,7 @@ onUnmounted(() => {
   transition: all 0.15s ease;
 }
 
-.bdp-quick-chip:hover:not(:disabled) {
+.bdp-quick-chip:hover:not(:disabled):not(.selected) {
   border-color: #1857b6;
   background: #eff6ff;
   color: #1857b6;
@@ -695,7 +697,8 @@ onUnmounted(() => {
   border-color: #93c5fd;
 }
 
-.bdp-quick-chip.selected {
+.bdp-quick-chip.selected,
+.bdp-quick-chip.selected:hover:not(:disabled) {
   background: #1857b6;
   border-color: #1857b6;
   color: #ffffff;

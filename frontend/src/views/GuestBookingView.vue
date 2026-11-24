@@ -308,8 +308,8 @@ watch(identity,()=>{generation++;busy.value=false;clear();if(!disposed)void load
 .field-label{font-size:.9rem;font-weight:650;color:#18354c}
 .session-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .session-card{display:flex;align-items:center;gap:12px;min-height:64px;padding:12px 14px;border:1.5px solid #c8d9e7;border-radius:12px;background:#f8fbff;color:#18354c;font:inherit;text-align:left;cursor:pointer;transition:all .15s ease}
-.session-card:hover:not(:disabled){border-color:#1857b6;background:#eff6ff;transform:translateY(-1px)}
-.session-card.selected{background:#1857b6;border-color:#1857b6;color:#fff;box-shadow:0 4px 12px rgba(24,87,182,.24)}
+.session-card:hover:not(:disabled):not(.selected){border-color:#1857b6;background:#eff6ff;transform:translateY(-1px)}
+.session-card.selected,.session-card.selected:hover:not(:disabled){background:#1857b6;border-color:#1857b6;color:#fff;box-shadow:0 4px 12px rgba(24,87,182,.24)}
 .session-card:disabled{opacity:.48;cursor:not-allowed;background:#f1f5f9}
 .session-icon{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:10px;background:#fff;font-size:1.25rem;flex-shrink:0}
 .session-card.selected .session-icon{background:rgba(255,255,255,.18)}

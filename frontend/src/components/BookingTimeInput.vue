@@ -178,13 +178,14 @@ watch(
   transition: all 0.16s ease;
 }
 
-.session-card:hover:not(:disabled) {
+.session-card:hover:not(:disabled):not(.selected) {
   border-color: #1857b6;
   background: #eff6ff;
   transform: translateY(-1px);
 }
 
-.session-card.selected {
+.session-card.selected,
+.session-card.selected:hover:not(:disabled) {
   background: #1857b6;
   border-color: #1857b6;
   color: #ffffff;
