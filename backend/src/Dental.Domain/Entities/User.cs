@@ -42,8 +42,20 @@ public class User : BaseEntity
     /// <summary>false = tài khoản bị khóa, không cho đăng nhập</summary>
     public bool IsActive { get; set; } = true;
 
+    // Workspace trong ngày (gộp từ StaffWorkspaces)
+    public int? WorkspaceRoomId { get; set; }
+    public int? WorkspaceDentistId { get; set; }
+    public DateOnly? WorkspaceDate { get; set; }
+    public int WorkspaceVersion { get; set; }
+    public int? WorkspaceUpdatedByUserId { get; set; }
+    public DateTime? WorkspaceUpdatedAt { get; set; }
+
+    // Đề xuất đổi SĐT tại quầy đang chờ xác nhận (JSONB, gộp từ PatientPhoneChangeRequests)
+    public string? PendingPhoneChangeJson { get; set; }
+
     // Navigation
     public Role Role { get; set; } = null!;
     public Patient? Patient { get; set; }
+    public ClinicRoom? WorkspaceRoom { get; set; }
     public ICollection<AuditLog> AuditLogs { get; set; } = [];
 }

@@ -159,16 +159,15 @@ public sealed class StaffWorkspaceService(IStaffWorkspaceRepository workspaces, 
                 var oldRoom = workspace?.RoomId;
                 var oldWorkDate = workspace?.WorkDate;
                 var previousDentist = workspace?.DentistId;
-                if (workspace is null)
-                {
-                    workspace = new StaffWorkspace { UserId = targetId, CreatedAt = clock.UtcNow };
-                    await workspaces.AddAsync(workspace, transactionCt);
-                }
-                else workspace.Version++;
+                var expectedVersion = workspace?.Version ?? 0;
+                var isNew = workspace is null;
+                workspace ??= new StaffWorkspace { UserId = targetId, Version = 0, CreatedAt = clock.UtcNow };
+                workspace.Version++;
                 workspace.RoomId = selectedRoom?.Id;
                 workspace.WorkDate = workDate;
                 workspace.DentistId = request.DentistId;
                 workspace.UpdatedAt = clock.UtcNow; workspace.UpdatedByUserId = actorId;
+                await workspaces.UpsertAsync(workspace, isNew ? 0 : expectedVersion, transactionCt);
                 var releasedAssistants = oldRoom.HasValue && !request.ChairId.HasValue
                     ? await ReleaseAssistantLinksAsync(targetId, actorId, transactionCt)
                     : 0;
@@ -191,11 +190,13 @@ public sealed class StaffWorkspaceService(IStaffWorkspaceRepository workspaces, 
         var assistants = await workspaces.GetAssistantLinksForUpdateAsync(dentistId, ct);
         foreach (var assistant in assistants)
         {
+            var expectedVersion = assistant.Version;
             assistant.DentistId = null;
             assistant.WorkDate = null;
             assistant.Version++;
             assistant.UpdatedAt = clock.UtcNow;
             assistant.UpdatedByUserId = actorId;
+            await workspaces.UpsertAsync(assistant, expectedVersion, ct);
         }
         return assistants.Count;
     }

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Dental.Domain.Constants;
 using Dental.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -12,8 +13,9 @@ public static partial class ClinicalDemoDataSeeder
         DateOnly today, DateTime now, CancellationToken ct)
     {
         // 1. Tiền sử dị ứng & Sinh hiệu (MOD_PAT)
-        db.MedicalHistoryRecords.AddRange(
-            new MedicalHistoryRecord
+        var historyRecords = new MedicalHistoryRecord[]
+        {
+            new()
             {
                 PatientId = p1.PatientId, VisitId = v1.VisitId, RecordedByUserId = assistant1.UserId, CreatedAt = now.Date.AddHours(8).AddMinutes(30),
                 Items =
@@ -22,7 +24,7 @@ public static partial class ClinicalDemoDataSeeder
                     new MedicalHistoryItem { Type = MedicalHistoryTypes.Condition, Name = "Tăng huyết áp", IsCritical = false, Detail = "Huyết áp vô căn độ 1, đang uống thuốc duy trì Amlodipine" }
                 ]
             },
-            new MedicalHistoryRecord
+            new()
             {
                 PatientId = p2.PatientId, VisitId = v2.VisitId, RecordedByUserId = assistant1.UserId, CreatedAt = now.Date.AddHours(9).AddMinutes(22),
                 Items =
@@ -30,7 +32,7 @@ public static partial class ClinicalDemoDataSeeder
                     new MedicalHistoryItem { Type = MedicalHistoryTypes.Allergy, Name = "Aspirin", IsCritical = true, Detail = "Co thắt phế quản, khó thở" }
                 ]
             },
-            new MedicalHistoryRecord
+            new()
             {
                 PatientId = p4.PatientId, VisitId = v3.VisitId, RecordedByUserId = assistant1.UserId, CreatedAt = now.Date.AddDays(-2).AddHours(10),
                 Items =
@@ -38,7 +40,9 @@ public static partial class ClinicalDemoDataSeeder
                     new MedicalHistoryItem { Type = MedicalHistoryTypes.Condition, Name = "Tiểu đường type 2", IsCritical = true, Detail = "Đang dùng Metformin, cần theo dõi đường huyết trước tiểu phẫu" }
                 ]
             }
-        );
+        };
+        foreach (var h in historyRecords) h.SyncItemsJson();
+        db.MedicalHistoryRecords.AddRange(historyRecords);
 
         db.VitalSignRecords.AddRange(
             new VitalSignRecord
@@ -71,24 +75,28 @@ public static partial class ClinicalDemoDataSeeder
         await db.SaveChangesAsync(ct);
 
         // Ghi chú hậu điều trị (MOD_PAT / F_PAT_08)
-        db.PostTreatmentNotes.Add(new PostTreatmentNote
+        v1.PostTreatmentNotesJson = JsonSerializer.Serialize(new[]
         {
-            VisitId = v1.VisitId,
-            CreatedByUserId = dentist1.UserId,
-            Note = "Bệnh nhân dung nạp thủ thuật tốt, đã hướng dẫn vệ sinh kẽ răng và hẹn tái kiểm tra sau 6 tháng.",
-            CreatedAt = now.Date.AddHours(9).AddMinutes(25),
-            RequestId = Guid.NewGuid(),
+            new PostTreatmentNote
+            {
+                Id = 1,
+                VisitId = v1.VisitId,
+                CreatedByUserId = dentist1.UserId,
+                Note = "Bệnh nhân dung nạp thủ thuật tốt, đã hướng dẫn vệ sinh kẽ răng và hẹn tái kiểm tra sau 6 tháng.",
+                CreatedAt = now.Date.AddHours(9).AddMinutes(25),
+                RequestId = Guid.NewGuid(),
+            }
         });
         await db.SaveChangesAsync(ct);
 
         // 3. Chỉ định dịch vụ theo răng (MOD_FDI)
-        var services = await db.DentalServices.Include(s => s.Prices).ToDictionaryAsync(s => s.Code, s => s, ct);
+        var services = await db.DentalServices.ToDictionaryAsync(s => s.Code, s => s, ct);
         var dv003 = services["DV003"];
         var dv002 = services["DV002"];
         var dv005 = services.GetValueOrDefault("DV005") ?? dv003;
-        var p003 = dv003.Prices.OrderByDescending(p => p.EffectiveFrom).First();
-        var p002 = dv002.Prices.OrderByDescending(p => p.EffectiveFrom).First();
-        var p005 = dv005.Prices.OrderByDescending(p => p.EffectiveFrom).First();
+        var p003 = dv003.GetPriceHistory().OrderByDescending(p => p.EffectiveFrom).First();
+        var p002 = dv002.GetPriceHistory().OrderByDescending(p => p.EffectiveFrom).First();
+        var p005 = dv005.GetPriceHistory().OrderByDescending(p => p.EffectiveFrom).First();
 
         var vs1 = new VisitService { VisitId = v1.VisitId, ServiceId = dv003.DentalServiceId, ServicePriceId = p003.ServicePriceId, ServiceCode = dv003.Code, ServiceName = dv003.Name, ToothNumber = 36, Surface = "O", Quantity = 1, UnitPrice = p003.Amount, CreatedByUserId = dentist1.UserId, CreatedAt = now.Date.AddHours(8).AddMinutes(45) };
         var vs2 = new VisitService { VisitId = v1.VisitId, ServiceId = dv002.DentalServiceId, ServicePriceId = p002.ServicePriceId, ServiceCode = dv002.Code, ServiceName = dv002.Name, Quantity = 1, UnitPrice = p002.Amount, CreatedByUserId = dentist1.UserId, CreatedAt = now.Date.AddHours(8).AddMinutes(50) };

@@ -72,7 +72,10 @@
                 <div class="field-grid">
                   <div class="field field-wide">
                     <label for="guest-appointment-date" class="field-label">Ngày khám <span class="required" aria-hidden="true">*</span></label>
-                    <BookingDatePicker v-model="form.appointmentDate" input-id="guest-appointment-date" :min="catalog.today" :disabled="busy || !!retryBody" required @input="onDateInput" />
+                    <BookingDatePicker v-model="form.appointmentDate" input-id="guest-appointment-date" :min="minBookingDate" :today="catalog.today" :disabled="busy || !!retryBody" required @input="onDateInput" />
+                    <p v-if="isAfterHoursToday" class="after-hours-notice" role="status">
+                      🌙 {{ AFTER_HOURS_BOOKING_NOTICE }}
+                    </p>
                   </div>
 
                   <div class="field field-wide slot-field-wrap">
@@ -113,7 +116,7 @@
                       </button>
                     </div>
                     <p v-if="!morningSlots.length && !afternoonSlots.length" class="slot-empty-hint">
-                      Hôm nay đã qua các buổi tiếp nhận. Vui lòng chọn ngày khám khác.
+                      {{ AFTER_HOURS_BOOKING_NOTICE }}
                     </p>
                     <p v-else-if="!morningSlots.length" class="slot-empty-hint">
                       Buổi sáng hôm nay đã hết giờ nhận lịch trực tuyến; vui lòng chọn Buổi chiều hoặc ngày khác.
@@ -167,6 +170,7 @@ import {patientsService,type PatientSummary} from '@/services/patients';
 import {bookingRequestsService,type BookingCatalog,type BookingIntent,type BookingSubmission,type BookingReceipt} from '@/services/bookingRequests';
 import {isUnderFourteen} from '@/services/patientAge';
 import {capitalizeVietnameseName} from '@/utils/vietnameseName';
+import {AFTER_HOURS_BOOKING_NOTICE,getVietnamNow,resolveBookingDateWindow} from '@/utils/bookingWindow';
 import VietnameseDateOfBirthInput from '@/components/VietnameseDateOfBirthInput.vue';
 import BookingDatePicker from '@/components/BookingDatePicker.vue';
 
@@ -178,19 +182,14 @@ const auth=useAuthStore(),catalog=ref<BookingCatalog|null>(null),patient=ref<Pat
 const form=reactive({fullName:'',phone:'',dateOfBirth:'',gender:'',email:'',appointmentDate:'',slot:'',notes:''});
 const guardianForm=reactive({fullName:'',relationship:'Bố/Mẹ'});
 const isChild=computed(()=>!!form.dateOfBirth&&isUnderFourteen(form.dateOfBirth,catalog.value?.today));
-function vietnamNow(): { date: string; time: string } {
-  const now = new Date();
-  const date = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit'
-  }).format(now);
-  const time = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
-  }).format(now);
-  return { date, time };
-}
+const nowTick=ref(0);
+const currentVietnamNow=computed(()=>{void nowTick.value;return getVietnamNow();});
+const bookingWindow=computed(()=>resolveBookingDateWindow(catalog.value?.today??'',catalog.value?.slots??[],currentVietnamNow.value));
+const minBookingDate=computed(()=>bookingWindow.value.minDate);
+const isAfterHoursToday=computed(()=>bookingWindow.value.isAfterHours);
 const visibleSlots=computed(()=>{
   const all = catalog.value?.slots || [];
-  const now = vietnamNow();
+  const now = currentVietnamNow.value;
   return form.appointmentDate === now.date ? all.filter(s => s > now.time) : all;
 });
 const morningSlots=computed(()=>visibleSlots.value.filter(s=>s<'12:00'));
@@ -199,6 +198,7 @@ const selectedSession=computed<'morning'|'afternoon'|''>(()=>!form.slot?'':form.
 const morningRangeLabel=computed(()=>{const first=(catalog.value?.slots||[]).find(s=>s<'12:00');return first?`Từ ${first} – 12:00`:'08:00 – 12:00';});
 const afternoonRangeLabel=computed(()=>{const first=(catalog.value?.slots||[]).find(s=>s>='12:00');return first?`Từ ${first} – 20:00`:'13:30 – 20:00';});
 const busy=ref(false),confirmed=ref(false),error=ref(''),receipt=ref<BookingReceipt|null>(null),retryBody=ref<BookingSubmission|null>(null),lastSubmittedIsChild=ref(false);let snapshot:BookingIntent|null=null,generation=0,disposed=false;
+let nowTimer:ReturnType<typeof setInterval>|null=null;
 const identity=()=>`${auth.user?.userId}/${auth.role}`;
 function alive(ticket:number,owner:string){return !disposed&&ticket===generation&&owner===identity();}
 function onGuestNameInput(){if(patientId.value===0)form.fullName=capitalizeVietnameseName(form.fullName,false);}
@@ -218,12 +218,18 @@ function pickSession(session: 'morning' | 'afternoon') {
 function onDateInput() {
   confirmed.value = false;
   if (!form.slot) return;
-  const now = vietnamNow();
+  const now = currentVietnamNow.value;
   if (form.appointmentDate === now.date && form.slot <= now.time) {
     const list = selectedSession.value === 'morning' ? morningSlots.value : afternoonSlots.value;
     form.slot = list[0] ?? '';
   }
 }
+watch(minBookingDate, minDate => {
+  if (minDate && form.appointmentDate && form.appointmentDate < minDate) {
+    form.appointmentDate = minDate;
+    onDateInput();
+  }
+});
 function clear(){catalog.value=null;patient.value=null;patientId.value=0;Object.assign(form,{fullName:'',phone:'',dateOfBirth:'',gender:'',email:'',appointmentDate:'',slot:'',notes:''});guardianForm.fullName='';guardianForm.relationship='Bố/Mẹ';lastSubmittedIsChild.value=false;snapshot=null;retryBody.value=null;receipt.value=null;confirmed.value=false;error.value='';profilesError.value='';}
 async function readCatalog() {
   const data = await bookingRequestsService.catalog();
@@ -236,7 +242,8 @@ async function readCatalog() {
 async function load(){
  const ticket=++generation,owner=identity();clear();busy.value=true;
  try{const data=await readCatalog();if(!alive(ticket,owner))return;
-  catalog.value=data;form.appointmentDate=data.today;
+  catalog.value=data;
+  form.appointmentDate=bookingWindow.value.defaultDate;
   if(preselectedService){form.notes=`Tư vấn ${preselectedService}`.slice(0,500);}
   if(auth.role==='PATIENT'){try{const mine=await patientsService.getMyPatient();if(alive(ticket,owner)){patient.value=mine;patientId.value=mine.patientId;Object.assign(form,{fullName:mine.fullName,phone:mine.phone,dateOfBirth:mine.dateOfBirth,gender:mine.gender});}}catch{if(alive(ticket,owner))profilesError.value='Không tải được hồ sơ cá nhân. Tải lại trước khi tiếp tục.';}}
  }catch{if(alive(ticket,owner))error.value='Không tải được khung hẹn. Vui lòng thử lại.';}
@@ -244,10 +251,10 @@ async function load(){
 }
 function validDay(value:string){const d=new Date(value+'T00:00:00Z');return /^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===value;}
 function intent():BookingIntent|null{
- const s=catalog.value;if(!s)return null;const minBirth=new Date(s.today+'T00:00:00Z'),month=minBirth.getUTCMonth();minBirth.setUTCFullYear(minBirth.getUTCFullYear()-120);if(minBirth.getUTCMonth()!==month)minBirth.setUTCDate(0);
+ const s=catalog.value;if(!s)return null;const minDate=minBookingDate.value||s.today;const minBirth=new Date(s.today+'T00:00:00Z'),month=minBirth.getUTCMonth();minBirth.setUTCFullYear(minBirth.getUTCFullYear()-120);if(minBirth.getUTCMonth()!==month)minBirth.setUTCDate(0);
  const cleanFullName=patientId.value>0?form.fullName.trim():capitalizeVietnameseName(form.fullName,true);
  const cleanGuardianName=capitalizeVietnameseName(guardianForm.fullName,true);
- if(!cleanFullName||cleanFullName.length>100||cleanFullName.includes('\0')||!/^0\d{9}$/.test(form.phone)||!validDay(form.dateOfBirth)||form.dateOfBirth<minBirth.toISOString().slice(0,10)||form.dateOfBirth>s.today||!['Male','Female','Other'].includes(form.gender)||!validDay(form.appointmentDate)||form.appointmentDate<s.today||!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(form.slot)||form.notes.length>500||form.notes.includes('\0')||form.email.length>100||form.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)||patientId.value>0&&(!patient.value||patient.value.patientId!==patientId.value||patient.value.fullName!==cleanFullName||patient.value.dateOfBirth!==form.dateOfBirth))return null;
+ if(!cleanFullName||cleanFullName.length>100||cleanFullName.includes('\0')||!/^0\d{9}$/.test(form.phone)||!validDay(form.dateOfBirth)||form.dateOfBirth<minBirth.toISOString().slice(0,10)||form.dateOfBirth>s.today||!['Male','Female','Other'].includes(form.gender)||!validDay(form.appointmentDate)||form.appointmentDate<minDate||!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(form.slot)||form.notes.length>500||form.notes.includes('\0')||form.email.length>100||form.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)||patientId.value>0&&(!patient.value||patient.value.patientId!==patientId.value||patient.value.fullName!==cleanFullName||patient.value.dateOfBirth!==form.dateOfBirth))return null;
  if(isChild.value&&(!cleanGuardianName||cleanGuardianName.length>100))return null;
  let combinedNotes=form.notes.trim()||'';
  if(isChild.value){
@@ -272,6 +279,9 @@ async function submit(){
         const refreshed = await readCatalog();
         if (alive(ticket, owner)) {
           catalog.value = refreshed;
+          if (!form.appointmentDate || form.appointmentDate < bookingWindow.value.minDate) {
+            form.appointmentDate = bookingWindow.value.defaultDate;
+          }
           error.value = 'Giờ làm việc vừa thay đổi. Hãy kiểm tra lại giờ hẹn.';
         }
       } catch {
@@ -288,7 +298,17 @@ async function submit(){
  }}
  finally{if(alive(ticket,owner))busy.value=false;}
 }
-watch(identity,()=>{generation++;busy.value=false;clear();if(!disposed)void load();});onMounted(()=>void load());onUnmounted(()=>{disposed=true;generation++;clear();});
+watch(identity,()=>{generation++;busy.value=false;clear();if(!disposed)void load();});
+onMounted(()=>{
+  if(typeof window!=='undefined'){nowTimer=setInterval(()=>{nowTick.value++;},30_000);}
+  void load();
+});
+onUnmounted(()=>{
+  disposed=true;
+  generation++;
+  if(nowTimer){clearInterval(nowTimer);nowTimer=null;}
+  clear();
+});
 </script>
 <style scoped>
 .guardian-section{margin-top:16px;padding:16px;background:#eef7ff;border:1.5px solid #93c5fd;border-radius:12px}
@@ -296,6 +316,7 @@ watch(identity,()=>{generation++;busy.value=false;clear();if(!disposed)void load
 .child-badge-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:#dbeafe;color:#1e40af;font-size:.86rem;margin-bottom:6px}
 .child-summary-tag{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;background:#dbeafe;color:#1e40af;font-size:.82rem;font-weight:750}
 .slot-empty-hint{margin:0;font-size:.86rem;color:#9a3412;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 12px}
+.after-hours-notice{margin:2px 0 0;font-size:.88rem;font-weight:650;line-height:1.45;color:#9a3412;background:#fff7ed;border:1.5px solid #fdba74;border-radius:10px;padding:10px 13px}
 .child-badge-notice strong{font-size:.95rem}
 .booking-page{min-height:100vh;background:var(--hg-canvas,#f4f8fc);color:var(--hg-ink,#18354c);font-family:var(--hg-font,"Segoe UI",system-ui,sans-serif)}
 .booking-header{background:#fff;border-bottom:1px solid #e4edf5}

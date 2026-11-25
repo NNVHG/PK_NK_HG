@@ -19,9 +19,9 @@ public sealed class DentalChairRepository(DentalDbContext db, VietnamClock? cloc
     public Task<bool> IsAssignedAsync(int roomId, CancellationToken ct = default)
     {
         var today = Today;
-        return db.StaffWorkspaces.AnyAsync(workspace => workspace.WorkDate == today && workspace.User.IsActive &&
-            workspace.User.Role.RoleCode == RoleCodes.Dentist &&
-            workspace.RoomId == roomId, ct);
+        return db.Users.AnyAsync(u => u.WorkspaceDate == today && u.IsActive &&
+            u.Role.RoleCode == RoleCodes.Dentist &&
+            u.WorkspaceRoomId == roomId, ct);
     }
 
     public Task<ClinicRoom?> FindAsync(int id, CancellationToken ct = default)

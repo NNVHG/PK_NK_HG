@@ -3,12 +3,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Dental.Infrastructure.Data.Seeders;
 
-/// <summary>MOD_BIL / F_BIL_02: seed danh mục mẫu giảm giá do Admin cấu hình (DL-119).</summary>
+/// <summary>MOD_BIL / F_BIL_02: seed danh mục mẫu giảm giá do Admin cấu hình trong SystemConfigs (DL-119, DL-380).</summary>
 public static class DiscountPresetsSeeder
 {
     public static async Task SeedAsync(DentalDbContext db, CancellationToken ct = default)
     {
-        if (await db.DiscountPresets.AnyAsync(ct)) return;
+        if (await db.SystemConfigs.AnyAsync(x => x.DataType == DiscountPreset.ConfigDataType && x.Key.StartsWith(DiscountPreset.ConfigKeyPrefix), ct))
+            return;
 
         (string Code, string Name, string Type, decimal Value)[] presets =
         [
@@ -19,13 +20,18 @@ public static class DiscountPresetsSeeder
             ("FIX100", "Ưu đãi 100.000 VNĐ",                "FixedAmount", 100000m),
         ];
 
-        db.DiscountPresets.AddRange(presets.Select(p => new DiscountPreset
+        db.SystemConfigs.AddRange(presets.Select(p =>
         {
-            Code = p.Code,
-            Name = p.Name,
-            DiscountType = p.Type,
-            Value = p.Value,
-            IsActive = true,
+            var cfg = new SystemConfig();
+            new DiscountPreset
+            {
+                Code = p.Code,
+                Name = p.Name,
+                DiscountType = p.Type,
+                Value = p.Value,
+                IsActive = true,
+            }.ApplyToSystemConfig(cfg);
+            return cfg;
         }));
 
         await db.SaveChangesAsync(ct);

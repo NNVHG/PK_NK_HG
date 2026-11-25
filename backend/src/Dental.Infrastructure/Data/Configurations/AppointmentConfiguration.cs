@@ -8,7 +8,11 @@ public sealed class AppointmentConfiguration : IEntityTypeConfiguration<Appointm
 {
     public void Configure(EntityTypeBuilder<Appointment> builder)
     {
-        builder.ToTable("Appointments", t => t.HasCheckConstraint("CK_Appointments_Duration", "\"SlotDurationMinutes\" BETWEEN 1 AND 1440"));
+        builder.ToTable("Appointments", t =>
+        {
+            t.HasCheckConstraint("CK_Appointments_Duration", "\"SlotDurationMinutes\" BETWEEN 1 AND 1440");
+            t.HasCheckConstraint("CK_Appointments_Version", "\"Version\" > 0");
+        });
         builder.Property(x => x.SlotDurationMinutes).HasDefaultValue(30).IsRequired();
         builder.HasKey(a => a.AppointmentId);
 
@@ -24,12 +28,26 @@ public sealed class AppointmentConfiguration : IEntityTypeConfiguration<Appointm
             .HasMaxLength(20)
             .IsRequired();
 
+        builder.Property(a => a.Source)
+            .HasMaxLength(20)
+            .HasDefaultValue("Counter")
+            .IsRequired();
+
         builder.Property(a => a.Notes)
             .HasMaxLength(500);
         builder.Property(a => a.RescheduleCount).HasDefaultValue(0);
         builder.Property(a => a.RescheduleReason).HasMaxLength(500);
         builder.Property(a => a.IsEmergency).HasDefaultValue(false).IsRequired();
         builder.Property(a => a.EmergencyReason).HasMaxLength(255);
+
+        builder.Property(a => a.IntentDigest).HasMaxLength(64);
+        builder.Property(a => a.GuestFullName).HasMaxLength(100);
+        builder.Property(a => a.GuestPhone).HasMaxLength(20);
+        builder.Property(a => a.GuestDateOfBirth).HasColumnType("date");
+        builder.Property(a => a.GuestGender).HasMaxLength(10);
+        builder.Property(a => a.GuestEmail).HasMaxLength(100);
+        builder.Property(a => a.Version).HasDefaultValue(1).IsConcurrencyToken();
+        builder.Property(a => a.RejectionReason).HasMaxLength(500);
 
         builder.Property(a => a.CreatedAt)
             .HasColumnType("timestamptz")
@@ -47,6 +65,22 @@ public sealed class AppointmentConfiguration : IEntityTypeConfiguration<Appointm
             .WithMany()
             .HasForeignKey(a => a.CreatedByUserId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(a => a.SubmittedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(a => a.ReviewedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(a => a.ClientRequestId)
+            .IsUnique()
+            .HasFilter("\"ClientRequestId\" IS NOT NULL");
+
+        builder.HasIndex(a => new { a.Status, a.AppointmentDate, a.SlotTime });
 
         builder.HasIndex(a => new { a.AppointmentDate, a.SlotTime })
             .HasDatabaseName("IX_Appointments_AppointmentDate_SlotTime");

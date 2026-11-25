@@ -17,7 +17,7 @@ public sealed class VisitServiceConfiguration : IEntityTypeConfiguration<VisitSe
         builder.HasIndex(x => new { x.VisitId, x.ToothNumber });
         builder.HasOne(x => x.Visit).WithMany().HasForeignKey(x => x.VisitId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.Service).WithMany().HasForeignKey(x => x.ServiceId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne(x => x.Price).WithMany().HasForeignKey(x => x.ServicePriceId).OnDelete(DeleteBehavior.Restrict);
+        builder.Ignore(x => x.Price);
         builder.HasOne(x => x.CreatedByUser).WithMany().HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
     }
 }

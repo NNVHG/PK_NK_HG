@@ -72,17 +72,10 @@ public static partial class ClinicalDemoDataSeeder
             ]
         };
         db.Prescriptions.AddRange(rx1, rx2);
-        foreach (var date in new[] { today, today.AddDays(-2) })
-        {
-            var counter = await db.PrescriptionNumberCounters.FindAsync([date], ct);
-            if (counter is null)
-                db.PrescriptionNumberCounters.Add(new PrescriptionNumberCounter { PrescriptionDate = date, LastNumber = 1 });
-            else
-                counter.LastNumber = Math.Max(counter.LastNumber, 1);
-        }
         await db.SaveChangesAsync(ct);
 
-        var presetFix50 = await db.DiscountPresets.FirstOrDefaultAsync(p => p.Code == "FIX50", ct);
+        var presetFix50Key = DiscountPreset.BuildConfigKey("FIX50");
+        var presetFix50 = await db.SystemConfigs.FirstOrDefaultAsync(p => p.DataType == DiscountPreset.ConfigDataType && p.Key == presetFix50Key, ct);
         var rxItems = rx1.Items.ToList();
         var rx2Items = rx2.Items.ToList();
 
@@ -147,7 +140,7 @@ public static partial class ClinicalDemoDataSeeder
         rx1.DispenseNote = "Đã dặn dò liều lượng chi tiết";
         rx1.Version = 2;
         rx1.UpdatedAt = now.Date.AddHours(9).AddMinutes(20);
-        db.PrescriptionDispenseEvents.Add(new PrescriptionDispenseEvent
+        rx1.AppendDispenseEvent(new PrescriptionDispenseEvent
         {
             PrescriptionId = rx1.Id, PrescriptionVersion = 2, Action = "Dispense",
             PerformedAt = now.Date.AddHours(9).AddMinutes(20), PerformedBy = assistant1.UserId, ReceivedByProxy = false,

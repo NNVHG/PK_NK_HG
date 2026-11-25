@@ -14,8 +14,14 @@ namespace Dental.Infrastructure.Repositories;
 
 public sealed class VisitReopenRepository(DentalDbContext db) : IVisitReopenRepository
 {
+    private static List<VisitUnlockRecord> ReadUnlocks(string? json)
+        => string.IsNullOrEmpty(json) ? [] : JsonSerializer.Deserialize<List<VisitUnlockRecord>>(json) ?? [];
+
     public async Task<IReadOnlyList<VisitUnlockRecord>> GetHistoryAsync(int visitId, CancellationToken ct = default)
-        => await db.VisitUnlockRecords.AsNoTracking().Where(x => x.VisitId == visitId).OrderByDescending(x => x.Id).ToListAsync(ct);
+    {
+        var json = await db.Visits.AsNoTracking().Where(x => x.VisitId == visitId).Select(x => x.UnlockHistoryJson).FirstOrDefaultAsync(ct);
+        return ReadUnlocks(json).OrderByDescending(x => x.Id).ToList();
+    }
     public async Task<Result<VisitUnlockRecord>> ReopenAsync(int visitId, int actor, string reason, string? ip, CancellationToken ct = default)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
@@ -36,9 +42,12 @@ public sealed class VisitReopenRepository(DentalDbContext db) : IVisitReopenRepo
             if (invoice is not null) invoice.Status = InvoiceStatus.Cancelled;
             // DL263: correction is not a new physical consultation. Keep queue and actual clinical timestamps.
             visit.IsLocked = false; visit.Status = VisitStatuses.Correcting; visit.UpdatedAt = now;
-            var record = new VisitUnlockRecord { VisitId = visitId, ActorUserId = actor, Reason = reason,
+            var unlocks = ReadUnlocks(visit.UnlockHistoryJson);
+            var nextId = unlocks.Count == 0 ? 1 : unlocks.Max(u => u.Id) + 1;
+            var record = new VisitUnlockRecord { Id = nextId, VisitId = visitId, ActorUserId = actor, Reason = reason,
                 CancelledInvoiceId = invoice?.Id, CreatedAt = now };
-            db.VisitUnlockRecords.Add(record);
+            unlocks.Add(record);
+            visit.UnlockHistoryJson = JsonSerializer.Serialize(unlocks);
             await db.SaveChangesAsync(ct);
             // DL-159 hòa giải DL-158 theo AGENTS §6: lý do chỉ lưu trong lịch sử bảo vệ; audit tham chiếu ID.
             // Lưu lý do ở bản ghi được bảo vệ, audit chỉ tham chiếu để tránh rò nội dung bệnh án.

@@ -15,5 +15,8 @@ public sealed class Medicine
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public int Version { get; set; } = 1;
+    public int OnHand { get; set; }
+    public long StockVersion { get; set; } = 1;
+    public DateTime? StockUpdatedAt { get; set; }
     public string SearchText { get; set; } = string.Empty;
 }

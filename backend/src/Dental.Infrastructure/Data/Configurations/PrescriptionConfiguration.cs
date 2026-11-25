@@ -15,6 +15,7 @@ public sealed class PrescriptionConfiguration : IEntityTypeConfiguration<Prescri
         b.Property(x => x.DoctorAdvice).HasMaxLength(1000); b.Property(x => x.Version).IsConcurrencyToken();
         b.Property(x => x.DispenseNote).HasMaxLength(300);
         b.Property(x => x.ReceiverName).HasMaxLength(100); b.Property(x => x.ReceiverPhone).HasMaxLength(20);
+        b.Property(x => x.DispenseHistoryJson).HasColumnType("jsonb");
         b.HasOne(x => x.Visit).WithMany().HasForeignKey(x => x.VisitId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.Invoice).WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<User>().WithMany().HasForeignKey(x => x.DoctorId).OnDelete(DeleteBehavior.Restrict);
@@ -35,8 +36,4 @@ public sealed class PrescriptionItemConfiguration : IEntityTypeConfiguration<Pre
         b.Property(x => x.Unit).HasMaxLength(20).IsRequired(); b.Property(x => x.UnitPrice).HasPrecision(18, 0); b.Ignore(x => x.TotalPrice);
         b.Property(x => x.UsageInstructions).HasMaxLength(500).IsRequired(); b.Property(x => x.AllergyOverrideReason).HasMaxLength(500);
     }
-}
-public sealed class PrescriptionNumberCounterConfiguration : IEntityTypeConfiguration<PrescriptionNumberCounter>
-{
-    public void Configure(EntityTypeBuilder<PrescriptionNumberCounter> b) { b.ToTable("PrescriptionNumberCounters"); b.HasKey(x => x.PrescriptionDate); }
 }

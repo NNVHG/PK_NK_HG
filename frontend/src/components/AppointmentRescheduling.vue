@@ -47,7 +47,10 @@
           <div class="form-row">
             <div class="form-group">
               <label :for="'new-day-' + appointmentId" class="form-label">Ngày khám mới <b class="req">*</b></label>
-              <BookingDatePicker v-model="day" :input-id="'new-day-' + appointmentId" :min="today" :disabled="busy" required />
+              <BookingDatePicker v-model="day" :input-id="'new-day-' + appointmentId" :min="minBookingDate" :today="today" :disabled="busy" required />
+              <p v-if="isAfterHoursToday" class="after-hours-notice" role="status">
+                🌙 {{ AFTER_HOURS_BOOKING_NOTICE }}
+              </p>
             </div>
 
             <div class="form-group">
@@ -101,10 +104,11 @@
   </dialog>
 </template>
 <script setup lang="ts">
-import { onUnmounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import axios from 'axios';
 import { appointmentsService, type AppointmentResponse, type SelfReschedulingEligibility } from '@/services/appointments';
 import { useBookingSchedule } from '@/composables/useBookingSchedule';
+import { AFTER_HOURS_BOOKING_NOTICE, getVietnamNow, resolveBookingDateWindow } from '@/utils/bookingWindow';
 import BookingTimeInput from '@/components/BookingTimeInput.vue';
 import BookingDatePicker from '@/components/BookingDatePicker.vue';
 const props = defineProps<{ appointmentId: number; patientName: string; selfService?: boolean }>();
@@ -112,9 +116,27 @@ const emit = defineEmits<{ rescheduled: [] }>();
 const dialog = ref<HTMLDialogElement | null>(null), current = ref<AppointmentResponse | null>(null);
 const eligibility = ref<SelfReschedulingEligibility | null>(null);
 const reading = ref(false), busy = ref(false), confirmed = ref(false), day = ref(''), time = ref(''), reason = ref(''), error = ref('');
-const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+const nowTick = ref(0);
+let nowTimer: ReturnType<typeof setInterval> | null = null;
+const today = computed(() => {
+  void nowTick.value;
+  return getVietnamNow().date;
+});
 const { slots, revision: scheduleRevision, loading: scheduleLoading, error: scheduleError, load: loadSchedule } = useBookingSchedule(false);
+const bookingWindow = computed(() => {
+  void nowTick.value;
+  return resolveBookingDateWindow(today.value, slots.value, getVietnamNow());
+});
+const minBookingDate = computed(() => bookingWindow.value.minDate);
+const isAfterHoursToday = computed(() => bookingWindow.value.isAfterHours);
 watch(scheduleRevision, () => { confirmed.value = false; });
+watch(minBookingDate, minDate => {
+  if (dialog.value?.open && day.value && day.value < minDate) {
+    day.value = minDate;
+    time.value = '';
+    confirmed.value = false;
+  }
+});
 let version = 0;
 async function readCurrent(ticket: number) {
   if (props.selfService) {
@@ -132,7 +154,15 @@ async function open() {
   const ticket = ++version; reading.value = true; current.value = null; eligibility.value = null; confirmed.value = false; reason.value = ''; error.value = '';
   try {
     const [result] = await Promise.all([readCurrent(ticket), loadSchedule()]);
-    if (ticket === version) { day.value = result.appointmentDate; time.value = result.slotTime.slice(0, 5); }
+    if (ticket === version) {
+      if (isAfterHoursToday.value && result.appointmentDate < minBookingDate.value) {
+        day.value = minBookingDate.value;
+        time.value = '';
+      } else {
+        day.value = result.appointmentDate;
+        time.value = result.slotTime.slice(0, 5);
+      }
+    }
   } catch { if (ticket === version) error.value = 'Không thể tải lịch. Vui lòng thử lại.'; }
   finally { if (ticket === version) { reading.value = false; if (dialog.value && !dialog.value.open) dialog.value.showModal(); } }
 }
@@ -141,7 +171,7 @@ function close() { if (!busy.value) reset(); }
 async function save() {
   if (busy.value || reading.value || scheduleLoading.value || !scheduleRevision.value || !confirmed.value || current.value?.status !== 'Scheduled' || current.value.appointmentId !== props.appointmentId) return;
   if (props.selfService && !eligibility.value?.canReschedule) return;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(day.value) || day.value < today || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time.value) || !reason.value.trim() || reason.value.trim().length > 500 ||
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day.value) || day.value < minBookingDate.value || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time.value) || !reason.value.trim() || reason.value.trim().length > 500 ||
       (day.value === current.value.appointmentDate && time.value === current.value.slotTime.slice(0, 5))) { error.value = 'Chọn ngày/giờ mới hợp lệ và nhập lý do đổi lịch.'; return; }
   const ticket = version; busy.value = true; error.value = '';
   try {
@@ -166,7 +196,15 @@ function formatSessionLabel(slot?: string | null): string {
   return slot.slice(0, 5) < '12:00' ? 'Buổi sáng' : 'Buổi chiều';
 }
 
-onUnmounted(reset);
+onMounted(() => {
+  if (typeof window !== 'undefined') {
+    nowTimer = setInterval(() => { nowTick.value++; }, 30_000);
+  }
+});
+onUnmounted(() => {
+  if (nowTimer) { clearInterval(nowTimer); nowTimer = null; }
+  reset();
+});
 </script>
 
 <style scoped>
@@ -316,6 +354,18 @@ onUnmounted(reset);
   background: #fef2f2;
   border: 1px solid #fecaca;
   color: #991b1b;
+}
+
+.after-hours-notice {
+  margin: 0.45rem 0 0;
+  font-size: 0.825rem;
+  font-weight: 650;
+  line-height: 1.45;
+  color: #9a3412;
+  background: #fff7ed;
+  border: 1.5px solid #fdba74;
+  border-radius: 8px;
+  padding: 0.55rem 0.75rem;
 }
 
 .eligibility-notice {

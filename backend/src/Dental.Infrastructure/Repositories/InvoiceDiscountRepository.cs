@@ -14,7 +14,16 @@ namespace Dental.Infrastructure.Repositories;
 public sealed class InvoiceDiscountRepository(DentalDbContext db) : IInvoiceDiscountRepository
 {
     public async Task<IReadOnlyList<DiscountPreset>> GetPresetsAsync(bool includeInactive, CancellationToken ct = default)
-        => await db.DiscountPresets.AsNoTracking().Where(x => includeInactive || x.IsActive).OrderBy(x => x.Code).ToArrayAsync(ct);
+    {
+        var configs = await db.SystemConfigs.AsNoTracking()
+            .Where(x => x.DataType == DiscountPreset.ConfigDataType && x.Key.StartsWith(DiscountPreset.ConfigKeyPrefix))
+            .ToArrayAsync(ct);
+        return configs
+            .Select(DiscountPreset.FromSystemConfig)
+            .Where(x => includeInactive || x.IsActive)
+            .OrderBy(x => x.Code)
+            .ToArray();
+    }
 
     public async Task<Result<DiscountPreset>> SavePresetAsync(int? id, DiscountPresetRequest request, int actorId, string? ip, CancellationToken ct = default)
     {
@@ -22,17 +31,41 @@ public sealed class InvoiceDiscountRepository(DentalDbContext db) : IInvoiceDisc
         var committed = false;
         try
         {
-            var preset = id.HasValue ? await db.DiscountPresets.FindAsync([id.Value], ct) : new DiscountPreset();
-            if (preset is null) return Result<DiscountPreset>.Failure(Error.NotFound);
-            if (await db.DiscountPresets.AnyAsync(x => x.Code == request.Code && x.Id != (id ?? 0), ct))
+            var config = id.HasValue
+                ? await db.SystemConfigs.SingleOrDefaultAsync(x =>
+                    x.Id == id.Value &&
+                    x.DataType == DiscountPreset.ConfigDataType &&
+                    x.Key.StartsWith(DiscountPreset.ConfigKeyPrefix), ct)
+                : new SystemConfig();
+            if (config is null) return Result<DiscountPreset>.Failure(Error.NotFound);
+
+            var targetKey = DiscountPreset.BuildConfigKey(request.Code);
+            if (await db.SystemConfigs.AnyAsync(x => x.Key == targetKey && x.Id != (id ?? 0), ct))
                 return Result<DiscountPreset>.Failure(new Error("BIL_026", "Mã mẫu giảm giá đã tồn tại."));
-            preset.Code = request.Code; preset.Name = request.Name; preset.DiscountType = request.DiscountType;
-            preset.Value = request.Value; preset.IsActive = request.IsActive;
-            if (!id.HasValue) db.DiscountPresets.Add(preset);
+
+            var preset = new DiscountPreset
+            {
+                Id = config.Id,
+                Code = request.Code,
+                Name = request.Name,
+                DiscountType = request.DiscountType,
+                Value = request.Value,
+                IsActive = request.IsActive,
+            };
+            preset.ApplyToSystemConfig(config, actorId, DateTime.UtcNow);
+            if (!id.HasValue) db.SystemConfigs.Add(config);
             await db.SaveChangesAsync(ct);
-            db.AuditLogs.Add(new AuditLog { Action = "MOD_BIL_DISCOUNT_PRESET_SAVED", EntityType = "DiscountPreset",
-                EntityId = preset.Id, UserId = actorId, IpAddress = ip,
-                Detail = JsonSerializer.Serialize(new { preset.DiscountType, preset.Value, preset.IsActive }) });
+            preset.Id = config.Id;
+
+            db.AuditLogs.Add(new AuditLog
+            {
+                Action = "MOD_BIL_DISCOUNT_PRESET_SAVED",
+                EntityType = "DiscountPreset",
+                EntityId = preset.Id,
+                UserId = actorId,
+                IpAddress = ip,
+                Detail = JsonSerializer.Serialize(new { preset.DiscountType, preset.Value, preset.IsActive })
+            });
             await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); committed = true;
             return Result<DiscountPreset>.Success(preset);
         }
@@ -55,14 +88,39 @@ public sealed class InvoiceDiscountRepository(DentalDbContext db) : IInvoiceDisc
             if (invoice is null) return Result<InvoiceDiscountResponse>.Failure(Error.NotFound);
             if (await db.PaymentTransactions.AnyAsync(x => x.InvoiceId == invoiceId, ct))
                 return Result<InvoiceDiscountResponse>.Failure(new Error("BIL_021", "Hóa đơn đã có khoản thu; không thể sửa giảm giá."));
-            var preset = request.PresetId.HasValue ? await db.DiscountPresets.AsNoTracking().FirstOrDefaultAsync(x => x.Id == request.PresetId, ct) : null;
+
+            DiscountPreset? preset = null;
+            if (request.PresetId.HasValue)
+            {
+                var config = await db.SystemConfigs.AsNoTracking().FirstOrDefaultAsync(x =>
+                    x.Id == request.PresetId &&
+                    x.DataType == DiscountPreset.ConfigDataType &&
+                    x.Key.StartsWith(DiscountPreset.ConfigKeyPrefix), ct);
+                preset = config is null ? null : DiscountPreset.FromSystemConfig(config);
+            }
+
             var oldAmount = invoice.DiscountAmount;
             var applied = InvoiceDiscountRules.Apply(invoice, preset, request, role);
             if (applied.IsFailure) return Result<InvoiceDiscountResponse>.Failure(applied.Error);
-            db.AuditLogs.Add(new AuditLog { Action = request.Mode == "Remove" ? "MOD_BIL_DISCOUNT_REMOVED" : "MOD_BIL_DISCOUNT_APPLIED",
-                EntityType = "Invoice", EntityId = invoice.Id, UserId = actorId, IpAddress = ip,
-                Detail = JsonSerializer.Serialize(new { oldAmount, invoice.DiscountAmount, invoice.DiscountType,
-                    invoice.DiscountValue, invoice.DiscountPresetId, invoice.Status, reason = invoice.DiscountReason, role }) });
+            db.AuditLogs.Add(new AuditLog
+            {
+                Action = request.Mode == "Remove" ? "MOD_BIL_DISCOUNT_REMOVED" : "MOD_BIL_DISCOUNT_APPLIED",
+                EntityType = "Invoice",
+                EntityId = invoice.Id,
+                UserId = actorId,
+                IpAddress = ip,
+                Detail = JsonSerializer.Serialize(new
+                {
+                    oldAmount,
+                    invoice.DiscountAmount,
+                    invoice.DiscountType,
+                    invoice.DiscountValue,
+                    invoice.DiscountPresetId,
+                    invoice.Status,
+                    reason = invoice.DiscountReason,
+                    role
+                })
+            });
             await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); committed = true;
             return Result<InvoiceDiscountResponse>.Success(new(invoice.Id, invoice.TotalAmount, invoice.DiscountAmount,
                 invoice.FinalAmount, invoice.FinalAmount - invoice.PaidAmount));

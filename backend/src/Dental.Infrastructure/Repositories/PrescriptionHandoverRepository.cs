@@ -31,10 +31,19 @@ public sealed class PrescriptionHandoverRepository(DentalDbContext db, VietnamCl
         if (p.Invoice is not {} invoice || invoice.VisitId != p.VisitId || invoice.Status is not (InvoiceStatus.Paid or InvoiceStatus.PartiallyRefunded) ||
             invoice.PaidAmount < 0 || invoice.FinalAmount < 0 || invoice.PaidAmount != invoice.FinalAmount) return false;
         // DL-301: a status flag cannot replace refund provenance or the unrefunded medicine-line check.
-        if (invoice.Status == InvoiceStatus.PartiallyRefunded && !await db.InvoiceRefunds.AnyAsync(r => r.InvoiceId == invoice.Id, ct)) return false;
+        if (invoice.Status == InvoiceStatus.PartiallyRefunded && !await db.InvoiceRefunds.AnyAsync(r => r.InvoiceId == invoice.Id && r.Status == InvoiceRefundStatuses.Approved, ct)) return false;
+        var refundedJsons = await db.InvoiceRefunds.AsNoTracking()
+            .Where(r => r.InvoiceId == invoice.Id && r.Status == InvoiceRefundStatuses.Approved)
+            .Select(r => r.ItemsJson)
+            .ToListAsync(ct);
+        var refundedItemIds = refundedJsons
+            .SelectMany(json => (JsonSerializer.Deserialize<List<InvoiceRefundItem>>(json) ?? []).Select(x => x.InvoiceItemId))
+            .Distinct()
+            .ToArray();
+        if (refundedItemIds.Length == 0) return true;
         var rxItems = db.PrescriptionItems.Where(x => x.PrescriptionId == p.Id).Select(x => x.Id);
-        return !await db.InvoiceRefundItems.AnyAsync(r => r.InvoiceRefund.InvoiceId == invoice.Id && r.InvoiceItem.ItemType == "Medicine" &&
-            r.InvoiceItem.SourcePrescriptionItemId.HasValue && rxItems.Contains(r.InvoiceItem.SourcePrescriptionItemId.Value), ct);
+        return !await db.InvoiceItems.AnyAsync(item => refundedItemIds.Contains(item.Id) && item.ItemType == "Medicine" &&
+            item.SourcePrescriptionItemId.HasValue && rxItems.Contains(item.SourcePrescriptionItemId.Value), ct);
     }
     private bool InWindow(Prescription p) => p.DispensedAt is DateTime at && at <= clock.UtcNow && clock.UtcNow - at <= TimeSpan.FromMinutes(30);
     private bool MayUndo(Prescription p, int actorId, string role) => Active(p) && PrescriptionHandoverService.CanWrite(role) && InWindow(p) && (role == RoleCodes.Admin || p.DispensedBy == actorId);
@@ -87,8 +96,16 @@ public sealed class PrescriptionHandoverRepository(DentalDbContext db, VietnamCl
                 return Result<PrescriptionHandoverStatus>.Failure(Locked);
             if (dispense is not null && status.ReceiverRequired && (!dispense.ReceivedByProxy || string.IsNullOrWhiteSpace(dispense.ReceiverName) || string.IsNullOrWhiteSpace(dispense.ReceiverPhone)))
                 return Result<PrescriptionHandoverStatus>.Failure(new("RX_RECEIVER_REQUIRED", "Bệnh nhân dưới 15 tuổi cần họ tên và số điện thoại người nhận thay."));
-            var record = new PrescriptionDispenseEvent {
-                PrescriptionId = rx.Id, PrescriptionVersion = rx.Version + 1, Action = action, PerformedAt = clock.UtcNow, PerformedBy = actorId,
+            var existingEvents = rx.GetDispenseHistory();
+            var nextEventId = (existingEvents.Count == 0 ? 0 : existingEvents.Max(e => e.Id)) + 1;
+            var eventDraft = new PrescriptionDispenseEvent
+            {
+                Id = nextEventId,
+                PrescriptionId = rx.Id,
+                PrescriptionVersion = rx.Version + 1,
+                Action = action,
+                PerformedAt = clock.UtcNow,
+                PerformedBy = actorId,
                 ReceivedByProxy = dispense?.ReceivedByProxy ?? rx.ReceivedByProxy,
                 ReceiverName = dispense is null ? rx.ReceiverName : dispense.ReceivedByProxy ? dispense.ReceiverName?.Trim() : null,
                 ReceiverPhone = dispense is null ? rx.ReceiverPhone : dispense.ReceivedByProxy ? dispense.ReceiverPhone?.Trim() : null,
@@ -97,11 +114,15 @@ public sealed class PrescriptionHandoverRepository(DentalDbContext db, VietnamCl
             };
             if (dispense is not null)
             {
-                var issued = await new MedicineStockLedger(db, clock).IssueAsync(rx, record, actorId, ct);
+                var issued = await new MedicineStockLedger(db, clock).IssueAsync(rx, eventDraft, actorId, ct);
                 if (!issued.IsSuccess) return Result<PrescriptionHandoverStatus>.Failure(issued.Error);
                 if (status.Stock?.NeedsDeduction == true)
                     db.AuditLogs.Add(new AuditLog { UserId = actorId, EntityType = "Prescription", EntityId = rx.Id, Action = "MOD_RX_STOCK_ISSUED", CreatedAt = clock.UtcNow,
                         Detail = JsonSerializer.Serialize(new { previousVersion = expected, lines = status.Stock.Lines.Select(l => new { l.MedicineId, l.Quantity }) }) });
+            }
+            var record = rx.AppendDispenseEvent(eventDraft);
+            if (dispense is not null)
+            {
                 rx.DispensedAt = clock.UtcNow; rx.DispensedBy = actorId; rx.ReceivedByProxy = record.ReceivedByProxy;
                 rx.ReceiverName = string.IsNullOrWhiteSpace(record.ReceiverName) ? null : record.ReceiverName;
                 rx.ReceiverPhone = string.IsNullOrWhiteSpace(record.ReceiverPhone) ? null : record.ReceiverPhone;
@@ -109,7 +130,6 @@ public sealed class PrescriptionHandoverRepository(DentalDbContext db, VietnamCl
             }
             else { rx.DispensedAt = null; rx.DispensedBy = null; rx.ReceivedByProxy = false; rx.ReceiverName = null; rx.ReceiverPhone = null; rx.DispenseNote = null; }
             rx.Version++; rx.UpdatedAt = clock.UtcNow;
-            db.PrescriptionDispenseEvents.Add(record);
             // Reason/receiver details remain in protected medical history, not in generic audit logs.
             db.AuditLogs.Add(new AuditLog { UserId = actorId, EntityType = "Prescription", EntityId = rx.Id, Action = action, CreatedAt = clock.UtcNow, IpAddress = ip,
                 Detail = JsonSerializer.Serialize(new { rx.Version, previousVersion = expected, record.ExpiryOverridden, trigger = "handover" }) });

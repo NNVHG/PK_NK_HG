@@ -17,9 +17,12 @@ public sealed class CounterPatientPhoneRepository(DentalDbContext db, VietnamClo
     {
         var u = await db.Users.AsNoTracking().Include(x => x.Role).SingleOrDefaultAsync(x => x.UserId == userId, ct);
         if (!OwnerEligible(u)) return Result<CounterPhoneSuggestion?>.Failure(Error.Forbidden);
-        var suggestion = await db.PatientPhoneChangeRequests.AsNoTracking()
-            .Where(x => x.UserId == userId && x.CurrentPhone == u!.Phone && x.TokenVersion == u.TokenVersion && x.CompletedAtUtc == null)
-            .Select(x => new CounterPhoneSuggestion(x.Id, x.AppointmentId, x.NewPhone, x.CreatedAtUtc)).SingleOrDefaultAsync(ct);
+        var pending = string.IsNullOrEmpty(u!.PendingPhoneChangeJson)
+            ? null
+            : JsonSerializer.Deserialize<PatientPhoneChangeRequest>(u.PendingPhoneChangeJson);
+        var suggestion = pending is not null && pending.CurrentPhone == u.Phone && pending.TokenVersion == u.TokenVersion && pending.CompletedAtUtc == null
+            ? new CounterPhoneSuggestion(pending.Id, pending.AppointmentId, pending.NewPhone, pending.CreatedAtUtc)
+            : null;
         return Result<CounterPhoneSuggestion?>.Success(suggestion);
     }
     public async Task<Result<CounterPhoneReceipt>> CreateAsync(int actorId, int appointmentId, CounterPhoneRequest request, string? ip, CancellationToken ct)
@@ -33,17 +36,20 @@ public sealed class CounterPatientPhoneRepository(DentalDbContext db, VietnamClo
                 return Result<CounterPhoneReceipt>.Failure(Error.Forbidden);
             var appointment = await db.Appointments.Include(x => x.Patient).SingleOrDefaultAsync(x => x.AppointmentId == appointmentId, ct);
             if (appointment is null) return Result<CounterPhoneReceipt>.Failure(Error.NotFound);
-            if (appointment.Status != AppointmentStatuses.Scheduled || appointment.AppointmentDate < clock.Today || !appointment.Patient.IsActive || !appointment.Patient.UserId.HasValue)
+            if (appointment.Status != AppointmentStatuses.Scheduled || appointment.AppointmentDate < clock.Today || appointment.Patient is null || !appointment.Patient.IsActive || !appointment.Patient.UserId.HasValue)
                 return Result<CounterPhoneReceipt>.Failure(Error.Conflict);
-            var u = await db.Users.AsNoTracking().Include(x => x.Role).SingleOrDefaultAsync(x => x.UserId == appointment.Patient.UserId, ct);
+            var u = await db.Users.Include(x => x.Role).SingleOrDefaultAsync(x => x.UserId == appointment.Patient.UserId, ct);
             if (!OwnerEligible(u)) return Result<CounterPhoneReceipt>.Failure(Error.Conflict);
             if (request.NewPhone == u!.Phone || !u.LoginByCitizenId && await db.Users.AnyAsync(x => !x.LoginByCitizenId && x.Phone == request.NewPhone && x.UserId != u.UserId, ct))
                 return Result<CounterPhoneReceipt>.Failure(PatientPhoneChangeService.NumberUnavailable);
-            if (await db.PatientPhoneChangeRequests.AnyAsync(x => x.UserId == u.UserId && x.TokenVersion == u.TokenVersion && x.CompletedAtUtc == null, ct))
+            var existingPending = string.IsNullOrEmpty(u.PendingPhoneChangeJson)
+                ? null
+                : JsonSerializer.Deserialize<PatientPhoneChangeRequest>(u.PendingPhoneChangeJson);
+            if (existingPending is not null && existingPending.TokenVersion == u.TokenVersion && existingPending.CompletedAtUtc == null)
                 return Result<CounterPhoneReceipt>.Failure(new Error("PAT_PHONE_PENDING", "Tài khoản đã có yêu cầu hiện hành. Chủ tài khoản đăng nhập để kiểm tra; nhân viên không ghi đè yêu cầu."));
             var row = new PatientPhoneChangeRequest { Id = Guid.NewGuid(), UserId = u.UserId, AppointmentId = appointmentId,
                 CreatedByUserId = actorId, CurrentPhone = u.Phone, NewPhone = request.NewPhone, TokenVersion = u.TokenVersion, CreatedAtUtc = clock.UtcNow };
-            db.PatientPhoneChangeRequests.Add(row);
+            u.PendingPhoneChangeJson = JsonSerializer.Serialize(row);
             db.AuditLogs.Add(new AuditLog { UserId = actorId, EntityType = "PatientPhoneChangeRequest", Action = "MOD_AUTH_COUNTER_PHONE_REQUESTED",
                 CreatedAt = clock.UtcNow, IpAddress = ip, Detail = JsonSerializer.Serialize(new { decision = "DL-335", requestId = row.Id, ownerUserId = u.UserId, appointmentId, requiresOwnerConfirmation = true }) });
             await db.SaveChangesAsync(ct);

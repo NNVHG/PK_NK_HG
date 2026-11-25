@@ -10,6 +10,7 @@ public sealed class Invoice
     public InvoiceStatus Status { get; set; }
     public int RefundRevision { get; set; }
     public ICollection<InvoiceRefund> Refunds { get; set; } = new List<InvoiceRefund>();
+    public IEnumerable<InvoiceRefund> ApprovedRefunds() => Refunds.Where(r => r.Status == InvoiceRefundStatuses.Approved);
     public decimal TotalAmount { get; set; }
     public decimal PaidAmount { get; set; }
     public decimal DiscountAmount { get; set; }
@@ -40,10 +41,4 @@ public sealed class InvoiceItem
     public decimal UnitPrice { get; set; }
     public decimal TotalAmount { get; set; }
     public Invoice Invoice { get; set; } = null!;
-}
-
-public sealed class InvoiceNumberCounter
-{
-    public DateOnly InvoiceDate { get; set; }
-    public int LastNumber { get; set; }
 }

@@ -151,13 +151,6 @@ builder.Services.AddScoped<IMedicalHistoryRepository, MedicalHistoryRepository>(
 builder.Services.AddScoped<IVitalSignRepository, VitalSignRepository>();
 builder.Services.AddScoped<IServiceCatalogRepository, ServiceCatalogRepository>();
 builder.Services.AddScoped<IAppointmentRepository, AppointmentRepository>();
-builder.Services.AddScoped<IAppointmentReminderRepository, AppointmentReminderRepository>();
-builder.Services.AddScoped<AppointmentReminderService>();
-builder.Services.AddScoped<SimulateAppointmentRemindersValidator>();
-builder.Services.AddScoped<ReminderLogQueryValidator>();
-builder.Services.AddSingleton<AppointmentReminderWorkerStatus>();
-builder.Services.AddSingleton<IAppointmentReminderWorkerStatus>(sp => sp.GetRequiredService<AppointmentReminderWorkerStatus>());
-builder.Services.AddHostedService<AppointmentReminderWorker>();
 builder.Services.AddScoped<IQueueRepository, QueueRepository>();
 
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();

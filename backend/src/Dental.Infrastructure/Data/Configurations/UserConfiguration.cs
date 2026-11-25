@@ -46,6 +46,33 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.Property(u => u.LoginByCitizenId).HasDefaultValue(false);
         builder.Property(u => u.RequiresIndividualIdentityConversion).HasDefaultValue(false);
+        builder.Property(u => u.WorkspaceDate).HasColumnType("date");
+        builder.Property(u => u.WorkspaceVersion).HasDefaultValue(0).IsConcurrencyToken();
+        builder.Property(u => u.WorkspaceUpdatedAt).HasColumnType("timestamptz");
+        builder.Property(u => u.PendingPhoneChangeJson).HasColumnType("jsonb");
+
+        builder.HasOne(u => u.WorkspaceRoom)
+            .WithMany()
+            .HasForeignKey(u => u.WorkspaceRoomId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(u => u.WorkspaceDentistId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(u => u.WorkspaceUpdatedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(u => u.WorkspaceRoomId)
+            .IsUnique()
+            .HasFilter("\"WorkspaceRoomId\" IS NOT NULL")
+            .HasDatabaseName("IX_Users_WorkspaceRoomId");
+
+        builder.HasIndex(u => u.WorkspaceDentistId)
+            .HasDatabaseName("IX_Users_WorkspaceDentistId");
 
         // Legacy/staff phone logins remain unique. New Patient accounts may share a contact phone and log in by CCCD.
         builder.HasIndex(u => u.Phone)

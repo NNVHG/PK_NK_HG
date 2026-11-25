@@ -8,4 +8,5 @@ public interface IStaffWorkspaceRepository
     Task<bool> ChairClaimedAsync(int roomId, int exceptUserId, CancellationToken ct = default);
     Task<bool> ReleaseStaleChairClaimsAsync(int roomId, int exceptUserId, DateOnly workDate, int actorId, DateTime updatedAtUtc, CancellationToken ct = default);
     Task AddAsync(StaffWorkspace workspace, CancellationToken ct = default);
+    Task UpsertAsync(StaffWorkspace workspace, int expectedVersion, CancellationToken ct = default);
 }

@@ -59,12 +59,14 @@ public sealed class PatientPhoneChangeRepository(DentalDbContext db, VietnamCloc
                     Action = "MOD_PAT_CONTACT_PHONE_SYNCED", CreatedAt = now, IpAddress = ip,
                     Detail = JsonSerializer.Serialize(new { decision = "DL-355/DL-367", confirmedByAccountOwner = true }) });
             }
-            var counterRequest = await db.PatientPhoneChangeRequests.SingleOrDefaultAsync(x =>
-                x.UserId == target.UserId && x.TokenVersion == user!.TokenVersion && x.CurrentPhone == user.Phone &&
-                x.NewPhone == target.NewPhone && x.CompletedAtUtc == null, ct);
-            if (counterRequest is not null)
+            var counterRequest = string.IsNullOrEmpty(user!.PendingPhoneChangeJson)
+                ? null
+                : JsonSerializer.Deserialize<PatientPhoneChangeRequest>(user.PendingPhoneChangeJson);
+            if (counterRequest is not null && counterRequest.TokenVersion == user.TokenVersion &&
+                counterRequest.CurrentPhone == user.Phone && counterRequest.NewPhone == target.NewPhone && counterRequest.CompletedAtUtc == null)
             {
                 counterRequest.CompletedAtUtc = now;
+                user.PendingPhoneChangeJson = JsonSerializer.Serialize(counterRequest);
                 db.AuditLogs.Add(new AuditLog { UserId = target.UserId, EntityType = "PatientPhoneChangeCommand",
                     Action = "MOD_AUTH_COUNTER_PHONE_CONFIRMED", CreatedAt = now, IpAddress = ip,
                     Detail = JsonSerializer.Serialize(new { decision = "DL-335/DL-355/DL-367", requestId = counterRequest.Id,

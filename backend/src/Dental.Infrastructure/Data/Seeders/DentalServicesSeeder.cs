@@ -35,24 +35,25 @@ public static class DentalServicesSeeder
                 "Phục hình răng sứ toàn phần Cercon HT chính hãng độ chịu lực và thẩm mỹ cao"),
         ];
 
-        db.DentalServices.AddRange(services.Select(s => new DentalService
+        db.DentalServices.AddRange(services.Select(s =>
         {
-            Code = s.Code,
-            Name = s.Name,
-            DurationMinutes = s.Duration,
-            Description = s.Desc,
-            IsActive = true,
-            CreatedAt = now,
-            Prices =
-            [
-                new ServicePrice
-                {
-                    Amount = s.Price,
-                    EffectiveFrom = now.AddDays(-60),
-                    CreatedByUserId = adminId,
-                    CreatedAt = now,
-                }
-            ]
+            var entity = new DentalService
+            {
+                Code = s.Code,
+                Name = s.Name,
+                DurationMinutes = s.Duration,
+                Description = s.Desc,
+                IsActive = true,
+                CreatedAt = now,
+            };
+            entity.AppendPrice(new ServicePrice
+            {
+                Amount = s.Price,
+                EffectiveFrom = now.AddDays(-60),
+                CreatedByUserId = adminId,
+                CreatedAt = now,
+            }, now);
+            return entity;
         }));
 
         await db.SaveChangesAsync(ct);

@@ -26,4 +26,5 @@ public sealed class DentalImage
     public DateTime? DeletedAt { get; set; }
     public int? DeletedByUserId { get; set; }
     public string? DeleteReason { get; set; }
+    public string? ClinicalAddendaJson { get; set; }
 }

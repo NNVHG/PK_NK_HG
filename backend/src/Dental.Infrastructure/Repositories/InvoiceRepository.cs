@@ -15,8 +15,14 @@ namespace Dental.Infrastructure.Repositories;
 
 public sealed class InvoiceRepository(DentalDbContext db) : IInvoiceRepository
 {
-    public Task<Invoice?> GetForVisitAsync(int visitId, CancellationToken ct = default)
-        => db.Invoices.AsNoTracking().Include(x => x.Items).Include(x => x.Refunds).ThenInclude(r => r.Items).FirstOrDefaultAsync(x => x.VisitId == visitId && x.Status != InvoiceStatus.Cancelled, ct);
+    public async Task<Invoice?> GetForVisitAsync(int visitId, CancellationToken ct = default)
+    {
+        var invoice = await db.Invoices.AsNoTracking().Include(x => x.Items).Include(x => x.Refunds)
+            .FirstOrDefaultAsync(x => x.VisitId == visitId && x.Status != InvoiceStatus.Cancelled, ct);
+        if (invoice is not null)
+            foreach (var r in invoice.Refunds) r.HydrateItems();
+        return invoice;
+    }
 
     public async Task<Result> CancelDraftAsync(int invoiceId, int userId, string reason, string? ip, CancellationToken ct = default)
     {
@@ -186,11 +192,19 @@ public sealed class InvoiceRepository(DentalDbContext db) : IInvoiceRepository
             if (!created && synced.Value) db.InvoiceItems.RemoveRange(oldItems);
             if (created)
             {
-                var counter = await db.InvoiceNumberCounters.FindAsync([date], ct);
-                if (counter is null) { counter = new InvoiceNumberCounter { InvoiceDate = date }; db.InvoiceNumberCounters.Add(counter); }
-                if (counter.LastNumber >= 9999) return Fail(new Error("BIL_005", "Đã hết số hóa đơn trong ngày."));
-                counter.LastNumber++;
-                invoice.InvoiceCode = $"INV-{date:yyyyMMdd}-{counter.LastNumber:D4}";
+                var prefix = $"INV-{date:yyyyMMdd}-";
+                var existingCodes = await db.Invoices.AsNoTracking()
+                    .Where(x => x.InvoiceCode.StartsWith(prefix) && x.InvoiceCode.Length == prefix.Length + 4)
+                    .Select(x => x.InvoiceCode)
+                    .ToListAsync(ct);
+                var maxNumber = 0;
+                foreach (var code in existingCodes)
+                {
+                    if (int.TryParse(code.AsSpan(prefix.Length), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var used))
+                        maxNumber = Math.Max(maxNumber, used);
+                }
+                if (maxNumber >= 9999) return Fail(new Error("BIL_005", "Đã hết số hóa đơn trong ngày."));
+                invoice.InvoiceCode = $"{prefix}{maxNumber + 1:D4}";
                 db.Invoices.Add(invoice);
             }
             if (prescription is not null) prescription.Invoice = invoice;

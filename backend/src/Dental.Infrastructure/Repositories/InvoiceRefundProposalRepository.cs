@@ -22,24 +22,47 @@ public sealed class InvoiceRefundProposalRepository(DentalDbContext db, VietnamC
     private Task<bool> IsReceptionist(int actor, CancellationToken ct) => db.Users.AnyAsync(x => x.UserId == actor && x.IsActive && x.Role.RoleCode == RoleCodes.Receptionist, ct);
     private Task<bool> IsAdmin(int actor, CancellationToken ct) => db.Users.AnyAsync(x => x.UserId == actor && x.IsActive && x.Role.RoleCode == RoleCodes.Admin, ct);
 
-    private IQueryable<InvoiceRefundProposal> ProposalQuery() => db.InvoiceRefundProposals
+    private IQueryable<InvoiceRefund> ProposalQuery() => db.InvoiceRefunds
         .Include(x => x.Invoice).ThenInclude(x => x.Items)
         .Include(x => x.Invoice).ThenInclude(x => x.Visit)
-        .Include(x => x.Invoice).ThenInclude(x => x.Refunds).ThenInclude(x => x.Items)
-        .Include(x => x.Creator).Include(x => x.Reviewer)
-        .Include(x => x.Items).ThenInclude(x => x.InvoiceItem)
+        .Include(x => x.Invoice).ThenInclude(x => x.Refunds)
+        .Include(x => x.Actor).Include(x => x.Reviewer)
         .AsSplitQuery();
 
-    private static InvoiceRefundProposalDto Map(InvoiceRefundProposal proposal) => new(
-        proposal.Id, proposal.InvoiceId, proposal.Invoice.InvoiceCode, proposal.Snapshot, proposal.RequestId,
-        proposal.Status, proposal.CreatedAt, proposal.Creator.FullName, proposal.ReasonCode, proposal.ReasonNotes,
-        proposal.Items.OrderBy(x => x.InvoiceItemId).Select(x => new RefundProposalLineDto(x.InvoiceItemId,
-            x.InvoiceItem.ItemType, x.InvoiceItem.Code, x.InvoiceItem.Name, x.Quantity, Money(x.InvoiceItem.UnitPrice))).ToArray(),
-        proposal.RefundId, proposal.DecisionNotes);
+    private static InvoiceRefundProposalDto Map(InvoiceRefund proposal)
+    {
+        var invoiceItems = proposal.Invoice.Items.ToDictionary(x => x.Id);
+        return new InvoiceRefundProposalDto(
+            proposal.Id,
+            proposal.InvoiceId,
+            proposal.Invoice.InvoiceCode,
+            proposal.Snapshot,
+            proposal.RequestId,
+            proposal.Status,
+            proposal.CreatedAt,
+            proposal.Actor.FullName,
+            proposal.ReasonCode,
+            proposal.ReasonNotes,
+            proposal.GetItems()
+                .OrderBy(x => x.InvoiceItemId)
+                .Select(x =>
+                {
+                    var item = invoiceItems[x.InvoiceItemId];
+                    return new RefundProposalLineDto(x.InvoiceItemId, item.ItemType, item.Code, item.Name, x.Quantity, Money(item.UnitPrice));
+                })
+                .ToArray(),
+            proposal.Status == InvoiceRefundStatuses.Approved ? proposal.Id : null,
+            proposal.DecisionNotes);
+    }
 
-    private Task<Invoice?> InvoiceForRefund(int id, CancellationToken ct) => db.Invoices
-        .Include(x => x.Visit).Include(x => x.Items).Include(x => x.Refunds).ThenInclude(x => x.Items)
-        .AsSplitQuery().SingleOrDefaultAsync(x => x.Id == id, ct);
+    private async Task<Invoice?> InvoiceForRefund(int id, CancellationToken ct)
+    {
+        var invoice = await db.Invoices.Include(x => x.Visit).Include(x => x.Items).Include(x => x.Refunds)
+            .AsSplitQuery().SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (invoice is not null)
+            foreach (var r in invoice.Refunds) r.HydrateItems();
+        return invoice;
+    }
 
     public async Task<Result<InvoiceRefundProposalDto>> CreateAsync(int invoiceId, int actorId, InvoiceRefundProposalCreateRequest request, CancellationToken ct)
     {
@@ -52,22 +75,38 @@ public sealed class InvoiceRefundProposalRepository(DentalDbContext db, VietnamC
             if (invoice is null) return Result<InvoiceRefundProposalDto>.Failure(Error.NotFound);
             var calculation = InvoiceRefundRules.Calculate(invoice, request.Items);
             if (calculation.IsFailure) return Result<InvoiceRefundProposalDto>.Failure(calculation.Error);
-            var proposal = new InvoiceRefundProposal
+
+            var proposal = new InvoiceRefund
             {
-                InvoiceId = invoiceId, Invoice = invoice, Snapshot = InvoiceRefundSnapshot.Create(invoice),
-                RequestId = Guid.NewGuid(), CreatorId = actorId, Creator = await db.Users.SingleAsync(x => x.UserId == actorId, ct), CreatedAt = clock.UtcNow,
-                ReasonCode = request.ReasonCode, ReasonNotes = request.ReasonNotes.Trim(), Status = "Pending",
-                Items = request.Items.Select(selection => new InvoiceRefundProposalItem
+                InvoiceId = invoiceId,
+                Invoice = invoice,
+                Revision = 0,
+                Snapshot = InvoiceRefundSnapshot.Create(invoice),
+                PayloadHash = string.Empty,
+                RequestId = Guid.NewGuid(),
+                ActorId = actorId,
+                Actor = await db.Users.SingleAsync(x => x.UserId == actorId, ct),
+                CreatedAt = clock.UtcNow,
+                ReasonCode = request.ReasonCode,
+                ReasonNotes = request.ReasonNotes.Trim(),
+                Status = InvoiceRefundStatuses.Pending,
+                PaymentMethod = "Cash",
+                Items = request.Items.Select(selection => new InvoiceRefundItem
                 {
-                    InvoiceItemId = selection.InvoiceItemId, Quantity = selection.Quantity,
-                    InvoiceItem = invoice.Items.Single(x => x.Id == selection.InvoiceItemId)
+                    InvoiceItemId = selection.InvoiceItemId,
+                    Quantity = selection.Quantity,
                 }).ToList()
             };
-            db.InvoiceRefundProposals.Add(proposal);
+            proposal.SyncItemsJson();
+
+            db.InvoiceRefunds.Add(proposal);
             await db.SaveChangesAsync(ct);
-            db.AuditLogs.Add(new AuditLog { UserId = actorId, EntityType = "InvoiceRefundProposal", EntityId = proposal.Id,
+            db.AuditLogs.Add(new AuditLog
+            {
+                UserId = actorId, EntityType = "InvoiceRefundProposal", EntityId = proposal.Id,
                 Action = "MOD_BIL_REFUND_PROPOSAL_CREATED", CreatedAt = clock.UtcNow,
-                Detail = JsonSerializer.Serialize(new { invoiceId, proposalId = proposal.Id, proposal.ReasonCode, itemCount = proposal.Items.Count }) });
+                Detail = JsonSerializer.Serialize(new { invoiceId, proposalId = proposal.Id, proposal.ReasonCode, itemCount = proposal.Items.Count })
+            });
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
             committed = true;
@@ -80,8 +119,8 @@ public sealed class InvoiceRefundProposalRepository(DentalDbContext db, VietnamC
     public async Task<Result<IReadOnlyList<InvoiceRefundProposalDto>>> ListPendingAsync(int actorId, int? invoiceId, CancellationToken ct)
     {
         if (!await IsAdmin(actorId, ct)) return Result<IReadOnlyList<InvoiceRefundProposalDto>>.Failure(Error.Forbidden);
-        var ids = await db.InvoiceRefundProposals.AsNoTracking()
-            .Where(x => (x.Status == "Pending" || x.Status == "Stale") && (invoiceId == null || x.InvoiceId == invoiceId))
+        var ids = await db.InvoiceRefunds.AsNoTracking()
+            .Where(x => (x.Status == InvoiceRefundStatuses.Pending || x.Status == InvoiceRefundStatuses.Stale) && (invoiceId == null || x.InvoiceId == invoiceId))
             .OrderByDescending(x => x.CreatedAt).Take(100).Select(x => x.Id).ToArrayAsync(ct);
         var results = new List<InvoiceRefundProposalDto>(ids.Length);
         foreach (var id in ids)
@@ -98,13 +137,19 @@ public sealed class InvoiceRefundProposalRepository(DentalDbContext db, VietnamC
         if (!await IsAdmin(actorId, ct)) return Result<InvoiceRefundProposalDto>.Failure(Error.Forbidden);
         var proposal = await ProposalQuery().SingleOrDefaultAsync(x => x.Id == proposalId, ct);
         if (proposal is null) return Result<InvoiceRefundProposalDto>.Failure(Error.NotFound);
-        if (proposal.Status == "Pending" && InvoiceRefundSnapshot.Create(proposal.Invoice) != proposal.Snapshot)
+        foreach (var r in proposal.Invoice.Refunds) r.HydrateItems();
+        if (proposal.Status == InvoiceRefundStatuses.Pending && InvoiceRefundSnapshot.Create(proposal.Invoice) != proposal.Snapshot)
         {
-            proposal.Status = "Stale"; proposal.ReviewerId = actorId; proposal.DecidedAt = clock.UtcNow;
+            proposal.Status = InvoiceRefundStatuses.Stale;
+            proposal.ReviewerId = actorId;
+            proposal.DecidedAt = clock.UtcNow;
             proposal.DecisionNotes = "Hóa đơn đã thay đổi; cần gửi đề xuất mới.";
-            db.AuditLogs.Add(new AuditLog { UserId = actorId, EntityType = "InvoiceRefundProposal", EntityId = proposal.Id,
+            db.AuditLogs.Add(new AuditLog
+            {
+                UserId = actorId, EntityType = "InvoiceRefundProposal", EntityId = proposal.Id,
                 Action = "MOD_BIL_REFUND_PROPOSAL_STALE", CreatedAt = clock.UtcNow,
-                Detail = JsonSerializer.Serialize(new { proposalId = proposal.Id, invoiceId = proposal.InvoiceId }) });
+                Detail = JsonSerializer.Serialize(new { proposalId = proposal.Id, invoiceId = proposal.InvoiceId })
+            });
             await db.SaveChangesAsync(ct);
         }
         await tx.CommitAsync(ct);
@@ -117,16 +162,20 @@ public sealed class InvoiceRefundProposalRepository(DentalDbContext db, VietnamC
         if (!await IsAdmin(actorId, ct)) return Result<bool>.Failure(Error.Forbidden);
         var proposal = await ProposalQuery().SingleOrDefaultAsync(x => x.Id == proposalId, ct);
         if (proposal is null) return Result<bool>.Failure(Error.NotFound);
-        if (proposal.Status != "Pending") return Result<bool>.Failure(Conflict);
+        foreach (var r in proposal.Invoice.Refunds) r.HydrateItems();
+        if (proposal.Status != InvoiceRefundStatuses.Pending) return Result<bool>.Failure(Conflict);
         if (InvoiceRefundSnapshot.Create(proposal.Invoice) != proposal.Snapshot)
         {
-            proposal.Status = "Stale"; proposal.ReviewerId = actorId; proposal.DecidedAt = clock.UtcNow;
+            proposal.Status = InvoiceRefundStatuses.Stale; proposal.ReviewerId = actorId; proposal.DecidedAt = clock.UtcNow;
             proposal.DecisionNotes = "Hóa đơn đã thay đổi; cần gửi đề xuất mới.";
             db.AuditLogs.Add(Audit(proposal, actorId, "MOD_BIL_REFUND_PROPOSAL_STALE", ip));
             await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
             return Result<bool>.Failure(Changed);
         }
-        proposal.Status = "Rejected"; proposal.ReviewerId = actorId; proposal.DecidedAt = clock.UtcNow; proposal.DecisionNotes = string.IsNullOrWhiteSpace(decisionNotes) ? null : decisionNotes.Trim();
+        proposal.Status = InvoiceRefundStatuses.Rejected;
+        proposal.ReviewerId = actorId;
+        proposal.DecidedAt = clock.UtcNow;
+        proposal.DecisionNotes = string.IsNullOrWhiteSpace(decisionNotes) ? null : decisionNotes.Trim();
         db.AuditLogs.Add(Audit(proposal, actorId, "MOD_BIL_REFUND_PROPOSAL_REJECTED", ip));
         await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
         return Result<bool>.Success(true);
@@ -139,30 +188,38 @@ public sealed class InvoiceRefundProposalRepository(DentalDbContext db, VietnamC
         try
         {
             if (!await IsAdmin(actorId, ct)) return Result<bool>.Failure(Error.Forbidden);
-            var proposal = await db.InvoiceRefundProposals.SingleOrDefaultAsync(x => x.Id == proposalId, ct);
+            var proposal = await db.InvoiceRefunds.SingleOrDefaultAsync(x => x.Id == proposalId, ct);
             if (proposal is null) return Result<bool>.Failure(Error.NotFound);
-            var matches = await db.InvoiceRefunds.AnyAsync(x => x.Id == refundId && x.InvoiceId == proposal.InvoiceId && x.RequestId == proposal.RequestId, ct);
+            var matches = proposal.Id == refundId && proposal.Status == InvoiceRefundStatuses.Approved;
             if (!matches) return Result<bool>.Failure(Error.Conflict);
-            if (proposal.Status == "Approved" && proposal.RefundId == refundId)
+
+            if (!await db.AuditLogs.AnyAsync(a => a.EntityType == "InvoiceRefundProposal" && a.EntityId == proposalId && a.Action == "MOD_BIL_REFUND_PROPOSAL_APPROVED", ct))
             {
-                await tx.CommitAsync(ct); committed = true; return Result<bool>.Success(true);
+                db.AuditLogs.Add(Audit(proposal, actorId, "MOD_BIL_REFUND_PROPOSAL_APPROVED", ip));
+                await db.SaveChangesAsync(ct);
             }
-            if (proposal.Status is not ("Pending" or "Stale")) return Result<bool>.Failure(Conflict);
-            proposal.Status = "Approved"; proposal.ReviewerId = actorId; proposal.DecidedAt = clock.UtcNow;
-            proposal.DecisionNotes = null; proposal.RefundId = refundId;
-            db.AuditLogs.Add(Audit(proposal, actorId, "MOD_BIL_REFUND_PROPOSAL_APPROVED", ip));
-            await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); committed = true;
+            await tx.CommitAsync(ct); committed = true;
             return Result<bool>.Success(true);
         }
         catch (Exception error) when (IsConflict(error)) { return Result<bool>.Failure(Conflict); }
         finally { if (!committed) db.ChangeTracker.Clear(); }
     }
 
-    private AuditLog Audit(InvoiceRefundProposal proposal, int actorId, string action, string? ip) => new()
+    private AuditLog Audit(InvoiceRefund proposal, int actorId, string action, string? ip) => new()
     {
-        UserId = actorId, EntityType = "InvoiceRefundProposal", EntityId = proposal.Id,
-        Action = action, CreatedAt = clock.UtcNow, IpAddress = ip,
-        Detail = JsonSerializer.Serialize(new { proposalId = proposal.Id, invoiceId = proposal.InvoiceId, status = proposal.Status, proposal.RefundId })
+        UserId = actorId,
+        EntityType = "InvoiceRefundProposal",
+        EntityId = proposal.Id,
+        Action = action,
+        CreatedAt = clock.UtcNow,
+        IpAddress = ip,
+        Detail = JsonSerializer.Serialize(new
+        {
+            proposalId = proposal.Id,
+            invoiceId = proposal.InvoiceId,
+            status = proposal.Status,
+            refundId = proposal.Status == InvoiceRefundStatuses.Approved ? (int?)proposal.Id : null
+        })
     };
 
     private static bool IsConflict(Exception error)

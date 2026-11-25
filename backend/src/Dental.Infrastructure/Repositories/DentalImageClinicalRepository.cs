@@ -43,14 +43,18 @@ public sealed class DentalImageClinicalRepository(DentalDbContext db, VietnamClo
         var context = await ContextAsync(state, actor, role, ct); await tx.CommitAsync(ct);
         return Result<ImageClinicalContext>.Success(context);
     }
+    private static List<DentalImageClinicalAddendum> ReadAddenda(string? json)
+        => string.IsNullOrEmpty(json) ? [] : JsonSerializer.Deserialize<List<DentalImageClinicalAddendum>>(json) ?? [];
+
     public async Task<Result<PagedResult<ImageClinicalAddendumDto>>> HistoryAsync(int image, int actor, string role, int page, int pageSize, CancellationToken ct)
     {
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
-        if (await LoadAsync(image, actor, role, false, ct) is null) return Result<PagedResult<ImageClinicalAddendumDto>>.Failure(Error.NotFound);
-        var rows = db.DentalImageClinicalAddenda.AsNoTracking().Where(a => a.DentalImageId == image);
-        var count = await rows.CountAsync(ct);
-        var items = await rows.OrderByDescending(a => a.Id).Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(a => new ImageClinicalAddendumDto(a.Id, a.DentalImageId, a.ImageVersion, a.CreatedByUserId, a.AuthorName, a.AuthorRole, a.CreatedAt, a.Note)).ToArrayAsync(ct);
+        var state = await LoadAsync(image, actor, role, false, ct);
+        if (state is null) return Result<PagedResult<ImageClinicalAddendumDto>>.Failure(Error.NotFound);
+        var rows = ReadAddenda(state.Image.ClinicalAddendaJson);
+        var count = rows.Count;
+        var items = rows.OrderByDescending(a => a.Id).Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(Dto).ToArray();
         await tx.CommitAsync(ct);
         return Result<PagedResult<ImageClinicalAddendumDto>>.Success(PagedResult<ImageClinicalAddendumDto>.Create(items, count, page, pageSize));
     }
@@ -81,7 +85,23 @@ public sealed class DentalImageClinicalRepository(DentalDbContext db, VietnamClo
             var state = await LoadAsync(image, actor, role, true, ct);
             if (state is null || !ImageClinicalRules.Owns(state, actor, role)) return Result<ImageClinicalAddendumDto>.Failure(Error.NotFound);
             if (state.Visit?.Status != VisitStatuses.Completed) return Result<ImageClinicalAddendumDto>.Failure(Locked);
-            var previous = await db.DentalImageClinicalAddenda.AsNoTracking().SingleOrDefaultAsync(a => a.RequestId == request.RequestId, ct);
+            List<string> addendaJsons;
+            if (db.Database.IsNpgsql())
+            {
+                var needle = JsonSerializer.Serialize(new[] { new { RequestId = request.RequestId } });
+                addendaJsons = await db.DentalImages.AsNoTracking()
+                    .Where(i => i.ClinicalAddendaJson != null && EF.Functions.JsonContains(i.ClinicalAddendaJson, needle))
+                    .Select(i => i.ClinicalAddendaJson!)
+                    .ToListAsync(ct);
+            }
+            else
+            {
+                addendaJsons = await db.DentalImages.AsNoTracking()
+                    .Where(i => i.ClinicalAddendaJson != null)
+                    .Select(i => i.ClinicalAddendaJson!)
+                    .ToListAsync(ct);
+            }
+            var previous = addendaJsons.SelectMany(ReadAddenda).FirstOrDefault(a => a.RequestId == request.RequestId);
             if (previous is not null)
             {
                 if (previous.DentalImageId != image || previous.CreatedByUserId != actor || previous.ImageVersion - 1 != request.ExpectedVersion || previous.Note != request.Note.Trim()) return Result<ImageClinicalAddendumDto>.Failure(Conflict);
@@ -91,8 +111,11 @@ public sealed class DentalImageClinicalRepository(DentalDbContext db, VietnamClo
             if (!ImageClinicalRules.MayAppend(state)) return Result<ImageClinicalAddendumDto>.Failure(Locked);
             var author = await db.Users.Where(u => u.UserId == actor).Select(u => u.FullName).SingleAsync(ct);
             state.Image.Version++;
+            var existing = ReadAddenda(state.Image.ClinicalAddendaJson);
+            var nextId = existing.Count == 0 ? 1 : existing.Max(a => a.Id) + 1;
             var entry = new DentalImageClinicalAddendum
             {
+                Id = nextId,
                 DentalImageId = image,
                 CreatedByUserId = actor,
                 AuthorName = author,
@@ -102,7 +125,9 @@ public sealed class DentalImageClinicalRepository(DentalDbContext db, VietnamClo
                 RequestId = request.RequestId,
                 ImageVersion = state.Image.Version
             };
-            db.DentalImageClinicalAddenda.Add(entry); Audit("MOD_IMG_CLINICAL_APPENDED", state.Image, actor, ip, request.RequestId);
+            existing.Add(entry);
+            state.Image.ClinicalAddendaJson = JsonSerializer.Serialize(existing);
+            Audit("MOD_IMG_CLINICAL_APPENDED", state.Image, actor, ip, request.RequestId);
             await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); committed = true;
             return Result<ImageClinicalAddendumDto>.Success(Dto(entry));
         }

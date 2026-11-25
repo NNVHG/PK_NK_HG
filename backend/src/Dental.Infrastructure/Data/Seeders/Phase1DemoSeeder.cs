@@ -56,9 +56,18 @@ public static class Phase1DemoSeeder
             db.ClinicRooms.Add(room);
         }
         if (!await db.DentalServices.AnyAsync(s => s.Code == "DEMO01"))
-            db.DentalServices.Add(new DentalService { Code = "DEMO01", Name = "Dịch vụ minh họa Phase 1",
-                Description = "Dữ liệu demo; không phải bảng giá điều trị thực tế.", DurationMinutes = 30, CreatedAt = now,
-                Prices = [new ServicePrice { Amount = 100000, EffectiveFrom = now.AddDays(-1), CreatedByUserId = admin.UserId, CreatedAt = now }] });
+        {
+            var demoService = new DentalService
+            {
+                Code = "DEMO01",
+                Name = "Dịch vụ minh họa Phase 1",
+                Description = "Dữ liệu demo; không phải bảng giá điều trị thực tế.",
+                DurationMinutes = 30,
+                CreatedAt = now,
+            };
+            demoService.AppendPrice(new ServicePrice { Amount = 100000, EffectiveFrom = now.AddDays(-1), CreatedByUserId = admin.UserId, CreatedAt = now }, now);
+            db.DentalServices.Add(demoService);
+        }
         if (!await db.MedicalSupplies.AnyAsync(s => s.Code == "DEMO01"))
             db.MedicalSupplies.Add(new MedicalSupply { Code = "DEMO01", Name = "Vật tư minh họa Phase 1", Unit = "Cái",
                 MinimumStockThreshold = 5, CreatedByUserId = admin.UserId, CreatedAt = now,
@@ -114,13 +123,21 @@ public static class Phase1DemoSeeder
 
         if (!await db.MedicalHistoryRecords.AnyAsync(h => h.VisitId == visit.VisitId))
         {
-            db.MedicalHistoryRecords.Add(new MedicalHistoryRecord { PatientId = demoPatient.PatientId, VisitId = visit.VisitId,
-                RecordedByUserId = dentist?.UserId ?? admin.UserId, Note = "Tiền sử minh họa để kiểm thử cảnh báo an toàn.",
-                CreatedAt = now.AddMinutes(-18), Items =
+            var historyRecord = new MedicalHistoryRecord
+            {
+                PatientId = demoPatient.PatientId,
+                VisitId = visit.VisitId,
+                RecordedByUserId = dentist?.UserId ?? admin.UserId,
+                Note = "Tiền sử minh họa để kiểm thử cảnh báo an toàn.",
+                CreatedAt = now.AddMinutes(-18),
+                Items =
                 [
                     new MedicalHistoryItem { Type = "Allergy", Name = "Dị ứng Penicillin (demo)", IsCritical = true, Detail = "Dữ liệu tổng hợp; không dùng làm tư vấn điều trị." },
                     new MedicalHistoryItem { Type = "Condition", Name = "Tăng huyết áp (demo)", IsCritical = true, Detail = "Dữ liệu tổng hợp; cần kiểm tra sinh hiệu trước thủ thuật." },
-                ] });
+                ]
+            };
+            historyRecord.SyncItemsJson();
+            db.MedicalHistoryRecords.Add(historyRecord);
         }
         if (!await db.VitalSignRecords.AnyAsync(v => v.VisitId == visit.VisitId))
             db.VitalSignRecords.Add(new VitalSignRecord { PatientId = demoPatient.PatientId, VisitId = visit.VisitId,
@@ -156,17 +173,17 @@ public static class Phase1DemoSeeder
         await db.SaveChangesAsync();
 
         foreach (var entry in await db.QueueEntries.Where(q => queuePatients.Select(p => p.PatientId).Contains(q.PatientId) && q.QueueDate == today)
-            .Include(q => q.StatusHistories).ToListAsync())
+            .ToListAsync())
         {
-            if (entry.StatusHistories.Count != 0) continue;
-            entry.StatusHistories.Add(new QueueStatusHistory { FromStatus = null, ToStatus = QueueStatus.Waiting,
+            if (!string.IsNullOrEmpty(entry.StatusHistoryJson)) continue;
+            entry.AppendStatusHistory(new QueueStatusHistory { FromStatus = null, ToStatus = QueueStatus.Waiting,
                 ChangedByUserId = receptionist?.UserId ?? admin.UserId, ChangedAt = entry.CheckInTime,
                 Reason = "Tiếp đón minh họa Phase 1." });
             if (entry.Status == QueueStatus.InConsultation)
-                entry.StatusHistories.Add(new QueueStatusHistory { FromStatus = QueueStatus.Waiting, ToStatus = QueueStatus.Calling,
+                entry.AppendStatusHistory(new QueueStatusHistory { FromStatus = QueueStatus.Waiting, ToStatus = QueueStatus.Calling,
                     ChangedByUserId = receptionist?.UserId ?? admin.UserId, ChangedAt = entry.CheckInTime.AddMinutes(1) });
             if (entry.Status == QueueStatus.InConsultation)
-                entry.StatusHistories.Add(new QueueStatusHistory { FromStatus = QueueStatus.Calling, ToStatus = QueueStatus.InConsultation,
+                entry.AppendStatusHistory(new QueueStatusHistory { FromStatus = QueueStatus.Calling, ToStatus = QueueStatus.InConsultation,
                     ChangedByUserId = dentist?.UserId ?? admin.UserId, ChangedAt = entry.CheckInTime.AddMinutes(2) });
         }
 
@@ -177,13 +194,12 @@ public static class Phase1DemoSeeder
     private static async Task<int?> EnsureDemoDentistLocationAsync(DentalDbContext db, ClinicRoom room, User? dentist, int adminId)
     {
         if (dentist is null || !room.IsActive || room.Status is DentalChairStatus.Maintenance or DentalChairStatus.Inactive) return null;
-        var workspace = await db.StaffWorkspaces.SingleOrDefaultAsync(w => w.UserId == dentist.UserId);
-        if (workspace is not null) return workspace.RoomId;
-        if (await db.StaffWorkspaces.AnyAsync(w => w.RoomId == room.Id) ||
+        if (dentist.WorkspaceVersion > 0 || dentist.WorkspaceRoomId.HasValue) return dentist.WorkspaceRoomId;
+        if (await db.Users.AnyAsync(u => u.WorkspaceRoomId == room.Id) ||
             await db.Visits.AnyAsync(v => v.RoomId == room.Id && v.Status == VisitStatuses.InProgress)) return null;
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "SE Asia Standard Time"));
-        db.StaffWorkspaces.Add(new StaffWorkspace { UserId = dentist.UserId, RoomId = room.Id, WorkDate = today,
-            DentistId = dentist.UserId, UpdatedByUserId = adminId, Version = 1, CreatedAt = DateTime.UtcNow });
+        dentist.WorkspaceRoomId = room.Id; dentist.WorkspaceDate = today; dentist.WorkspaceDentistId = dentist.UserId;
+        dentist.WorkspaceUpdatedByUserId = adminId; dentist.WorkspaceVersion = 1; dentist.WorkspaceUpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
         return room.Id;
     }

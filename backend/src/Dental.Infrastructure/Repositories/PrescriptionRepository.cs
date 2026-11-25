@@ -26,8 +26,8 @@ public sealed partial class PrescriptionRepository(DentalDbContext db, IInvoiceR
         var rx = await (tracking ? db.Prescriptions : db.Prescriptions.AsNoTracking()).Include(p => p.Items).SingleOrDefaultAsync(p => p.VisitId == visitId && !p.IsCancelled, ct);
         var generation = await db.Prescriptions.Where(p => p.VisitId == visitId && p.IsCancelled).MaxAsync(p => (int?)p.Id, ct) ?? 0;
         var invoice = await (tracking ? db.Invoices : db.Invoices.AsNoTracking()).Include(i => i.Items).SingleOrDefaultAsync(i => i.VisitId == visitId && i.Status != InvoiceStatus.Cancelled, ct);
-        var history = await db.MedicalHistoryRecords.AsNoTracking().Include(h => h.Items).Where(h => h.PatientId == visit.PatientId)
-            .OrderByDescending(h => h.CreatedAt).ThenByDescending(h => h.RecordId).FirstOrDefaultAsync(ct);
+        var history = (await db.MedicalHistoryRecords.AsNoTracking().Where(h => h.PatientId == visit.PatientId)
+            .OrderByDescending(h => h.CreatedAt).ThenByDescending(h => h.RecordId).FirstOrDefaultAsync(ct))?.HydrateItems();
         var ids = (requested ?? []).Concat(rx?.Items.Select(i => i.MedicineId) ?? []).Distinct().ToArray();
         var medicines = await db.Medicines.AsNoTracking().Where(m => ids.Contains(m.Id)).ToListAsync(ct);
         var services = await db.VisitServices.AsNoTracking().Where(s => s.VisitId == visitId).ToListAsync(ct);
@@ -134,28 +134,19 @@ public sealed partial class PrescriptionRepository(DentalDbContext db, IInvoiceR
             var rx = s.Prescription ?? new Prescription { VisitId = visitId, DoctorId = actorId, CreatedByUserId = actorId, CreatedAt = clock.UtcNow };
             if (creating)
             {
-                var counter = await db.PrescriptionNumberCounters.FindAsync([today], ct);
                 var prefix = $"RX-{today:yyyyMMdd}-";
-                var nextCode = $"{prefix}{(counter?.LastNumber ?? 0) + 1:D4}";
-                var counterNeedsSync = counter is null || await db.Prescriptions.AnyAsync(p => p.PrescriptionCode == nextCode, ct);
-                if (counter is null)
+                var existingCodes = await db.Prescriptions.AsNoTracking()
+                    .Where(p => p.PrescriptionCode.StartsWith(prefix) && p.PrescriptionCode.Length == prefix.Length + 4)
+                    .Select(p => p.PrescriptionCode)
+                    .ToListAsync(ct);
+                var maxNumber = 0;
+                foreach (var code in existingCodes)
                 {
-                    counter = new PrescriptionNumberCounter { PrescriptionDate = today };
-                    db.PrescriptionNumberCounters.Add(counter);
+                    if (int.TryParse(code.AsSpan(prefix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out var used))
+                        maxNumber = Math.Max(maxNumber, used);
                 }
-                if (counterNeedsSync)
-                {
-                    var existingCodes = await db.Prescriptions.Where(p => p.PrescriptionCode.StartsWith(prefix) &&
-                        p.PrescriptionCode.Length == prefix.Length + 4).Select(p => p.PrescriptionCode).ToListAsync(ct);
-                    foreach (var code in existingCodes)
-                    {
-                        if (int.TryParse(code.AsSpan(prefix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out var used))
-                            counter.LastNumber = Math.Max(counter.LastNumber, used);
-                    }
-                }
-                if (counter.LastNumber >= 9999) return Fail(new Error("RX_009", "Đã hết số đơn thuốc trong ngày."));
-                counter.LastNumber++;
-                rx.PrescriptionCode = $"{prefix}{counter.LastNumber:D4}";
+                if (maxNumber >= 9999) return Fail(new Error("RX_009", "Đã hết số đơn thuốc trong ngày."));
+                rx.PrescriptionCode = $"{prefix}{maxNumber + 1:D4}";
                 db.Prescriptions.Add(rx);
             }
             else { rx.Version++; rx.UpdatedAt = clock.UtcNow; }
@@ -226,9 +217,8 @@ public sealed partial class PrescriptionRepository(DentalDbContext db, IInvoiceR
             return (postgres.SqlState, postgres.ConstraintName) switch
             {
                 ("40001" or "40P01", _) => "transaction_retry",
-                ("23505", "PK_PrescriptionNumberCounters" or "PK_InvoiceNumberCounters") => "transaction_retry",
                 ("23505", "IX_Prescriptions_VisitId") => "existing_prescription",
-                ("23505", "IX_Prescriptions_PrescriptionCode" or "IX_Invoices_InvoiceCode") => "number_in_use",
+                ("23505", "IX_Prescriptions_PrescriptionCode" or "IX_Invoices_InvoiceCode") => "transaction_retry",
                 _ => "write_conflict"
             };
         }

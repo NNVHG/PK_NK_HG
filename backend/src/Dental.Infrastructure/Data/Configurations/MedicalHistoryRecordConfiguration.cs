@@ -34,10 +34,9 @@ public sealed class MedicalHistoryRecordConfiguration : IEntityTypeConfiguration
             .HasForeignKey(record => record.RecordedByUserId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasMany(record => record.Items)
-            .WithOne(item => item.Record)
-            .HasForeignKey(item => item.RecordId)
-            .OnDelete(DeleteBehavior.Restrict);
+        builder.Property(record => record.ItemsJson)
+            .HasColumnType("jsonb");
+        builder.Ignore(record => record.Items);
 
         builder.HasIndex(record => new { record.PatientId, record.CreatedAt })
             .HasDatabaseName("IX_MedicalHistoryRecords_PatientId_CreatedAt");

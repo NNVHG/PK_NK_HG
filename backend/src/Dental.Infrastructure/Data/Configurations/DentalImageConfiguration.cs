@@ -16,6 +16,7 @@ public sealed class DentalImageConfiguration : IEntityTypeConfiguration<DentalIm
         b.Property(x => x.ClinicalNotes).HasColumnType("text").HasMaxLength(1000);
         b.Property(x => x.DoctorDiagnosis).HasMaxLength(255);
         b.Property(x => x.ClinicalUpdatedAt).HasColumnType("timestamptz");
+        b.Property(x => x.ClinicalAddendaJson).HasColumnType("jsonb");
         b.HasOne<User>().WithMany().HasForeignKey(x => x.ClinicalUpdatedByUserId).OnDelete(DeleteBehavior.Restrict);
         b.Property(x => x.OriginalFileName).HasMaxLength(180).IsRequired();
         b.Property(x => x.StoragePath).HasMaxLength(180).IsRequired();

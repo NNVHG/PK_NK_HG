@@ -17,7 +17,6 @@ public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         b.Property(x => x.DiscountValue).HasPrecision(20, 2);
         b.Property(x => x.DiscountReason).HasMaxLength(255);
         b.Ignore(x => x.FinalAmount);
-        b.HasOne<DiscountPreset>().WithMany().HasForeignKey(x => x.DiscountPresetId).OnDelete(DeleteBehavior.Restrict);
         b.ToTable(t => t.HasCheckConstraint("CK_Invoices_DiscountAmount", "\"DiscountAmount\" >= 0 AND \"DiscountAmount\" <= \"TotalAmount\""));
         b.HasIndex(x => x.InvoiceCode).IsUnique();
         b.HasIndex(x => x.VisitId).IsUnique().HasFilter("\"Status\" <> 4");
@@ -38,13 +37,5 @@ public sealed class InvoiceItemConfiguration : IEntityTypeConfiguration<InvoiceI
         b.Property(x => x.UnitPrice).HasPrecision(18, 0);
         b.Property(x => x.TotalAmount).HasPrecision(18, 0);
         b.HasOne(x => x.Invoice).WithMany(x => x.Items).HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
-    }
-}
-
-public sealed class InvoiceNumberCounterConfiguration : IEntityTypeConfiguration<InvoiceNumberCounter>
-{
-    public void Configure(EntityTypeBuilder<InvoiceNumberCounter> b)
-    {
-        b.ToTable("InvoiceNumberCounters"); b.HasKey(x => x.InvoiceDate);
     }
 }

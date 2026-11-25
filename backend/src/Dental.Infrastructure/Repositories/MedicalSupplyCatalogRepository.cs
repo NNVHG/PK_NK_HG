@@ -10,7 +10,8 @@ namespace Dental.Infrastructure.Repositories;
 
 public sealed class MedicalSupplyCatalogRepository(DentalDbContext db) : IMedicalSupplyCatalogRepository
 {
-    public async Task<bool> HasStockHistoryAsync(int id, CancellationToken ct) => await db.StockReceiptLines.AnyAsync(x => x.MedicalSupplyId == id, ct) || await db.StockIssueLines.AnyAsync(x => x.MedicalSupplyId == id, ct);
+    public Task<bool> HasStockHistoryAsync(int id, CancellationToken ct) =>
+        db.InventoryTransactionLines.AnyAsync(x => x.ItemId == id && x.Transaction.ItemDomain == InventoryItemDomains.Supply, ct);
     public async Task<PagedResult<MedicalSupply>> GetPageAsync(MedicalSupplyQuery query, CancellationToken ct)
     {
         var items = db.MedicalSupplies.AsNoTracking().Where(x => query.IncludeInactive || x.IsActive);

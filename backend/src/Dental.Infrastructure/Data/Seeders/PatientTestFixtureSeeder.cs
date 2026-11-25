@@ -477,15 +477,16 @@ public static class PatientTestFixtureSeeder
             "REQ-ONLINE-01" => Guid.Parse("ea897090-2026-4dcb-8fa1-000000000101"),
             _ => Guid.Parse("ea897090-2026-4dcb-8fa1-000000000102"),
         };
-        if (await db.BookingRequests.AnyAsync(x => x.ClientRequestId == requestId, ct)) return;
-        db.BookingRequests.Add(new BookingRequest
+        if (await db.Appointments.AnyAsync(x => x.ClientRequestId == requestId, ct)) return;
+        db.Appointments.Add(new Appointment
         {
+            Source = "Online",
             ClientRequestId = requestId,
             IntentDigest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("patient-test-fixture-v1:" + key))),
-            FullName = name,
-            Phone = phone,
-            DateOfBirth = dob,
-            Gender = gender,
+            GuestFullName = name,
+            GuestPhone = phone,
+            GuestDateOfBirth = dob,
+            GuestGender = gender,
             Notes = "Yêu cầu đặt lịch giả lập, chưa xác minh tại quầy.",
             AppointmentDate = date,
             SlotTime = slot,
@@ -555,21 +556,26 @@ public static class PatientTestFixtureSeeder
     };
 
     private static QueueEntry NewQueue(Patient patient, Appointment? appointment, Visit visit, DateOnly date, int number, QueueStatus status,
-        List<QueueStatusHistory> histories) => new()
+        List<QueueStatusHistory> histories)
     {
-        PatientId = patient.PatientId,
-        DentistId = visit.DentistId,
-        AppointmentId = appointment?.AppointmentId,
-        VisitId = visit.VisitId,
-        QueueDate = date,
-        QueueNumber = number,
-        IsPriority = false,
-        CheckInTime = histories[0].ChangedAt,
-        Status = status,
-        Notes = "Lượt kiểm thử giả lập.",
-        CreatedAt = histories[0].ChangedAt,
-        StatusHistories = histories,
-    };
+        var entry = new QueueEntry
+        {
+            PatientId = patient.PatientId,
+            DentistId = visit.DentistId,
+            AppointmentId = appointment?.AppointmentId,
+            VisitId = visit.VisitId,
+            QueueDate = date,
+            QueueNumber = number,
+            IsPriority = false,
+            CheckInTime = histories[0].ChangedAt,
+            Status = status,
+            Notes = "Lượt kiểm thử giả lập.",
+            CreatedAt = histories[0].ChangedAt,
+            StatusHistories = histories,
+        };
+        entry.SyncStatusHistoryFromCollection();
+        return entry;
+    }
 
     private static QueueStatusHistory History(QueueStatus? from, QueueStatus to, int actor, DateTime at, string reason) => new()
     {
@@ -587,7 +593,7 @@ public static class PatientTestFixtureSeeder
         DentalDbContext db, Patient p101, Patient p103, Patient p105, Visit v101, Visit v101Open, Visit v103, Visit v103Complete, Visit v105,
         User assistant, DateTime now)
     {
-        db.MedicalHistoryRecords.Add(new MedicalHistoryRecord
+        var history = new MedicalHistoryRecord
         {
             PatientId = p105.PatientId,
             VisitId = v105.VisitId,
@@ -599,7 +605,9 @@ public static class PatientTestFixtureSeeder
                 new MedicalHistoryItem { Type = MedicalHistoryTypes.Allergy, Name = "Penicillin", IsCritical = true, Detail = "Dữ liệu dị ứng giả lập, chỉ dùng kiểm tra giao diện." },
                 new MedicalHistoryItem { Type = MedicalHistoryTypes.Condition, Name = "Tăng huyết áp", IsCritical = true, Detail = "Dữ liệu bệnh nền giả lập, chỉ dùng kiểm tra giao diện." },
             ],
-        });
+        };
+        history.SyncItemsJson();
+        db.MedicalHistoryRecords.Add(history);
         db.VitalSignRecords.Add(new VitalSignRecord
         {
             PatientId = p105.PatientId, VisitId = v105.VisitId, SystolicBp = 158, DiastolicBp = 96,
@@ -627,11 +635,11 @@ public static class PatientTestFixtureSeeder
 
     private static async Task<ServiceSet> CreateServicesAsync(DentalDbContext db, Visit v101, Visit v103, Visit v105, Visit v107, User dentist, DateTime now, CancellationToken ct)
     {
-        var catalog = await db.DentalServices.Include(x => x.Prices).ToDictionaryAsync(x => x.Code, ct);
+        var catalog = await db.DentalServices.ToDictionaryAsync(x => x.Code, ct);
         VisitService Make(string code, Visit visit, int? tooth, string? surface, DateTime createdAt)
         {
             var service = catalog[code];
-            var price = service.Prices.OrderByDescending(x => x.EffectiveFrom).First();
+            var price = service.GetPriceHistory().OrderByDescending(x => x.EffectiveFrom).First();
             return new VisitService
             {
                 VisitId = visit.VisitId, ServiceId = service.DentalServiceId, ServicePriceId = price.ServicePriceId,
@@ -658,19 +666,29 @@ public static class PatientTestFixtureSeeder
         med011.IsActive = true;
         med030.IsActive = true;
 
-        if (!await db.MedicineStockBalances.AnyAsync(x => x.MedicineId == med011.Id, ct))
+        if (!await db.InventoryTransactions.AnyAsync(t => t.ItemDomain == InventoryItemDomains.Medicine && t.TransactionType == InventoryTransactionTypes.Receipt && t.Lines.Any(l => l.ItemId == med011.Id), ct))
         {
-            db.MedicineStockReceipts.Add(new MedicineStockReceipt
+            db.InventoryTransactions.Add(new InventoryTransaction
             {
-                RequestId = FixtureGuid("MED011-BASE-RECEIPT"), PayloadHash = HashText("MED011-BASE-RECEIPT"),
-                MedicineId = med011.Id, MedicineCode = med011.Code, MedicineName = med011.Name, Unit = med011.Unit,
-                Quantity = 500, SupplierName = "Nhà cung cấp giả lập", Notes = "Tồn ban đầu dữ liệu Development.",
-                ConfirmedByUserId = adminId, ConfirmedAt = now.AddDays(-7),
+                ItemDomain = InventoryItemDomains.Medicine,
+                TransactionType = InventoryTransactionTypes.Receipt,
+                RequestId = FixtureGuid("MED011-BASE-RECEIPT"),
+                PayloadHash = HashText("MED011-BASE-RECEIPT"),
+                SupplierName = "Nhà cung cấp giả lập",
+                Notes = "Tồn ban đầu dữ liệu Development.",
+                ConfirmedByUserId = adminId,
+                ConfirmedAt = now.AddDays(-7),
+                Lines = [new InventoryTransactionLine { ItemId = med011.Id, ItemCode = med011.Code, ItemName = med011.Name, Unit = med011.Unit, Quantity = 500 }],
             });
-            db.MedicineStockBalances.Add(new MedicineStockBalance { MedicineId = med011.Id, OnHand = 500, Version = 1, UpdatedAt = now });
+            med011.OnHand = 500;
+            med011.StockVersion++;
+            med011.StockUpdatedAt = now;
         }
-        if (!await db.MedicineStockBalances.AnyAsync(x => x.MedicineId == med030.Id, ct))
-            db.MedicineStockBalances.Add(new MedicineStockBalance { MedicineId = med030.Id, OnHand = 0, Version = 1, UpdatedAt = now });
+        if (med030.StockVersion <= 1 && med030.StockUpdatedAt is null)
+        {
+            med030.OnHand = 0;
+            med030.StockUpdatedAt = now;
+        }
         return (med011, med030);
     }
 
@@ -680,10 +698,8 @@ public static class PatientTestFixtureSeeder
         DentalDbContext db, Visit v101, Visit v105, Visit v106, User dentist1, User dentist2,
         (Medicine Med011, Medicine Med030) meds, DateOnly date, DateTime now, CancellationToken ct)
     {
-        var counter = await db.PrescriptionNumberCounters.SingleOrDefaultAsync(x => x.PrescriptionDate == date, ct);
-        var last = counter?.LastNumber ?? 0;
         var existingCodes = await db.Prescriptions.Where(x => x.PrescriptionCode.StartsWith($"RX-{date:yyyyMMdd}-")).Select(x => x.PrescriptionCode).ToListAsync(ct);
-        last = Math.Max(last, MaxCodeNumber(existingCodes));
+        var last = MaxCodeNumber(existingCodes);
         string NextCode() => $"RX-{date:yyyyMMdd}-{++last:D4}";
 
         Prescription Make(Visit visit, User dentist, Medicine medicine, DateTime createdAt, bool cancelled = false) => new()
@@ -714,8 +730,6 @@ public static class PatientTestFixtureSeeder
         var rxOld = Make(v106, dentist1, meds.Med011, now.AddHours(-1), cancelled: true);
         var rxNew = Make(v106, dentist2, meds.Med030, now.AddMinutes(-25));
         db.Prescriptions.AddRange(rx101, rx105, rxOld, rxNew);
-        if (counter is null) db.PrescriptionNumberCounters.Add(new PrescriptionNumberCounter { PrescriptionDate = date, LastNumber = last });
-        else counter.LastNumber = last;
         db.AuditLogs.Add(new AuditLog
         {
             UserId = dentist2.UserId, Action = "PRESCRIPTION_CANCELLED", EntityType = "Prescription",
@@ -730,12 +744,11 @@ public static class PatientTestFixtureSeeder
         DentalDbContext db, Visit v101, Visit v103, Visit v105, Visit v107, ServiceSet services,
         PrescriptionSet prescriptions, User cashier, DateOnly date, CancellationToken ct)
     {
-        var counter = await db.InvoiceNumberCounters.SingleOrDefaultAsync(x => x.InvoiceDate == date, ct);
-        var last = counter?.LastNumber ?? 0;
         var existingCodes = await db.Invoices.Where(x => x.InvoiceCode.StartsWith($"INV-{date:yyyyMMdd}-")).Select(x => x.InvoiceCode).ToListAsync(ct);
-        last = Math.Max(last, MaxCodeNumber(existingCodes));
+        var last = MaxCodeNumber(existingCodes);
         string NextCode() => $"INV-{date:yyyyMMdd}-{++last:D4}";
-        var fix50 = await db.DiscountPresets.FirstOrDefaultAsync(x => x.Code == "FIX50", ct);
+        var fix50Key = DiscountPreset.BuildConfigKey("FIX50");
+        var fix50 = await db.SystemConfigs.FirstOrDefaultAsync(x => x.DataType == DiscountPreset.ConfigDataType && x.Key == fix50Key, ct);
         var rx101Item = prescriptions.Rx101.Items.Single();
         var rx105Item = prescriptions.Rx105.Items.Single();
 
@@ -774,8 +787,6 @@ public static class PatientTestFixtureSeeder
         db.Invoices.AddRange(paid, partial, draft, cancelled);
         prescriptions.Rx101.Invoice = paid;
         prescriptions.Rx105.Invoice = partial;
-        if (counter is null) db.InvoiceNumberCounters.Add(new InvoiceNumberCounter { InvoiceDate = date, LastNumber = last });
-        else counter.LastNumber = last;
         db.AuditLogs.Add(new AuditLog
         {
             UserId = cashier.UserId, Action = "INVOICE_DRAFT_CANCELLED", EntityType = "Invoice",
@@ -832,71 +843,73 @@ public static class PatientTestFixtureSeeder
     private static async Task SeedSuppliesAsync(DentalDbContext db, Visit visit, User assistant, int adminId, DateTime now, CancellationToken ct)
     {
         var supplies = await db.MedicalSupplies.OrderBy(x => x.Code).ToListAsync(ct);
-        if (!await db.StockReceipts.AnyAsync(ct))
+        if (!await db.InventoryTransactions.AnyAsync(t => t.ItemDomain == InventoryItemDomains.Supply && t.TransactionType == InventoryTransactionTypes.Receipt, ct))
         {
-            var baseline = new StockReceipt
+            var baseline = new InventoryTransaction
             {
+                ItemDomain = InventoryItemDomains.Supply,
+                TransactionType = InventoryTransactionTypes.Receipt,
                 RequestId = FixtureGuid("SUPPLY-BASELINE"), PayloadHash = HashText("SUPPLY-BASELINE"),
                 SupplierName = "Nhà cung cấp giả lập", Notes = "Tồn đầu kỳ test Development.",
                 ConfirmedByUserId = adminId, ConfirmedAt = now.AddDays(-7),
-                Lines = supplies.Select(x => new StockReceiptLine
+                Lines = supplies.Select(x => new InventoryTransactionLine
                 {
-                    MedicalSupplyId = x.Id, SupplyCode = x.Code, SupplyName = x.Name, Unit = x.Unit,
+                    ItemId = x.Id, ItemCode = x.Code, ItemName = x.Name, Unit = x.Unit,
                     Quantity = x.Code == "VT003" ? 3 : x.Code is "VT001" or "VT002" ? 50 : 25,
                 }).ToList(),
             };
-            db.StockReceipts.Add(baseline);
-            await db.SaveChangesAsync(ct);
-            foreach (var line in baseline.Lines)
-                db.StockBalances.Add(new StockBalance { MedicalSupplyId = line.MedicalSupplyId, OnHand = line.Quantity, Version = 1, UpdatedAt = now });
+            db.InventoryTransactions.Add(baseline);
+            foreach (var supply in supplies)
+            {
+                var line = baseline.Lines.First(l => l.ItemId == supply.Id);
+                supply.OnHand = line.Quantity;
+                supply.StockVersion++;
+                supply.StockUpdatedAt = now;
+            }
             await db.SaveChangesAsync(ct);
         }
 
         var receiptSupply = supplies.SingleOrDefault(x => x.Code == "VT003");
         if (receiptSupply is not null)
         {
-            var receipt = new StockReceipt
+            var receipt = new InventoryTransaction
             {
+                ItemDomain = InventoryItemDomains.Supply,
+                TransactionType = InventoryTransactionTypes.Receipt,
                 RequestId = FixtureGuid("RCV-TST-01"), PayloadHash = HashText("RCV-TST-01"),
                 SupplierName = "Nhà cung cấp giả lập", Notes = "Phiếu nhập test-only, một hộp VT003.",
                 ConfirmedByUserId = adminId, ConfirmedAt = now,
-                Lines = [new StockReceiptLine { MedicalSupplyId = receiptSupply.Id, Quantity = 1, SupplyCode = receiptSupply.Code, SupplyName = receiptSupply.Name, Unit = receiptSupply.Unit }],
+                Lines = [new InventoryTransactionLine { ItemId = receiptSupply.Id, Quantity = 1, ItemCode = receiptSupply.Code, ItemName = receiptSupply.Name, Unit = receiptSupply.Unit }],
             };
-            db.StockReceipts.Add(receipt);
-            var balance = await db.StockBalances.SingleOrDefaultAsync(x => x.MedicalSupplyId == receiptSupply.Id, ct);
-            if (balance is null) db.StockBalances.Add(new StockBalance { MedicalSupplyId = receiptSupply.Id, OnHand = 1, Version = 1, UpdatedAt = now });
-            else { balance.OnHand += 1; balance.Version++; balance.UpdatedAt = now; }
+            db.InventoryTransactions.Add(receipt);
+            receiptSupply.OnHand += 1;
+            receiptSupply.StockVersion++;
+            receiptSupply.StockUpdatedAt = now;
             await db.SaveChangesAsync(ct);
             db.AuditLogs.Add(new AuditLog { UserId = adminId, Action = "STOCK_RECEIPT_CONFIRMED", EntityType = "StockReceipt", EntityId = receipt.Id, Detail = "{\"fixture\":true,\"code\":\"VT003\",\"quantity\":1}", CreatedAt = now });
         }
 
-        var issueLines = new List<StockIssueLine>();
+        var issueLines = new List<InventoryTransactionLine>();
         foreach (var code in new[] { "VT001", "VT005" })
         {
             var supply = supplies.SingleOrDefault(x => x.Code == code);
             if (supply is null) continue;
-            var balance = await db.StockBalances.SingleOrDefaultAsync(x => x.MedicalSupplyId == supply.Id, ct);
-            if (balance is null)
-            {
-                var received = await db.StockReceiptLines.Where(x => x.MedicalSupplyId == supply.Id).SumAsync(x => (int?)x.Quantity, ct) ?? 0;
-                var issued = await db.StockIssueLines.Where(x => x.MedicalSupplyId == supply.Id).SumAsync(x => (int?)x.Quantity, ct) ?? 0;
-                balance = new StockBalance { MedicalSupplyId = supply.Id, OnHand = received - issued, Version = 1, UpdatedAt = now };
-                db.StockBalances.Add(balance);
-            }
-            if (balance.OnHand < 1) continue;
-            issueLines.Add(new StockIssueLine { MedicalSupplyId = supply.Id, Quantity = 1, SupplyCode = supply.Code, SupplyName = supply.Name, Unit = supply.Unit });
-            balance.OnHand -= 1;
-            balance.Version++;
-            balance.UpdatedAt = now;
+            if (supply.OnHand < 1) continue;
+            issueLines.Add(new InventoryTransactionLine { ItemId = supply.Id, Quantity = 1, ItemCode = supply.Code, ItemName = supply.Name, Unit = supply.Unit });
+            supply.OnHand -= 1;
+            supply.StockVersion++;
+            supply.StockUpdatedAt = now;
         }
         if (issueLines.Count > 0)
         {
-            var issue = new StockIssue
+            var issue = new InventoryTransaction
             {
+                ItemDomain = InventoryItemDomains.Supply,
+                TransactionType = InventoryTransactionTypes.Issue,
                 VisitId = visit.VisitId, RequestId = FixtureGuid("ISS-TST-101-01"), PayloadHash = HashText("ISS-TST-101-01"),
                 Notes = "Tiêu hao thực tế giả lập, đã xác nhận.", ConfirmedByUserId = assistant.UserId, ConfirmedAt = now, Lines = issueLines,
             };
-            db.StockIssues.Add(issue);
+            db.InventoryTransactions.Add(issue);
             await db.SaveChangesAsync(ct);
             db.AuditLogs.Add(new AuditLog { UserId = assistant.UserId, Action = "STOCK_ISSUE_CONFIRMED", EntityType = "StockIssue", EntityId = issue.Id, Detail = "{\"fixture\":true,\"lineCount\":2}", CreatedAt = now });
         }

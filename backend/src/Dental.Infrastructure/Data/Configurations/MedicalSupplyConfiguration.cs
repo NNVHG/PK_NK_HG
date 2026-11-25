@@ -8,7 +8,11 @@ public sealed class MedicalSupplyConfiguration : IEntityTypeConfiguration<Medica
 {
     public void Configure(EntityTypeBuilder<MedicalSupply> b)
     {
-        b.ToTable("MedicalSupplies", t => t.HasCheckConstraint("CK_MedicalSupplies_MinimumStockThreshold", "\"MinimumStockThreshold\" >= 0"));
+        b.ToTable("MedicalSupplies", t =>
+        {
+            t.HasCheckConstraint("CK_MedicalSupplies_MinimumStockThreshold", "\"MinimumStockThreshold\" >= 0");
+            t.HasCheckConstraint("CK_MedicalSupplies_OnHand", "\"OnHand\" >= 0");
+        });
         b.HasKey(x => x.Id);
         b.Property(x => x.Code).HasMaxLength(50).IsRequired();
         b.HasIndex(x => x.Code).IsUnique().HasDatabaseName("IX_MedicalSupplies_Code");
@@ -18,6 +22,8 @@ public sealed class MedicalSupplyConfiguration : IEntityTypeConfiguration<Medica
         b.Property(x => x.Description).HasMaxLength(500);
         b.Property(x => x.SearchText).HasMaxLength(600).IsRequired();
         b.Property(x => x.Version).IsConcurrencyToken();
+        b.Property(x => x.StockVersion).IsConcurrencyToken();
+        b.Property(x => x.StockUpdatedAt).HasColumnType("timestamptz");
         b.HasOne<User>().WithMany().HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<User>().WithMany().HasForeignKey(x => x.UpdatedByUserId).OnDelete(DeleteBehavior.Restrict);
     }

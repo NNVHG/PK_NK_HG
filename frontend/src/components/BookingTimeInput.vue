@@ -47,7 +47,7 @@
     </div>
 
     <p v-if="slots.length && hidePastSlots && isTodaySelected && !availableMorningSlots.length && !availableAfternoonSlots.length" class="past-slots-hint">
-      Hôm nay đã qua các buổi tiếp nhận. Vui lòng chọn ngày khám khác.
+      {{ AFTER_HOURS_BOOKING_NOTICE }}
     </p>
     <p v-else-if="slots.length && hidePastSlots && isTodaySelected && !availableMorningSlots.length" class="past-slots-hint">
       Buổi sáng hôm nay đã hết giờ nhận lịch trực tuyến; bạn có thể chọn Buổi chiều hoặc ngày khác.
@@ -57,6 +57,7 @@
 
 <script setup lang="ts">
 import { computed, watch } from 'vue';
+import { AFTER_HOURS_BOOKING_NOTICE, getVietnamNow } from '@/utils/bookingWindow';
 
 const props = defineProps<{
   inputId: string;
@@ -68,31 +69,20 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>();
 
-function vietnamNow(): { date: string; time: string } {
-  const now = new Date();
-  const date = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit'
-  }).format(now);
-  const time = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
-  }).format(now);
-  return { date, time };
-}
-
-const isTodaySelected = computed(() => Boolean(props.selectedDate) && props.selectedDate === vietnamNow().date);
+const isTodaySelected = computed(() => Boolean(props.selectedDate) && props.selectedDate === getVietnamNow().date);
 
 const allMorningSlots = computed(() => props.slots.filter(slot => slot < '12:00'));
 const allAfternoonSlots = computed(() => props.slots.filter(slot => slot >= '12:00'));
 
 const availableMorningSlots = computed(() => {
   if (!props.hidePastSlots || !isTodaySelected.value) return allMorningSlots.value;
-  const nowTime = vietnamNow().time;
+  const nowTime = getVietnamNow().time;
   return allMorningSlots.value.filter(slot => slot > nowTime);
 });
 
 const availableAfternoonSlots = computed(() => {
   if (!props.hidePastSlots || !isTodaySelected.value) return allAfternoonSlots.value;
-  const nowTime = vietnamNow().time;
+  const nowTime = getVietnamNow().time;
   return allAfternoonSlots.value.filter(slot => slot > nowTime);
 });
 
@@ -123,7 +113,7 @@ watch(
   () => {
     if (!props.modelValue || !props.slots.length) return;
     if (!props.hidePastSlots || !isTodaySelected.value) return;
-    const nowTime = vietnamNow().time;
+    const nowTime = getVietnamNow().time;
     const list = selectedSession.value === 'morning' ? availableMorningSlots.value : availableAfternoonSlots.value;
     if (!list.length) {
       emit('update:modelValue', '');

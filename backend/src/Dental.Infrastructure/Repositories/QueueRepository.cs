@@ -24,15 +24,14 @@ public sealed class QueueRepository : IQueueRepository
     {
         if (dentistIds.Count == 0) return [];
         var today = _clock.Today;
-        return await (from workspace in _db.StaffWorkspaces.AsNoTracking()
-                      join dentist in _db.Users on workspace.UserId equals dentist.UserId
-                      join room in _db.ClinicRooms on workspace.RoomId equals (int?)room.Id
-                      where dentistIds.Contains(workspace.UserId) && workspace.WorkDate == today &&
+        return await (from dentist in _db.Users.AsNoTracking()
+                      join room in _db.ClinicRooms on dentist.WorkspaceRoomId equals (int?)room.Id
+                      where dentistIds.Contains(dentist.UserId) && dentist.WorkspaceDate == today &&
                           dentist.IsActive &&
                           dentist.Role.RoleCode == Dental.Domain.Constants.RoleCodes.Dentist && room.IsActive &&
                           (room.Status == DentalChairStatus.Available || room.Status == DentalChairStatus.Occupied)
                       select new Dental.Application.Features.Queue.DTOs.QueueDentistLocation(
-                          workspace.UserId, room.RoomCode, room.RoomName)).ToListAsync(ct);
+                          dentist.UserId, room.RoomCode, room.RoomName)).ToListAsync(ct);
     }
 
     public async Task<IReadOnlyList<QueueEntry>> GetExpiredUnstartedAsync(DateOnly lastExpiredDate, CancellationToken ct = default)
@@ -45,15 +44,22 @@ public sealed class QueueRepository : IQueueRepository
     public async Task AddAsync(QueueEntry entry, CancellationToken ct = default)
         => await _db.QueueEntries.AddAsync(entry, ct);
 
-    public Task<QueueEntry?> GetByIdAsync(int queueEntryId, CancellationToken ct = default)
-        => _db.QueueEntries
+    public async Task<QueueEntry?> GetByIdAsync(int queueEntryId, CancellationToken ct = default)
+    {
+        var entry = await _db.QueueEntries
             .Include(q => q.Patient)
             .Include(q => q.Appointment)
             .Include(q => q.Dentist)
             .Include(q => q.Visit)
-            .Include(q => q.StatusHistories.OrderBy(h => h.ChangedAt))
-                .ThenInclude(h => h.ChangedByUser)
             .FirstOrDefaultAsync(q => q.QueueEntryId == queueEntryId, ct);
+        if (entry is not null)
+        {
+            var histories = await HydrateHistoriesAsync(entry.StatusHistoryJson, ct);
+            foreach (var h in histories) h.QueueEntry = entry;
+            entry.StatusHistories = histories;
+        }
+        return entry;
+    }
 
     public async Task<int> GetNextQueueNumberAsync(DateOnly date, CancellationToken ct = default)
     {
@@ -100,10 +106,8 @@ public sealed class QueueRepository : IQueueRepository
 
         // DL-046/054: đúng hẹn theo giờ hẹn; thường/trễ hẹn theo giờ check-in.
         var items = await query
-            .OrderByDescending(q => q.Status == QueueStatus.Waiting && q.StatusHistories.Any(h =>
-                h.FromStatus == QueueStatus.InImaging && h.ToStatus == QueueStatus.Waiting))
-            .ThenByDescending(q => q.Status == QueueStatus.Waiting && q.StatusHistories.Any(h =>
-                h.FromStatus == QueueStatus.Skipped && h.ToStatus == QueueStatus.Waiting))
+            .OrderByDescending(q => q.Status == QueueStatus.Waiting && q.ReturnedFromImaging)
+            .ThenByDescending(q => q.Status == QueueStatus.Waiting && q.ReturnedFromSkipped)
             .ThenByDescending(q => q.IsPriority)
             .ThenBy(q => q.IsPriority && q.Appointment != null ? q.Appointment.SlotTime : TimeOnly.MaxValue)
             .ThenBy(q => q.CheckInTime)
@@ -135,10 +139,8 @@ public sealed class QueueRepository : IQueueRepository
         }
 
         return await query
-            .OrderByDescending(q => q.StatusHistories.Any(h =>
-                h.FromStatus == QueueStatus.InImaging && h.ToStatus == QueueStatus.Waiting))
-            .ThenByDescending(q => q.Status == QueueStatus.Waiting && q.StatusHistories.Any(h =>
-                h.FromStatus == QueueStatus.Skipped && h.ToStatus == QueueStatus.Waiting))
+            .OrderByDescending(q => q.ReturnedFromImaging)
+            .ThenByDescending(q => q.ReturnedFromSkipped)
             .ThenByDescending(q => q.IsPriority)
             .ThenBy(q => q.IsPriority && q.Appointment != null ? q.Appointment.SlotTime : TimeOnly.MaxValue)
             .ThenBy(q => q.CheckInTime)
@@ -149,36 +151,63 @@ public sealed class QueueRepository : IQueueRepository
 
     public async Task<IReadOnlyList<QueueStatusHistory>> GetActivePublicCallsAsync(
         DateOnly date, DateTime windowStartUtc, DateTime utcNow, CancellationToken ct = default)
-        => await _db.QueueStatusHistories
+    {
+        var entries = await _db.QueueEntries
             .AsNoTracking()
-            .Where(call => call.QueueEntry.QueueDate == date && call.QueueEntry.Status == QueueStatus.Calling &&
-                call.ToStatus == QueueStatus.Calling &&
-                (call.FromStatus == QueueStatus.Waiting || call.FromStatus == QueueStatus.Calling) &&
-                call.Reason == QueueStatusHistory.PublicInvitationReason &&
-                call.ChangedAt > windowStartUtc && call.ChangedAt <= utcNow &&
-                call.ChangedByUser != null && call.ChangedByUser.IsActive &&
-                call.ChangedByUser.Role.RoleCode == RoleCodes.Dentist &&
-                call.ChangedByUserId == call.QueueEntry.DentistId &&
-                !call.QueueEntry.StatusHistories.Any(later =>
-                    later.ChangedAt > call.ChangedAt ||
-                    (later.ChangedAt == call.ChangedAt && later.QueueStatusHistoryId > call.QueueStatusHistoryId)))
-            .OrderByDescending(call => call.ChangedAt)
-            .ThenByDescending(call => call.QueueStatusHistoryId)
+            .Include(q => q.Patient)
+            .Where(q => q.QueueDate == date && q.Status == QueueStatus.Calling &&
+                q.PublicCalledAtUtc != null &&
+                q.PublicCalledAtUtc > windowStartUtc && q.PublicCalledAtUtc <= utcNow &&
+                q.PublicCalledByUser != null && q.PublicCalledByUser.IsActive &&
+                q.PublicCalledByUser.Role.RoleCode == RoleCodes.Dentist &&
+                q.PublicCalledByUserId == q.DentistId)
+            .OrderByDescending(q => q.PublicCalledAtUtc)
+            .ThenByDescending(q => q.QueueEntryId)
             .Take(5)
-            .Include(call => call.QueueEntry)
-                .ThenInclude(entry => entry.Patient)
             .ToListAsync(ct);
 
+        return entries.Select(q => new QueueStatusHistory
+        {
+            QueueEntryId = q.QueueEntryId,
+            QueueEntry = q,
+            FromStatus = QueueStatus.Waiting,
+            ToStatus = QueueStatus.Calling,
+            ChangedByUserId = q.PublicCalledByUserId,
+            ChangedAt = q.PublicCalledAtUtc!.Value,
+            Reason = QueueStatusHistory.PublicInvitationReason
+        }).ToList();
+    }
+
     public async Task AddStatusHistoryAsync(QueueStatusHistory history, CancellationToken ct = default)
-        => await _db.QueueStatusHistories.AddAsync(history, ct);
+    {
+        var entry = _db.QueueEntries.Local.FirstOrDefault(q => q.QueueEntryId == history.QueueEntryId)
+            ?? await _db.QueueEntries.FirstAsync(q => q.QueueEntryId == history.QueueEntryId, ct);
+        entry.AppendStatusHistory(history);
+    }
 
     public async Task<IReadOnlyList<QueueStatusHistory>> GetStatusHistoriesAsync(int queueEntryId, CancellationToken ct = default)
     {
-        return await _db.QueueStatusHistories
-            .AsNoTracking()
-            .Include(h => h.ChangedByUser)
-            .Where(h => h.QueueEntryId == queueEntryId)
-            .OrderBy(h => h.ChangedAt)
-            .ToListAsync(ct);
+        var json = await _db.QueueEntries.AsNoTracking()
+            .Where(q => q.QueueEntryId == queueEntryId)
+            .Select(q => q.StatusHistoryJson)
+            .FirstOrDefaultAsync(ct);
+        return await HydrateHistoriesAsync(json, ct);
+    }
+
+    private async Task<List<QueueStatusHistory>> HydrateHistoriesAsync(string? json, CancellationToken ct)
+    {
+        var items = string.IsNullOrEmpty(json)
+            ? new List<QueueStatusHistory>()
+            : System.Text.Json.JsonSerializer.Deserialize<List<QueueStatusHistory>>(json) ?? new List<QueueStatusHistory>();
+        if (items.Count == 0) return items;
+        var userIds = items.Where(h => h.ChangedByUserId.HasValue).Select(h => h.ChangedByUserId!.Value).Distinct().ToArray();
+        if (userIds.Length > 0)
+        {
+            var users = await _db.Users.AsNoTracking().Where(u => userIds.Contains(u.UserId)).ToDictionaryAsync(u => u.UserId, ct);
+            foreach (var h in items)
+                if (h.ChangedByUserId.HasValue && users.TryGetValue(h.ChangedByUserId.Value, out var u))
+                    h.ChangedByUser = u;
+        }
+        return items.OrderBy(h => h.ChangedAt).ToList();
     }
 }

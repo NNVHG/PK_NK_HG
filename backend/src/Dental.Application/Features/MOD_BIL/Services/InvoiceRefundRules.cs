@@ -22,7 +22,7 @@ public static class InvoiceRefundRules
             invoice.RefundRevision == int.MaxValue || invoice.PaidAmount < 0 || invoice.PaidAmount > invoice.FinalAmount ||
             selection.Count is < 1 or > 200 || selection.Select(x=>x.InvoiceItemId).Distinct().Count()!=selection.Count)
             return Fail();
-        var returned = invoice.Refunds.SelectMany(r=>r.Items).GroupBy(x=>x.InvoiceItemId).ToDictionary(g=>g.Key,g=>g.Sum(x=>(long)x.Quantity));
+        var returned = invoice.ApprovedRefunds().SelectMany(r=>r.GetItems()).GroupBy(x=>x.InvoiceItemId).ToDictionary(g=>g.Key,g=>g.Sum(x=>(long)x.Quantity));
         var remaining = new Dictionary<int,int>();
         foreach (var item in invoice.Items)
         {

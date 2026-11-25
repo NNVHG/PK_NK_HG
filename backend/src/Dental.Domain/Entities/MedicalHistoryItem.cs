@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Dental.Domain.Entities;
 
 /// <summary>Mục dị ứng hoặc bệnh lý thuộc một bản chụp tiền sử.</summary>
@@ -10,5 +12,6 @@ public sealed class MedicalHistoryItem
     public bool IsCritical { get; set; }
     public string? Detail { get; set; }
 
+    [JsonIgnore]
     public MedicalHistoryRecord Record { get; set; } = null!;
 }

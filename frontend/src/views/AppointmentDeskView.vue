@@ -4,11 +4,9 @@
       <div class="header-icon">🗓️</div>
       <div class="header-titles">
         <h1>Quản lý lịch hẹn tại quầy</h1>
-        <p class="subtitle">Tra cứu lịch hẹn trong ngày, hỗ trợ dời lịch, hủy hẹn và nhắc hẹn tự động qua SMS/Zalo.</p>
+        <p class="subtitle">Tra cứu lịch hẹn trong ngày, hỗ trợ dời lịch và hủy hẹn tại quầy.</p>
       </div>
     </div>
-
-    <AppointmentReminderPanel />
 
     <form class="filters-card" @submit.prevent="load(1)">
       <div class="filter-group">
@@ -155,7 +153,6 @@
   </main>
 </template>
 <script setup lang="ts">
-import AppointmentReminderPanel from '@/components/AppointmentReminderPanel.vue';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import AppointmentRescheduling from '@/components/AppointmentRescheduling.vue';
 import axios from 'axios';

@@ -90,7 +90,7 @@
         class="bdp-quick-chip"
         :class="{
           selected: modelValue === item.iso,
-          today: item.offset === 0,
+          today: item.isTodayChip,
           weekend: item.isWeekend
         }"
         :aria-pressed="modelValue === item.iso"
@@ -132,7 +132,7 @@
           :disabled="disabled || !isWithinBounds(effectiveMin)"
           @click="jumpToMinDate"
         >
-          Về hôm nay
+          {{ minJumpLabel }}
         </button>
       </div>
 
@@ -172,12 +172,14 @@ const props = withDefaults(defineProps<{
   modelValue: string;
   min?: string;
   max?: string;
+  today?: string;
   inputId?: string;
   disabled?: boolean;
   required?: boolean;
 }>(), {
   min: '',
   max: '',
+  today: '',
   inputId: 'booking-date-input',
   disabled: false,
   required: false
@@ -245,7 +247,10 @@ function formatFullVietnamese(iso: string): string {
 }
 
 const todayIso = vietnamToday();
-const effectiveMin = computed(() => (isValidIsoDate(props.min) ? props.min : todayIso));
+const effectiveMin = computed(() =>
+  isValidIsoDate(props.min) ? props.min : isValidIsoDate(props.today) ? props.today : todayIso
+);
+const effectiveToday = computed(() => (isValidIsoDate(props.today) ? props.today : effectiveMin.value));
 const effectiveMax = computed(() => (isValidIsoDate(props.max) ? props.max : ''));
 
 function isWithinBounds(iso: string): boolean {
@@ -279,7 +284,7 @@ const displayText = computed(() =>
 );
 
 const relativeDelta = computed(() =>
-  isValidIsoDate(props.modelValue) ? diffDays(effectiveMin.value, props.modelValue) : null
+  isValidIsoDate(props.modelValue) ? diffDays(effectiveToday.value, props.modelValue) : null
 );
 
 const relativeLabel = computed(() => {
@@ -291,6 +296,13 @@ const relativeLabel = computed(() => {
   if (delta > 2 && delta <= 30) return `Sau ${delta} ngày`;
   if (delta < 0) return 'Ngày đã qua';
   return '';
+});
+
+const minJumpLabel = computed(() => {
+  const delta = diffDays(effectiveToday.value, effectiveMin.value);
+  if (delta === 0) return 'Về hôm nay';
+  if (delta === 1) return 'Về ngày mai';
+  return 'Ngày gần nhất';
 });
 
 const relativeToneClass = computed(() => {
@@ -312,17 +324,20 @@ const canNextDay = computed(() => isWithinBounds(addDays(anchorIso.value, 1)));
 
 const quickDays = computed(() => {
   const base = effectiveMin.value;
+  const refToday = effectiveToday.value;
   return Array.from({ length: 7 }, (_, offset) => {
     const iso = addDays(base, offset);
     const dt = parseIsoUtc(iso);
     const dow = dt ? dt.getUTCDay() : 0;
-    const topLabel = offset === 0 ? 'Hôm nay' : offset === 1 ? 'Ngày mai' : WEEKDAY_SHORT[dow];
+    const deltaFromToday = diffDays(refToday, iso);
+    const topLabel = deltaFromToday === 0 ? 'Hôm nay' : deltaFromToday === 1 ? 'Ngày mai' : WEEKDAY_SHORT[dow];
     const shortDate = `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
     return {
       offset,
       iso,
       topLabel,
       shortDate,
+      isTodayChip: deltaFromToday === 0,
       isWeekend: dow === 0 || dow === 6,
       disabled: !isWithinBounds(iso)
     };
@@ -354,7 +369,7 @@ const calendarCells = computed(() => {
   const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
   const totalCells = leadingCount + daysInMonth > 35 ? 42 : 35;
   const startUtc = new Date(Date.UTC(y, m - 1, 1 - leadingCount));
-  const baseMin = effectiveMin.value;
+  const refToday = effectiveToday.value;
 
   return Array.from({ length: totalCells }, (_, idx) => {
     const dt = new Date(Date.UTC(startUtc.getUTCFullYear(), startUtc.getUTCMonth(), startUtc.getUTCDate() + idx));
@@ -364,7 +379,7 @@ const calendarCells = computed(() => {
       iso,
       day: dt.getUTCDate(),
       inMonth: dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1,
-      isToday: iso === baseMin,
+      isToday: iso === refToday,
       isSelected: iso === props.modelValue,
       isWeekend: dow === 0 || dow === 6,
       disabled: !isWithinBounds(iso)

@@ -26,6 +26,8 @@ public sealed class VisitConfiguration : IEntityTypeConfiguration<Visit>
             .HasColumnType("timestamptz")
             .IsRequired();
         builder.Property(visit => visit.UpdatedAt).HasColumnType("timestamptz");
+        builder.Property(visit => visit.PostTreatmentNotesJson).HasColumnType("jsonb");
+        builder.Property(visit => visit.UnlockHistoryJson).HasColumnType("jsonb");
 
         builder.HasOne(visit => visit.Patient)
             .WithMany()

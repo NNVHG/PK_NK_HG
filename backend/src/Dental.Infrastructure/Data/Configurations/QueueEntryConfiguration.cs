@@ -32,6 +32,18 @@ public sealed class QueueEntryConfiguration : IEntityTypeConfiguration<QueueEntr
         builder.Property(q => q.Notes)
             .HasMaxLength(500);
 
+        builder.Property(q => q.ReturnedFromImaging)
+            .HasDefaultValue(false);
+
+        builder.Property(q => q.ReturnedFromSkipped)
+            .HasDefaultValue(false);
+
+        builder.Property(q => q.PublicCalledAtUtc)
+            .HasColumnType("timestamptz");
+
+        builder.Property(q => q.StatusHistoryJson)
+            .HasColumnType("jsonb");
+
         builder.Property(q => q.CreatedAt)
             .HasColumnType("timestamptz")
             .IsRequired();
@@ -59,10 +71,12 @@ public sealed class QueueEntryConfiguration : IEntityTypeConfiguration<QueueEntr
             .HasForeignKey(q => q.VisitId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasMany(q => q.StatusHistories)
-            .WithOne(h => h.QueueEntry)
-            .HasForeignKey(h => h.QueueEntryId)
-            .OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(q => q.PublicCalledByUser)
+            .WithMany()
+            .HasForeignKey(q => q.PublicCalledByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Ignore(q => q.StatusHistories);
 
         // Ràng buộc duy nhất theo ngày để chống trùng số khi check-in đồng thời (DL-046)
         builder.HasIndex(q => new { q.QueueDate, q.QueueNumber })
@@ -74,6 +88,10 @@ public sealed class QueueEntryConfiguration : IEntityTypeConfiguration<QueueEntr
 
         builder.HasIndex(q => new { q.QueueDate, q.Status })
             .HasDatabaseName("IX_QueueEntries_QueueDate_Status");
+
+        builder.HasIndex(q => new { q.QueueDate, q.Status, q.PublicCalledAtUtc })
+            .HasFilter("\"PublicCalledAtUtc\" IS NOT NULL")
+            .HasDatabaseName("IX_QueueEntries_PublicCalls");
 
         builder.HasIndex(q => q.AppointmentId)
             .HasDatabaseName("IX_QueueEntries_AppointmentId");

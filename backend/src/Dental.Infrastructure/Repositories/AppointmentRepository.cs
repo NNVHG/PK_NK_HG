@@ -23,7 +23,7 @@ public sealed class AppointmentRepository : IAppointmentRepository
         => _db.Appointments
             .Include(a => a.Patient)
             .Include(a => a.CreatedByUser)
-            .FirstOrDefaultAsync(a => a.AppointmentId == appointmentId, ct);
+            .FirstOrDefaultAsync(a => a.AppointmentId == appointmentId && a.Status != "Pending" && a.Status != "Rejected", ct);
 
     public async Task<ScheduleSnapshot?> GetScheduleAsync(CancellationToken ct = default) => await ClinicScheduleReader.ReadAsync(_db, ct);
 
@@ -32,20 +32,21 @@ public sealed class AppointmentRepository : IAppointmentRepository
         var first = DateOnly.FromDayNumber(Math.Max(DateOnly.MinValue.DayNumber, date.DayNumber - 1));
         var last = DateOnly.FromDayNumber(Math.Min(DateOnly.MaxValue.DayNumber, date.DayNumber + 1));
         return _db.Appointments.AsNoTracking().Where(a => a.AppointmentDate >= first && a.AppointmentDate <= last &&
-            a.Status == AppointmentStatuses.Scheduled && (!excludedId.HasValue || a.AppointmentId != excludedId.Value));
+            (a.Status == AppointmentStatuses.Scheduled || a.Status == "Pending") &&
+            (!excludedId.HasValue || a.AppointmentId != excludedId.Value));
     }
+
     public async Task<int> GetSlotBookingCountAsync(DateOnly date, TimeOnly slotTime, CancellationToken ct = default, int? excludedId = null, int? durationMinutes = null)
     {
-        var old=await Nearby(date,excludedId).ToArrayAsync(ct);
-        var pending=await BookingRequestReservations.Nearby(_db,date).ToArrayAsync(ct);
-        return BookingOccupancy.Peak(old.Concat(pending.Select(BookingRequestReservations.Period)),date,slotTime,durationMinutes??30);
+        var held = await Nearby(date, excludedId).ToArrayAsync(ct);
+        return BookingOccupancy.Peak(held, date, slotTime, durationMinutes ?? 30);
     }
 
     public async Task<bool> HasActiveAppointmentOnDateAsync(int patientId, DateOnly date, CancellationToken ct = default, int? excludedId = null)
-        => await _db.Appointments
-            .AnyAsync(a => a.PatientId == patientId &&
-                           a.AppointmentDate == date &&
-                           a.Status == AppointmentStatuses.Scheduled && (!excludedId.HasValue || a.AppointmentId != excludedId.Value), ct) || await _db.BookingRequests.AnyAsync(x=>x.Status=="Pending"&&x.VerifiedPatientId==patientId&&x.AppointmentDate==date,ct);
+        => await _db.Appointments.AnyAsync(a => a.PatientId == patientId &&
+            a.AppointmentDate == date &&
+            (a.Status == AppointmentStatuses.Scheduled || a.Status == "Pending") &&
+            (!excludedId.HasValue || a.AppointmentId != excludedId.Value), ct);
 
     public async Task<(IReadOnlyList<Appointment> Items, int TotalCount)> GetAppointmentsAsync(
         DateOnly? date,
@@ -60,10 +61,10 @@ public sealed class AppointmentRepository : IAppointmentRepository
             .AsNoTracking()
             .Include(a => a.Patient)
             .Include(a => a.CreatedByUser)
-            .AsQueryable();
+            .Where(a => a.Status != "Pending" && a.Status != "Rejected");
 
         if (ownerUserId.HasValue)
-            query = query.Where(a =>
+            query = query.Where(a => a.Patient != null && (
                 a.Patient.UserId == ownerUserId.Value ||
                 _db.PatientGuardians.Any(g =>
                     g.IsActive &&
@@ -74,7 +75,7 @@ public sealed class AppointmentRepository : IAppointmentRepository
                     g.GuardianPatient.IsActive &&
                     g.GuardianPatient.UserId == ownerUserId.Value &&
                     g.GuardianPatient.User != null &&
-                    g.GuardianPatient.User.IsActive));
+                    g.GuardianPatient.User.IsActive)));
 
         if (date.HasValue)
             query = query.Where(a => a.AppointmentDate == date.Value);

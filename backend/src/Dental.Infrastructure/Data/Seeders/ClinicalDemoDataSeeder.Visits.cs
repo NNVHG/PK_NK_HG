@@ -12,15 +12,16 @@ public static partial class ClinicalDemoDataSeeder
         User dentist1, User dentist2, User receptionist1, DateOnly today, DateTime now, CancellationToken ct)
     {
         // Yêu cầu đặt lịch trực tuyến (MOD_APP - chờ Lễ tân/Admin duyệt)
-        db.BookingRequests.AddRange(
-            new BookingRequest
+        db.Appointments.AddRange(
+            new Appointment
             {
+                Source = "Online",
                 ClientRequestId = Guid.NewGuid(),
                 IntentDigest = "DEMO_BOOKING_REQUEST_ADULT_01",
-                FullName = "Võ Minh Tuấn",
-                Phone = "0900000031",
-                DateOfBirth = new DateOnly(1992, 4, 18),
-                Gender = "Nam",
+                GuestFullName = "Võ Minh Tuấn",
+                GuestPhone = "0900000031",
+                GuestDateOfBirth = new DateOnly(1992, 4, 18),
+                GuestGender = "Nam",
                 Notes = "Đau nhức răng hàm dưới bên phải, muốn kiểm tra tổng quát",
                 AppointmentDate = today.AddDays(1),
                 SlotTime = new TimeOnly(10, 30),
@@ -29,14 +30,15 @@ public static partial class ClinicalDemoDataSeeder
                 Version = 1,
                 CreatedAt = now.AddHours(-2),
             },
-            new BookingRequest
+            new Appointment
             {
+                Source = "Online",
                 ClientRequestId = Guid.NewGuid(),
                 IntentDigest = "DEMO_BOOKING_REQUEST_CHILD_02",
-                FullName = "Trần Gia Hân",
-                Phone = "0900000032",
-                DateOfBirth = new DateOnly(2019, 11, 5),
-                Gender = "Nữ",
+                GuestFullName = "Trần Gia Hân",
+                GuestPhone = "0900000032",
+                GuestDateOfBirth = new DateOnly(2019, 11, 5),
+                GuestGender = "Nữ",
                 Notes = "Trẻ dưới 14 tuổi - khám sâu răng sữa và kiểm tra thay răng",
                 AppointmentDate = today.AddDays(2),
                 SlotTime = new TimeOnly(15, 0),
@@ -191,13 +193,14 @@ public static partial class ClinicalDemoDataSeeder
                 new QueueStatusHistory { FromStatus = null, ToStatus = QueueStatus.Waiting, ChangedByUserId = receptionist1.UserId, ChangedAt = now.Date.AddHours(10).AddMinutes(10), Reason = "Tiếp đón tại quầy" }
             ]
         };
+        foreach (var entry in new[] { q1, q2, q3, q4, q5 }) entry.SyncStatusHistoryFromCollection();
         db.QueueEntries.AddRange(q1, q2, q3, q4, q5);
 
         // Giữ lượt trẻ em trong hàng đợi chung. Ca khác đã điều phối để thử Phụ tá gọi cho Nha sĩ 2.
         if (dentist2.UserId != dentist1.UserId && room2 is { IsActive: true, Status: DentalChairStatus.Available })
         {
             var checkInTime = q5.CheckInTime.AddMinutes(5);
-            db.QueueEntries.Add(new QueueEntry
+            var q6 = new QueueEntry
             {
                 PatientId = p4.PatientId, DentistId = dentist2.UserId, QueueDate = today,
                 QueueNumber = q5.QueueNumber + 1, CheckInTime = checkInTime, CreatedAt = checkInTime,
@@ -215,7 +218,9 @@ public static partial class ClinicalDemoDataSeeder
                         ChangedAt = checkInTime, Reason = "Tiếp đón và điều phối lượt demo",
                     },
                 ],
-            });
+            };
+            q6.SyncStatusHistoryFromCollection();
+            db.QueueEntries.Add(q6);
         }
         await db.SaveChangesAsync(ct);
 

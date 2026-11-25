@@ -36,27 +36,63 @@ namespace Dental.Infrastructure.Migrations
                     b.Property<DateOnly>("AppointmentDate")
                         .HasColumnType("date");
 
+                    b.Property<Guid?>("ClientRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("CreatedAccount")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamptz");
 
-                    b.Property<int>("CreatedByUserId")
+                    b.Property<int?>("CreatedByUserId")
                         .HasColumnType("integer");
 
                     b.Property<string>("EmergencyReason")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
+                    b.Property<DateOnly?>("GuestDateOfBirth")
+                        .HasColumnType("date");
+
+                    b.Property<string>("GuestEmail")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("GuestFullName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("GuestGender")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<string>("GuestPhone")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("IntentDigest")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<bool>("IsEmergency")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
+                    b.Property<bool>("IsReturning")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Notes")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<int>("PatientId")
+                    b.Property<int?>("PatientId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<int>("RescheduleCount")
                         .ValueGeneratedOnAdd()
@@ -67,6 +103,9 @@ namespace Dental.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<int?>("ReviewedByUserId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("SlotDurationMinutes")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
@@ -75,18 +114,42 @@ namespace Dental.Infrastructure.Migrations
                     b.Property<TimeOnly>("SlotTime")
                         .HasColumnType("time");
 
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Counter");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<int?>("SubmittedByUserId")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamptz");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.HasKey("AppointmentId");
+
+                    b.HasIndex("ClientRequestId")
+                        .IsUnique()
+                        .HasFilter("\"ClientRequestId\" IS NOT NULL");
 
                     b.HasIndex("CreatedByUserId")
                         .HasDatabaseName("IX_Appointments_CreatedByUserId");
+
+                    b.HasIndex("ReviewedByUserId");
+
+                    b.HasIndex("SubmittedByUserId");
 
                     b.HasIndex("AppointmentDate", "SlotTime")
                         .HasDatabaseName("IX_Appointments_AppointmentDate_SlotTime");
@@ -94,9 +157,13 @@ namespace Dental.Infrastructure.Migrations
                     b.HasIndex("PatientId", "AppointmentDate")
                         .HasDatabaseName("IX_Appointments_PatientId_AppointmentDate");
 
+                    b.HasIndex("Status", "AppointmentDate", "SlotTime");
+
                     b.ToTable("Appointments", null, t =>
                         {
                             t.HasCheckConstraint("CK_Appointments_Duration", "\"SlotDurationMinutes\" BETWEEN 1 AND 1440");
+
+                            t.HasCheckConstraint("CK_Appointments_Version", "\"Version\" > 0");
                         });
                 });
 
@@ -143,118 +210,6 @@ namespace Dental.Infrastructure.Migrations
                         .HasDatabaseName("IX_AuditLogs_User");
 
                     b.ToTable("AuditLogs");
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.BookingRequest", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateOnly>("AppointmentDate")
-                        .HasColumnType("date");
-
-                    b.Property<int?>("ApprovedAppointmentId")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("ClientRequestId")
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("CreatedAccount")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateOnly>("DateOfBirth")
-                        .HasColumnType("date");
-
-                    b.Property<string>("Email")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("FullName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("Gender")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
-
-                    b.Property<string>("IntentDigest")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<bool>("IsReturning")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<string>("Phone")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("RejectionReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<int?>("ReviewedByUserId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("SlotDurationMinutes")
-                        .HasColumnType("integer");
-
-                    b.Property<TimeOnly>("SlotTime")
-                        .HasColumnType("time without time zone");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<int?>("SubmittedByUserId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("VerifiedPatientId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Version")
-                        .IsConcurrencyToken()
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ApprovedAppointmentId")
-                        .IsUnique();
-
-                    b.HasIndex("ClientRequestId")
-                        .IsUnique();
-
-                    b.HasIndex("ReviewedByUserId");
-
-                    b.HasIndex("SubmittedByUserId");
-
-                    b.HasIndex("VerifiedPatientId");
-
-                    b.HasIndex("Status", "AppointmentDate", "SlotTime");
-
-                    b.ToTable("BookingRequests", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_BookingRequests_Duration", "\"SlotDurationMinutes\" BETWEEN 1 AND 1440");
-
-                            t.HasCheckConstraint("CK_BookingRequests_Version", "\"Version\" > 0");
-                        });
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.ClinicRoom", b =>
@@ -387,6 +342,9 @@ namespace Dental.Infrastructure.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<string>("ClinicalAddendaJson")
+                        .HasColumnType("jsonb");
+
                     b.Property<string>("ClinicalNotes")
                         .HasMaxLength(1000)
                         .HasColumnType("text");
@@ -479,56 +437,6 @@ namespace Dental.Infrastructure.Migrations
                     b.ToTable("DentalImages", (string)null);
                 });
 
-            modelBuilder.Entity("Dental.Domain.Entities.DentalImageClinicalAddendum", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("AuthorName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("AuthorRole")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamptz");
-
-                    b.Property<int>("CreatedByUserId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("DentalImageId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("ImageVersion")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Note")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<Guid>("RequestId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatedByUserId");
-
-                    b.HasIndex("RequestId")
-                        .IsUnique();
-
-                    b.HasIndex("DentalImageId", "Id");
-
-                    b.ToTable("DentalImageClinicalAddenda", (string)null);
-                });
-
             modelBuilder.Entity("Dental.Domain.Entities.DentalService", b =>
                 {
                     b.Property<int>("DentalServiceId")
@@ -562,6 +470,18 @@ namespace Dental.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<DateTime?>("PriceEffectiveFrom")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("PriceHistoryJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<decimal>("UnitPrice")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)")
+                        .HasDefaultValue(0m);
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamptz");
 
@@ -574,7 +494,7 @@ namespace Dental.Infrastructure.Migrations
                     b.ToTable("DentalServices");
                 });
 
-            modelBuilder.Entity("Dental.Domain.Entities.DiscountPreset", b =>
+            modelBuilder.Entity("Dental.Domain.Entities.InventoryTransaction", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -582,34 +502,113 @@ namespace Dental.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
+                    b.Property<DateTime>("ConfirmedAt")
+                        .HasColumnType("timestamptz");
 
-                    b.Property<string>("DiscountType")
+                    b.Property<int>("ConfirmedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("DispenseEventId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ItemDomain")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
-                    b.Property<string>("Name")
+                    b.Property<string>("PayloadHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int?>("PrescriptionId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SupplierName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("TransactionType")
                         .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
-                    b.Property<decimal>("Value")
-                        .HasPrecision(20, 2)
-                        .HasColumnType("numeric(20,2)");
+                    b.Property<int?>("VisitId")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Code")
+                    b.HasIndex("ConfirmedByUserId");
+
+                    b.HasIndex("PrescriptionId");
+
+                    b.HasIndex("VisitId");
+
+                    b.HasIndex("ItemDomain", "TransactionType", "Id");
+
+                    b.HasIndex("ItemDomain", "TransactionType", "RequestId")
+                        .IsUnique()
+                        .HasFilter("\"RequestId\" IS NOT NULL");
+
+                    b.ToTable("InventoryTransactions", (string)null);
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.InventoryTransactionLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ItemCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("ItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ItemName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int?>("PrescriptionItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TransactionId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemId");
+
+                    b.HasIndex("PrescriptionItemId")
+                        .IsUnique()
+                        .HasFilter("\"PrescriptionItemId\" IS NOT NULL");
+
+                    b.HasIndex("TransactionId", "ItemId")
                         .IsUnique();
 
-                    b.ToTable("DiscountPresets", (string)null);
+                    b.ToTable("InventoryTransactionLines", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_InventoryTransactionLine_Quantity", "\"Quantity\" > 0");
+                        });
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.Invoice", b =>
@@ -674,8 +673,6 @@ namespace Dental.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedByUserId");
-
-                    b.HasIndex("DiscountPresetId");
 
                     b.HasIndex("InvoiceCode")
                         .IsUnique();
@@ -747,19 +744,6 @@ namespace Dental.Infrastructure.Migrations
                     b.ToTable("InvoiceItems", (string)null);
                 });
 
-            modelBuilder.Entity("Dental.Domain.Entities.InvoiceNumberCounter", b =>
-                {
-                    b.Property<DateOnly>("InvoiceDate")
-                        .HasColumnType("date");
-
-                    b.Property<int>("LastNumber")
-                        .HasColumnType("integer");
-
-                    b.HasKey("InvoiceDate");
-
-                    b.ToTable("InvoiceNumberCounters", (string)null);
-                });
-
             modelBuilder.Entity("Dental.Domain.Entities.InvoiceRefund", b =>
                 {
                     b.Property<int>("Id")
@@ -778,6 +762,13 @@ namespace Dental.Infrastructure.Migrations
                         .HasPrecision(18)
                         .HasColumnType("numeric(18,0)");
 
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DecisionNotes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<decimal>("DiscountAfter")
                         .HasPrecision(18)
                         .HasColumnType("numeric(18,0)");
@@ -788,6 +779,12 @@ namespace Dental.Infrastructure.Migrations
 
                     b.Property<int>("InvoiceId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("ItemsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValue("[]");
 
                     b.Property<bool>("LateApproval")
                         .HasColumnType("boolean");
@@ -833,8 +830,25 @@ namespace Dental.Infrastructure.Migrations
                     b.Property<bool>("ReserveConfirmed")
                         .HasColumnType("boolean");
 
+                    b.Property<int?>("ReviewerId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Revision")
                         .HasColumnType("integer");
+
+                    b.Property<string>("Snapshot")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasDefaultValue("");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasDefaultValue("Approved");
 
                     b.Property<decimal>("TotalAfter")
                         .HasPrecision(18)
@@ -849,188 +863,28 @@ namespace Dental.Infrastructure.Migrations
                     b.HasIndex("ActorId");
 
                     b.HasIndex("PaymentTransactionId")
-                        .IsUnique();
-
-                    b.HasIndex("RequestId")
-                        .IsUnique();
-
-                    b.HasIndex("InvoiceId", "Revision")
-                        .IsUnique();
-
-                    b.ToTable("InvoiceRefunds", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_InvoiceRefunds_Amounts", "\"RefundAmount\" >= 0 AND \"DebtReduction\" >= 0 AND \"TotalAfter\" >= \"DiscountAfter\" AND \"PaidAfter\" >= 0 AND \"PaidAfter\" <= \"TotalAfter\" - \"DiscountAfter\"");
-
-                            t.HasCheckConstraint("CK_InvoiceRefunds_Payment", "(\"RefundAmount\" = 0 AND \"PaymentTransactionId\" IS NULL) OR (\"RefundAmount\" > 0 AND \"PaymentTransactionId\" IS NOT NULL)");
-                        });
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.InvoiceRefundItem", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("InvoiceItemId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("InvoiceRefundId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Quantity")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("InvoiceItemId");
-
-                    b.HasIndex("InvoiceRefundId", "InvoiceItemId")
-                        .IsUnique();
-
-                    b.ToTable("InvoiceRefundItems", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_InvoiceRefundItems_Quantity", "\"Quantity\" > 0");
-                        });
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.InvoiceRefundProposal", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("CreatorId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("DecidedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("DecisionNotes")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<int>("InvoiceId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("ReasonCode")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.Property<string>("ReasonNotes")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<int?>("RefundId")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("RequestId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int?>("ReviewerId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Snapshot")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatorId");
-
-                    b.HasIndex("InvoiceId");
+                        .IsUnique()
+                        .HasFilter("\"PaymentTransactionId\" IS NOT NULL");
 
                     b.HasIndex("RequestId")
                         .IsUnique();
 
                     b.HasIndex("ReviewerId");
 
+                    b.HasIndex("InvoiceId", "Revision")
+                        .IsUnique()
+                        .HasFilter("\"Status\" = 'Approved'");
+
                     b.HasIndex("Status", "CreatedAt");
 
-                    b.ToTable("InvoiceRefundProposals", null, t =>
+                    b.ToTable("InvoiceRefunds", null, t =>
                         {
-                            t.HasCheckConstraint("CK_InvoiceRefundProposals_Status", "\"Status\" IN ('Pending','Approved','Rejected','Stale')");
+                            t.HasCheckConstraint("CK_InvoiceRefunds_Amounts", "\"RefundAmount\" >= 0 AND \"DebtReduction\" >= 0 AND \"TotalAfter\" >= \"DiscountAfter\" AND \"PaidAfter\" >= 0 AND \"PaidAfter\" <= \"TotalAfter\" - \"DiscountAfter\"");
+
+                            t.HasCheckConstraint("CK_InvoiceRefunds_Payment", "(\"Status\" <> 'Approved' AND \"PaymentTransactionId\" IS NULL AND \"RefundAmount\" = 0) OR (\"Status\" = 'Approved' AND ((\"RefundAmount\" = 0 AND \"PaymentTransactionId\" IS NULL) OR (\"RefundAmount\" > 0 AND \"PaymentTransactionId\" IS NOT NULL)))");
+
+                            t.HasCheckConstraint("CK_InvoiceRefunds_Status", "\"Status\" IN ('Pending','Approved','Rejected','Stale')");
                         });
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.InvoiceRefundProposalItem", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("InvoiceItemId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("ProposalId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Quantity")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("InvoiceItemId");
-
-                    b.HasIndex("ProposalId", "InvoiceItemId")
-                        .IsUnique();
-
-                    b.ToTable("InvoiceRefundProposalItems", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_InvoiceRefundProposalItems_Quantity", "\"Quantity\" > 0");
-                        });
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.MedicalHistoryItem", b =>
-                {
-                    b.Property<int>("ItemId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ItemId"));
-
-                    b.Property<string>("Detail")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<bool>("IsCritical")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<int>("RecordId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.HasKey("ItemId");
-
-                    b.HasIndex("RecordId")
-                        .HasDatabaseName("IX_MedicalHistoryItems_RecordId");
-
-                    b.ToTable("MedicalHistoryItems");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.MedicalHistoryRecord", b =>
@@ -1043,6 +897,9 @@ namespace Dental.Infrastructure.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamptz");
+
+                    b.Property<string>("ItemsJson")
+                        .HasColumnType("jsonb");
 
                     b.Property<string>("Note")
                         .HasMaxLength(2000)
@@ -1108,10 +965,20 @@ namespace Dental.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<int>("OnHand")
+                        .HasColumnType("integer");
+
                     b.Property<string>("SearchText")
                         .IsRequired()
                         .HasMaxLength(600)
                         .HasColumnType("character varying(600)");
+
+                    b.Property<DateTime?>("StockUpdatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<long>("StockVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
 
                     b.Property<string>("Unit")
                         .IsRequired()
@@ -1141,6 +1008,8 @@ namespace Dental.Infrastructure.Migrations
                     b.ToTable("MedicalSupplies", null, t =>
                         {
                             t.HasCheckConstraint("CK_MedicalSupplies_MinimumStockThreshold", "\"MinimumStockThreshold\" >= 0");
+
+                            t.HasCheckConstraint("CK_MedicalSupplies_OnHand", "\"OnHand\" >= 0");
                         });
                 });
 
@@ -1176,10 +1045,20 @@ namespace Dental.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<int>("OnHand")
+                        .HasColumnType("integer");
+
                     b.Property<string>("SearchText")
                         .IsRequired()
                         .HasMaxLength(600)
                         .HasColumnType("character varying(600)");
+
+                    b.Property<DateTime?>("StockUpdatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<long>("StockVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
 
                     b.Property<string>("Strength")
                         .HasMaxLength(50)
@@ -1206,222 +1085,10 @@ namespace Dental.Infrastructure.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("Medicines", (string)null);
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.MedicineStockBalance", b =>
-                {
-                    b.Property<int>("MedicineId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("OnHand")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<long>("Version")
-                        .IsConcurrencyToken()
-                        .HasColumnType("bigint");
-
-                    b.HasKey("MedicineId");
-
-                    b.ToTable("MedicineStockBalances", null, t =>
+                    b.ToTable("Medicines", null, t =>
                         {
-                            t.HasCheckConstraint("CK_MedicineStockBalance_Nonnegative", "\"OnHand\" >= 0");
+                            t.HasCheckConstraint("CK_Medicines_OnHand", "\"OnHand\" >= 0");
                         });
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.MedicineStockIssue", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("DispenseEventId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("IssuedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("IssuedByUserId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("MedicineCode")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<int>("MedicineId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("MedicineName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<int>("PrescriptionId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("PrescriptionItemId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Quantity")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Unit")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DispenseEventId");
-
-                    b.HasIndex("IssuedByUserId");
-
-                    b.HasIndex("MedicineId");
-
-                    b.HasIndex("PrescriptionItemId")
-                        .IsUnique();
-
-                    b.HasIndex("PrescriptionId", "MedicineId")
-                        .IsUnique();
-
-                    b.ToTable("MedicineStockIssues", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_MedicineStockIssue_Quantity", "\"Quantity\" > 0");
-                        });
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.MedicineStockReceipt", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("ConfirmedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("ConfirmedByUserId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("MedicineCode")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<int>("MedicineId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("MedicineName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<string>("PayloadHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<int>("Quantity")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("RequestId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("SupplierName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("Unit")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ConfirmedByUserId");
-
-                    b.HasIndex("RequestId")
-                        .IsUnique();
-
-                    b.HasIndex("MedicineId", "Id");
-
-                    b.ToTable("MedicineStockReceipts", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_MedicineStockReceipt_Quantity", "\"Quantity\" > 0");
-                        });
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.NotificationLog", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateOnly>("AppointmentDate")
-                        .HasColumnType("date");
-
-                    b.Property<int>("AppointmentId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Channel")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("MessageContent")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("NotificationType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<int>("PatientId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("RecipientPhone")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<DateTime>("SentAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<TimeOnly>("SlotTime")
-                        .HasColumnType("time");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PatientId");
-
-                    b.HasIndex("AppointmentId", "NotificationType");
-
-                    b.HasIndex("AppointmentId", "NotificationType", "AppointmentDate", "SlotTime")
-                        .IsUnique()
-                        .HasDatabaseName("IX_NotificationLogs_ReminderOccurrence");
-
-                    b.ToTable("NotificationLogs", (string)null);
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.Patient", b =>
@@ -1588,53 +1255,6 @@ namespace Dental.Infrastructure.Migrations
                     b.ToTable("PatientGuardians");
                 });
 
-            modelBuilder.Entity("Dental.Domain.Entities.PatientPhoneChangeRequest", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("AppointmentId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("CompletedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("CreatedByUserId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("CurrentPhone")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
-
-                    b.Property<string>("NewPhone")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
-
-                    b.Property<int>("TokenVersion")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AppointmentId");
-
-                    b.HasIndex("CreatedByUserId");
-
-                    b.HasIndex("UserId", "TokenVersion")
-                        .IsUnique()
-                        .HasFilter("\"CompletedAtUtc\" IS NULL");
-
-                    b.ToTable("PatientPhoneChangeRequests", (string)null);
-                });
-
             modelBuilder.Entity("Dental.Domain.Entities.PaymentTransaction", b =>
                 {
                     b.Property<int>("Id")
@@ -1729,46 +1349,6 @@ namespace Dental.Infrastructure.Migrations
                     b.ToTable("PaymentTransactions", (string)null);
                 });
 
-            modelBuilder.Entity("Dental.Domain.Entities.PostTreatmentNote", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamptz");
-
-                    b.Property<int>("CreatedByUserId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Note")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<Guid?>("RequestId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("VisitId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatedByUserId");
-
-                    b.HasIndex("RequestId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_PostTreatmentNotes_RequestId")
-                        .HasFilter("\"RequestId\" IS NOT NULL");
-
-                    b.HasIndex("VisitId", "CreatedAt")
-                        .HasDatabaseName("IX_PostTreatmentNotes_VisitId_CreatedAt");
-
-                    b.ToTable("PostTreatmentNotes", (string)null);
-                });
-
             modelBuilder.Entity("Dental.Domain.Entities.Prescription", b =>
                 {
                     b.Property<int>("Id")
@@ -1790,6 +1370,9 @@ namespace Dental.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
+
+                    b.Property<string>("DispenseHistoryJson")
+                        .HasColumnType("jsonb");
 
                     b.Property<string>("DispenseNote")
                         .HasMaxLength(300)
@@ -1865,59 +1448,6 @@ namespace Dental.Infrastructure.Migrations
                     b.ToTable("Prescriptions", (string)null);
                 });
 
-            modelBuilder.Entity("Dental.Domain.Entities.PrescriptionDispenseEvent", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.Property<bool>("ExpiryOverridden")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime>("PerformedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("PerformedBy")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("PrescriptionId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("PrescriptionVersion")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Reason")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<bool>("ReceivedByProxy")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("ReceiverName")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("ReceiverPhone")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PerformedBy");
-
-                    b.HasIndex("PrescriptionId", "PrescriptionVersion")
-                        .IsUnique();
-
-                    b.ToTable("PrescriptionDispenseEvents", (string)null);
-                });
-
             modelBuilder.Entity("Dental.Domain.Entities.PrescriptionItem", b =>
                 {
                     b.Property<int>("Id")
@@ -1984,19 +1514,6 @@ namespace Dental.Infrastructure.Migrations
                     b.ToTable("PrescriptionItems", (string)null);
                 });
 
-            modelBuilder.Entity("Dental.Domain.Entities.PrescriptionNumberCounter", b =>
-                {
-                    b.Property<DateOnly>("PrescriptionDate")
-                        .HasColumnType("date");
-
-                    b.Property<int>("LastNumber")
-                        .HasColumnType("integer");
-
-                    b.HasKey("PrescriptionDate");
-
-                    b.ToTable("PrescriptionNumberCounters", (string)null);
-                });
-
             modelBuilder.Entity("Dental.Domain.Entities.QueueEntry", b =>
                 {
                     b.Property<int>("QueueEntryId")
@@ -2027,14 +1544,33 @@ namespace Dental.Infrastructure.Migrations
                     b.Property<int>("PatientId")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime?>("PublicCalledAtUtc")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<int?>("PublicCalledByUserId")
+                        .HasColumnType("integer");
+
                     b.Property<DateOnly>("QueueDate")
                         .HasColumnType("date");
 
                     b.Property<int>("QueueNumber")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("ReturnedFromImaging")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("ReturnedFromSkipped")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
+
+                    b.Property<string>("StatusHistoryJson")
+                        .HasColumnType("jsonb");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamptz");
@@ -2050,6 +1586,8 @@ namespace Dental.Infrastructure.Migrations
                     b.HasIndex("DentistId")
                         .HasDatabaseName("IX_QueueEntries_DentistId");
 
+                    b.HasIndex("PublicCalledByUserId");
+
                     b.HasIndex("VisitId")
                         .HasDatabaseName("IX_QueueEntries_VisitId");
 
@@ -2063,45 +1601,11 @@ namespace Dental.Infrastructure.Migrations
                     b.HasIndex("QueueDate", "Status")
                         .HasDatabaseName("IX_QueueEntries_QueueDate_Status");
 
+                    b.HasIndex("QueueDate", "Status", "PublicCalledAtUtc")
+                        .HasDatabaseName("IX_QueueEntries_PublicCalls")
+                        .HasFilter("\"PublicCalledAtUtc\" IS NOT NULL");
+
                     b.ToTable("QueueEntries", (string)null);
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.QueueStatusHistory", b =>
-                {
-                    b.Property<int>("QueueStatusHistoryId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("QueueStatusHistoryId"));
-
-                    b.Property<DateTime>("ChangedAt")
-                        .HasColumnType("timestamptz");
-
-                    b.Property<int?>("ChangedByUserId")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("FromStatus")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("QueueEntryId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Reason")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<int>("ToStatus")
-                        .HasColumnType("integer");
-
-                    b.HasKey("QueueStatusHistoryId");
-
-                    b.HasIndex("ChangedByUserId")
-                        .HasDatabaseName("IX_QueueStatusHistories_ChangedByUserId");
-
-                    b.HasIndex("QueueEntryId", "ChangedAt")
-                        .HasDatabaseName("IX_QueueStatusHistories_QueueEntryId_ChangedAt");
-
-                    b.ToTable("QueueStatusHistories", (string)null);
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.Role", b =>
@@ -2143,281 +1647,6 @@ namespace Dental.Infrastructure.Migrations
                         .HasDatabaseName("IX_Roles_RoleName");
 
                     b.ToTable("Roles");
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.ServicePrice", b =>
-                {
-                    b.Property<int>("ServicePriceId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ServicePriceId"));
-
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(18)
-                        .HasColumnType("numeric(18,0)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamptz");
-
-                    b.Property<int>("CreatedByUserId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("EffectiveFrom")
-                        .HasColumnType("timestamptz");
-
-                    b.Property<int>("ServiceId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamptz");
-
-                    b.HasKey("ServicePriceId");
-
-                    b.HasIndex("CreatedByUserId")
-                        .HasDatabaseName("IX_ServicePrices_CreatedByUserId");
-
-                    b.HasIndex("ServiceId", "EffectiveFrom", "ServicePriceId")
-                        .HasDatabaseName("IX_ServicePrices_ServiceId_EffectiveFrom_ServicePriceId");
-
-                    b.ToTable("ServicePrices");
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.StaffWorkspace", b =>
-                {
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("DentistId")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("RoomId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("UpdatedByUserId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Version")
-                        .IsConcurrencyToken()
-                        .HasColumnType("integer");
-
-                    b.Property<DateOnly?>("WorkDate")
-                        .HasColumnType("date");
-
-                    b.HasKey("UserId");
-
-                    b.HasIndex("DentistId")
-                        .HasDatabaseName("IX_StaffWorkspaces_DentistId");
-
-                    b.HasIndex("RoomId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_StaffWorkspaces_RoomId")
-                        .HasFilter("\"RoomId\" IS NOT NULL");
-
-                    b.HasIndex("UpdatedByUserId");
-
-                    b.ToTable("StaffWorkspaces", (string)null);
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.StockBalance", b =>
-                {
-                    b.Property<int>("MedicalSupplyId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("OnHand")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<long>("Version")
-                        .IsConcurrencyToken()
-                        .HasColumnType("bigint");
-
-                    b.HasKey("MedicalSupplyId");
-
-                    b.ToTable("StockBalances", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_StockBalance_OnHand", "\"OnHand\" >= 0");
-                        });
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.StockIssue", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("ConfirmedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("ConfirmedByUserId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<string>("PayloadHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<Guid>("RequestId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("VisitId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ConfirmedByUserId");
-
-                    b.HasIndex("RequestId")
-                        .IsUnique();
-
-                    b.HasIndex("VisitId", "Id");
-
-                    b.ToTable("StockIssues", (string)null);
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.StockIssueLine", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("MedicalSupplyId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Quantity")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("StockIssueId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("SupplyCode")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<string>("SupplyName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("Unit")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("MedicalSupplyId");
-
-                    b.HasIndex("StockIssueId", "MedicalSupplyId")
-                        .IsUnique();
-
-                    b.ToTable("StockIssueLines", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_StockIssueLine_Quantity", "\"Quantity\" > 0");
-                        });
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.StockReceipt", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("ConfirmedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("ConfirmedByUserId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<string>("PayloadHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<Guid>("RequestId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("SupplierName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ConfirmedByUserId");
-
-                    b.HasIndex("RequestId")
-                        .IsUnique();
-
-                    b.ToTable("StockReceipts", (string)null);
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.StockReceiptLine", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("MedicalSupplyId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Quantity")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("StockReceiptId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("SupplyCode")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<string>("SupplyName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("Unit")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("MedicalSupplyId");
-
-                    b.HasIndex("StockReceiptId", "MedicalSupplyId")
-                        .IsUnique();
-
-                    b.ToTable("StockReceiptLines", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_StockReceiptLine_Quantity", "\"Quantity\" > 0");
-                        });
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.SystemConfig", b =>
@@ -2545,6 +1774,9 @@ namespace Dental.Infrastructure.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
+                    b.Property<string>("PendingPhoneChangeJson")
+                        .HasColumnType("jsonb");
+
                     b.Property<string>("Phone")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -2581,6 +1813,27 @@ namespace Dental.Infrastructure.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamptz");
 
+                    b.Property<DateOnly?>("WorkspaceDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("WorkspaceDentistId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("WorkspaceRoomId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("WorkspaceUpdatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<int?>("WorkspaceUpdatedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("WorkspaceVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.HasKey("UserId");
 
                     b.HasIndex("Phone")
@@ -2589,6 +1842,16 @@ namespace Dental.Infrastructure.Migrations
                         .HasFilter("\"LoginByCitizenId\" = false");
 
                     b.HasIndex("RoleId");
+
+                    b.HasIndex("WorkspaceDentistId")
+                        .HasDatabaseName("IX_Users_WorkspaceDentistId");
+
+                    b.HasIndex("WorkspaceRoomId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Users_WorkspaceRoomId")
+                        .HasFilter("\"WorkspaceRoomId\" IS NOT NULL");
+
+                    b.HasIndex("WorkspaceUpdatedByUserId");
 
                     b.ToTable("Users");
                 });
@@ -2633,6 +1896,9 @@ namespace Dental.Infrastructure.Migrations
                     b.Property<int>("PatientId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("PostTreatmentNotesJson")
+                        .HasColumnType("jsonb");
+
                     b.Property<int?>("RoomId")
                         .HasColumnType("integer");
 
@@ -2643,6 +1909,9 @@ namespace Dental.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<string>("UnlockHistoryJson")
+                        .HasColumnType("jsonb");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamptz");
@@ -2719,47 +1988,9 @@ namespace Dental.Infrastructure.Migrations
 
                     b.HasIndex("ServiceId");
 
-                    b.HasIndex("ServicePriceId");
-
                     b.HasIndex("VisitId", "ToothNumber");
 
                     b.ToTable("VisitServices", (string)null);
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.VisitUnlockRecord", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("ActorUserId")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("CancelledInvoiceId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<int>("VisitId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ActorUserId");
-
-                    b.HasIndex("CancelledInvoiceId");
-
-                    b.HasIndex("VisitId");
-
-                    b.ToTable("VisitUnlockRecords", (string)null);
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.VitalSignRecord", b =>
@@ -2820,14 +2051,22 @@ namespace Dental.Infrastructure.Migrations
                     b.HasOne("Dental.Domain.Entities.User", "CreatedByUser")
                         .WithMany()
                         .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Dental.Domain.Entities.Patient", "Patient")
                         .WithMany()
                         .HasForeignKey("PatientId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Dental.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Dental.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("SubmittedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("CreatedByUser");
 
@@ -2842,29 +2081,6 @@ namespace Dental.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.BookingRequest", b =>
-                {
-                    b.HasOne("Dental.Domain.Entities.Appointment", null)
-                        .WithMany()
-                        .HasForeignKey("ApprovedAppointmentId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Dental.Domain.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("ReviewedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Dental.Domain.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("SubmittedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Dental.Domain.Entities.Patient", null)
-                        .WithMany()
-                        .HasForeignKey("VerifiedPatientId")
-                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.ClinicRoom", b =>
@@ -2911,19 +2127,39 @@ namespace Dental.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
-            modelBuilder.Entity("Dental.Domain.Entities.DentalImageClinicalAddendum", b =>
+            modelBuilder.Entity("Dental.Domain.Entities.InventoryTransaction", b =>
                 {
                     b.HasOne("Dental.Domain.Entities.User", null)
                         .WithMany()
-                        .HasForeignKey("CreatedByUserId")
+                        .HasForeignKey("ConfirmedByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Dental.Domain.Entities.DentalImage", null)
+                    b.HasOne("Dental.Domain.Entities.Prescription", null)
                         .WithMany()
-                        .HasForeignKey("DentalImageId")
+                        .HasForeignKey("PrescriptionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Dental.Domain.Entities.Visit", null)
+                        .WithMany()
+                        .HasForeignKey("VisitId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Dental.Domain.Entities.InventoryTransactionLine", b =>
+                {
+                    b.HasOne("Dental.Domain.Entities.PrescriptionItem", null)
+                        .WithMany()
+                        .HasForeignKey("PrescriptionItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Dental.Domain.Entities.InventoryTransaction", "Transaction")
+                        .WithMany("Lines")
+                        .HasForeignKey("TransactionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Transaction");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.Invoice", b =>
@@ -2933,11 +2169,6 @@ namespace Dental.Infrastructure.Migrations
                         .HasForeignKey("CreatedByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("Dental.Domain.Entities.DiscountPreset", null)
-                        .WithMany()
-                        .HasForeignKey("DiscountPresetId")
-                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Dental.Domain.Entities.Visit", "Visit")
                         .WithMany()
@@ -2980,86 +2211,18 @@ namespace Dental.Infrastructure.Migrations
                         .HasForeignKey("PaymentTransactionId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.Navigation("Actor");
-
-                    b.Navigation("Invoice");
-
-                    b.Navigation("PaymentTransaction");
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.InvoiceRefundItem", b =>
-                {
-                    b.HasOne("Dental.Domain.Entities.InvoiceItem", "InvoiceItem")
-                        .WithMany()
-                        .HasForeignKey("InvoiceItemId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Dental.Domain.Entities.InvoiceRefund", "InvoiceRefund")
-                        .WithMany("Items")
-                        .HasForeignKey("InvoiceRefundId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("InvoiceItem");
-
-                    b.Navigation("InvoiceRefund");
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.InvoiceRefundProposal", b =>
-                {
-                    b.HasOne("Dental.Domain.Entities.User", "Creator")
-                        .WithMany()
-                        .HasForeignKey("CreatorId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Dental.Domain.Entities.Invoice", "Invoice")
-                        .WithMany()
-                        .HasForeignKey("InvoiceId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.HasOne("Dental.Domain.Entities.User", "Reviewer")
                         .WithMany()
                         .HasForeignKey("ReviewerId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.Navigation("Creator");
+                    b.Navigation("Actor");
 
                     b.Navigation("Invoice");
 
+                    b.Navigation("PaymentTransaction");
+
                     b.Navigation("Reviewer");
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.InvoiceRefundProposalItem", b =>
-                {
-                    b.HasOne("Dental.Domain.Entities.InvoiceItem", "InvoiceItem")
-                        .WithMany()
-                        .HasForeignKey("InvoiceItemId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Dental.Domain.Entities.InvoiceRefundProposal", "Proposal")
-                        .WithMany("Items")
-                        .HasForeignKey("ProposalId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("InvoiceItem");
-
-                    b.Navigation("Proposal");
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.MedicalHistoryItem", b =>
-                {
-                    b.HasOne("Dental.Domain.Entities.MedicalHistoryRecord", "Record")
-                        .WithMany("Items")
-                        .HasForeignKey("RecordId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Record");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.MedicalHistoryRecord", b =>
@@ -3101,84 +2264,6 @@ namespace Dental.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("UpdatedByUserId")
                         .OnDelete(DeleteBehavior.Restrict);
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.MedicineStockBalance", b =>
-                {
-                    b.HasOne("Dental.Domain.Entities.Medicine", null)
-                        .WithMany()
-                        .HasForeignKey("MedicineId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.MedicineStockIssue", b =>
-                {
-                    b.HasOne("Dental.Domain.Entities.PrescriptionDispenseEvent", "DispenseEvent")
-                        .WithMany()
-                        .HasForeignKey("DispenseEventId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Dental.Domain.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("IssuedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Dental.Domain.Entities.Medicine", null)
-                        .WithMany()
-                        .HasForeignKey("MedicineId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Dental.Domain.Entities.Prescription", null)
-                        .WithMany()
-                        .HasForeignKey("PrescriptionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Dental.Domain.Entities.PrescriptionItem", null)
-                        .WithMany()
-                        .HasForeignKey("PrescriptionItemId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("DispenseEvent");
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.MedicineStockReceipt", b =>
-                {
-                    b.HasOne("Dental.Domain.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("ConfirmedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Dental.Domain.Entities.Medicine", null)
-                        .WithMany()
-                        .HasForeignKey("MedicineId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.NotificationLog", b =>
-                {
-                    b.HasOne("Dental.Domain.Entities.Appointment", "Appointment")
-                        .WithMany()
-                        .HasForeignKey("AppointmentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Dental.Domain.Entities.Patient", "Patient")
-                        .WithMany()
-                        .HasForeignKey("PatientId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Appointment");
-
-                    b.Navigation("Patient");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.Patient", b =>
@@ -3225,27 +2310,6 @@ namespace Dental.Infrastructure.Migrations
                     b.Navigation("WardPatient");
                 });
 
-            modelBuilder.Entity("Dental.Domain.Entities.PatientPhoneChangeRequest", b =>
-                {
-                    b.HasOne("Dental.Domain.Entities.Appointment", null)
-                        .WithMany()
-                        .HasForeignKey("AppointmentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Dental.Domain.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Dental.Domain.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("Dental.Domain.Entities.PaymentTransaction", b =>
                 {
                     b.HasOne("Dental.Domain.Entities.User", "Cashier")
@@ -3263,25 +2327,6 @@ namespace Dental.Infrastructure.Migrations
                     b.Navigation("Cashier");
 
                     b.Navigation("Invoice");
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.PostTreatmentNote", b =>
-                {
-                    b.HasOne("Dental.Domain.Entities.User", "CreatedByUser")
-                        .WithMany()
-                        .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Dental.Domain.Entities.Visit", "Visit")
-                        .WithMany()
-                        .HasForeignKey("VisitId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("CreatedByUser");
-
-                    b.Navigation("Visit");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.Prescription", b =>
@@ -3319,21 +2364,6 @@ namespace Dental.Infrastructure.Migrations
                     b.Navigation("Visit");
                 });
 
-            modelBuilder.Entity("Dental.Domain.Entities.PrescriptionDispenseEvent", b =>
-                {
-                    b.HasOne("Dental.Domain.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("PerformedBy")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Dental.Domain.Entities.Prescription", null)
-                        .WithMany()
-                        .HasForeignKey("PrescriptionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("Dental.Domain.Entities.PrescriptionItem", b =>
                 {
                     b.HasOne("Dental.Domain.Entities.Medicine", null)
@@ -3369,6 +2399,11 @@ namespace Dental.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Dental.Domain.Entities.User", "PublicCalledByUser")
+                        .WithMany()
+                        .HasForeignKey("PublicCalledByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Dental.Domain.Entities.Visit", "Visit")
                         .WithMany()
                         .HasForeignKey("VisitId")
@@ -3380,138 +2415,9 @@ namespace Dental.Infrastructure.Migrations
 
                     b.Navigation("Patient");
 
+                    b.Navigation("PublicCalledByUser");
+
                     b.Navigation("Visit");
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.QueueStatusHistory", b =>
-                {
-                    b.HasOne("Dental.Domain.Entities.User", "ChangedByUser")
-                        .WithMany()
-                        .HasForeignKey("ChangedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Dental.Domain.Entities.QueueEntry", "QueueEntry")
-                        .WithMany("StatusHistories")
-                        .HasForeignKey("QueueEntryId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ChangedByUser");
-
-                    b.Navigation("QueueEntry");
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.ServicePrice", b =>
-                {
-                    b.HasOne("Dental.Domain.Entities.User", "CreatedByUser")
-                        .WithMany()
-                        .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Dental.Domain.Entities.DentalService", "Service")
-                        .WithMany("Prices")
-                        .HasForeignKey("ServiceId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("CreatedByUser");
-
-                    b.Navigation("Service");
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.StaffWorkspace", b =>
-                {
-                    b.HasOne("Dental.Domain.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("DentistId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Dental.Domain.Entities.ClinicRoom", null)
-                        .WithMany()
-                        .HasForeignKey("RoomId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Dental.Domain.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("UpdatedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Dental.Domain.Entities.User", "User")
-                        .WithOne()
-                        .HasForeignKey("Dental.Domain.Entities.StaffWorkspace", "UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.StockBalance", b =>
-                {
-                    b.HasOne("Dental.Domain.Entities.MedicalSupply", null)
-                        .WithMany()
-                        .HasForeignKey("MedicalSupplyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.StockIssue", b =>
-                {
-                    b.HasOne("Dental.Domain.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("ConfirmedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Dental.Domain.Entities.Visit", null)
-                        .WithMany()
-                        .HasForeignKey("VisitId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.StockIssueLine", b =>
-                {
-                    b.HasOne("Dental.Domain.Entities.MedicalSupply", null)
-                        .WithMany()
-                        .HasForeignKey("MedicalSupplyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Dental.Domain.Entities.StockIssue", "Issue")
-                        .WithMany("Lines")
-                        .HasForeignKey("StockIssueId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Issue");
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.StockReceipt", b =>
-                {
-                    b.HasOne("Dental.Domain.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("ConfirmedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.StockReceiptLine", b =>
-                {
-                    b.HasOne("Dental.Domain.Entities.MedicalSupply", null)
-                        .WithMany()
-                        .HasForeignKey("MedicalSupplyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Dental.Domain.Entities.StockReceipt", "Receipt")
-                        .WithMany("Lines")
-                        .HasForeignKey("StockReceiptId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Receipt");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.SystemConfig", b =>
@@ -3541,7 +2447,24 @@ namespace Dental.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Dental.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceDentistId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Dental.Domain.Entities.ClinicRoom", "WorkspaceRoom")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceRoomId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Dental.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceUpdatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Role");
+
+                    b.Navigation("WorkspaceRoom");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.Visit", b =>
@@ -3589,12 +2512,6 @@ namespace Dental.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Dental.Domain.Entities.ServicePrice", "Price")
-                        .WithMany()
-                        .HasForeignKey("ServicePriceId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.HasOne("Dental.Domain.Entities.Visit", "Visit")
                         .WithMany()
                         .HasForeignKey("VisitId")
@@ -3603,35 +2520,7 @@ namespace Dental.Infrastructure.Migrations
 
                     b.Navigation("CreatedByUser");
 
-                    b.Navigation("Price");
-
                     b.Navigation("Service");
-
-                    b.Navigation("Visit");
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.VisitUnlockRecord", b =>
-                {
-                    b.HasOne("Dental.Domain.Entities.User", "Actor")
-                        .WithMany()
-                        .HasForeignKey("ActorUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Dental.Domain.Entities.Invoice", "CancelledInvoice")
-                        .WithMany()
-                        .HasForeignKey("CancelledInvoiceId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Dental.Domain.Entities.Visit", "Visit")
-                        .WithMany()
-                        .HasForeignKey("VisitId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Actor");
-
-                    b.Navigation("CancelledInvoice");
 
                     b.Navigation("Visit");
                 });
@@ -3663,9 +2552,9 @@ namespace Dental.Infrastructure.Migrations
                     b.Navigation("Visit");
                 });
 
-            modelBuilder.Entity("Dental.Domain.Entities.DentalService", b =>
+            modelBuilder.Entity("Dental.Domain.Entities.InventoryTransaction", b =>
                 {
-                    b.Navigation("Prices");
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.Invoice", b =>
@@ -3675,44 +2564,14 @@ namespace Dental.Infrastructure.Migrations
                     b.Navigation("Refunds");
                 });
 
-            modelBuilder.Entity("Dental.Domain.Entities.InvoiceRefund", b =>
-                {
-                    b.Navigation("Items");
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.InvoiceRefundProposal", b =>
-                {
-                    b.Navigation("Items");
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.MedicalHistoryRecord", b =>
-                {
-                    b.Navigation("Items");
-                });
-
             modelBuilder.Entity("Dental.Domain.Entities.Prescription", b =>
                 {
                     b.Navigation("Items");
                 });
 
-            modelBuilder.Entity("Dental.Domain.Entities.QueueEntry", b =>
-                {
-                    b.Navigation("StatusHistories");
-                });
-
             modelBuilder.Entity("Dental.Domain.Entities.Role", b =>
                 {
                     b.Navigation("Users");
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.StockIssue", b =>
-                {
-                    b.Navigation("Lines");
-                });
-
-            modelBuilder.Entity("Dental.Domain.Entities.StockReceipt", b =>
-                {
-                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("Dental.Domain.Entities.User", b =>

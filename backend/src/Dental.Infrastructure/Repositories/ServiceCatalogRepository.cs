@@ -33,39 +33,37 @@ public sealed class ServiceCatalogRepository : IServiceCatalogRepository
             query = query.Where(service => service.IsActive == active);
 
         var totalCount = await query.CountAsync(ct);
-        var items = await query
+        var services = await query
             .OrderBy(service => service.Name)
             .ThenBy(service => service.DentalServiceId)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(service => new ServiceCatalogListItemResponse(
+            .ToListAsync(ct);
+
+        var items = services.Select(service =>
+        {
+            var current = ResolveCurrentPrice(service, nowUtc);
+            return new ServiceCatalogListItemResponse(
                 service.DentalServiceId,
                 service.Code,
                 service.Name,
                 service.Description,
                 service.DurationMinutes,
                 service.IsActive,
-                service.Prices.Where(price => price.EffectiveFrom <= nowUtc)
-                    .OrderByDescending(price => price.EffectiveFrom)
-                    .ThenByDescending(price => price.ServicePriceId)
-                    .Select(price => (decimal?)price.Amount)
-                    .FirstOrDefault(),
-                service.Prices.Where(price => price.EffectiveFrom <= nowUtc)
-                    .OrderByDescending(price => price.EffectiveFrom)
-                    .ThenByDescending(price => price.ServicePriceId)
-                    .Select(price => (DateTime?)price.EffectiveFrom)
-                    .FirstOrDefault()))
-            .ToListAsync(ct);
+                current?.Amount,
+                current?.EffectiveFrom);
+        }).ToList();
 
         return PagedResult<ServiceCatalogListItemResponse>.Create(items, totalCount, page, pageSize);
     }
 
-    public Task<DentalService?> GetByIdAsync(int serviceId, bool includePrices, CancellationToken ct = default)
+    public async Task<DentalService?> GetByIdAsync(int serviceId, bool includePrices, CancellationToken ct = default)
     {
-        var query = _db.DentalServices.AsNoTracking().AsQueryable();
-        if (includePrices)
-            query = query.Include(service => service.Prices);
-        return query.FirstOrDefaultAsync(service => service.DentalServiceId == serviceId, ct);
+        var service = await _db.DentalServices.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.DentalServiceId == serviceId, ct);
+        if (service is not null && includePrices)
+            service.HydratePrices();
+        return service;
     }
 
     public Task<DentalService?> GetByIdForUpdateAsync(int serviceId, CancellationToken ct = default)
@@ -74,17 +72,21 @@ public sealed class ServiceCatalogRepository : IServiceCatalogRepository
     public Task<bool> CodeExistsAsync(string normalizedCode, CancellationToken ct = default)
         => _db.DentalServices.AnyAsync(service => service.Code == normalizedCode, ct);
 
-    public Task<DateTime?> GetLatestPriceEffectiveFromAsync(int serviceId, CancellationToken ct = default)
-        => _db.ServicePrices
-            .Where(price => price.ServiceId == serviceId)
-            .Select(price => (DateTime?)price.EffectiveFrom)
-            .MaxAsync(ct);
+    public async Task<DateTime?> GetLatestPriceEffectiveFromAsync(int serviceId, CancellationToken ct = default)
+    {
+        var service = await _db.DentalServices.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.DentalServiceId == serviceId, ct);
+        if (service is null) return null;
+
+        var history = service.GetPriceHistory();
+        return history.Count > 0 ? history.Max(x => x.EffectiveFrom) : service.PriceEffectiveFrom;
+    }
 
     public async Task<bool> AddServiceWithInitialPriceAsync(
         DentalService service, ServicePrice initialPrice, CancellationToken ct = default)
     {
+        service.AppendPrice(initialPrice);
         _db.DentalServices.Add(service);
-        _db.ServicePrices.Add(initialPrice);
         try
         {
             await _db.SaveChangesAsync(ct);
@@ -93,36 +95,55 @@ public sealed class ServiceCatalogRepository : IServiceCatalogRepository
         catch (DbUpdateException exception) when (IsServiceCodeConflict(exception))
         {
             _db.Entry(service).State = EntityState.Detached;
-            _db.Entry(initialPrice).State = EntityState.Detached;
             return false;
         }
     }
 
     public async Task AddPriceAsync(ServicePrice price, CancellationToken ct = default)
-        => await _db.ServicePrices.AddAsync(price, ct);
+    {
+        var service = await _db.DentalServices
+            .FirstOrDefaultAsync(x => x.DentalServiceId == price.ServiceId, ct);
+        if (service is null) return;
+        service.AppendPrice(price);
+    }
 
     public async Task<ActiveServiceWithCurrentPriceResponse?> GetActiveServiceWithCurrentPriceAsync(
         int serviceId, DateTime nowUtc, CancellationToken ct = default)
-        => await _db.DentalServices.AsNoTracking()
-            .Where(service => service.DentalServiceId == serviceId && service.IsActive)
-            .Select(service => new
-            {
-                Service = service,
-                Price = service.Prices.Where(price => price.EffectiveFrom <= nowUtc)
-                    .OrderByDescending(price => price.EffectiveFrom)
-                    .ThenByDescending(price => price.ServicePriceId)
-                    .Select(price => new { price.Amount, price.EffectiveFrom })
-                    .FirstOrDefault(),
-            })
-            .Where(item => item.Price != null)
-            .Select(item => new ActiveServiceWithCurrentPriceResponse(
-                item.Service.DentalServiceId,
-                item.Service.Code,
-                item.Service.Name,
-                item.Service.DurationMinutes,
-                item.Price!.Amount,
-                item.Price.EffectiveFrom))
-            .FirstOrDefaultAsync(ct);
+    {
+        var service = await _db.DentalServices.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.DentalServiceId == serviceId && x.IsActive, ct);
+        if (service is null) return null;
+
+        var current = ResolveCurrentPrice(service, nowUtc);
+        if (current is null) return null;
+
+        return new ActiveServiceWithCurrentPriceResponse(
+            service.DentalServiceId,
+            service.Code,
+            service.Name,
+            service.DurationMinutes,
+            current.Value.Amount,
+            current.Value.EffectiveFrom);
+    }
+
+    private static (decimal Amount, DateTime EffectiveFrom)? ResolveCurrentPrice(DentalService service, DateTime nowUtc)
+    {
+        var history = service.GetPriceHistory();
+        if (history.Count > 0)
+        {
+            var match = history
+                .Where(price => price.EffectiveFrom <= nowUtc)
+                .OrderByDescending(price => price.EffectiveFrom)
+                .ThenByDescending(price => price.ServicePriceId)
+                .FirstOrDefault();
+            return match is null ? null : (match.Amount, match.EffectiveFrom);
+        }
+
+        if (service.PriceEffectiveFrom is DateTime effective && effective <= nowUtc)
+            return (service.UnitPrice, effective);
+
+        return null;
+    }
 
     private static bool IsServiceCodeConflict(DbUpdateException exception)
         => exception.InnerException is PostgresException

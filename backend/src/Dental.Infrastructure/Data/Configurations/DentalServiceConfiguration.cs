@@ -16,6 +16,10 @@ public sealed class DentalServiceConfiguration : IEntityTypeConfiguration<Dental
         builder.Property(service => service.Description).HasMaxLength(1000);
         builder.Property(service => service.DurationMinutes).IsRequired();
         builder.Property(service => service.IsActive).HasDefaultValue(true).IsRequired();
+        builder.Property(service => service.UnitPrice).HasPrecision(18, 0).HasDefaultValue(0m).IsRequired();
+        builder.Property(service => service.PriceEffectiveFrom).HasColumnType("timestamptz");
+        builder.Property(service => service.PriceHistoryJson).HasColumnType("jsonb");
+        builder.Ignore(service => service.Prices);
         builder.Property(service => service.CreatedAt).HasColumnType("timestamptz").IsRequired();
         builder.Property(service => service.UpdatedAt).HasColumnType("timestamptz");
 

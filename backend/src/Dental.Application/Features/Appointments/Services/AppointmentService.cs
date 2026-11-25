@@ -144,7 +144,10 @@ public sealed class AppointmentService
 
         if (isToday && !isCounterActor && request.SlotTime <= nowVietnamTime)
         {
-            return Result<AppointmentResponse>.Failure(Error.AppointmentInvalidTime.Code, "Không thể đặt lịch cho khung giờ đã qua trong ngày.");
+            var closedMessage = !snapshot.Schedule.Slots().Any(t => t > nowVietnamTime)
+                ? "Nha khoa đã hết giờ làm việc hôm nay, hãy đặt lịch cho ngày mai để hàm răng chắc khỏe."
+                : "Không thể đặt lịch cho khung giờ đã qua trong ngày.";
+            return Result<AppointmentResponse>.Failure(Error.AppointmentInvalidTime.Code, closedMessage);
         }
 
         if (await _appointmentRepository.HasActiveAppointmentOnDateAsync(request.PatientId, request.AppointmentDate, ct))
@@ -468,7 +471,7 @@ public sealed class AppointmentService
         if (appointment is null) return Result<AppointmentResponse>.Failure(Error.AppointmentNotFound);
         if (role == RoleCodes.Patient)
         {
-            var patient = await _patientRepository.GetByIdAsync(appointment.PatientId, ct);
+            var patient = await _patientRepository.GetByIdAsync(appointment.PatientId!.Value, ct);
             if (!await CanPatientAccessAsync(actorUserId, patient, ct))
                 return Result<AppointmentResponse>.Failure(Error.AppointmentNotFound);
         }
@@ -516,7 +519,7 @@ public sealed class AppointmentService
 
         if (actorRoleCode == RoleCodes.Patient)
         {
-            var patient = await _patientRepository.GetByIdAsync(appointment.PatientId, ct);
+            var patient = await _patientRepository.GetByIdAsync(appointment.PatientId!.Value, ct);
             if (!await CanPatientAccessAsync(actorUserId, patient, ct))
                 return Result<AppointmentResponse>.Failure(Error.AppointmentNotFound);
             if ((appointment.AppointmentDate.ToDateTime(appointment.SlotTime) - _vietnamClock.Now).TotalMinutes < 120)
@@ -586,7 +589,7 @@ public sealed class AppointmentService
 
         if (actorRoleCode == RoleCodes.Patient)
         {
-            var patient = await _patientRepository.GetByIdAsync(appointment.PatientId, ct);
+            var patient = await _patientRepository.GetByIdAsync(appointment.PatientId!.Value, ct);
             if (!await CanPatientAccessAsync(actorUserId, patient, ct))
                 return Result<AppointmentResponse>.Failure(Error.AppointmentNotFound);
             // Portal only moves the time; it cannot edit staff notes.
@@ -617,10 +620,15 @@ public sealed class AppointmentService
         {
             var nowVietnamTime = TimeOnly.FromDateTime(_vietnamClock.Now);
             if (request.SlotTime <= nowVietnamTime)
-                return Result<AppointmentResponse>.Failure(Error.AppointmentInvalidTime.Code, "Không thể đổi lịch sang khung giờ đã qua trong ngày.");
+            {
+                var closedMessage = !snapshot.Schedule.Slots().Any(t => t > nowVietnamTime)
+                    ? "Nha khoa đã hết giờ làm việc hôm nay, hãy đặt lịch cho ngày mai để hàm răng chắc khỏe."
+                    : "Không thể đổi lịch sang khung giờ đã qua trong ngày.";
+                return Result<AppointmentResponse>.Failure(Error.AppointmentInvalidTime.Code, closedMessage);
+            }
         }
 
-        if (await _appointmentRepository.HasActiveAppointmentOnDateAsync(appointment.PatientId, request.AppointmentDate, ct, appointmentId))
+        if (await _appointmentRepository.HasActiveAppointmentOnDateAsync(appointment.PatientId!.Value, request.AppointmentDate, ct, appointmentId))
             return Result<AppointmentResponse>.Failure(Error.AppointmentPatientHasActive);
         var currentSlotCount = await _appointmentRepository.GetSlotBookingCountAsync(request.AppointmentDate, request.SlotTime, ct, appointmentId, snapshot.Schedule.DurationMinutes);
         if (currentSlotCount >= AppointmentSlots.MaxBookingsPerSlot)
@@ -676,7 +684,7 @@ public sealed class AppointmentService
         var appointment = await _appointmentRepository.GetByIdAsync(id, ct);
         if (appointment is null)
             return Result<SelfReschedulingEligibilityResponse>.Failure(Error.AppointmentNotFound);
-        var patient = await _patientRepository.GetByIdAsync(appointment.PatientId, ct);
+        var patient = await _patientRepository.GetByIdAsync(appointment.PatientId!.Value, ct);
         if (!await CanPatientAccessAsync(actorUserId, patient, ct))
             return Result<SelfReschedulingEligibilityResponse>.Failure(Error.AppointmentNotFound);
         var message = SelfReschedulingMessage(appointment);
@@ -709,8 +717,8 @@ public sealed class AppointmentService
 
         var today = _vietnamClock.Today;
         var childPatientIds = appointments
-            .Where(a => a.Patient is not null && PatientAccountAge.IsUnderMinimumAge(a.Patient.DateOfBirth, today))
-            .Select(a => a.PatientId)
+            .Where(a => a.PatientId.HasValue && a.Patient is not null && PatientAccountAge.IsUnderMinimumAge(a.Patient.DateOfBirth, today))
+            .Select(a => a.PatientId!.Value)
             .Distinct()
             .ToArray();
 
@@ -731,12 +739,13 @@ public sealed class AppointmentService
         IReadOnlySet<int> activeGuardianWardIds,
         DateOnly today)
     {
+        var patientId = a.PatientId ?? 0;
         DateOnly? patientDob = a.Patient?.DateOfBirth;
         var isChild = patientDob.HasValue && PatientAccountAge.IsUnderMinimumAge(patientDob.Value, today);
-        var missingGuardianAccount = isChild && !activeGuardianWardIds.Contains(a.PatientId);
+        var missingGuardianAccount = isChild && !activeGuardianWardIds.Contains(patientId);
         return new(
             a.AppointmentId,
-            a.PatientId,
+            patientId,
             a.Patient?.PatientCode ?? string.Empty,
             a.Patient?.FullName ?? string.Empty,
             a.Patient?.Phone ?? string.Empty,
@@ -744,7 +753,7 @@ public sealed class AppointmentService
             a.SlotTime,
             a.Status,
             a.Notes,
-            a.CreatedByUserId,
+            a.CreatedByUserId ?? 0,
             a.CreatedAt,
             a.RescheduleCount,
             a.RescheduleReason,

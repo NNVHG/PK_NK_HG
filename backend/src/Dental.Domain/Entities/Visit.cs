@@ -18,6 +18,8 @@ public sealed class Visit : BaseEntity
     public bool IsLocked { get; set; }
     public DateTime? LockedAt { get; set; }
     public int? LockedBy { get; set; }
+    public string? PostTreatmentNotesJson { get; set; }
+    public string? UnlockHistoryJson { get; set; }
 
     public Patient Patient { get; set; } = null!;
     public User? Dentist { get; set; }

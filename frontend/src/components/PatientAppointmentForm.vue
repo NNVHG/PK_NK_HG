@@ -69,7 +69,10 @@
             <label for="appointment-date" class="form-label">
               <span>Ngày khám <b class="req">*</b></span>
             </label>
-            <BookingDatePicker id="appointment-date-picker" v-model="appointmentDate" input-id="appointment-date" :min="today" :disabled="submitting" required />
+            <BookingDatePicker id="appointment-date-picker" v-model="appointmentDate" input-id="appointment-date" :min="minBookingDate" :today="today" :disabled="submitting" required />
+            <p v-if="isAfterHoursToday" class="after-hours-notice" role="status">
+              🌙 {{ AFTER_HOURS_BOOKING_NOTICE }}
+            </p>
           </div>
 
           <div class="form-group">
@@ -152,7 +155,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import axios from 'axios';
 import { appointmentsService, type AppointmentResponse } from '@/services/appointments';
@@ -160,6 +163,7 @@ import { patientsService, type PatientSummary } from '@/services/patients';
 import { patientGuardiansService, type WardSummary } from '@/services/patientGuardians';
 import { isUnderFourteen } from '@/services/patientAge';
 import { useBookingSchedule } from '@/composables/useBookingSchedule';
+import { AFTER_HOURS_BOOKING_NOTICE, getVietnamNow, resolveBookingDateWindow } from '@/utils/bookingWindow';
 import BookingTimeInput from '@/components/BookingTimeInput.vue';
 import BookingDatePicker from '@/components/BookingDatePicker.vue';
 
@@ -179,11 +183,13 @@ const loadingProfiles = ref(true);
 const submitting = ref(false);
 const errorMessage = ref('');
 const success = ref<AppointmentResponse | null>(null);
+const nowTick = ref(0);
+let nowTimer: ReturnType<typeof setInterval> | null = null;
 let version = 0;
 
 const today = computed(() => {
-  const date = new Date();
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+  void nowTick.value;
+  return getVietnamNow().date;
 });
 
 const currentProfile = computed(() => {
@@ -224,7 +230,29 @@ function formatGender(gender: string | null): string {
 
 const { slots, revision: scheduleRevision, loading: scheduleLoading, error: scheduleError, load: loadSchedule } = useBookingSchedule();
 
+const bookingWindow = computed(() => {
+  void nowTick.value;
+  return resolveBookingDateWindow(today.value, slots.value, getVietnamNow());
+});
+const minBookingDate = computed(() => bookingWindow.value.minDate);
+const isAfterHoursToday = computed(() => bookingWindow.value.isAfterHours);
+
+watch(
+  [minBookingDate, slots],
+  ([minDate, currentSlots]) => {
+    if (!currentSlots.length) return;
+    if (!appointmentDate.value || appointmentDate.value < minDate) {
+      appointmentDate.value = minDate;
+      slotTime.value = '';
+    }
+  },
+  { immediate: true }
+);
+
 onMounted(async () => {
+  if (typeof window !== 'undefined') {
+    nowTimer = setInterval(() => { nowTick.value++; }, 30_000);
+  }
   const serviceParam = typeof route?.query?.service === 'string' ? route.query.service.trim() : '';
   if (serviceParam && !notes.value) {
     notes.value = `Tư vấn ${serviceParam}`.slice(0, 500);
@@ -260,6 +288,13 @@ async function submit() {
   if (submitting.value || loadingProfiles.value || scheduleLoading.value || !scheduleRevision.value) return;
   errorMessage.value = '';
   success.value = null;
+
+  if (appointmentDate.value && appointmentDate.value < minBookingDate.value) {
+    errorMessage.value = isAfterHoursToday.value
+      ? AFTER_HOURS_BOOKING_NOTICE
+      : 'Vui lòng chọn ngày và buổi khám hợp lệ.';
+    return;
+  }
 
   if (!selectedPatientId.value || !appointmentDate.value || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(slotTime.value) || notes.value.length > 500) {
     errorMessage.value = 'Vui lòng chọn hồ sơ, ngày và khung giờ khám.';
@@ -303,7 +338,14 @@ function formatSessionLabel(slot?: string | null): string {
   return slot.slice(0, 5) < '12:00' ? 'Buổi sáng' : 'Buổi chiều';
 }
 
-onUnmounted(() => { version++; patient.value = null; wards.value = []; notes.value = ''; success.value = null; });
+onUnmounted(() => {
+  version++;
+  if (nowTimer) { clearInterval(nowTimer); nowTimer = null; }
+  patient.value = null;
+  wards.value = [];
+  notes.value = '';
+  success.value = null;
+});
 </script>
 
 <style scoped>
@@ -503,6 +545,18 @@ onUnmounted(() => { version++; patient.value = null; wards.value = []; notes.val
   justify-content: space-between;
   gap: 0.5rem;
   margin-bottom: 1rem;
+}
+
+.after-hours-notice {
+  margin: 0.55rem 0 0;
+  font-size: 0.86rem;
+  font-weight: 650;
+  line-height: 1.45;
+  color: #9a3412;
+  background: #fff7ed;
+  border: 1.5px solid #fdba74;
+  border-radius: 10px;
+  padding: 0.65rem 0.85rem;
 }
 
 .button {

@@ -11,6 +11,6 @@ public static class InvoiceRefundSnapshot
     {
         invoice.Id, invoice.RefundRevision, invoice.Status, invoice.TotalAmount, invoice.PaidAmount, invoice.DiscountAmount, invoice.DiscountType, invoice.DiscountValue,
         items = invoice.Items.OrderBy(x => x.Id).Select(x => new { x.Id, x.Quantity, x.UnitPrice, x.ItemType, x.SourcePrescriptionItemId }),
-        returned = invoice.Refunds.OrderBy(x => x.Revision).Select(x => new { x.Id, x.Revision, items = x.Items.OrderBy(l => l.InvoiceItemId).Select(l => new { l.InvoiceItemId, l.Quantity }) })
+        returned = invoice.ApprovedRefunds().OrderBy(x => x.Revision).Select(x => new { x.Id, x.Revision, items = x.GetItems().OrderBy(l => l.InvoiceItemId).Select(l => new { l.InvoiceItemId, l.Quantity }) })
     }))));
 }

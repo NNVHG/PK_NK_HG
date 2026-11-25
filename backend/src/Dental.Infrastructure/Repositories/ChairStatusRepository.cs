@@ -23,8 +23,8 @@ public sealed class ChairStatusRepository(DentalDbContext db, VietnamClock? cloc
     public Task<bool> IsAssignedAsync(int id, CancellationToken ct = default)
     {
         var today = Today;
-        return db.StaffWorkspaces.AnyAsync(workspace => workspace.WorkDate == today && workspace.User.IsActive &&
-            workspace.User.Role.RoleCode == RoleCodes.Dentist && workspace.RoomId == id, ct);
+        return db.Users.AnyAsync(u => u.WorkspaceDate == today && u.IsActive &&
+            u.Role.RoleCode == RoleCodes.Dentist && u.WorkspaceRoomId == id, ct);
     }
 
     public Task<bool> HasActiveVisitAsync(int id, CancellationToken ct = default)
@@ -42,24 +42,24 @@ public sealed class ChairStatusRepository(DentalDbContext db, VietnamClock? cloc
         if (request.Status.HasValue) query = query.Where(x => x.Status == (DentalChairStatus)request.Status.Value);
         if (request.IsActive.HasValue) query = query.Where(x => x.IsActive == request.IsActive.Value);
         var count = await query.CountAsync(ct);
-        var dailyAssignments = db.StaffWorkspaces.AsNoTracking()
-            .Where(w => w.WorkDate == today && w.User.IsActive);
-        var dentists = dailyAssignments.Where(w => w.RoomId.HasValue && w.User.Role.RoleCode == RoleCodes.Dentist);
+        var dailyAssignments = db.Users.AsNoTracking()
+            .Where(u => u.WorkspaceDate == today && u.IsActive);
+        var dentists = dailyAssignments.Where(u => u.WorkspaceRoomId.HasValue && u.Role.RoleCode == RoleCodes.Dentist);
         var page = await query.OrderBy(x => x.RoomName).ThenBy(x => x.RoomCode).ThenBy(x => x.Id)
             .Skip((request.Page - 1) * request.PageSize).Take(request.PageSize)
             .Select(room => new
             {
                 Room = room,
-                Dentist = dentists.Where(w => w.RoomId == room.Id)
-                    .OrderBy(w => w.UserId)
-                    .Select(w => new { w.UserId, w.User.FullName }).FirstOrDefault(),
+                Dentist = dentists.Where(u => u.WorkspaceRoomId == room.Id)
+                    .OrderBy(u => u.UserId)
+                    .Select(u => new { u.UserId, u.FullName }).FirstOrDefault(),
                 HasActiveVisit = db.Visits.Any(v => v.Status == VisitStatuses.InProgress && v.RoomId == room.Id)
             }).ToListAsync(ct);
         var dentistIds = page.Where(x => x.Dentist is not null).Select(x => x.Dentist!.UserId).Distinct().ToArray();
         var assistants = await dailyAssignments
-            .Where(w => w.DentistId.HasValue && dentistIds.Contains(w.DentistId.Value) && w.User.Role.RoleCode == RoleCodes.Assistant)
-            .OrderBy(w => w.User.FullName).ThenBy(w => w.UserId)
-            .Select(w => new { w.DentistId, w.UserId, w.User.FullName })
+            .Where(u => u.WorkspaceDentistId.HasValue && dentistIds.Contains(u.WorkspaceDentistId.Value) && u.Role.RoleCode == RoleCodes.Assistant)
+            .OrderBy(u => u.FullName).ThenBy(u => u.UserId)
+            .Select(u => new { DentistId = u.WorkspaceDentistId, u.UserId, u.FullName })
             .ToListAsync(ct);
         var assistantsByDentist = assistants.ToLookup(w => w.DentistId!.Value);
         var items = page.Select(row => ChairStatusResponse.From(row.Room) with
