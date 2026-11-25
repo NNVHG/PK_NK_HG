@@ -481,7 +481,7 @@ const roleQuickActions = computed(() => {
         { label: '+ Quản lý nhân sự', to: '/management/admin/staff', primary: true },
         { label: 'Dịch vụ & bảng giá', to: '/management/admin/services' },
         { label: 'Danh mục vật tư', to: '/management/admin/medical-supplies' },
-        { label: 'Danh mục thuốc', to: '/management/admin/medicines' },
+        { label: 'Thuốc & Tồn kho', to: '/management/admin/medicines' },
         { label: 'Báo cáo doanh thu', to: '/management/admin/reports/revenue' },
         { label: 'Nhật ký thao tác', to: '/management/admin/audit-logs' }
       ];

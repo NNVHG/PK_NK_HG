@@ -35,7 +35,10 @@ public sealed class QueueRepository : IQueueRepository
     }
 
     public async Task<IReadOnlyList<QueueEntry>> GetExpiredUnstartedAsync(DateOnly lastExpiredDate, CancellationToken ct = default)
-        => await _db.QueueEntries.Include(q => q.Visit)
+        => await _db.QueueEntries
+            .Include(q => q.Patient)
+            .Include(q => q.Appointment)
+            .Include(q => q.Visit)
             .Where(q => q.QueueDate <= lastExpiredDate &&
                 (q.Status == QueueStatus.Waiting || q.Status == QueueStatus.Calling || q.Status == QueueStatus.Skipped) &&
                 q.Visit != null && q.Visit.Status == Dental.Domain.Constants.VisitStatuses.Created && q.Visit.StartedAt == null && !q.Visit.IsLocked)

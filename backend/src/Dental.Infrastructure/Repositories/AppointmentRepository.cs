@@ -48,6 +48,17 @@ public sealed class AppointmentRepository : IAppointmentRepository
             (a.Status == AppointmentStatuses.Scheduled || a.Status == "Pending") &&
             (!excludedId.HasValue || a.AppointmentId != excludedId.Value), ct);
 
+    public Task<bool> HasPendingOnlineRequestAsync(string phone, string fullName, DateOnly dateOfBirth, DateOnly date, CancellationToken ct = default)
+        => _db.Appointments.AnyAsync(a => a.Source == "Online" &&
+            a.Status == "Pending" &&
+            a.GuestPhone == phone &&
+            a.GuestFullName == fullName &&
+            a.GuestDateOfBirth == dateOfBirth &&
+            a.AppointmentDate == date, ct);
+
+    public Task<bool> HasCompletedVisitForPatientAsync(int patientId, CancellationToken ct = default)
+        => _db.Visits.AnyAsync(v => v.PatientId == patientId && v.Status == VisitStatuses.Completed, ct);
+
     public async Task<(IReadOnlyList<Appointment> Items, int TotalCount)> GetAppointmentsAsync(
         DateOnly? date,
         int? patientId,

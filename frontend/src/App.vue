@@ -191,13 +191,9 @@
               <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
               <span class="nav-label">Danh mục chẩn đoán</span>
             </router-link>
-            <router-link to="/management/admin/medicines" title="Danh mục thuốc">
+            <router-link to="/management/admin/medicines" title="Thuốc & Tồn kho">
               <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></svg>
-              <span class="nav-label">Danh mục thuốc</span>
-            </router-link>
-            <router-link to="/management/admin/medicine-stock" title="Nhập & tồn thuốc">
-              <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-              <span class="nav-label">Nhập & tồn thuốc</span>
+              <span class="nav-label">Thuốc &amp; Tồn kho</span>
             </router-link>
             <router-link to="/management/admin/medical-supplies" title="Danh mục vật tư">
               <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
@@ -296,6 +292,10 @@
             </router-link>
 
             <span class="nav-caption">Nghiệp vụ Phụ tá</span>
+            <router-link to="/management/clinical/pre-exam" title="Đo sinh hiệu & Tiền khám">
+              <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              <span class="nav-label">Đo sinh hiệu &amp; Tiền khám</span>
+            </router-link>
             <router-link to="/management/inventory/receipts" title="Tồn kho & nhập kho">
               <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               <span class="nav-label">Tồn kho & nhập kho</span>
@@ -386,6 +386,10 @@
           </router-link>
 
           <span class="nav-caption caption-assistant">Phụ Tá Điều Trị</span>
+          <router-link to="/management/clinical/pre-exam" title="Đo sinh hiệu & Tiền khám">
+            <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            <span class="nav-label">Đo sinh hiệu &amp; Tiền khám</span>
+          </router-link>
           <router-link to="/management/inventory/receipts" title="Tồn kho & nhập kho">
             <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             <span class="nav-label">Tồn kho & nhập kho</span>

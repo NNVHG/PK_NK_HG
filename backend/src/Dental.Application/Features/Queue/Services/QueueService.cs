@@ -100,9 +100,6 @@ public sealed class QueueService
     private async Task<Result<QueueEntryResponse>> CheckInCoreAsync(
         int actorUserId, CheckInRequest request, string? ipAddress, CancellationToken ct)
     {
-        // DL-260 closes the current reception day at 23:30; avoid immediately expiring a new ticket.
-        if (TimeOnly.FromDateTime(_vietnamClock.Now) >= QueueExpiryRules.Cutoff)
-            return Result<QueueEntryResponse>.Failure(Error.Validation.Code, "Đã qua mốc đóng lượt chưa khám 23:30. Vui lòng tiếp đón vào ngày mới.");
         var patient = await _patientRepository.GetByIdAsync(request.PatientId, ct);
         if (patient is null)
             return Result<QueueEntryResponse>.Failure(Error.NotFound);
@@ -256,7 +253,8 @@ public sealed class QueueService
 
         foreach (var entry in expired)
         {
-            var history = QueueExpiryRules.Cancel(entry, actorUserId, _vietnamClock.UtcNow);
+            var history = QueueExpiryRules.Cancel(entry, actorUserId, _vietnamClock.UtcNow,
+                "Tự động đóng lượt chưa khám từ ngày trước khi bệnh nhân tiếp đón mới (DL-381)");
             await _queueRepository.AddStatusHistoryAsync(history, ct);
             await _unitOfWork.SaveChangesAsync(ct);
             await _auditLogger.LogRequiredAsync(AuditActions.QueueStatusChanged, "QueueEntry", entry.QueueEntryId, actorUserId,

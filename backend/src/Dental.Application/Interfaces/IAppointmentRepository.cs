@@ -10,6 +10,8 @@ public interface IAppointmentRepository
     Task<ScheduleSnapshot?> GetScheduleAsync(CancellationToken ct = default);
     Task<int> GetSlotBookingCountAsync(DateOnly date, TimeOnly slotTime, CancellationToken ct = default, int? excludedId = null, int? durationMinutes = null);
     Task<bool> HasActiveAppointmentOnDateAsync(int patientId, DateOnly date, CancellationToken ct = default, int? excludedId = null);
+    Task<bool> HasPendingOnlineRequestAsync(string phone, string fullName, DateOnly dateOfBirth, DateOnly date, CancellationToken ct = default);
+    Task<bool> HasCompletedVisitForPatientAsync(int patientId, CancellationToken ct = default);
     Task<(IReadOnlyList<Appointment> Items, int TotalCount)> GetAppointmentsAsync(
         DateOnly? date,
         int? patientId,

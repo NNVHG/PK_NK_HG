@@ -20,7 +20,7 @@ public sealed class QueueCleanupWorker(IServiceScopeFactory scopes, TimeProvider
                     await using var scope = scopes.CreateAsyncScope();
                     var result = await scope.ServiceProvider.GetRequiredService<QueueCleanupService>().RunAutomaticallyAsync(stoppingToken);
                     if (result.IsFailure) logger.LogWarning("MOD_CHK expiry scan conflicted. Code={Code}", result.Error.Code);
-                    else if (result.Value!.CancelledCount > 0) logger.LogInformation("MOD_CHK expiry scan completed. Count={Count}", result.Value.CancelledCount);
+                    else if (result.Value!.CancelledCount > 0) logger.LogInformation("MOD_CHK rollover scan completed. ClosedCount={ClosedCount}, RolledOverCount={RolledOverCount}", result.Value.CancelledCount, result.Value.RolledOverCount);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
                 catch (Exception) { logger.LogWarning("MOD_CHK expiry scan failed; will retry on the next tick."); }

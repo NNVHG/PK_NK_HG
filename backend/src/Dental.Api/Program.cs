@@ -218,7 +218,6 @@ builder.Services.AddScoped<Dental.Application.Features.MOD_MST.Services.DentalCh
 builder.Services.AddScoped<IVisitChairCoordinator, Dental.Application.Features.MOD_MST.Services.VisitChairService>();
 builder.Services.AddScoped<QueueService>();
 builder.Services.AddScoped<QueueCleanupService>();
-builder.Services.AddScoped<QueueCleanupRequestValidator>();
 builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.PauseVisitRequestValidator>();
 builder.Services.AddScoped<Dental.Application.Features.Queue.Validators.ResumeVisitRequestValidator>();
 builder.Services.AddHostedService<QueueCleanupWorker>();
