@@ -298,7 +298,7 @@ router.beforeEach((to, _from, next) => {
   // 2. Tuyến chỉ dành cho khách (guest-only) khi đã đăng nhập
   if (to.meta.guestOnly && authStore.isAuthenticated) {
     if (isPatient) {
-      return next({ path: '/patient/dashboard' });
+      return next({ name: 'public-home' });
     }
     return next({ path: '/management/dashboard' });
   }
