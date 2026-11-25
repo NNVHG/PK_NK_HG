@@ -14,5 +14,6 @@ public interface IAuditLogRepository
         DateTime? createdBeforeUtc,
         int page,
         int pageSize,
+        string? roleCode = null,
         CancellationToken ct = default);
 }

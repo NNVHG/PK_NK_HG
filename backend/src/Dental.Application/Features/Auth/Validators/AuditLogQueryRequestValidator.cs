@@ -1,4 +1,5 @@
 using Dental.Application.Features.Auth.DTOs;
+using Dental.Domain.Constants;
 using FluentValidation;
 
 namespace Dental.Application.Features.Auth.Validators;
@@ -16,6 +17,10 @@ public sealed class AuditLogQueryRequestValidator : AbstractValidator<AuditLogQu
         RuleFor(x => x.PerformedBy)
             .MaximumLength(100)
             .WithMessage("Người thực hiện không được vượt quá 100 ký tự.");
+        RuleFor(x => x.RoleCode)
+            .Must(roleCode => string.IsNullOrWhiteSpace(roleCode)
+                || RoleCodes.StaffRoles.Contains(roleCode.Trim().ToUpperInvariant()))
+            .WithMessage("Vai trò lọc phải là vai trò nhân viên hợp lệ (ADMIN, RECEPTIONIST, DENTIST, ASSISTANT).");
         RuleFor(x => x.Action)
             .MaximumLength(50)
             .WithMessage("Hành động không được vượt quá 50 ký tự.");

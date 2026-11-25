@@ -20,6 +20,7 @@ public sealed class AuditLogService
         int? performedByUserId = int.TryParse(performedBy, out var userId) ? userId : null;
         var performedByName = performedByUserId.HasValue ? null : performedBy;
         var action = string.IsNullOrWhiteSpace(request.Action) ? null : request.Action.Trim().ToUpperInvariant();
+        var roleCode = string.IsNullOrWhiteSpace(request.RoleCode) ? null : request.RoleCode.Trim().ToUpperInvariant();
         var entityType = string.IsNullOrWhiteSpace(request.EntityType) ? null : request.EntityType.Trim();
         DateTime? createdFromUtc = request.FromDate.HasValue
             ? new DateTimeOffset(request.FromDate.Value.ToDateTime(TimeOnly.MinValue), VietnamOffset).UtcDateTime
@@ -37,6 +38,7 @@ public sealed class AuditLogService
             createdBeforeUtc,
             request.Page,
             request.PageSize,
+            roleCode,
             ct);
 
         var responses = items.Select(log => new AuditLogResponse(
@@ -48,7 +50,9 @@ public sealed class AuditLogService
             log.EntityId,
             log.Detail,
             log.IpAddress,
-            DateTime.SpecifyKind(log.CreatedAt, DateTimeKind.Utc))).ToList();
+            DateTime.SpecifyKind(log.CreatedAt, DateTimeKind.Utc),
+            log.User?.Role?.RoleCode,
+            log.User?.Role?.RoleName)).ToList();
 
         return PagedResult<AuditLogResponse>.Create(responses, totalCount, request.Page, request.PageSize);
     }

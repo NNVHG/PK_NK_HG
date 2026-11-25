@@ -1,4 +1,5 @@
 using Dental.Application.Interfaces;
+using Dental.Domain.Constants;
 using Dental.Domain.Entities;
 using Dental.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -20,12 +21,21 @@ public sealed class AuditLogRepository : IAuditLogRepository
         DateTime? createdBeforeUtc,
         int page,
         int pageSize,
+        string? roleCode = null,
         CancellationToken ct = default)
     {
         var query = _db.AuditLogs
             .AsNoTracking()
             .Include(log => log.User)
+            .ThenInclude(user => user!.Role)
+            .Where(log => log.UserId != null
+                && log.User != null
+                && log.User.Role != null
+                && RoleCodes.StaffRoles.Contains(log.User.Role.RoleCode))
             .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(roleCode))
+            query = query.Where(log => log.User!.Role!.RoleCode == roleCode);
 
         if (performedByUserId.HasValue && !string.IsNullOrWhiteSpace(performedByName))
         {

@@ -9,4 +9,6 @@ public sealed record AuditLogResponse(
     int? EntityId,
     string? Detail,
     string? IpAddress,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    string? RoleCode = null,
+    string? RoleName = null);
