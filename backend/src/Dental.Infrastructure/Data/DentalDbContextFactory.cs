@@ -8,7 +8,11 @@ public sealed class DentalDbContextFactory : IDesignTimeDbContextFactory<DentalD
     public DentalDbContext CreateDbContext(string[] args)
     {
         var optionsBuilder = new DbContextOptionsBuilder<DentalDbContext>();
-        optionsBuilder.UseNpgsql("Host=localhost;Port=5432;Database=dental_clinic;Username=postgres;Password=postgres");
+        // Lệnh kiểm tra mô hình vẫn chạy được khi chưa chỉ định kết nối CSDL.
+        var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__Default");
+        optionsBuilder.UseNpgsql(string.IsNullOrWhiteSpace(connectionString)
+            ? "Host=127.0.0.1;Port=1;Database=ef_design_time;Username=ef_design_time;Timeout=2"
+            : connectionString);
         return new DentalDbContext(optionsBuilder.Options);
     }
 }
