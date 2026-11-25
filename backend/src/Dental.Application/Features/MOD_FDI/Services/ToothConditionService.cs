@@ -73,6 +73,10 @@ public sealed class ToothConditionService(IVisitRepository visits, IPatientRepos
             return Result<ToothConditionResponse>.Failure(Error.Forbidden);
         if (!VisitStatuses.IsEditable(visit.Status) || visit.IsLocked)
             return Result<ToothConditionResponse>.Failure(VisitClosed);
+        var patient = await patients.GetByIdAsync(visit.PatientId, ct);
+        if (patient is null) return Result<ToothConditionResponse>.Failure(Error.NotFound);
+        if (!VisitDentition.Contains(visit, patient.DateOfBirth, request.ToothNumber))
+            return Result<ToothConditionResponse>.Failure(VisitDentition.ToothOutsideDentition);
         var row = new ToothCondition
         {
             VisitId = visitId, ToothNumber = request.ToothNumber,
@@ -103,6 +107,10 @@ public sealed class ToothConditionService(IVisitRepository visits, IPatientRepos
             return Result<ToothConditionResponse>.Failure(VisitClosed);
         var row = await conditions.GetForUpdateAsync(visitId, conditionId, ct);
         if (row is null) return Result<ToothConditionResponse>.Failure(Error.NotFound);
+        var patient = await patients.GetByIdAsync(visit.PatientId, ct);
+        if (patient is null) return Result<ToothConditionResponse>.Failure(Error.NotFound);
+        if (!VisitDentition.Contains(visit, patient.DateOfBirth, request.ToothNumber))
+            return Result<ToothConditionResponse>.Failure(VisitDentition.ToothOutsideDentition);
         row.ToothNumber = request.ToothNumber;
         row.Surface = FdiCodes.NormalizeSurface(request.Surface);
         row.ConditionCode = request.ConditionCode;

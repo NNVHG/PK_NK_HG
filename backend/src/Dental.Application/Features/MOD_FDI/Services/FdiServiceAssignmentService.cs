@@ -52,6 +52,13 @@ public sealed class FdiServiceAssignmentService(IVisitRepository visits, IPatien
                     return Result<IReadOnlyList<AssignedServiceResponse>>.Failure(Error.Forbidden);
                 if (!VisitStatuses.IsEditable(visit.Status) || visit.IsLocked)
                     return Result<IReadOnlyList<AssignedServiceResponse>>.Failure(Closed);
+                if (request.ToothNumbers is { Length: > 0 } selectedTeeth)
+                {
+                    var patient = await patients.GetByIdAsync(visit.PatientId, transactionCt);
+                    if (patient is null) return Result<IReadOnlyList<AssignedServiceResponse>>.Failure(Error.NotFound);
+                    if (selectedTeeth.Any(tooth => !VisitDentition.Contains(visit, patient.DateOfBirth, tooth)))
+                        return Result<IReadOnlyList<AssignedServiceResponse>>.Failure(VisitDentition.ToothOutsideDentition);
+                }
                 var service = await catalog.GetByIdAsync(request.ServiceId, true, transactionCt);
                 var now = DateTime.UtcNow;
                 var price = service?.Prices.Where(x => x.EffectiveFrom <= now)
